@@ -1,0 +1,273 @@
+//! Lecture et écriture STL.
+//!
+//! C'est le format d'échange de l'onglet IA : les outils Python le manipulent
+//! sans effort, et l'application le convertit en 3MF aux deux bouts.
+//!
+//! Un STL ne porte ni couleur, ni nom d'objet, ni unité — seulement des
+//! triangles en millimètres. On accepte les deux dialectes, binaire et texte,
+//! et on n'écrit que le binaire, quatre fois plus compact.
+
+use crate::mesh::{MeshData, Tri};
+use anyhow::{anyhow, Result};
+use std::io::{BufWriter, Write};
+use std::path::Path;
+
+/// En-tête (80 o) + nombre de triangles (4 o).
+const HEADER: usize = 84;
+/// Normale + 3 sommets + attribut : 12 flottants et 2 octets.
+const RECORD: usize = 50;
+
+/// Vrai si la taille du fichier correspond exactement au décompte annoncé.
+///
+/// On ne se fie pas au mot « solid » en tête : beaucoup d'exportateurs le
+/// placent aussi dans l'en-tête d'un fichier binaire.
+fn looks_binary(data: &[u8]) -> bool {
+    if data.len() < HEADER {
+        return false;
+    }
+    let n = u32::from_le_bytes([data[80], data[81], data[82], data[83]]) as usize;
+    n.checked_mul(RECORD)
+        .map(|body| HEADER + body == data.len())
+        .unwrap_or(false)
+}
+
+fn f32_at(data: &[u8], off: usize) -> f32 {
+    f32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]])
+}
+
+fn read_binary(data: &[u8]) -> Vec<[[f32; 3]; 3]> {
+    let n = u32::from_le_bytes([data[80], data[81], data[82], data[83]]) as usize;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        // On saute la normale : elle est souvent fausse, et on la recalcule.
+        let base = HEADER + i * RECORD + 12;
+        let mut v = [[0f32; 3]; 3];
+        for (k, vertex) in v.iter_mut().enumerate() {
+            for (c, coord) in vertex.iter_mut().enumerate() {
+                *coord = f32_at(data, base + k * 12 + c * 4);
+            }
+        }
+        out.push(v);
+    }
+    out
+}
+
+fn read_ascii(text: &str) -> Vec<[[f32; 3]; 3]> {
+    let mut out = Vec::new();
+    let mut cur = [[0f32; 3]; 3];
+    let mut k = 0usize;
+    for line in text.lines() {
+        let mut it = line.split_whitespace();
+        if it.next() != Some("vertex") {
+            continue;
+        }
+        let mut p = [0f32; 3];
+        for c in p.iter_mut() {
+            match it.next().and_then(|t| t.parse::<f32>().ok()) {
+                Some(x) => *c = x,
+                None => return out, // ligne tronquée : on garde ce qu'on a
+            }
+        }
+        cur[k] = p;
+        k += 1;
+        if k == 3 {
+            out.push(cur);
+            k = 0;
+        }
+    }
+    out
+}
+
+/// Charge un STL, binaire ou texte.
+pub fn read(path: &Path) -> Result<MeshData> {
+    let data = std::fs::read(path)?;
+    if data.len() < 15 {
+        return Err(anyhow!("fichier STL vide"));
+    }
+    let faces = if looks_binary(&data) {
+        read_binary(&data)
+    } else {
+        read_ascii(&String::from_utf8_lossy(&data))
+    };
+    if faces.is_empty() {
+        return Err(anyhow!("aucun triangle dans le STL"));
+    }
+
+    let mut min = [f32::MAX; 3];
+    let mut max = [f32::MIN; 3];
+    let mut tris = Vec::with_capacity(faces.len());
+    for v in faces {
+        for p in &v {
+            for k in 0..3 {
+                min[k] = min[k].min(p[k]);
+                max[k] = max[k].max(p[k]);
+            }
+        }
+        tris.push(Tri {
+            v,
+            c: crate::render::DEFAULT_COLOR,
+        });
+    }
+    Ok(MeshData {
+        tris,
+        min,
+        max,
+        truncated: false,
+    })
+}
+
+/// Nombre de triangles d'un STL binaire, lu dans l'en-tête seul.
+///
+/// Compter sans analyser : sur un maillage de plusieurs millions de faces, la
+/// lecture complète coûterait des secondes pour une information de quatre
+/// octets.
+pub fn count(path: &Path) -> Option<usize> {
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).ok()?;
+    let mut head = [0u8; HEADER];
+    f.read_exact(&mut head).ok()?;
+    let n = u32::from_le_bytes([head[80], head[81], head[82], head[83]]) as usize;
+    let len = f.metadata().ok()?.len() as usize;
+    (HEADER + n * RECORD == len).then_some(n)
+}
+
+/// Normale unitaire d'un triangle ; nulle si le triangle est dégénéré.
+fn normal(v: &[[f32; 3]; 3]) -> [f32; 3] {
+    let u = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
+    let w = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
+    let n = [
+        u[1] * w[2] - u[2] * w[1],
+        u[2] * w[0] - u[0] * w[2],
+        u[0] * w[1] - u[1] * w[0],
+    ];
+    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    if len > 0.0 {
+        [n[0] / len, n[1] / len, n[2] / len]
+    } else {
+        [0.0; 3]
+    }
+}
+
+/// Écrit un STL binaire. Les couleurs sont perdues : le format n'en a pas.
+pub fn write(path: &Path, tris: &[Tri]) -> Result<()> {
+    if tris.is_empty() {
+        return Err(anyhow!("aucun triangle à écrire"));
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut w = BufWriter::with_capacity(1 << 20, std::fs::File::create(path)?);
+
+    let mut header = [0u8; 80];
+    let tag = b"Snap Studio";
+    header[..tag.len()].copy_from_slice(tag);
+    w.write_all(&header)?;
+    w.write_all(&(tris.len() as u32).to_le_bytes())?;
+
+    for t in tris {
+        for c in normal(&t.v) {
+            w.write_all(&c.to_le_bytes())?;
+        }
+        for v in &t.v {
+            for c in v {
+                w.write_all(&c.to_le_bytes())?;
+            }
+        }
+        w.write_all(&[0, 0])?;
+    }
+    w.flush()?;
+    Ok(())
+}
+
+/// Cube de 10 mm en 12 triangles, pour les essais des autres modules.
+#[cfg(test)]
+pub fn tests_cube() -> Vec<Tri> {
+    // Un cube de 10 mm posé à l'origine, en 12 triangles.
+    let p = [
+        [0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.],
+        [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.],
+    ];
+    let faces = [
+        [0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7],
+        [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5],
+        [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7],
+    ];
+    faces
+        .iter()
+        .map(|f| Tri {
+            v: [p[f[0]], p[f[1]], p[f[2]]],
+            c: crate::render::DEFAULT_COLOR,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use super::tests_cube as cube;
+
+    #[test]
+    fn round_trip() {
+        let dir = std::env::temp_dir().join("snapstudio-stl-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("cube.stl");
+        let src = cube();
+        write(&path, &src).unwrap();
+
+        let back = read(&path).unwrap();
+        assert_eq!(back.tris.len(), src.len(), "même nombre de triangles");
+        assert_eq!(back.min, [0., 0., 0.]);
+        assert_eq!(back.max, [10., 10., 10.]);
+        for (a, b) in src.iter().zip(back.tris.iter()) {
+            assert_eq!(a.v, b.v, "sommets conservés à l'octet près");
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn reads_ascii() {
+        let text = "solid essai
+ facet normal 0 0 1
+  outer loop
+   vertex 0 0 0
+   vertex 1 0 0
+   vertex 0 1 0
+  endloop
+ endfacet
+ facet normal 0 0 1
+  outer loop
+   vertex 0 0 2
+   vertex 1 0 2
+   vertex 0 1 2
+  endloop
+ endfacet
+endsolid essai
+";
+        let dir = std::env::temp_dir().join("snapstudio-stl-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("ascii.stl");
+        std::fs::write(&path, text).unwrap();
+        let m = read(&path).unwrap();
+        assert_eq!(m.tris.len(), 2);
+        assert_eq!(m.max, [1., 1., 2.]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Un binaire dont l'en-tête commence par « solid » ne doit pas être pris
+    /// pour du texte : c'est le piège classique du format.
+    #[test]
+    fn binary_header_saying_solid() {
+        let dir = std::env::temp_dir().join("snapstudio-stl-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("piege.stl");
+        write(&path, &cube()).unwrap();
+        let mut data = std::fs::read(&path).unwrap();
+        data[..5].copy_from_slice(b"solid");
+        std::fs::write(&path, &data).unwrap();
+
+        assert!(looks_binary(&data));
+        assert_eq!(read(&path).unwrap().tris.len(), 12);
+        let _ = std::fs::remove_file(&path);
+    }
+}

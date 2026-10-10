@@ -1,0 +1,12 @@
+# Rust / Tauri : sorties de build et schémas régénérés à chaque build
+/src-tauri/target/
+/src-tauri/gen/schemas/
+
+# Clone de référence d'OrcaSlicer : dépôt séparé, 1,8 Go, non utilisé par le code
+/OrcaSlicer/
+
+# Outils ponctuels (npx, Playwright…)
+node_modules/
+
+# macOS
+.DS_Store

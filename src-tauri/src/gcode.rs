@@ -1,0 +1,599 @@
+//! Lecture d'un fichier G-code : trajectoires, couches et métadonnées.
+//!
+//! Les marqueurs reconnus couvrent les trois familles rencontrées en pratique :
+//! Orca et Bambu (`;LAYER_CHANGE`, `;TYPE:`), PrusaSlicer (mêmes marqueurs,
+//! autres noms de types) et Cura (`;LAYER:`, types en majuscules).
+
+use anyhow::{anyhow, Result};
+use std::io::{BufRead, BufReader, Read};
+
+fn feature_id(name: &str) -> u8 {
+    let n = name.trim().to_ascii_lowercase();
+    let has = |k: &str| n.contains(k);
+    if has("overhang") {
+        11
+    } else if has("outer") || has("external perimeter") || has("wall-outer") {
+        1
+    } else if has("inner") || has("perimeter") || has("wall-inner") {
+        2
+    } else if has("top") || has("ironing") {
+        3
+    } else if has("bottom") {
+        4
+    } else if has("bridge") {
+        7
+    } else if has("solid") || has("skin") {
+        6
+    } else if has("infill") || has("fill") {
+        5
+    } else if has("support") {
+        8
+    } else if has("skirt") || has("brim") {
+        9
+    } else if has("prime tower") || has("wipe tower") {
+        10
+    } else {
+        0
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Seg {
+    pub a: [f32; 3],
+    pub b: [f32; 3],
+    pub layer: u16,
+    pub feature: u8,
+    pub tool: u8,
+    pub travel: bool,
+}
+
+#[derive(Default, Clone, serde::Serialize)]
+pub struct GMeta {
+    pub printer: Option<String>,
+    pub profile: Option<String>,
+    pub filaments: Vec<String>,
+    pub print_time_s: Option<u32>,
+    pub filament_g: Option<f32>,
+    pub layer_height: Option<f32>,
+    pub total_layers: Option<u32>,
+    pub generator: Option<String>,
+}
+
+pub struct GcodeData {
+    pub segs: Vec<Seg>,
+    pub layers: u16,
+    pub min: [f32; 3],
+    pub max: [f32; 3],
+    pub meta: GMeta,
+    pub truncated: bool,
+}
+
+/// Au-delà, l'affichage n'apporte plus rien et la mémoire s'envole.
+const MAX_SEGS: usize = 3_000_000;
+
+fn num_after(line: &str, key: u8) -> Option<f32> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i].to_ascii_uppercase();
+        if c == b';' {
+            return None;
+        }
+        if c == key && (i == 0 || bytes[i - 1] == b' ') {
+            let rest = &line[i + 1..];
+            let end = rest
+                .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e'))
+                .unwrap_or(rest.len());
+            return rest[..end].parse().ok();
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Valeur d'un commentaire de la forme `; clé : valeur` ou `;clé=valeur`.
+///
+/// Le séparateur est obligatoire : sans lui, la clé `LAYER` avalerait
+/// `layer_height = 0.3` et la vraie valeur ne serait jamais lue.
+fn comment_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let l = line.trim_start_matches(';').trim();
+    let low = l.to_ascii_lowercase();
+    let k = key.to_ascii_lowercase();
+    if !low.starts_with(&k) {
+        return None;
+    }
+    // Séparateur exigé : deux-points, égal, ou au moins une espace. Sans cette
+    // règle, la clé `LAYER` avalerait `layer_height = 0.3`.
+    let rest = &l[key.len()..];
+    match rest.chars().next() {
+        None => Some(""),
+        Some(c) if c == ':' || c == '=' => Some(rest[1..].trim()),
+        Some(c) if c.is_whitespace() => {
+            let r = rest.trim_start();
+            Some(r.strip_prefix([':', '=']).unwrap_or(r).trim())
+        }
+        _ => None,
+    }
+}
+
+fn parse_duration(s: &str) -> Option<u32> {
+    // Formats rencontrés : "1h 37m 12s", "5843", "2 h 3 m".
+    if let Ok(v) = s.trim().parse::<f64>() {
+        return Some(v as u32);
+    }
+    let mut total = 0u32;
+    let mut num = String::new();
+    let mut any = false;
+    for c in s.chars() {
+        if c.is_ascii_digit() {
+            num.push(c);
+        } else if let Ok(v) = num.parse::<u32>() {
+            let mult = match c.to_ascii_lowercase() {
+                'd' => 86_400,
+                'h' => 3_600,
+                'm' => 60,
+                's' => 1,
+                _ => 0,
+            };
+            if mult > 0 {
+                total += v * mult;
+                any = true;
+            }
+            num.clear();
+        } else {
+            num.clear();
+        }
+    }
+    any.then_some(total)
+}
+
+pub fn parse(read: impl Read) -> Result<GcodeData> {
+    let mut rd = BufReader::with_capacity(1 << 20, read);
+    let mut segs: Vec<Seg> = Vec::new();
+    let mut meta = GMeta::default();
+
+    let (mut x, mut y, mut z, mut e) = (0f32, 0f32, 0f32, 0f32);
+    let mut abs_xyz = true;
+    let mut abs_e = true;
+    let mut layer: u16 = 0;
+    let mut feature: u8 = 0;
+    let mut tool: u8 = 0;
+    let mut seen_layer_marker = false;
+    let mut last_z = f32::MIN;
+    let mut truncated = false;
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        let mut raw = Vec::new();
+        let n = rd.read_until(b'\n', &mut raw)?;
+        if n == 0 {
+            break;
+        }
+        line.push_str(&String::from_utf8_lossy(&raw));
+        let l = line.trim_end();
+        if l.is_empty() {
+            continue;
+        }
+
+        if let Some(rest) = l.strip_prefix(';') {
+            let r = rest.trim();
+            let rl = r.to_ascii_lowercase();
+            if rl.starts_with("type:") {
+                feature = feature_id(&r[5..]);
+            } else if rl == "layer_change" {
+                layer = layer.saturating_add(1);
+                seen_layer_marker = true;
+            } else if let Some(v) = comment_value(l, "LAYER") {
+                // Cura : `;LAYER:12`
+                if let Ok(n) = v.parse::<i32>() {
+                    layer = n.max(0) as u16;
+                    seen_layer_marker = true;
+                }
+            } else if let Some(v) = comment_value(l, "printer_model")
+                .or_else(|| comment_value(l, "Printer"))
+            {
+                meta.printer.get_or_insert_with(|| v.to_string());
+            } else if let Some(v) = comment_value(l, "Profile").or_else(|| comment_value(l, "print_settings_id")) {
+                meta.profile.get_or_insert_with(|| v.to_string());
+            } else if let Some(v) = comment_value(l, "filament_type") {
+                if meta.filaments.is_empty() {
+                    meta.filaments = v
+                        .split(|c| c == ';' || c == ',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                }
+            } else if let Some(v) = comment_value(l, "total layer number")
+                .or_else(|| comment_value(l, "LAYER_COUNT"))
+            {
+                meta.total_layers = v.parse().ok();
+            } else if let Some(v) = comment_value(l, "layer_height") {
+                meta.layer_height = v.parse().ok();
+            } else if let Some(v) = comment_value(l, "estimated printing time (normal mode)")
+                .or_else(|| comment_value(l, "model printing time"))
+                .or_else(|| comment_value(l, "total estimated time"))
+                .or_else(|| comment_value(l, "TIME"))
+            {
+                meta.print_time_s = meta.print_time_s.or_else(|| parse_duration(v));
+            } else if let Some(v) = comment_value(l, "total filament weight [g]")
+                .or_else(|| comment_value(l, "filament used [g]"))
+                .or_else(|| comment_value(l, "total filament used [g]"))
+            {
+                meta.filament_g = v.split(',').next().and_then(|s| s.trim().parse().ok());
+            } else if let Some(v) = comment_value(l, "generated by") {
+                meta.generator.get_or_insert_with(|| v.to_string());
+            }
+            continue;
+        }
+
+        // Changement d'outil : T0 à T3.
+        if l.len() >= 2 && l.as_bytes()[0].to_ascii_uppercase() == b'T' {
+            if let Ok(t) = l[1..].split_whitespace().next().unwrap_or("").parse::<u8>() {
+                if t < 16 {
+                    tool = t;
+                }
+            }
+            continue;
+        }
+
+        let up = l.as_bytes()[0].to_ascii_uppercase();
+        if up != b'G' && up != b'M' {
+            continue;
+        }
+        let code: u32 = match l[1..]
+            .split(|c: char| !c.is_ascii_digit())
+            .next()
+            .unwrap_or("")
+            .parse()
+        {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        match (up, code) {
+            (b'G', 90) => abs_xyz = true,
+            (b'G', 91) => abs_xyz = false,
+            (b'M', 82) => abs_e = true,
+            (b'M', 83) => abs_e = false,
+            (b'G', 92) => {
+                if let Some(v) = num_after(l, b'E') {
+                    e = v;
+                }
+                if let Some(v) = num_after(l, b'X') {
+                    x = v;
+                }
+                if let Some(v) = num_after(l, b'Y') {
+                    y = v;
+                }
+                if let Some(v) = num_after(l, b'Z') {
+                    z = v;
+                }
+            }
+            (b'G', 0) | (b'G', 1) => {
+                let (px, py, pz) = (x, y, z);
+                let nx = num_after(l, b'X');
+                let ny = num_after(l, b'Y');
+                let nz = num_after(l, b'Z');
+                let ne = num_after(l, b'E');
+                if abs_xyz {
+                    x = nx.unwrap_or(x);
+                    y = ny.unwrap_or(y);
+                    z = nz.unwrap_or(z);
+                } else {
+                    x += nx.unwrap_or(0.0);
+                    y += ny.unwrap_or(0.0);
+                    z += nz.unwrap_or(0.0);
+                }
+                let de = match (ne, abs_e) {
+                    (Some(v), true) => {
+                        let d = v - e;
+                        e = v;
+                        d
+                    }
+                    (Some(v), false) => {
+                        e += v;
+                        v
+                    }
+                    (None, _) => 0.0,
+                };
+
+                // Sans marqueur de couche, on en déduit une à chaque montée en Z.
+                if !seen_layer_marker && z > last_z + 0.01 {
+                    if last_z > f32::MIN {
+                        layer = layer.saturating_add(1);
+                    }
+                    last_z = z;
+                }
+
+                let moved = (x - px).abs() > 1e-6 || (y - py).abs() > 1e-6 || (z - pz).abs() > 1e-6;
+                if !moved {
+                    continue;
+                }
+                if segs.len() >= MAX_SEGS {
+                    truncated = true;
+                    continue;
+                }
+                segs.push(Seg {
+                    a: [px, py, pz],
+                    b: [x, y, z],
+                    layer,
+                    feature,
+                    tool,
+                    travel: de <= 0.0,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    if segs.is_empty() {
+        return Err(anyhow!("aucune trajectoire trouvée"));
+    }
+
+    let mut layers = 0u16;
+    for s in &segs {
+        layers = layers.max(s.layer);
+    }
+
+    // Cadrage sur la pièce : ni les déplacements à vide, ni les trajectoires du
+    // G-code de démarrage (ligne d'amorçage), qui traversent tout le plateau.
+    let bbox = |keep: &dyn Fn(&Seg) -> bool| {
+        let mut min = [f32::MAX; 3];
+        let mut max = [f32::MIN; 3];
+        for s in segs.iter().filter(|s| keep(s)) {
+            for p in [&s.a, &s.b] {
+                for k in 0..3 {
+                    min[k] = min[k].min(p[k]);
+                    max[k] = max[k].max(p[k]);
+                }
+            }
+        }
+        (min, max)
+    };
+    let (mut min, mut max) = bbox(&|s| !s.travel && s.feature != 0);
+    if min[0] > max[0] {
+        let r = bbox(&|s| !s.travel);
+        min = r.0;
+        max = r.1;
+    }
+    if min[0] > max[0] {
+        let r = bbox(&|_| true);
+        min = r.0;
+        max = r.1;
+    }
+
+    Ok(GcodeData {
+        segs,
+        layers,
+        min,
+        max,
+        meta,
+        truncated,
+    })
+}
+
+/// Sérialisation pour le visualiseur.
+///
+/// En-tête de 40 octets :
+/// `"3MFG"` | version u8 | drapeaux u8 (bit 0 : tronqué) | réservé u8×2 |
+/// nombre de segments u32 | nombre de couches u32 | min f32×3 | max f32×3 |
+/// positions (6 f32 par segment) | attributs (couche u16, famille u8,
+/// outil sur les 4 bits hauts + déplacement sur le bit 0).
+///
+/// Les segments sont triés par couche : le visualiseur affiche les couches
+/// jusqu'à un rang donné avec un seul appel de dessin.
+pub fn encode(data: &GcodeData) -> Vec<u8> {
+    let mut order: Vec<&Seg> = data.segs.iter().collect();
+    order.sort_by_key(|s| (s.layer, s.travel));
+    let n = order.len();
+
+    let mut out = Vec::with_capacity(40 + n * 28);
+    out.extend_from_slice(b"3MFG");
+    out.push(1);
+    out.push(if data.truncated { 1 } else { 0 });
+    out.extend_from_slice(&[0, 0]);
+    out.extend_from_slice(&(n as u32).to_le_bytes());
+    out.extend_from_slice(&(data.layers as u32 + 1).to_le_bytes());
+    for v in data.min.iter().chain(data.max.iter()) {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+    for s in &order {
+        for c in s.a.iter().chain(s.b.iter()) {
+            out.extend_from_slice(&c.to_le_bytes());
+        }
+    }
+    for s in &order {
+        out.extend_from_slice(&s.layer.to_le_bytes());
+        out.push(s.feature);
+        out.push((s.tool << 4) | u8::from(s.travel));
+    }
+    out
+}
+
+/// Vignette PNG encodée en base64 dans les commentaires, si le profil en a mis une.
+pub fn embedded_thumbnail(read: impl Read) -> Option<Vec<u8>> {
+    let rd = BufReader::with_capacity(1 << 16, read);
+    let mut best: Option<Vec<u8>> = None;
+    let mut cur: Option<String> = None;
+    for line in rd.lines().take(200_000).map_while(Result::ok) {
+        let t = line.trim_start_matches(';').trim();
+        let tl = t.to_ascii_lowercase();
+        if tl.starts_with("thumbnail begin") || tl.starts_with("thumbnail_png begin") {
+            cur = Some(String::new());
+        } else if tl.starts_with("thumbnail end") || tl.starts_with("thumbnail_png end") {
+            if let Some(b64) = cur.take() {
+                if let Some(bytes) = b64_decode(&b64) {
+                    // On garde la plus grande : c'est la plus lisible en vignette.
+                    if best.as_ref().map(|b| bytes.len() > b.len()).unwrap_or(true) {
+                        best = Some(bytes);
+                    }
+                }
+            }
+        } else if let Some(buf) = cur.as_mut() {
+            buf.push_str(t);
+        } else if tl.starts_with("g1") || tl.starts_with("g0") {
+            break; // passé l'en-tête, il n'y a plus de vignette
+        }
+    }
+    best
+}
+
+fn b64_decode(s: &str) -> Option<Vec<u8>> {
+    const INVALID: u8 = 255;
+    let val = |c: u8| -> u8 {
+        match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => INVALID,
+        }
+    };
+    let mut out = Vec::with_capacity(s.len() / 4 * 3);
+    let mut acc: u32 = 0;
+    let mut bits = 0;
+    for c in s.bytes() {
+        if c == b'=' {
+            break;
+        }
+        let v = val(c);
+        if v == INVALID {
+            continue;
+        }
+        acc = (acc << 6) | v as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE: &str = "\
+; generated by OrcaSlicer 2.3.6
+; total layer number: 2
+;TYPE:Custom
+G90
+M83
+G1 X10 Y10 Z0.2 F3000
+;LAYER_CHANGE
+;Z:0.2
+;TYPE:Outer wall
+G1 X20 Y10 E0.5
+G1 X20 Y20 E0.5
+;TYPE:Sparse infill
+G1 X15 Y15 E0.3
+;LAYER_CHANGE
+;Z:0.4
+;TYPE:Inner wall
+G1 Z0.4
+G1 X10 Y10 E0.4
+G1 X30 Y30 F9000
+; estimated printing time (normal mode) = 1h 37m 12s
+";
+
+    #[test]
+    fn parse_basics() {
+        let d = parse(SAMPLE.as_bytes()).unwrap();
+        assert_eq!(d.layers, 2, "deux changements de couche");
+        assert_eq!(d.meta.total_layers, Some(2));
+        assert_eq!(d.meta.print_time_s, Some(3600 + 37 * 60 + 12));
+        assert!(d.meta.generator.as_deref().unwrap_or("").contains("Orca"));
+
+        let extr: Vec<&Seg> = d.segs.iter().filter(|s| !s.travel).collect();
+        let trav: Vec<&Seg> = d.segs.iter().filter(|s| s.travel).collect();
+        assert_eq!(extr.len(), 4, "quatre extrusions");
+        // Le premier positionnement et le déplacement rapide sont des trajets à vide.
+        assert!(trav.len() >= 2, "déplacements détectés");
+
+        assert_eq!(extr[0].feature, 1, "paroi extérieure");
+        assert_eq!(extr[2].feature, 5, "remplissage");
+        assert_eq!(extr[3].feature, 2, "paroi intérieure");
+        assert_eq!(extr[3].layer, 2);
+
+        // Le cadrage ignore les déplacements à vide : X ne dépasse pas 20.
+        assert!((d.max[0] - 20.0).abs() < 0.01, "max x = {}", d.max[0]);
+    }
+
+    /// Le séparateur distingue une clé d'une autre qui commence pareil.
+    #[test]
+    fn comment_keys_need_a_separator() {
+        assert_eq!(comment_value("; layer_height = 0.3", "layer_height"), Some("0.3"));
+        assert_eq!(comment_value(";LAYER:12", "LAYER"), Some("12"));
+        assert_eq!(comment_value("; layer_height = 0.3", "LAYER"), None, "pas un préfixe");
+        assert_eq!(comment_value("; total layer number: 42", "total layer number"), Some("42"));
+        // L'espace seule sert aussi de séparateur.
+        assert_eq!(comment_value("; generated by OrcaSlicer 2.3.6", "generated by"), Some("OrcaSlicer 2.3.6"));
+    }
+
+    #[test]
+    fn reads_layer_height_from_header() {
+        let g = "; generated by Snapmaker Orca\n; layer_height = 0.3\n; total layer number: 10\nG1 X1 Y1 Z0.3 E1\n";
+        let d = parse(g.as_bytes()).unwrap();
+        assert_eq!(d.meta.layer_height, Some(0.3));
+        assert_eq!(d.meta.total_layers, Some(10));
+    }
+
+    #[test]
+    fn relative_extrusion_is_not_a_travel() {
+        // En mode absolu (M82), une valeur E qui n'augmente pas est une rétraction.
+        let g = "G90\nM82\nG1 X0 Y0 Z0.2\nG1 X10 Y0 E1.0\nG1 X20 Y0 E0.5\n";
+        let d = parse(g.as_bytes()).unwrap();
+        let extr: Vec<&Seg> = d.segs.iter().filter(|s| !s.travel).collect();
+        assert_eq!(extr.len(), 1, "seule la montée de E est une extrusion");
+    }
+
+    #[test]
+    fn encode_sorted_by_layer() {
+        let d = parse(SAMPLE.as_bytes()).unwrap();
+        let b = encode(&d);
+        assert_eq!(&b[0..4], b"3MFG");
+        let n = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
+        assert_eq!(n, d.segs.len());
+        assert_eq!(u32::from_le_bytes(b[12..16].try_into().unwrap()), 3, "couches 0 à 2");
+        assert_eq!(b.len(), 40 + n * 24 + n * 4, "en-tête de 40 octets");
+        // Les couches sont croissantes dans le tampon d'attributs.
+        let base = 40 + n * 24;
+        let mut prev = 0u16;
+        for i in 0..n {
+            let l = u16::from_le_bytes(b[base + i * 4..base + i * 4 + 2].try_into().unwrap());
+            assert!(l >= prev, "tri par couche");
+            prev = l;
+        }
+    }
+
+    /// Analyse un vrai G-code et écrit l'aperçu, pour vérification visuelle.
+    #[test]
+    fn dump_real_gcode() {
+        let (Ok(src), Ok(out)) = (std::env::var("GCODE_IN"), std::env::var("GCODE_OUT")) else {
+            return;
+        };
+        let t = std::time::Instant::now();
+        let d = parse(std::fs::File::open(&src).unwrap()).unwrap();
+        println!(
+            "{} segments ({} extrusions), {} couches, {:?} — analysé en {} ms",
+            d.segs.len(),
+            d.segs.iter().filter(|s| !s.travel).count(),
+            d.layers + 1,
+            d.meta.printer,
+            t.elapsed().as_millis()
+        );
+        let mut hist = [0usize; 12];
+        for sg in d.segs.iter().filter(|s| !s.travel) {
+            hist[sg.feature as usize] += 1;
+        }
+        println!("répartition par famille : {hist:?}");
+        std::fs::write(format!("{out}.bin"), encode(&d)).unwrap();
+        let img = crate::render::render_paths(&d.segs, d.min, d.max, 512);
+        image::DynamicImage::ImageRgba8(img)
+            .save(format!("{out}.png"))
+            .unwrap();
+    }
+}

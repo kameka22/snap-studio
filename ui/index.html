@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Snap Studio</title>
+<link rel="stylesheet" href="vendor/xterm.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="window">
+<aside id="sidebar" class="sidebar">
+  <div class="titlebar" data-tauri-drag-region></div>
+  <nav class="side-nav">
+    <button class="side-item" data-view="files">
+      <span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+      <span class="lbl">Fichiers</span>
+      <span class="count" id="count-files"></span>
+    </button>
+    <button class="side-item" data-view="library">
+      <span class="glyph" style="color: #FF9500"><svg viewBox="0 0 24 24"><path d="M4 4h5v16H4zm6 0h4v16h-4zm5.3.6 3.9-1 3.8 14.6-3.9 1z"/></svg></span>
+      <span class="lbl">Bibliothèque</span>
+      <span class="count" id="count-library"></span>
+    </button>
+    <button class="side-item" data-view="ia">
+      <span class="glyph" style="color: #AF52DE"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg></span>
+      <span class="lbl">IA</span>
+      <span class="count" id="count-ia"></span>
+    </button>
+
+    <div class="side-section">Dossiers récents</div>
+    <div id="side-recents" class="side-group"></div>
+
+    <div class="side-section">Imprimantes</div>
+    <div id="side-printers" class="side-group"></div>
+    <button id="prn-add" class="side-item side-add">
+      <span class="glyph"><svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg></span>
+      <span class="lbl">Ajouter une imprimante</span>
+    </button>
+  </nav>
+  <div class="side-footer">
+    <button class="side-item" data-view="settings">
+      <span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span>
+      <span class="lbl">Réglages</span>
+    </button>
+  </div>
+</aside>
+<main id="content" class="content">
+<header class="toolbar" data-tauri-drag-region>
+  <div class="tb-actions tb-lead" data-for="ia">
+    <button id="ia-back" class="tb-btn hidden" title="Conversations"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
+  </div>
+  <div class="tb-title" data-tauri-drag-region>
+    <h1 id="tb-title" data-tauri-drag-region></h1>
+    <span id="tb-sub" data-tauri-drag-region></span>
+  </div>
+  <div class="tb-spacer" data-tauri-drag-region></div>
+  <div class="tb-actions" data-for="files">
+    <input id="tile" type="range" min="140" max="360" step="10" title="Taille des vignettes" />
+    <div class="seg" role="group" aria-label="Affichage">
+      <button id="view-grid" class="seg-btn" title="Vignettes (⌘1)">
+        <svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z"/></svg>
+      </button>
+      <button id="view-list" class="seg-btn" title="Liste (⌘2)">
+        <svg viewBox="0 0 24 24"><path d="M4 5h16v3H4zm0 5.5h16v3H4zM4 16h16v3H4z"/></svg>
+      </button>
+    </div>
+    <button id="btn-sort" class="tb-btn" title="Trier"><svg viewBox="0 0 24 24"><path d="M7 4l4 5H8v11H6V9H3zm10 16l-4-5h3V4h2v11h3z"/></svg></button>
+    <button id="btn-refresh" class="tb-btn" title="Actualiser (⌘R)"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+    <label class="search">
+      <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 1-4.2 10.2l-3 3-1.4-1.4 3-3A6 6 0 0 1 10 4m0 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8"/></svg>
+      <input id="search" type="search" placeholder="Rechercher" spellcheck="false" />
+    </label>
+    <button id="btn-add" class="tb-btn" title="Ouvrir un dossier"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="tb-actions" data-for="ia">
+    <span id="ia-engine-tag" class="ia-tag"></span>
+    <div id="ia-dacts" class="tb-group hidden">
+      <button id="ia-folder" class="tb-btn" title="Afficher le dossier de travail"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+      <button id="ia-stop" class="btn">Fermer la session</button>
+    </div>
+  </div>
+  <div class="tb-actions" data-for="library">
+    <div id="lib-bar" class="tb-group hidden">
+      <button id="lib-back" class="tb-btn" title="Précédent"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
+      <button id="lib-fwd" class="tb-btn" title="Suivant"><svg viewBox="0 0 24 24"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z"/></svg></button>
+      <button id="lib-reload" class="tb-btn" title="Recharger"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+      <div id="lib-url" class="tb-url" title=""></div>
+      <button id="lib-fav" class="tb-btn" title="Ajouter à vos prints"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></button>
+    </div>
+    <button id="lib-add" class="tb-btn" title="Ouvrir un site"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="tb-actions" data-for="printers">
+    <div id="prn-tools" class="tb-group hidden">
+      <span id="prn-pill" class="pill">—</span>
+      <button id="prn-refresh" class="tb-btn" title="Rafraîchir"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+      <button id="prn-edit" class="tb-btn" title="Modifier"><svg viewBox="0 0 24 24"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8zm14.7-7.6a.8.8 0 0 0 0-1.1l-1.2-1.2a.8.8 0 0 0-1.1 0l-1.4 1.4 2.3 2.3z"/></svg></button>
+      <button id="prn-del" class="tb-btn" title="Supprimer"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg></button>
+    </div>
+    <button id="prn-add3" class="tb-btn" title="Ajouter une imprimante"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+  </div>
+</header>
+<div class="views">
+<section id="view-files" class="view">
+<div class="files-body">
+  <section id="stage">
+    <div id="empty" class="empty">
+      <div class="empty-art">
+        <svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg>
+      </div>
+      <h1>Vos fichiers 3MF, en un coup d'œil</h1>
+      <p>Choisissez un dossier, ou déposez-le simplement dans cette fenêtre.</p>
+      <div class="empty-actions">
+        <button id="btn-open2" class="btn primary big">Choisir un dossier</button>
+      </div>
+      <div id="places" class="places"></div>
+    </div>
+
+    <div id="loading" class="loading hidden"><div class="spinner"></div><span>Lecture du dossier…</span></div>
+
+    <div id="listhead" class="listhead hidden">
+      <div class="col-pick"></div>
+      <div class="col-thumb"></div>
+      <div class="col-name sortable" data-sort="name">Nom</div>
+      <div class="col-time sortable" data-sort="time">Durée</div>
+      <div class="col-weight sortable" data-sort="weight">Filament</div>
+      <div class="col-size sortable" data-sort="size">Taille</div>
+      <div class="col-date sortable" data-sort="date">Modifié</div>
+    </div>
+    <div id="items" class="grid"></div>
+    <div id="sentinel"></div>
+    <div id="selbar" class="selbar hidden">
+      <span id="selbar-txt"></span>
+      <button id="selbar-all" class="btn small">Tout sélectionner</button>
+      <button id="selbar-none" class="btn small">Annuler</button>
+      <button id="selbar-del" class="btn small danger">Mettre à la corbeille</button>
+    </div>
+    <div id="noresult" class="empty small hidden"><p>Aucun fichier ne correspond à la recherche.</p></div>
+  </section>
+
+  <div id="splitter" class="splitter"></div>
+
+  <aside id="details" class="details">
+    <div id="det-empty" class="det-empty">
+      <p>Sélectionnez un fichier pour afficher son aperçu.</p>
+    </div>
+    <div id="det-body" class="det-body hidden">
+      <div class="det-preview">
+        <img id="det-img" alt="" />
+        <div id="det-badge" class="badge"></div>
+        <button id="det-3d" class="btn view3d" title="Voir en 3D (V)">
+          <svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg>
+          Vue 3D
+        </button>
+      </div>
+      <h2 id="det-name"></h2>
+      <div id="det-sub" class="det-sub"></div>
+      <div class="det-actions">
+        <button id="act-slice" class="btn primary">Découper</button>
+      </div>
+      <div id="det-ia" class="det-actions">
+        <button id="act-ia" class="btn">Modifier avec l'IA</button>
+      </div>
+      <div id="det-actions" class="det-actions">
+        <button id="act-open" class="btn">Ouvrir</button>
+        <button id="act-plate" class="btn">Au plateau</button>
+      </div>
+      <div class="det-actions">
+        <button id="act-reveal" class="btn">Finder</button>
+        <button id="act-delete" class="btn danger">Supprimer</button>
+      </div>
+      <dl id="det-info" class="info"></dl>
+      <div id="det-filaments" class="filaments"></div>
+      <button id="act-analyze" class="btn wide">Analyser la géométrie</button>
+      <div id="det-desc" class="desc"></div>
+    </div>
+    <div id="det-multi" class="det-multi hidden">
+      <h2><span id="multi-count"></span> fichiers sélectionnés</h2>
+      <div id="multi-size" class="det-sub"></div>
+      <div class="det-actions">
+        <button id="multi-delete" class="btn danger wide">Supprimer la sélection</button>
+      </div>
+    </div>
+  </aside>
+</div>
+</section>
+
+<section id="view-printers" class="view hidden">
+  <div class="prn">
+    <section class="prn-main">
+      <div id="prn-empty" class="empty">
+        <h1>Aucune imprimante</h1>
+        <p>Ajoutez une imprimante Klipper par son adresse IP ou son nom d'hôte.</p>
+        <div class="empty-actions"><button id="prn-add2" class="btn primary big">Ajouter une imprimante</button></div>
+      </div>
+      <div id="prn-detail" class="prn-detail hidden">
+        <div id="prn-msg" class="prn-msg hidden"></div>
+
+        <div class="hero">
+          <div class="hero-visual">
+            <svg id="pv" class="pv" viewBox="0 0 280 252" aria-hidden="true">
+              <defs>
+                <linearGradient id="pvFront" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" class="pv-front-a" /><stop offset="1" class="pv-front-b" />
+                </linearGradient>
+                <linearGradient id="pvLeft" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" class="pv-left-a" /><stop offset="1" class="pv-left-b" />
+                </linearGradient>
+                <radialGradient id="pvAct">
+                  <stop offset="0" style="stop-color: var(--accent)" stop-opacity=".9" />
+                  <stop offset="1" style="stop-color: var(--accent)" stop-opacity="0" />
+                </radialGradient>
+                <radialGradient id="pvHot">
+                  <stop offset="0" stop-color="#ff8a3d" stop-opacity=".85" />
+                  <stop offset="1" stop-color="#ff8a3d" stop-opacity="0" />
+                </radialGradient>
+              </defs>
+
+              <ellipse class="pv-shadow" cx="140" cy="228" rx="96" ry="9" />
+
+              <!-- caisson en perspective : flanc gauche, façade, dessus ouvert -->
+              <path class="pv-face-left" d="M34 66 L140 104 L140 216 L34 178 Z" />
+              <path class="pv-face-front" d="M140 104 L246 66 L246 178 L140 216 Z" />
+              <path class="pv-top-rim" d="M34 66 L140 28 L246 66 L140 104 Z" />
+              <path class="pv-top-in" d="M44 66 L140 32 L236 66 L140 100 Z" />
+
+              <!-- façade : porte vitrée, écran, marque -->
+              <path class="pv-door" d="M155 123 L233 95 L233 167 L155 195 Z" />
+              <path id="pv-lamp" class="pv-lamp" d="M155 123 L233 95 L233 167 L155 195 Z" opacity="0" />
+              <ellipse id="pv-bedglow" cx="198" cy="170" rx="28" ry="7"
+                       transform="rotate(-19.7 198 170)" fill="url(#pvHot)" opacity="0" />
+              <path class="pv-bed" d="M177 176 L219 161 L219 167 L177 182 Z" />
+              <path id="pv-obj" class="pv-obj" d="M181 172 L206 163 L206 163 L181 172 Z" />
+              <path class="pv-handle" d="M228 120 L233 118 L233 140 L228 142 Z" />
+              <path class="pv-screen-body" d="M212 85 L238 76 L238 88 L212 97 Z" />
+              <circle id="pv-screen" cx="217" cy="88" r="2.6" />
+              <text class="pv-word" x="152" y="170" transform="matrix(1,-0.358,0,1,0,0)">snapmaker</text>
+
+              <!-- bobines sur le flanc gauche -->
+              <g transform="matrix(1,0.358,0,1,0,0)">
+                <circle class="pv-reel" cx="72" cy="64" r="12.5" />
+                <circle class="pv-spool" data-i="0" cx="72" cy="64" r="6.5" />
+                <circle class="pv-reel" cx="72" cy="90" r="12.5" />
+                <circle class="pv-spool" data-i="1" cx="72" cy="90" r="6.5" />
+                <circle class="pv-reel" cx="72" cy="116" r="12.5" />
+                <circle class="pv-spool" data-i="2" cx="72" cy="116" r="6.5" />
+                <circle class="pv-reel" cx="72" cy="142" r="12.5" />
+                <circle class="pv-spool" data-i="3" cx="72" cy="142" r="6.5" />
+              </g>
+
+              <!-- tubes d'alimentation, colorés par bobine -->
+              <path class="pv-tube" data-i="0" d="M103 70 C97 48 78 42 62 46" />
+              <path class="pv-tube" data-i="1" d="M126 62 C120 38 96 30 74 34" />
+              <path class="pv-tube" data-i="2" d="M150 53 C144 28 112 18 86 22" />
+              <path class="pv-tube" data-i="3" d="M173 45 C167 20 128 8 98 12" />
+
+              <!-- traverse : quatre têtes, la tête active désignée -->
+              <g id="pv-heads">
+                <circle id="pv-heat" cx="150" cy="75" r="26" fill="url(#pvHot)" opacity="0" />
+                <circle id="pv-glow" cx="150" cy="62" r="28" fill="url(#pvAct)" opacity="0" />
+                <g class="pv-head" data-i="0">
+                  <path class="f-left" d="M90 75.6 L103 80.2 L103 92 L90 87.4 Z" />
+                  <path class="f-right" d="M103 80.2 L116 75.6 L116 87.4 L103 92 Z" />
+                  <path class="f-top" d="M103 71 L116 75.6 L103 80.2 L90 75.6 Z" />
+                  <path class="pv-chip" data-i="0" d="M103 71 L109 73.1 L103 75.2 L97 73.1 Z" />
+                </g>
+                <g class="pv-head" data-i="1">
+                  <path class="f-left" d="M113 67.6 L126 72.2 L126 84 L113 79.4 Z" />
+                  <path class="f-right" d="M126 72.2 L139 67.6 L139 79.4 L126 84 Z" />
+                  <path class="f-top" d="M126 63 L139 67.6 L126 72.2 L113 67.6 Z" />
+                  <path class="pv-chip" data-i="1" d="M126 63 L132 65.1 L126 67.2 L120 65.1 Z" />
+                </g>
+                <g class="pv-head" data-i="2">
+                  <path class="f-left" d="M137 58.6 L150 63.2 L150 75 L137 70.4 Z" />
+                  <path class="f-right" d="M150 63.2 L163 58.6 L163 70.4 L150 75 Z" />
+                  <path class="f-top" d="M150 54 L163 58.6 L150 63.2 L137 58.6 Z" />
+                  <path class="pv-chip" data-i="2" d="M150 54 L156 56.1 L150 58.2 L144 56.1 Z" />
+                </g>
+                <g class="pv-head" data-i="3">
+                  <path class="f-left" d="M160 50.6 L173 55.2 L173 67 L160 62.4 Z" />
+                  <path class="f-right" d="M173 55.2 L186 50.6 L186 62.4 L173 67 Z" />
+                  <path class="f-top" d="M173 46 L186 50.6 L173 55.2 L160 50.6 Z" />
+                  <path class="pv-chip" data-i="3" d="M173 46 L179 48.1 L173 50.2 L167 48.1 Z" />
+                </g>
+              </g>
+              <g id="pv-badge" opacity="0">
+                <path class="pv-badge-line" d="M150 33 L150 42" />
+                <rect x="128" y="14" width="44" height="17" rx="8.5" />
+                <text x="150" y="26" text-anchor="middle">T0</text>
+              </g>
+
+              <path class="pv-foot" d="M50 178 L60 181.6 L60 191 L50 187.4 Z" />
+              <path class="pv-foot" d="M222 178 L232 174.4 L232 183.8 L222 187.4 Z" />
+            </svg>
+          </div>
+
+          <div class="hero-stats">
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 120 120">
+                <circle class="ring-bg" cx="60" cy="60" r="50" />
+                <circle id="prn-ring" class="ring-fg" cx="60" cy="60" r="50" />
+              </svg>
+              <div class="ring-txt"><b id="prn-jobpct">—</b><span id="prn-ringlbl">au repos</span></div>
+            </div>
+            <div class="hero-lines">
+              <div id="prn-jobname" class="job">Aucune impression en cours</div>
+              <div id="prn-times" class="muted"></div>
+              <div id="prn-chips" class="chips"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group" id="prn-filaments"></div>
+        <div class="group" id="prn-temps"></div>
+        <div class="group" id="prn-info"></div>
+        <div id="prn-updated" class="prn-updated"></div>
+      </div>
+    </section>
+  </div>
+</section>
+
+<section id="view-library" class="view hidden">
+  <div class="lib-tabs">
+    <button class="lib-tab on" data-tab="home">
+      <svg viewBox="0 0 24 24"><path d="m12 3 9 8h-3v9h-5v-6h-2v6H6v-9H3z"/></svg>
+      Mes prints
+    </button>
+    <div id="lib-tablist" class="lib-tablist"></div>
+  </div>
+
+  <div id="lib-frame" class="lib-frame">
+    <div id="lib-home" class="lib-home">
+      <div id="lib-empty" class="lib-empty">
+        <div class="empty-art">
+          <svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg>
+        </div>
+        <h1>Vos prints à faire</h1>
+        <p>Ouvrez un site, puis marquez d'une étoile les modèles à imprimer.</p>
+        <div id="lib-sites" class="places"></div>
+      </div>
+      <div id="lib-grid" class="lib-grid hidden"></div>
+    </div>
+  </div>
+</section>
+
+<section id="view-ia" class="view hidden">
+
+  <div id="ia-list" class="ia-list"></div>
+
+  <div id="ia-detail" class="ia-detail hidden">
+    <div id="ia-hint" class="ia-hint hidden">
+      Première ouverture : Claude vous demandera de confirmer le dossier de
+      travail. Répondez <b>« Yes, I trust this folder »</b> — c'est un dossier
+      que l'application vient de créer pour cette conversation.
+    </div>
+    <div class="ia-split">
+      <div class="ia-left">
+        <div id="ia-term" class="ia-term"></div>
+        <div id="ia-dead" class="ia-dead hidden">
+          <span>La session s'est terminée.</span>
+          <button id="ia-restart" class="btn small">Rouvrir</button>
+        </div>
+      </div>
+
+      <aside class="ia-right">
+        <div class="ia-rbar">
+          <span>Aperçu</span>
+          <span class="ia-rbar-end">
+            <button id="ia-reframe" class="btn small" title="Recadrer la vue">Recadrer</button>
+            <button id="ia-expand" class="btn small" title="Agrandir (double-clic sur l'aperçu)">Agrandir</button>
+            <span id="ia-vlabel" class="ia-vlabel"></span>
+          </span>
+        </div>
+        <div id="ia-stage" class="ia-stage"></div>
+        <div id="ia-versions" class="ia-versions"></div>
+        <dl id="ia-stats" class="ia-stats"></dl>
+        <div class="ia-rActions">
+          <button id="ia-save" class="btn primary">Enregistrer dans Fichiers</button>
+          <button id="ia-slice" class="btn">Découper</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div id="ia-empty" class="ia-empty hidden">
+    <div class="empty-art">
+      <svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg>
+    </div>
+    <h1>Modifier une pièce en discutant</h1>
+    <p>Choisissez un objet dans <b>Fichiers</b>, puis « Modifier avec l'IA ».
+       Chaque conversation garde son propre espace de travail.</p>
+  </div>
+</section>
+
+<section id="view-settings" class="view hidden">
+  <div class="settings-page">
+
+    <div class="set-section">Navigation 3D</div>
+    <div class="group">
+      <div class="grow-row">
+        <span class="k">Action de la molette
+          <span class="sub">Le pincement à deux doigts zoome toujours, quel que soit ce choix</span>
+        </span>
+        <select id="set-wheel-action">
+          <option value="zoom">Zoomer</option>
+          <option value="pan">Déplacer la vue</option>
+          <option value="orbit">Pivoter</option>
+        </select>
+      </div>
+      <label class="grow-row">
+        <span class="k">Inverser la molette
+          <span class="sub">Le défilement vers le haut éloigne la caméra au lieu de la rapprocher</span>
+        </span>
+        <input type="checkbox" id="set-invert-wheel" class="sw" />
+      </label>
+      <div class="grow-row">
+        <span class="k">Sensibilité
+          <span class="sub">Amplitude du mouvement pour un cran de molette</span>
+        </span>
+        <span class="range-wrap">
+          <input type="range" id="set-wheel-speed" min="0.3" max="2.5" step="0.1" />
+          <b id="set-wheel-speed-val">1,0×</b>
+        </span>
+      </div>
+      <div class="grow-row">
+        <span class="k">Rappel des commandes
+          <span class="sub">Glisser : pivoter · ⇧ glisser ou clic droit : déplacer · double-clic : recadrer</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="set-section">Trancheur</div>
+    <div class="group">
+      <div class="grow-row">
+        <span class="k">Application
+          <span class="sub">Utilisée par « Ouvrir » et « Au plateau »</span>
+        </span>
+        <select id="opt-slicer"></select>
+      </div>
+      <div class="grow-row">
+        <span class="k">Au plateau
+          <span class="sub">Envoie une copie sans les réglages de projet : la pièce s'ajoute au plateau en cours au lieu de le remplacer</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="set-section">Fichiers</div>
+    <div class="group">
+      <label class="grow-row">
+        <span class="k">Inclure les sous-dossiers
+          <span class="sub">Parcourir aussi les dossiers contenus dans celui qui est ouvert</span>
+        </span>
+        <input type="checkbox" id="opt-recursive" class="sw" />
+      </label>
+      <div class="grow-row">
+        <span class="k">Source de l'aperçu
+          <span class="sub">Ce qui sert de vignette quand le fichier contient plusieurs images</span>
+        </span>
+        <select id="opt-pref">
+          <option value="0">Automatique</option>
+          <option value="1">Aperçu du plateau</option>
+          <option value="2">Image du modèle</option>
+          <option value="3">Rendu 3D de la pièce</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="set-section">Cache des vignettes</div>
+    <div class="group">
+      <div class="grow-row">
+        <span class="k">Espace occupé
+          <span class="sub">Les vignettes sont régénérées automatiquement si un fichier change</span>
+        </span>
+        <span class="val" id="cache-size">—</span>
+      </div>
+      <div class="grow-row">
+        <span class="k">Vider le cache</span>
+        <button id="opt-clear" class="btn small">Vider</button>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+</main>
+</div>
+
+<div id="smodal" class="modal hidden">
+  <div class="modal-box wide">
+    <h3>Découper</h3>
+    <div id="s-file" class="det-sub"></div>
+
+    <div class="form">
+      <label>Imprimante<select id="s-machine"></select></label>
+      <label>Profil d'impression<select id="s-process"></select></label>
+      <label>Filament<select id="s-filament"></select></label>
+    </div>
+
+    <div class="set-section">Réglages rapides</div>
+    <div class="group">
+      <div class="grow-row">
+        <span class="k">Hauteur de couche</span>
+        <span class="range-wrap">
+          <input type="range" id="s-layer" min="0.06" max="0.32" step="0.02" />
+          <b id="s-layer-val">—</b>
+        </span>
+      </div>
+      <div class="grow-row">
+        <span class="k">Remplissage</span>
+        <span class="range-wrap">
+          <input type="range" id="s-infill" min="0" max="100" step="5" />
+          <b id="s-infill-val">—</b>
+        </span>
+      </div>
+      <div class="grow-row">
+        <span class="k">Parois</span>
+        <span class="range-wrap">
+          <input type="range" id="s-walls" min="1" max="6" step="1" />
+          <b id="s-walls-val">—</b>
+        </span>
+      </div>
+      <label class="grow-row">
+        <span class="k">Supports</span>
+        <input type="checkbox" id="s-supports" class="sw" />
+      </label>
+      <label class="grow-row">
+        <span class="k">Bordure d'accroche</span>
+        <input type="checkbox" id="s-brim" class="sw" />
+      </label>
+    </div>
+
+    <div id="s-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="s-stop" class="btn danger left hidden">Interrompre</button>
+      <button id="s-cancel" class="btn" data-cancel>Annuler</button>
+      <button id="s-go" class="btn primary">Découper</button>
+    </div>
+  </div>
+</div>
+
+<div id="iamodal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Nouvelle conversation</h3>
+    <div id="ia-src" class="det-sub"></div>
+
+    <div class="form">
+      <label>Que voulez-vous modifier ?
+        <textarea id="ia-prompt" rows="3" placeholder="Incline le plateau de 15° vers l'arrière"></textarea>
+      </label>
+      <label>Bac à sable
+        <select id="ia-engine">
+          <option value="container">Conteneur (isolé)</option>
+          <option value="local">Local, sans conteneur</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="ia-hints">
+      Essayez : « perce un trou de 4 mm au centre » · « creuse l'intérieur,
+      parois 2 mm » · « arrondis les angles de la base »
+    </div>
+
+    <div id="ia-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="ia-cancel" class="btn" data-cancel>Annuler</button>
+      <button id="ia-go" class="btn primary">Démarrer</button>
+    </div>
+  </div>
+</div>
+
+<div id="viewer" class="viewer hidden">
+  <canvas id="v-canvas"></canvas>
+  <div class="v-bar" data-tauri-drag-region>
+    <div class="v-title" data-tauri-drag-region>
+      <b id="v-name" data-tauri-drag-region></b>
+      <span id="v-stats" data-tauri-drag-region></span>
+    </div>
+    <div class="v-actions">
+      <button id="v-travel" class="btn hidden">Déplacements</button>
+      <button id="v-plate" class="btn on">Plateau</button>
+      <button id="v-reset" class="btn" title="Recadrer (R)">Recadrer</button>
+      <button id="v-close" class="btn" title="Fermer (Échap)">Fermer</button>
+    </div>
+  </div>
+  <div id="v-layers" class="v-layers hidden">
+    <input type="range" id="v-layer" min="1" max="1" value="1" />
+    <div class="v-layer-info">
+      <b id="v-layer-n"></b>
+      <span id="v-layer-z"></span>
+    </div>
+  </div>
+  <div id="v-legend" class="v-legend hidden"></div>
+  <div id="v-msg" class="v-msg">Lecture du maillage…</div>
+  <div class="v-hint" id="v-hint">glisser : pivoter · ⇧ glisser ou clic droit : déplacer · pincer : zoomer</div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+
+<div id="pmodal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="pmodal-title">Ajouter une imprimante</h3>
+    <div class="form">
+      <label>Nom<input id="pf-name" placeholder="Snapmaker U1 de l'atelier" /></label>
+      <label>Adresse IP ou nom d'hôte<input id="pf-host" placeholder="192.168.1.50" spellcheck="false" /></label>
+      <label>Port<input id="pf-port" type="number" min="1" max="65535" value="7125" /></label>
+      <label>Modèle<input id="pf-model" placeholder="Snapmaker U1" list="pf-models" /></label>
+      <datalist id="pf-models">
+        <option value="Snapmaker U1"></option>
+        <option value="Snapmaker J1"></option>
+        <option value="Klipper / Moonraker"></option>
+      </datalist>
+    </div>
+    <div id="pf-test" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="pf-probe" class="btn left">Tester la connexion</button>
+      <button id="pf-cancel" class="btn" data-cancel>Annuler</button>
+      <button id="pf-save" class="btn primary">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script src="printers.js"></script>
+<script src="viewer.js"></script>
+<script src="slice.js"></script>
+<script src="library.js"></script>
+<script src="vendor/xterm.js"></script>
+<script src="vendor/xterm-addon-fit.js"></script>
+<script src="ia.js"></script>
+</body>
+</html>
