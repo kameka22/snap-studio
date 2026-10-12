@@ -1,5 +1,6 @@
 mod menu;
 mod migrate;
+mod discover;
 mod favorites;
 mod gcode;
 mod ia;
@@ -982,6 +983,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(update::Pending::default())
+        .manage(discover::Discovery::default())
         .register_asynchronous_uri_scheme_protocol("cam", |_app, request: Request<Vec<u8>>, responder| {
             let uri = request.uri().to_string();
             tauri::async_runtime::spawn(async move {
@@ -1037,6 +1039,8 @@ pub fn run() {
             update::app_version,
             update::update_check,
             update::update_install,
+            discover::printer_discover_start,
+            discover::printer_discover_stop,
             pick_folder,
             scan_folder,
             read_metas,

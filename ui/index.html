@@ -486,6 +486,12 @@
         </span>
         <button id="up-check" class="btn small">Rechercher</button>
       </div>
+      <div class="grow-row">
+        <span class="k">Assistant de bienvenue
+          <span class="sub">Choisir un dossier de modèles, trouver une imprimante sur le réseau</span>
+        </span>
+        <button id="w-again" class="btn small">Revoir l'accueil</button>
+      </div>
     </div>
 
     <div class="set-section">Navigation 3D</div>
@@ -755,6 +761,7 @@
 <div id="pmodal" class="modal hidden">
   <div class="modal-box">
     <h3 id="pmodal-title">Ajouter une imprimante</h3>
+    <div id="pf-disc" class="disc"></div>
     <div class="form">
       <label>Nom<input id="pf-name" placeholder="Snapmaker U1 de l'atelier" /></label>
       <label>Adresse IP ou nom d'hôte<input id="pf-host" placeholder="192.168.1.50" spellcheck="false" /></label>
@@ -790,6 +797,87 @@
   </div>
 </div>
 
+<div id="welcome" class="welcome hidden" role="dialog" aria-modal="true" aria-labelledby="w-title">
+  <div class="w-card">
+    <button id="w-skip" class="w-skip">Ignorer</button>
+    <div class="w-viewport">
+      <div id="w-track" class="w-track">
+
+        <section class="w-step">
+          <img class="w-icon" src="assets/app-icon.png" alt="" />
+          <h1 id="w-title">Bienvenue dans Snap Studio</h1>
+          <p class="w-lead">Merci d'utiliser Snap Studio ! Tout ce qu'il faut pour votre Snapmaker U1, du fichier à l'impression.</p>
+          <ul class="w-features">
+            <li>
+              <span class="w-ico" style="--c: #007aff"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+              <span><b>Explorez vos modèles</b><small>Aperçus, informations et vue 3D de vos fichiers 3MF et G-code</small></span>
+            </li>
+            <li>
+              <span class="w-ico" style="--c: #af52de"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span>
+              <span><b>Préparez et découpez</b><small>Plateau, orientation automatique, découpe avec Snapmaker Orca</small></span>
+            </li>
+            <li>
+              <span class="w-ico" style="--c: #34c759"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/></svg></span>
+              <span><b>Suivez vos impressions</b><small>Statut en direct, bobines chargées et caméra de vos imprimantes</small></span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="w-step">
+          <div class="w-badge" style="--c: #007aff"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+          <h1>Vos modèles</h1>
+          <p class="w-lead">Où rangez-vous vos fichiers 3MF ? Snap Studio les affichera dans Fichiers.</p>
+          <div id="w-places" class="places"></div>
+          <button id="w-pick" class="btn">Choisir un dossier…</button>
+          <div id="w-folder" class="w-result hidden"></div>
+        </section>
+
+        <section class="w-step">
+          <div class="w-badge" style="--c: #34c759"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/></svg></div>
+          <h1>Votre imprimante</h1>
+          <p class="w-lead">Trouvons votre Snapmaker U1 sur le réseau local.</p>
+          <div id="w-disc" class="disc"></div>
+          <div id="w-form" class="w-form hidden">
+            <div class="form">
+              <label>Nom<input id="w-pname" placeholder="Snapmaker U1 de l'atelier" /></label>
+              <div class="w-row">
+                <label>Adresse IP ou nom d'hôte<input id="w-phost" placeholder="192.168.1.50" spellcheck="false" /></label>
+                <label class="w-port">Port<input id="w-pport" type="number" min="1" max="65535" value="7125" /></label>
+              </div>
+            </div>
+            <div id="w-ptest" class="pf-test"></div>
+            <div class="w-form-actions">
+              <button id="w-ptry" class="btn">Tester la connexion</button>
+              <button id="w-padd" class="btn primary">Ajouter</button>
+            </div>
+          </div>
+          <button id="w-manual" class="w-link">Saisir l'adresse manuellement</button>
+          <div id="w-added" class="w-result hidden"></div>
+        </section>
+
+        <section class="w-step">
+          <div class="w-final">
+            <canvas id="w-confetti"></canvas>
+            <img class="w-icon big" src="assets/app-icon.png" alt="" />
+          </div>
+          <h1>Tout est prêt !</h1>
+          <ul id="w-summary" class="w-summary"></ul>
+          <button id="w-start" class="btn primary w-start">
+            <svg viewBox="0 0 24 24"><path d="M9.19 6.35c-2.04 2.29-3.44 5.58-3.57 5.89L2 10.69l4.05-4.05c.47-.47 1.15-.68 1.81-.55l1.33.26zM11.17 17s3.74-1.55 5.89-3.7c5.4-5.4 4.5-9.62 4.21-10.57-.95-.3-5.17-1.19-10.57 4.21C8.55 9.09 7 12.83 7 12.83zm6.48-2.19c-2.29 2.04-5.58 3.44-5.89 3.57L13.31 22l4.05-4.05c.47-.47.68-1.15.55-1.81zM9 18c0 .83-.34 1.58-.88 2.12C6.94 21.3 2 22 2 22s.7-4.94 1.88-6.12C4.42 15.34 5.17 15 6 15c1.66 0 3 1.34 3 3m4-9c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2"/></svg>
+            Commencer
+          </button>
+        </section>
+
+      </div>
+    </div>
+    <div class="w-nav">
+      <button id="w-back" class="btn">Retour</button>
+      <div id="w-dots" class="w-dots"><i></i><i></i><i></i><i></i></div>
+      <button id="w-next" class="btn primary">Continuer</button>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 <script src="printers.js"></script>
 <script src="viewer.js"></script>
@@ -800,5 +888,6 @@
 <script src="vendor/xterm-addon-fit.js"></script>
 <script src="ia.js"></script>
 <script src="update.js"></script>
+<script src="welcome.js"></script>
 </body>
 </html>

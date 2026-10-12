@@ -2,7 +2,8 @@
 /* Vue « Imprimantes ».
    Le statut est lu par l'API HTTP Moonraker de l'imprimante (Klipper) :
    la Snapmaker U1 l'expose sur le port 7125, et sur le port 80 derrière son nginx.
-   Aucune découverte réseau : seules les adresses saisies ici sont interrogées. */
+   La recherche réseau (mDNS) ne tourne que pendant l'affichage de la liste
+   « Sur le réseau » ; sinon, seules les adresses enregistrées sont interrogées. */
 
 const P = {
   list: [],
@@ -482,6 +483,104 @@ function updateFreshness() {
 
 /* ------------------------------------------------------------ formulaire */
 
+/* ------------------------------------------------- recherche réseau */
+
+/* Liste « Sur le réseau », partagée par la fenêtre d'ajout et l'assistant de
+   bienvenue : une seule recherche à la fois, affichée dans la dernière liste
+   ouverte. Les imprimantes arrivent au fil des réponses, une par adresse. */
+const DISC = { items: new Map(), running: false, error: null, picked: null, view: null };
+
+function discoveryList(box, onPick) {
+  DISC.view = { box, onPick };
+  box.classList.add("disc");
+  box.innerHTML = `<div class="disc-head">
+      <span class="disc-title">Sur le réseau</span>
+      <span class="disc-state"></span>
+      <button class="btn small disc-again hidden">Relancer</button>
+    </div>
+    <div class="disc-list"></div>`;
+  box.querySelector(".disc-again").onclick = discoverStart;
+  discoverStart();
+}
+
+async function discoverStart() {
+  DISC.items.clear();
+  DISC.picked = null;
+  DISC.error = null;
+  DISC.running = true;
+  discRender();
+  try {
+    await invoke("printer_discover_start");
+  } catch (e) {
+    DISC.running = false;
+    DISC.error = String(e);
+    discRender();
+  }
+}
+
+function discoverStop() {
+  if (DISC.running) invoke("printer_discover_stop").catch(() => {});
+  DISC.running = false;
+  DISC.view = null;
+}
+
+/* Modèle à proposer pour une imprimante trouvée. */
+const discModel = (f) => f.model || (f.service === "snapmaker" ? "Snapmaker U1" : "Klipper / Moonraker");
+
+/* Déjà enregistrée : même adresse. */
+const discKnown = (f) => P.list.some((p) => p.host === f.ip);
+
+listen("printer-found", (e) => {
+  const f = e.payload;
+  const prev = DISC.items.get(f.ip);
+  // Une U1 s'annonce parfois deux fois (Snapmaker et Moonraker) : la fiche
+  // Snapmaker, plus riche, l'emporte.
+  if (prev?.service === "snapmaker" && f.service !== "snapmaker") return;
+  DISC.items.set(f.ip, f);
+  discRender();
+});
+listen("printer-discover-done", () => {
+  DISC.running = false;
+  discRender();
+});
+
+function discRender() {
+  const v = DISC.view;
+  if (!v) return;
+  const items = [...DISC.items.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const st = v.box.querySelector(".disc-state");
+  st.innerHTML = DISC.running
+    ? '<span class="spinner small"></span>Recherche…'
+    : items.length
+      ? `${items.length} trouvée${items.length > 1 ? "s" : ""}`
+      : "";
+  v.box.querySelector(".disc-again").classList.toggle("hidden", DISC.running);
+  const list = v.box.querySelector(".disc-list");
+  if (!items.length) {
+    list.innerHTML = DISC.running
+      ? ""
+      : `<div class="disc-empty">${esc(DISC.error || "Aucune imprimante trouvée — vérifiez qu'elle est allumée et sur le même réseau, ou saisissez son adresse.")}</div>`;
+    return;
+  }
+  list.innerHTML = "";
+  for (const f of items) {
+    const known = discKnown(f);
+    const el = document.createElement("button");
+    el.className = "disc-item" + (DISC.picked === f.ip ? " on" : "");
+    el.disabled = known;
+    const sub = [f.ip, discModel(f), f.firmware && `firmware ${f.firmware}`].filter(Boolean).join(" · ");
+    el.innerHTML = `<span class="glyph">${SIDE_PRINTER}</span>
+      <span class="disc-text"><b>${esc(f.name)}</b><small>${esc(sub)}</small></span>
+      ${known ? '<span class="disc-tag">déjà ajoutée</span>' : ""}`;
+    el.onclick = () => {
+      DISC.picked = f.ip;
+      discRender();
+      v.onPick(f);
+    };
+    list.appendChild(el);
+  }
+}
+
 function openForm(printer) {
   P.editing = printer || null;
   $("pmodal-title").textContent = printer ? "Modifier l'imprimante" : "Ajouter une imprimante";
@@ -491,11 +590,23 @@ function openForm(printer) {
   $("pf-model").value = printer?.model || "Snapmaker U1";
   $("pf-test").textContent = "";
   $("pf-test").className = "pf-test";
+  // La recherche ne sert qu'à un ajout.
+  $("pf-disc").classList.toggle("hidden", !!printer);
+  if (!printer) {
+    discoveryList($("pf-disc"), (f) => {
+      $("pf-name").value = f.name;
+      $("pf-host").value = f.ip;
+      $("pf-port").value = 7125;
+      $("pf-model").value = discModel(f);
+      probeForm();
+    });
+  }
   openSheet($("pmodal"));
   setTimeout(() => $("pf-host").focus(), 30);
 }
 
 function closeForm() {
+  discoverStop();
   closeSheet($("pmodal"));
   P.editing = null;
 }

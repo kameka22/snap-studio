@@ -27,9 +27,10 @@ les couleurs d'un modèle multicolore sont associées aux têtes. Aperçu des
 trajectoires avec durée, filament et coût, puis enregistrement du G-code ou
 envoi à l'imprimante (nivellement, calibration du débit, timelapse).
 
-**Imprimantes** — statut en direct par WebSocket Moonraker : état, progression,
-températures des quatre têtes, bobines chargées, caméra. Fonctionne avec toute
-imprimante Klipper.
+**Imprimantes** — recherche automatique des U1 sur le réseau local (mDNS,
+comme Snapmaker Orca) ; statut en direct par WebSocket Moonraker : état,
+progression, températures des quatre têtes, bobines chargées, caméra.
+Fonctionne avec toute imprimante Klipper.
 
 **Bibliothèque** — MakerWorld, Printables, Thingiverse et Cults3D dans des
 onglets natifs, sessions conservées ; les téléchargements arrivent dans
@@ -54,6 +55,11 @@ lancement : sur macOS, clic droit → Ouvrir (ou
 `xattr -dr com.apple.quarantine "/Applications/Snap Studio.app"`) ; sur
 Windows, « Informations complémentaires » → « Exécuter quand même ».
 
+Au premier lancement, un **assistant de bienvenue** fait choisir le dossier de
+modèles et trouve l'imprimante sur le réseau (ou sa saisie à la main) ; il
+reste accessible depuis Réglages → Application et le menu Aide. Sur macOS, la
+recherche réseau demande une fois l'accès au réseau local.
+
 Ensuite, **l'application se met à jour seule** : au lancement, elle propose
 la nouvelle version, la télécharge, vérifie sa signature et redémarre
 (Réglages → Application ; menu Snap Studio → Rechercher les mises à jour). Sous
@@ -72,12 +78,13 @@ cargo tauri build --bundles app    # build local
 npx @tauri-apps/cli icon src-tauri/app-icon.svg -o src-tauri/icons   # icônes
 ```
 
-**Publier une version** : `scripts/release.sh` (CLI `gh` requise) lance le
-workflow `.github/workflows/build.yml`, qui construit macOS, Windows et Linux,
-signe les paquets et publie la release avec son `latest.json`. La version vaut
-majeure.mineure de `src-tauri/tauri.conf.json` + numéro de build
-(`0.1.0` → `0.1.42`, tag `v0.1.42`) ; pour passer en 0.2, changer `version`
-dans ce fichier.
+**Publier une version** : `scripts/release.sh` (CLI `gh` requise), sur `main`
+propre et à jour. Il affiche la version actuelle et celle à publier, demande
+confirmation, incrémente la version (`tauri.conf.json`, `Cargo.toml`), commite
+« Version x.y.z », pousse, puis lance `.github/workflows/build.yml`, qui
+construit macOS, Windows et Linux, signe les paquets et publie la release
+`vx.y.z` avec son `latest.json`. `--minor` / `--major` pour changer de niveau ;
+une version pas encore publiée (build en échec) est réutilisée sans bump.
 
 La signature des mises à jour utilise la clé des secrets GitHub
 `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ; sa clé
@@ -115,6 +122,7 @@ src-tauri/src/
   ia.rs pty.rs    conversations IA, terminal   slicers.rs    trancheurs installés
   menu.rs         menus natifs                 migrate.rs    reprise de 3MF Studio
   update.rs       mises à jour (GitHub, signature, installation)
+  discover.rs     recherche des imprimantes sur le réseau (mDNS)
 ```
 
 Snap Studio s'appelait auparavant 3MF Studio : ses données (réglages,

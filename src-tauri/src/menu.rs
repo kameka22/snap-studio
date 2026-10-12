@@ -131,7 +131,9 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         &PredefinedMenuItem::minimize(app, Some("Placer dans le Dock"))?,
         &PredefinedMenuItem::maximize(app, Some("Réduire/agrandir"))?,
     ])?;
-    let help_sub = Submenu::with_items(app, "Aide", true, &[])?;
+    let help_sub = Submenu::with_items(app, "Aide", true, &[
+        &item("welcome:open", "Assistant de bienvenue", None)?,
+    ])?;
     let _ = window_sub.set_as_windows_menu_for_nsapp();
     let _ = help_sub.set_as_help_menu_for_nsapp();
 

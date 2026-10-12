@@ -144,5 +144,6 @@ onMenu("app", (what) => {
   upStatus();
   $("up-version").textContent = await invoke("app_version").catch(() => "—");
   // Laisser l'application finir de démarrer avant d'interroger le réseau.
-  if (UP.prefs.auto) setTimeout(() => upCheck(false), 3000);
+  // Pas de fenêtre de mise à jour par-dessus l'assistant de bienvenue.
+  if (UP.prefs.auto) setTimeout(() => !W.open && upCheck(false), 3000);
 })();

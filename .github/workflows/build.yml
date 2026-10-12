@@ -3,9 +3,9 @@
 # Déclenchement manuel uniquement, par `scripts/release.sh` (ou le bouton
 # « Run workflow » de l'onglet Actions).
 #
-# Version : majeure.mineure lues dans src-tauri/tauri.conf.json, correctif =
-# numéro d'exécution du workflow (0.1.0 → 0.1.37). Rien n'est commité : la
-# version n'existe que dans le build et le tag `v0.1.37`.
+# Version : celle de src-tauri/tauri.conf.json, incrémentée et commitée par
+# `scripts/release.sh` avant le lancement. Le workflow refuse une version déjà
+# publiée.
 #
 # Mises à jour : les paquets sont signés avec la clé des secrets
 # TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD, et la release
@@ -31,9 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          base=$(jq -r .version src-tauri/tauri.conf.json)
-          echo "version=${base%.*}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          v=$(jq -r .version src-tauri/tauri.conf.json)
+          if gh release view "v$v" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "::error::v$v est déjà publiée : lancez scripts/release.sh, qui incrémente la version."
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
 
   build:
     needs: version
@@ -79,13 +85,13 @@ jobs:
         with:
           node-version: 22
 
-      # Version et paquets de mise à jour injectés ici seulement : un build
-      # local, sans clé de signature, reste possible.
+      # Paquets de mise à jour activés ici seulement : un build local, sans
+      # clé de signature, reste possible.
       - name: Build
         working-directory: src-tauri
         run: |
           npx --yes @tauri-apps/cli@^2 build ${{ matrix.args }} \
-            --config "{\"version\":\"$VERSION\",\"bundle\":{\"createUpdaterArtifacts\":true}}"
+            --config '{"bundle":{"createUpdaterArtifacts":true}}'
 
       - name: Paquets (macOS)
         if: runner.os == 'macOS'

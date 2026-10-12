@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Recherche des imprimantes (mDNS) : sans ces clés, macOS bloque la
+       recherche sans prévenir. Fusionné par Tauri dans le Info.plist du paquet. -->
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Snap Studio recherche les imprimantes Snapmaker de votre réseau local.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_snapmaker._tcp</string>
+    <string>_moonraker._tcp</string>
+  </array>
+</dict>
+</plist>
