@@ -647,6 +647,8 @@ body.dragover #stage::after {
   animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .modal.closing .modal-box { animation: sheet-out 150ms ease forwards; }
+/* La sheet défile ; ses blocs gardent leur hauteur au lieu de s'écraser. */
+.modal-box > * { flex-shrink: 0; }
 .modal-box h3 { margin: 0 0 2px; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
 .modal-box h3 + .det-sub { margin-top: -12px; }
 .modal-box .det-sub:empty { display: none; }
@@ -1130,6 +1132,22 @@ body.dragover #stage::after {
   font-size: 12px;
   pointer-events: none;
 }
+/* État vide de Préparer : sur le plateau dessiné, un panneau translucide en
+   haut de la vue plutôt qu'un texte posé sur le logo. */
+#p-empty {
+  inset: 16px auto auto 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 14px 20px;
+  gap: 6px;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--card-bg) 80%, transparent);
+  border: 1px solid var(--separator);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+#p-empty .empty-art svg { width: 32px; height: 32px; }
 .btn.view3d {
   position: absolute;
   right: 8px;
@@ -1531,3 +1549,169 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .ia-rActions { padding: 14px; display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
 .ia-rActions .btn { justify-content: center; }
 .ia-rbar-end { display: flex; align-items: center; gap: 10px; }
+
+/* ---------- découpe : têtes, couleurs du modèle, avancement ---------- */
+.set-note { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-tertiary); }
+.modal-box .grow-row select { margin-left: auto; flex: 0 1 230px; min-width: 0; max-width: 230px; }
+.modal-box .grow-row .k { min-width: 0; }
+.modal-box .grow-row .k .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.swatch.none { background: transparent; box-shadow: inset 0 0 0 1px var(--separator); }
+.swatch.sq { border-radius: 3px; }
+.warn { color: var(--danger); }
+/* Notes de version dans la fenêtre de mise à jour. */
+.u-notes {
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--control-bg);
+  border: 1px solid var(--separator);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  user-select: text;
+}
+.progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ring-track);
+  overflow: hidden;
+}
+.progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 250ms linear;
+}
+
+/* ---------- aperçu de découpe dans le visualiseur ---------- */
+.v-panel {
+  position: absolute;
+  top: calc(var(--titlebar-height) + 12px);
+  right: 12px;
+  bottom: 12px;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sheet-bg) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--sheet-shadow);
+  overflow-y: auto;
+}
+.vp-section {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.vp-section:first-child { margin-top: 0; }
+.vp-time {
+  font-family: var(--font-mono);
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.vp-sub { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.v-panel .group { margin: 0; }
+.v-panel .grow-row { padding: 7px 10px; font-size: 12px; gap: 8px; }
+.v-panel .grow-row .val { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; }
+.v-panel .grow-row .val .sub, .v-panel .grow-row .k .sub { display: block; color: var(--text-secondary); font-size: 11px; }
+.v-panel .grow-row.total { font-weight: 600; }
+.vp-feat .k { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-bar { flex: 0 0 60px; height: 4px; border-radius: 2px; background: var(--ring-track); overflow: hidden; }
+.vp-bar i { display: block; height: 100%; background: var(--text-tertiary); border-radius: 2px; }
+.vp-feat .val { flex: 0 0 64px; }
+.vp-seg { align-self: flex-start; }
+.vp-seg .seg-btn { font-size: 12px; }
+.vp-actions { margin-top: auto; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.vp-actions .btn { justify-content: center; }
+/* Le curseur de couches se décale pour laisser la place au panneau. */
+.viewer.previewing .v-layers { right: 324px; }
+
+/* ---------- caméra de l'imprimante ---------- */
+.group.cam .ghead .btn { margin-left: 10px; }
+.cam-box {
+  position: relative;
+  max-width: 560px;
+  margin: 0 auto;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.cam-box.big { max-width: none; }
+.cam-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+/* ---------- vue Préparer ---------- */
+.prep { flex: 1; display: flex; min-height: 0; }
+.prep-stage { flex: 1; min-width: 0; position: relative; }
+.prep-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.prep-stage .empty { pointer-events: none; }
+.prep-inspector {
+  width: 280px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 20px;
+  border-left: 1px solid var(--separator);
+  overflow-y: auto;
+}
+.prep-inspector .group { margin: 0; }
+.prep-inspector .grow-row { padding: 7px 10px; font-size: 13px; gap: 8px; }
+.prep-inspector .grow-row .k { flex: 1; min-width: 0; }
+.p-obj { border: 0; width: 100%; text-align: left; background: none; color: var(--text); }
+.p-obj .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-obj .tag { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.p-obj .tag.bad { color: var(--danger); }
+/* Sélection dans la liste : même rendu que la barre latérale. */
+.p-obj.on { background: var(--accent); color: var(--accent-text); }
+.p-obj.on .tag { color: var(--accent-text); opacity: 0.8; }
+.field.num { width: 76px; min-height: 24px; padding: 2px 6px; text-align: right; font-variant-numeric: tabular-nums; }
+.prep-inspector .unit { width: 22px; font-size: 12px; color: var(--text-secondary); }
+.p-obj .tag.warn { color: var(--warning); }
+.p-obj.on .tag.warn { color: var(--accent-text); }
+
+/* Préparer : outils */
+.tb-btn.on { background: var(--accent); border-color: transparent; color: var(--accent-text); }
+.p-angle {
+  position: absolute;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  transform: translate(14px, -28px);
+}
+.p-toolhint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  font-size: 12px;
+  pointer-events: none;
+}
+.prep-inspector .group.locked .p-axis { display: none; }
+.prep-inspector .group:not(.locked) .p-uni { display: none; }
+
+/* Dossiers récents : rattachés à « Fichiers », en retrait. */
+.side-sub .side-item { padding-left: 22px; font-size: 12px; }
+.side-sub .side-item .glyph svg { width: 14px; height: 14px; }
+/* Une entrée principale et ses sous-éléments forment un bloc ; les blocs
+   sont espacés pour aérer la barre. */
+.side-block { display: flex; flex-direction: column; gap: 2px; }
+.side-block + .side-block { margin-top: 12px; }
+.side-block .side-section { margin-top: 0; }

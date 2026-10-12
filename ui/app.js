@@ -203,6 +203,7 @@ function sideSync() {
   let target = null;
   if (v === "files" && state.dir) target = document.querySelector(`#side-recents [data-dir="${CSS.escape(state.dir)}"]`);
   if (v === "printers" && typeof P !== "undefined" && P.sel) target = document.querySelector(`#side-printers [data-id="${CSS.escape(P.sel)}"]`);
+  if (v === "ia" && typeof IA !== "undefined" && IA.open) target = document.querySelector(`#side-ia [data-conv="${CSS.escape(IA.open)}"]`);
   if (!target) target = document.querySelector(`.sidebar .side-item[data-view="${v}"]`);
   document.querySelectorAll(".sidebar .side-item").forEach((el) => el.classList.toggle("on", el === target));
   // Le décompte du dossier ouvert s'affiche sur son entrée.
@@ -280,7 +281,9 @@ async function pickFolder() {
 
 async function openDir(dir) {
   state.dir = dir;
-  state.recents = [dir, ...state.recents.filter((d) => d !== dir)].slice(0, 8);
+  // Un dossier déjà listé garde sa place dans la barre latérale ; seul un
+  // nouveau venu s'ajoute en tête (le plus ancien sort quand la liste est pleine).
+  if (!state.recents.includes(dir)) state.recents = [dir, ...state.recents].slice(0, 8);
   save();
   renderRecents();
   updateStatus();
@@ -791,7 +794,7 @@ function openMenu(x, y, path) {
   const id = (what) => `ctxfile:${what}:${path}`;
   nativeMenu([
     { id: id("open"), label: many ? `Ouvrir ${state.sel.size} fichiers` : "Ouvrir" },
-    ...(f0?.kind !== "gcode" ? [{ id: id("plate"), label: "Ajouter au plateau" }] : []),
+    ...(f0?.kind !== "gcode" ? [{ id: id("plate"), label: "Ajouter au plateau du trancheur" }] : []),
     ...(many ? [] : [
       {},
       { id: id("view3d"), label: f0?.kind === "gcode" ? "Voir les trajectoires" : "Vue 3D" },

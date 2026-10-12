@@ -397,7 +397,7 @@ new ResizeObserver(() => LIB.visible && pushRect()).observe($("lib-frame"));
 
 /* Les vues natives se dessinent au-dessus de tout : on les efface pendant
    qu'un dialogue ou le visualiseur occupe l'écran, et on les rappelle après. */
-const OVERLAYS = ["smodal", "pmodal", "iamodal", "viewer"];
+const OVERLAYS = ["smodal", "pmodal", "iamodal", "sendmodal", "viewer"];
 (() => {
   const check = () => {
     const shown = OVERLAYS.some((id) => $(id) && !$(id).classList.contains("hidden"));

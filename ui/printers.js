@@ -25,10 +25,14 @@ function switchView(v) {
     s.classList.toggle("hidden", s.id !== "view-" + v);
   });
   if (v === "printers") startLive();
-  else stopLive();
+  else {
+    stopLive();
+    camStop();
+  }
   // Les vues natives de la Bibliothèque ne doivent vivre que dans son onglet.
   libSetVisible(v === "library");
   if (v === "settings") refreshCacheSize();
+  if (v === "prepare") prepareShow();
   if (v === "ia") iaRefresh();
   // Le visualiseur ancré doit suivre l'onglet, pas y rester prisonnier.
   iaSetVisible(v === "ia");
@@ -39,6 +43,7 @@ function switchView(v) {
 document.querySelectorAll(".sidebar .side-item[data-view]").forEach((b) =>
   b.addEventListener("click", () => switchView(b.dataset.view))
 );
+tbSet("prepare", "Plateau");
 tbSet("library", "Bibliothèque");
 tbSet("ia", "IA");
 tbSet("printers", "Imprimantes");
@@ -133,6 +138,8 @@ function current() {
 
 function prnRenderDetail() {
   const p = current();
+  // La caméra suit l'imprimante affichée : on coupe en changeant d'imprimante.
+  if (CAM.id && CAM.id !== p?.id) camStop();
   $("prn-empty").classList.toggle("hidden", !!p);
   $("prn-detail").classList.toggle("hidden", !p);
   $("prn-tools").classList.toggle("hidden", !p);
@@ -563,6 +570,65 @@ async function askRemove(target) {
     .then(() => toast("Imprimante supprimée"))
     .catch((e) => toast(String(e), true));
 }
+
+/* ------------------------------------------------------------ caméra */
+
+/* Comme Snapmaker Orca : la caméra est réveillée par `camera.start_monitor`,
+   publie une image JPEG renouvelée en continu, qu'on relit en boucle ; elle
+   s'éteint d'elle-même si on ne la relance pas, d'où la relance toutes les
+   10 s. Une seule lecture en vol à la fois : la suivante part au chargement. */
+const CAM = { id: null, on: false, n: 0, timer: 0, keep: 0 };
+
+async function camStart() {
+  const p = current();
+  if (!p) return;
+  camStop();
+  Object.assign(CAM, { id: p.id, on: true });
+  $("cam-toggle").textContent = "Masquer";
+  $("cam-note").textContent = "démarrage…";
+  $("cam-box").classList.remove("hidden");
+  try {
+    await invoke("camera_start", { printerId: p.id });
+  } catch (e) {
+    if (CAM.id !== p.id) return;
+    camStop();
+    $("cam-note").textContent = String(e);
+    return;
+  }
+  if (!CAM.on || CAM.id !== p.id) return;
+  CAM.keep = setInterval(() => invoke("camera_start", { printerId: p.id }).catch(() => {}), 10000);
+  camNext();
+}
+
+function camNext() {
+  if (!CAM.on) return;
+  $("cam-img").src = `cam://localhost/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`;
+}
+
+function camStop() {
+  clearTimeout(CAM.timer);
+  clearInterval(CAM.keep);
+  if (CAM.on && CAM.id) invoke("camera_stop", { printerId: CAM.id }).catch(() => {});
+  Object.assign(CAM, { id: null, on: false, timer: 0, keep: 0 });
+  $("cam-toggle").textContent = "Afficher";
+  $("cam-note").textContent = "";
+  $("cam-box").classList.add("hidden");
+  $("cam-img").removeAttribute("src");
+}
+
+$("cam-img").addEventListener("load", () => {
+  if (!CAM.on) return;
+  $("cam-note").textContent = "";
+  CAM.timer = setTimeout(camNext, 200);
+});
+$("cam-img").addEventListener("error", () => {
+  if (!CAM.on) return;
+  $("cam-note").textContent = "image indisponible, nouvel essai…";
+  CAM.timer = setTimeout(camNext, 1000);
+});
+$("cam-toggle").addEventListener("click", () => (CAM.on ? camStop() : camStart()));
+// Double-clic : l'image prend toute la largeur de l'écran de l'imprimante.
+$("cam-box").addEventListener("dblclick", () => $("cam-box").classList.toggle("big"));
 
 /* ------------------------------------------------------------ événements */
 

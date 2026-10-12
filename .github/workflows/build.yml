@@ -1,0 +1,187 @@
+# Release de Snap Studio : macOS (universel), Windows et Linux.
+#
+# Déclenchement manuel uniquement, par `scripts/release.sh` (ou le bouton
+# « Run workflow » de l'onglet Actions).
+#
+# Version : majeure.mineure lues dans src-tauri/tauri.conf.json, correctif =
+# numéro d'exécution du workflow (0.1.0 → 0.1.37). Rien n'est commité : la
+# version n'existe que dans le build et le tag `v0.1.37`.
+#
+# Mises à jour : les paquets sont signés avec la clé des secrets
+# TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD, et la release
+# porte `latest.json`, que l'application installée consulte.
+
+name: Release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          base=$(jq -r .version src-tauri/tauri.conf.json)
+          echo "version=${base%.*}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --target universal-apple-darwin --bundles app,dmg
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - os: windows-latest
+            args: --bundles nsis
+            rust-targets: ""
+          - os: ubuntu-22.04
+            args: --bundles deb,appimage
+            rust-targets: ""
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dépendances Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Version et paquets de mise à jour injectés ici seulement : un build
+      # local, sans clé de signature, reste possible.
+      - name: Build
+        working-directory: src-tauri
+        run: |
+          npx --yes @tauri-apps/cli@^2 build ${{ matrix.args }} \
+            --config "{\"version\":\"$VERSION\",\"bundle\":{\"createUpdaterArtifacts\":true}}"
+
+      - name: Paquets (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          b=src-tauri/target/universal-apple-darwin/release/bundle
+          n="Snap-Studio_${VERSION}_macos-universal"
+          mkdir -p dist
+          cp "$b"/dmg/*.dmg "dist/$n.dmg"
+          cp "$b/macos/Snap Studio.app.tar.gz" "dist/$n.app.tar.gz"
+          cp "$b/macos/Snap Studio.app.tar.gz.sig" "dist/$n.app.tar.gz.sig"
+
+      - name: Paquets (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          b=src-tauri/target/release/bundle/nsis
+          n="Snap-Studio_${VERSION}_x64-setup.exe"
+          mkdir -p dist
+          cp "$b"/*-setup.exe "dist/$n"
+          cp "$b"/*-setup.exe.sig "dist/$n.sig"
+
+      - name: Paquets (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          b=src-tauri/target/release/bundle
+          n="Snap-Studio_${VERSION}_amd64"
+          mkdir -p dist
+          cp "$b"/deb/*.deb "dist/$n.deb"
+          cp "$b"/appimage/*.AppImage "dist/$n.AppImage"
+          cp "$b"/appimage/*.AppImage.sig "dist/$n.AppImage.sig"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snap-studio-${{ runner.os }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # Notes : les commits depuis la release précédente.
+      - name: Notes de version
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          if [ -n "$prev" ]; then
+            git log "$prev..HEAD" --no-merges --format='- %s' > notes.md
+          else
+            git log -20 --no-merges --format='- %s' > notes.md
+          fi
+          [ -s notes.md ] || echo "- Reconstruction sans changement" > notes.md
+          cat notes.md
+
+      # Fichier lu par l'application installée : une entrée par plateforme,
+      # avec l'adresse du paquet et sa signature.
+      - name: latest.json
+        run: |
+          base="https://github.com/${{ github.repository }}/releases/download/v$VERSION"
+          mac="Snap-Studio_${VERSION}_macos-universal.app.tar.gz"
+          win="Snap-Studio_${VERSION}_x64-setup.exe"
+          lin="Snap-Studio_${VERSION}_amd64.AppImage"
+          jq -n \
+            --arg v "$VERSION" \
+            --rawfile notes notes.md \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg mu "$base/$mac" --rawfile ms "dist/$mac.sig" \
+            --arg wu "$base/$win" --rawfile ws "dist/$win.sig" \
+            --arg lu "$base/$lin" --rawfile ls "dist/$lin.sig" \
+            '{
+              version: $v,
+              notes: $notes,
+              pub_date: $date,
+              platforms: {
+                "darwin-aarch64": { url: $mu, signature: $ms },
+                "darwin-x86_64":  { url: $mu, signature: $ms },
+                "windows-x86_64": { url: $wu, signature: $ws },
+                "linux-x86_64":   { url: $lu, signature: $ls }
+              }
+            }' > dist/latest.json
+          cat dist/latest.json
+
+      - name: Release
+        run: |
+          gh release create "v$VERSION" $(ls dist/* | grep -v '\.sig$') \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Snap Studio $VERSION" \
+            --notes-file notes.md

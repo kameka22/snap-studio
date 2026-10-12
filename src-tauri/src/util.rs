@@ -70,10 +70,26 @@ pub fn which(name: &str) -> Option<std::path::PathBuf> {
         dirs.push(h.join(".local/bin"));
         dirs.push(h.join("bin"));
     }
+    // Windows : la commande s'écrit sans son extension.
+    let names: Vec<String> = if cfg!(windows) {
+        vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_string()]
+    } else {
+        vec![name.to_string()]
+    };
     dirs.into_iter().find_map(|d| {
-        let c = d.join(name);
-        c.is_file().then_some(c)
+        names.iter().map(|n| d.join(n)).find(|c| c.is_file())
     })
+}
+
+/// Windows : lance la commande sans ouvrir de fenêtre de console.
+pub fn no_window(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
 }
 
 /// Encode en base64, sans dépendance : le pendant du décodeur de `gcode.rs`.

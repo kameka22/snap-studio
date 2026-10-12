@@ -73,6 +73,9 @@ pub struct MeshData {
     pub min: [f32; 3],
     pub max: [f32; 3],
     pub truncated: bool,
+    /// Extrudeur du modèle pour chaque triangle (1 à 16), quand le fichier le
+    /// déclare (`model_settings.config`) ; vide sinon.
+    pub extruders: Vec<u8>,
 }
 
 impl MeshData {
@@ -263,6 +266,8 @@ fn parse_part(data: &[u8]) -> Part {
 struct Inst {
     part_key: String,
     objid: u32,
+    /// Objet du `<build>` dont cette occurrence descend.
+    root: u32,
     xf: Mat,
     color: Option<[u8; 3]>,
 }
@@ -286,10 +291,12 @@ impl<'a> Ctx<'a> {
     }
 
     /// Resout recursivement les composants sans toucher aux maillages.
+    #[allow(clippy::too_many_arguments)]
     fn collect(
         &mut self,
         part_key: &str,
         objid: u32,
+        root: u32,
         xf: Mat,
         inherited: Option<[u8; 3]>,
         depth: u32,
@@ -311,13 +318,14 @@ impl<'a> Ctx<'a> {
             out.push(Inst {
                 part_key: part_key.to_string(),
                 objid,
+                root,
                 xf,
                 color,
             });
         }
         for (path, id, cxf) in components {
             let key = path.unwrap_or_else(|| part_key.to_string());
-            self.collect(&key, id, cxf.then(&xf), color, depth + 1, out);
+            self.collect(&key, id, root, cxf.then(&xf), color, depth + 1, out);
         }
     }
 }
@@ -348,16 +356,21 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
             .map(|p| p.objects.keys().copied().collect())
             .unwrap_or_default();
         for id in ids {
-            ctx.collect(&root_key, id, Mat::IDENTITY, None, 0, &mut insts);
+            ctx.collect(&root_key, id, id, Mat::IDENTITY, None, 0, &mut insts);
         }
     } else {
         for (id, xf, path) in build {
             let key = path.unwrap_or_else(|| root_key.clone());
-            ctx.collect(&key, id, xf, None, 0, &mut insts);
+            ctx.collect(&key, id, id, xf, None, 0, &mut insts);
         }
     }
 
-    // 2. Emission des triangles transformes, sans copier les maillages.
+    emit(&mut ctx, &insts, budget)
+}
+
+
+/// Émission des triangles transformés des occurrences, sans copier les maillages.
+fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
     let total: usize = insts
         .iter()
         .filter_map(|i| ctx.parts.get(&i.part_key)?.objects.get(&i.objid))
@@ -369,14 +382,20 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
         1
     };
     let mut tris: Vec<Tri> = Vec::with_capacity(total.min(budget) + 8);
+    // Extrudeur de chaque occurrence : celui de la pièce, sinon celui de l'objet.
+    let settings = crate::model3mf::extruder_settings(ctx.zip);
+    let mut extruders: Vec<u8> = Vec::new();
     let mut min = [f32::MAX; 3];
     let mut max = [f32::MIN; 3];
-    for inst in &insts {
+    for inst in insts {
         let Some(obj) = ctx.parts.get(&inst.part_key).and_then(|p| p.objects.get(&inst.objid))
         else {
             continue;
         };
         let base = inst.color;
+        let ext = settings.get(&inst.root).map(|(obj, parts)| {
+            parts.get(&inst.objid).copied().filter(|e| *e > 0).unwrap_or(*obj).max(1)
+        });
         for (i, t) in obj.tris.iter().enumerate() {
             // Sur les maillages tres denses on echantillonne au lieu de tronquer :
             // la silhouette reste correcte.
@@ -402,20 +421,99 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
                 v,
                 c: obj.tri_colors[i].or(base).unwrap_or(crate::render::DEFAULT_COLOR),
             });
+            if let Some(e) = ext {
+                extruders.resize(tris.len() - 1, 1);
+                extruders.push(e);
+            }
         }
     }
 
     if tris.is_empty() {
         return Err(anyhow!("aucune geometrie"));
     }
+    // Des occurrences sans réglage sont rattachées à l'extrudeur 1.
+    if !extruders.is_empty() {
+        extruders.resize(tris.len(), 1);
+    }
     Ok(MeshData {
+        extruders,
         tris,
         min,
         max,
         truncated: step > 1,
-    })
+    })}
+
+/// Une occurrence du `<build>` : objet, placement dans la scène.
+#[derive(Clone, Copy, Debug)]
+pub struct BuildItem {
+    pub objid: u32,
+    pub xf: Mat,
 }
 
+/// Occurrences du `<build>` du modèle principal, dans l'ordre du fichier.
+pub fn build_items(zip: &mut Zip) -> Result<Vec<BuildItem>> {
+    let root_key = "3D/3dmodel.model".to_string();
+    let mut ctx = Ctx { zip, parts: HashMap::new() };
+    if !ctx.part(&root_key) {
+        return Err(anyhow!("modele introuvable"));
+    }
+    let part = ctx.parts.get(&root_key).unwrap();
+    let mut items: Vec<BuildItem> = part.build.iter().map(|(id, xf, _)| BuildItem { objid: *id, xf: *xf }).collect();
+    if items.is_empty() {
+        let mut ids: Vec<u32> = part.objects.keys().copied().collect();
+        ids.sort_unstable();
+        items = ids.into_iter().map(|objid| BuildItem { objid, xf: Mat::IDENTITY }).collect();
+    }
+    Ok(items)
+}
+
+/// Un objet du `<build>`, isolé pour le plateau.
+pub struct ItemMesh {
+    /// Triangles centrés sur le centre de la boîte englobante, orientés comme
+    /// dans le fichier (la partie linéaire du placement est appliquée).
+    pub mesh: MeshData,
+    /// Position du centre dans la scène du fichier.
+    pub center: [f32; 3],
+}
+
+/// Charge l'occurrence `index` du `<build>`, dans son repère propre.
+pub fn load_item(zip: &mut Zip, index: usize, budget: usize) -> Result<ItemMesh> {
+    let root_key = "3D/3dmodel.model".to_string();
+    let item = *build_items(zip)?
+        .get(index)
+        .ok_or_else(|| anyhow!("objet {index} absent du fichier"))?;
+    let mut ctx = Ctx { zip, parts: HashMap::new() };
+    if !ctx.part(&root_key) {
+        return Err(anyhow!("modele introuvable"));
+    }
+    // Orientation et échelle du fichier conservées, translation retirée :
+    // la position devient celle du plateau.
+    let mut lin = item.xf;
+    let t = [lin.0[9], lin.0[10], lin.0[11]];
+    lin.0[9] = 0.0;
+    lin.0[10] = 0.0;
+    lin.0[11] = 0.0;
+    let mut insts = Vec::new();
+    ctx.collect(&root_key, item.objid, item.objid, lin, None, 0, &mut insts);
+    let mut mesh = emit(&mut ctx, &insts, budget)?;
+    let c = [
+        (mesh.min[0] + mesh.max[0]) / 2.0,
+        (mesh.min[1] + mesh.max[1]) / 2.0,
+        (mesh.min[2] + mesh.max[2]) / 2.0,
+    ];
+    for tri in &mut mesh.tris {
+        for v in &mut tri.v {
+            for k in 0..3 {
+                v[k] -= c[k];
+            }
+        }
+    }
+    for k in 0..3 {
+        mesh.min[k] -= c[k];
+        mesh.max[k] -= c[k];
+    }
+    Ok(ItemMesh { mesh, center: [c[0] + t[0], c[1] + t[1], c[2] + t[2]] })
+}
 
 /// Ce qu'on sait dire d'un maillage sans le découper.
 #[derive(serde::Serialize, Clone, Copy)]
@@ -558,6 +656,7 @@ mod tests {
     #[test]
     fn encode_layout() {
         let m = MeshData {
+            extruders: Vec::new(),
             tris: vec![
                 Tri { v: [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]], c: [10, 20, 30] },
                 Tri { v: [[0., 0., 1.], [1., 0., 1.], [0., 1., 1.]], c: [40, 50, 60] },
@@ -588,6 +687,7 @@ mod stats_tests {
     fn a_closed_cube_is_watertight() {
         let tris = crate::stl::tests_cube();
         let m = MeshData {
+            extruders: Vec::new(),
             min: [0.; 3],
             max: [10.; 3],
             tris,
@@ -605,6 +705,7 @@ mod stats_tests {
         let mut tris = crate::stl::tests_cube();
         tris.truncate(10); // on retire une face
         let m = MeshData {
+            extruders: Vec::new(),
             min: [0.; 3],
             max: [10.; 3],
             tris,

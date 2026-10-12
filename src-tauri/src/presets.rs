@@ -60,6 +60,12 @@ pub struct PresetDto {
     pub kind: Kind,
     /// Vrai pour un préréglage créé par l'utilisateur.
     pub user: bool,
+    /// Filaments seulement : matière (`PLA`, `PETG`…) et fabricant, pour
+    /// retrouver le préréglage qui correspond à une bobine chargée.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ftype: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
 }
 
 fn read_json(p: &Path) -> Option<Value> {
@@ -74,20 +80,19 @@ pub fn datadir() -> PathBuf {
 }
 
 /// Dossier des profils livrés avec l'application.
-fn system_profiles(app: &Path) -> PathBuf {
-    app.join("Contents/Resources/profiles/Snapmaker")
+fn system_profiles(app: &Path) -> Option<PathBuf> {
+    crate::slicers::resources(app).map(|r| r.join("profiles/Snapmaker"))
 }
 
 impl Index {
     /// Inventorie les profils système de `app` et les préréglages de l'utilisateur.
     pub fn build(app: &Path) -> Result<Index> {
-        let sys = system_profiles(app);
-        if !sys.is_dir() {
+        let Some(sys) = system_profiles(app).filter(|p| p.is_dir()) else {
             return Err(anyhow!(
                 "profils introuvables dans {} — cette application n'est pas Snapmaker Orca",
                 app.display()
             ));
-        }
+        };
         let mut entries = HashMap::new();
         let add = |dir: PathBuf, kind: Kind, user: bool, entries: &mut HashMap<String, Entry>| {
             let Ok(rd) = std::fs::read_dir(&dir) else { return };
@@ -168,7 +173,7 @@ impl Index {
         let mut v: Vec<PresetDto> = self
             .selectable(Kind::Machine)
             .into_iter()
-            .map(|(n, e)| PresetDto { name: n.clone(), kind: Kind::Machine, user: e.user })
+            .map(|(n, e)| PresetDto { name: n.clone(), kind: Kind::Machine, user: e.user, ftype: None, vendor: None })
             .collect();
         sort_presets(&mut v);
         v
@@ -204,19 +209,28 @@ impl Index {
         let mut v: Vec<PresetDto> = self
             .selectable(kind)
             .into_iter()
-            .filter(|(n, _)| {
+            .filter_map(|(n, e)| {
                 // La compatibilité peut être déclarée sur le préréglage lui-même
-                // ou héritée de son parent.
+                // ou héritée de son parent ; l'héritage résolu sert aussi à lire
+                // la matière et le fabricant d'un filament.
                 let flat = self.flatten(n).unwrap_or_default();
-                match flat.get("compatible_printers").and_then(|v| v.as_array()) {
+                let ok = match flat.get("compatible_printers").and_then(|v| v.as_array()) {
                     Some(list) if !list.is_empty() => list
                         .iter()
                         .any(|x| x.as_str().map(|s| names.iter().any(|n| n == s)).unwrap_or(false)),
                     // Sans liste explicite, le préréglage vaut pour tout le monde.
                     _ => true,
+                };
+                if !ok {
+                    return None;
                 }
+                let (ftype, vendor) = if kind == Kind::Filament {
+                    (first_str(&flat, "filament_type"), first_str(&flat, "filament_vendor"))
+                } else {
+                    (None, None)
+                };
+                Some(PresetDto { name: n.clone(), kind, user: e.user, ftype, vendor })
             })
-            .map(|(n, e)| PresetDto { name: n.clone(), kind, user: e.user })
             .collect();
         sort_presets(&mut v);
         v
@@ -257,6 +271,15 @@ impl Index {
         }
     }
 
+    /// Modèle d'imprimante d'un préréglage machine (« Snapmaker U1 »…).
+    pub fn printer_model(&self, machine: &str) -> Option<String> {
+        self.flatten(machine)?
+            .get("printer_model")?
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    }
+
     /// Nombre de têtes déclarées par une machine.
     pub fn extruder_count(&self, machine: &str) -> usize {
         self.flatten(machine)
@@ -271,6 +294,18 @@ impl Index {
 }
 
 /// Les préréglages utilisateur d'abord, puis par ordre alphabétique naturel.
+/// Première valeur d'un réglage, qu'il soit écrit en liste ou en texte.
+fn first_str(cfg: &Map<String, Value>, key: &str) -> Option<String> {
+    let v = cfg.get(key)?;
+    let s = match v {
+        Value::Array(a) => a.first()?.as_str()?.to_string(),
+        Value::String(s) => s.clone(),
+        _ => return None,
+    };
+    let s = s.trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
 fn sort_presets(v: &mut [PresetDto]) {
     v.sort_by(|a, b| b.user.cmp(&a.user).then_with(|| a.name.cmp(&b.name)));
 }
@@ -312,6 +347,11 @@ fn declare_compatible(cfg: &mut Map<String, Value>, machine: &str) {
     }
 }
 
+/// `#rrggbb` : seule forme acceptée pour une couleur de filament.
+fn is_hex_color(c: &str) -> bool {
+    c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit())
+}
+
 fn write_config(dir: &Path, kind: Kind, name: &str, mut cfg: Map<String, Value>, suffix: &str) -> Result<PathBuf> {
     cfg.insert("type".into(), Value::String(kind.tag().into()));
     cfg.insert("name".into(), Value::String(name.into()));
@@ -327,13 +367,16 @@ fn write_config(dir: &Path, kind: Kind, name: &str, mut cfg: Map<String, Value>,
 /// Écrit les configurations complètes dans `dir`.
 ///
 /// `filaments` contient un préréglage par tête ; s'il en manque, le premier est
-/// répété, comme le fait l'interface d'Orca.
+/// répété, comme le fait l'interface d'Orca. `colors` porte la couleur réelle
+/// de chaque bobine : elle remplace celle du préréglage, et se retrouve dans le
+/// G-code et l'aperçu.
 pub fn prepare(
     index: &Index,
     dir: &Path,
     machine: &str,
     process: &str,
     filaments: &[String],
+    colors: &[Option<String>],
     overrides: &Map<String, Value>,
 ) -> Result<Prepared> {
     std::fs::create_dir_all(dir)?;
@@ -377,6 +420,11 @@ pub fn prepare(
             .flatten(name)
             .ok_or_else(|| anyhow!("héritage irrésoluble pour {name}"))?;
         declare_compatible(&mut cfg, machine);
+        if let Some(Some(c)) = colors.get(i) {
+            if is_hex_color(c) {
+                cfg.insert("filament_colour".into(), Value::Array(vec![Value::String(c.to_uppercase())]));
+            }
+        }
         paths.push(write_config(dir, Kind::Filament, name, cfg, &format!("_{i}"))?);
     }
 
@@ -462,7 +510,7 @@ mod tests {
         let dir = std::env::temp_dir().join("snapstudio_presets_test");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let p = prepare(&idx, &dir, machine, &process, &[filament.clone()], &Map::new()).unwrap();
+        let p = prepare(&idx, &dir, machine, &process, &[filament.clone()], &[], &Map::new()).unwrap();
         assert_eq!(p.filaments.len(), 4, "un filament par tête");
 
         let m: Value = serde_json::from_slice(&std::fs::read(&p.machine).unwrap()).unwrap();
@@ -506,7 +554,7 @@ mod tests {
 
         let dir = std::env::temp_dir().join("snapstudio_slice_it");
         let _ = std::fs::remove_dir_all(&dir);
-        let p = prepare(&idx, &dir, &machine, &process, &[filament.clone()], &Map::new()).unwrap();
+        let p = prepare(&idx, &dir, &machine, &process, &[filament.clone()], &[], &Map::new()).unwrap();
 
         let out = dir.join("out");
         std::fs::create_dir_all(&out).unwrap();
@@ -518,7 +566,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join(";");
         let t = std::time::Instant::now();
-        let out_cmd = std::process::Command::new(app().join("Contents/MacOS/Snapmaker_Orca"))
+        let out_cmd = std::process::Command::new(crate::slicers::executable(&app()).unwrap())
             .args(["--arrange", "0", "--allow-newer-file", "--slice", "0"])
             .arg("--load-settings").arg(&settings)
             .arg("--load-filaments").arg(&fils)
@@ -565,7 +613,7 @@ mod tests {
         let dir = std::env::temp_dir().join("snapstudio_presets_ovr");
         let mut ovr = Map::new();
         ovr.insert("layer_height".into(), Value::String("0.28".into()));
-        let p = prepare(&idx, &dir, machine, &process, &[filament], &ovr).unwrap();
+        let p = prepare(&idx, &dir, machine, &process, &[filament], &[], &ovr).unwrap();
         let pr: Value = serde_json::from_slice(&std::fs::read(&p.process).unwrap()).unwrap();
         assert_eq!(pr["layer_height"], "0.28");
     }

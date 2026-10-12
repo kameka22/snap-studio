@@ -149,6 +149,224 @@ fn temp_of(v: Option<&Value>) -> Option<Temp> {
     })
 }
 
+// ------------------------------------------------------------ envoi d'une impression
+
+/// Client sans délai global : un téléversement peut durer plusieurs minutes.
+fn long_client() -> &'static reqwest::Client {
+    static C: OnceLock<reqwest::Client> = OnceLock::new();
+    C.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(4))
+            .user_agent("Snap-Studio")
+            .build()
+            .expect("client HTTP")
+    })
+}
+
+/// Options de lancement proposées par Snapmaker Orca pour la U1.
+#[derive(Deserialize, Clone, Copy, Default, Debug)]
+pub struct StartOptions {
+    /// Nivellement automatique du plateau.
+    pub bed_leveling: bool,
+    /// Calibration du débit d'extrusion.
+    pub flow_calibration: bool,
+    /// Caméra timelapse.
+    pub timelapse: bool,
+}
+
+impl StartOptions {
+    /// Clés de `print_task_config`, dans l'ordre où Snapmaker Orca les envoie.
+    fn entries(&self) -> [(&'static str, bool); 3] {
+        [
+            ("auto_bed_leveling", self.bed_leveling),
+            ("flow_calibrate", self.flow_calibration),
+            ("time_lapse_camera", self.timelapse),
+        ]
+    }
+}
+
+/// G-code de préparation envoyé avant le lancement, comme le fait Snapmaker
+/// Orca : correspondance outil → tête, têtes employées, options.
+///
+/// Firmware ≥ 1.3.0 : une macro `SET_PRINT_PREFERENCE` par option. Avant :
+/// une seule `SET_PRINT_PREFERENCES` (`legacy`).
+pub fn preprint_script(opts: &StartOptions, tools: &[u8], legacy: bool) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    // Les outils du G-code sont déjà les têtes : correspondance identité.
+    for t in tools {
+        lines.push(format!("SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER={t} MAP_EXTRUDER={t}"));
+    }
+    if !tools.is_empty() {
+        let list: Vec<String> = tools.iter().map(|t| t.to_string()).collect();
+        lines.push(format!("SET_PRINT_USED_EXTRUDERS EXTRUDERS={}", list.join(",")));
+    }
+    if legacy {
+        let kv: Vec<String> = opts
+            .entries()
+            .iter()
+            .map(|(k, v)| format!("{}={}", k.to_uppercase(), v))
+            .collect();
+        lines.push(format!("SET_PRINT_PREFERENCES {}", kv.join(" ")));
+    } else {
+        for (k, v) in opts.entries() {
+            lines.push(format!("SET_PRINT_PREFERENCE KEY={k} VALUE={v}"));
+        }
+    }
+    lines.join("\n")
+}
+
+/// Exécute un script G-code ; l'erreur rapporte la réponse de Klipper.
+pub async fn gcode_script(host: &str, port: u16, script: &str) -> Result<()> {
+    let r = long_client()
+        .post(format!("{}/printer/gcode/script", base(host, port)))
+        .timeout(Duration::from_secs(30))
+        .json(&serde_json::json!({ "script": script }))
+        .send()
+        .await?;
+    if r.status().is_success() {
+        return Ok(());
+    }
+    let code = r.status().as_u16();
+    let body: Value = r.json().await.unwrap_or(Value::Null);
+    let msg = body
+        .pointer("/error/message")
+        .and_then(|v| v.as_str())
+        .unwrap_or("réponse inattendue");
+    Err(anyhow!("HTTP {code} : {msg}"))
+}
+
+/// Vrai quand Klipper ne connaît pas la commande (firmware plus ancien).
+pub fn is_unknown_command(err: &anyhow::Error) -> bool {
+    let m = err.to_string().to_ascii_lowercase();
+    m.contains("unknown command")
+}
+
+/// `print_task_config` tel que l'imprimante le voit, pour vérifier les options.
+pub async fn task_config(host: &str, port: u16) -> Option<Value> {
+    let url = format!("{}/printer/objects/query?print_task_config", base(host, port));
+    let v = get_json(&url).await.ok()?;
+    v.pointer("/result/status/print_task_config").cloned()
+}
+
+/// Options que l'imprimante n'a pas prises en compte (vide si tout va bien,
+/// ou si elle ne les expose pas).
+pub fn unapplied_options(cfg: &Value, opts: &StartOptions) -> Vec<&'static str> {
+    opts.entries()
+        .iter()
+        .filter(|(k, want)| match cfg.get(*k) {
+            Some(Value::Bool(b)) => b != want,
+            Some(Value::Number(n)) => (n.as_f64().unwrap_or(0.0) != 0.0) != *want,
+            Some(Value::String(s)) => matches!(s.to_ascii_lowercase().as_str(), "true" | "1") != *want,
+            _ => false,
+        })
+        .map(|(k, _)| *k)
+        .collect()
+}
+
+/// Téléverse un G-code dans `gcodes/` et, si demandé, lance l'impression.
+/// `progress(envoyé, total)` suit les octets au fil de l'envoi.
+pub async fn upload(
+    host: &str,
+    port: u16,
+    path: &std::path::Path,
+    remote_name: &str,
+    start: bool,
+    progress: impl Fn(u64, u64) + Send + Sync + 'static,
+) -> Result<()> {
+    let data = std::fs::read(path)?;
+    let total = data.len() as u64;
+    let chunks: Vec<Vec<u8>> = data.chunks(64 * 1024).map(|c| c.to_vec()).collect();
+    let mut sent = 0u64;
+    let stream = futures_util::stream::iter(chunks.into_iter().map(move |c| {
+        sent += c.len() as u64;
+        progress(sent, total);
+        Ok::<Vec<u8>, std::io::Error>(c)
+    }));
+    let part = reqwest::multipart::Part::stream_with_length(reqwest::Body::wrap_stream(stream), total)
+        .file_name(remote_name.to_string())
+        .mime_str("application/octet-stream")?;
+    let form = reqwest::multipart::Form::new()
+        .text("root", "gcodes")
+        .text("print", if start { "true" } else { "false" })
+        .part("file", part);
+    let r = long_client()
+        .post(format!("{}/server/files/upload", base(host, port)))
+        .multipart(form)
+        .send()
+        .await?;
+    if !r.status().is_success() {
+        let code = r.status().as_u16();
+        let body: Value = r.json().await.unwrap_or(Value::Null);
+        let msg = body.pointer("/error/message").and_then(|v| v.as_str()).unwrap_or("refusé");
+        return Err(anyhow!("téléversement refusé (HTTP {code}) : {msg}"));
+    }
+    Ok(())
+}
+
+// ------------------------------------------------------------ caméra
+
+/// Appelle une méthode JSON-RPC sur le websocket de Moonraker et attend sa
+/// réponse. Les méthodes propres à Snapmaker (`camera.*`) ne sont pas
+/// relayées en HTTP par le nginx de la U1 : le websocket est la seule voie.
+pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Result<Value> {
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let h = host
+        .trim()
+        .trim_end_matches('/')
+        .trim_start_matches("http://")
+        .trim_start_matches("https://");
+    let url = if h.contains(':') { format!("ws://{h}/websocket") } else { format!("ws://{h}:{port}/websocket") };
+    let run = async {
+        let (mut ws, _) = tokio_tungstenite::connect_async(url.as_str()).await?;
+        let req = serde_json::json!({ "jsonrpc": "2.0", "method": method, "params": params, "id": 1 });
+        ws.send(Message::Text(req.to_string().into())).await?;
+        while let Some(msg) = ws.next().await {
+            let Message::Text(t) = msg? else { continue };
+            let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
+            if v.get("id").and_then(|i| i.as_i64()) != Some(1) {
+                continue; // notifications de statut, sans rapport
+            }
+            let _ = ws.close(None).await;
+            if let Some(e) = v.get("error") {
+                let msg = e.get("message").and_then(|m| m.as_str()).unwrap_or("erreur");
+                return Err(anyhow!("{method} : {msg}"));
+            }
+            return Ok(v.get("result").cloned().unwrap_or(Value::Null));
+        }
+        Err(anyhow!("{method} : connexion fermée sans réponse"))
+    };
+    tokio::time::timeout(Duration::from_secs(8), run)
+        .await
+        .map_err(|_| anyhow!("{method} : pas de réponse"))?
+}
+
+/// Réveille la caméra de la U1 : elle publie alors une image renouvelée en
+/// continu, et s'éteint d'elle-même si on ne la relance pas (environ 10 s).
+pub async fn camera_start(host: &str, port: u16) -> Result<()> {
+    let r = ws_call(host, port, "camera.start_monitor", serde_json::json!({ "domain": "lan", "interval": 0 })).await?;
+    match r.get("state").and_then(|s| s.as_str()) {
+        Some("success") | None => Ok(()),
+        Some(other) => Err(anyhow!("caméra : {other}")),
+    }
+}
+
+pub async fn camera_stop(host: &str, port: u16) -> Result<()> {
+    ws_call(host, port, "camera.stop_monitor", serde_json::json!({ "domain": "lan" }))
+        .await
+        .map(|_| ())
+}
+
+/// Dernière image de la caméra (JPEG), comme la lit Snapmaker Orca.
+pub async fn camera_frame(host: &str, port: u16) -> Result<Vec<u8>> {
+    let url = format!("{}/server/files/camera/monitor.jpg", base(host, port));
+    let r = client().get(url).send().await?;
+    if !r.status().is_success() {
+        return Err(anyhow!("HTTP {}", r.status().as_u16()));
+    }
+    Ok(r.bytes().await?.to_vec())
+}
+
 /// Objets Klipper interrogés à chaque rafraîchissement.
 const OBJECTS: &str = "print_task_config&print_stats&display_status&virtual_sdcard&extruder&extruder1&extruder2&extruder3&heater_bed&toolhead&gcode_move&fan";
 
@@ -390,6 +608,54 @@ mod tests {
         assert!((st.bed.as_ref().unwrap().target - 60.0).abs() < 0.01);
         assert!((st.fan.unwrap() - 0.85).abs() < 0.01);
         assert!((st.speed_factor.unwrap() - 1.15).abs() < 0.01);
+    }
+
+    /// Caméra d'une vraie U1 : `CAMERA_HOST=192.168.x.x cargo test camera_on_real_printer`.
+    #[test]
+    fn camera_on_real_printer() {
+        let Ok(host) = std::env::var("CAMERA_HOST") else { return };
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async {
+            camera_start(&host, 80).await.expect("démarrage");
+            tokio::time::sleep(Duration::from_millis(1500)).await;
+            let mut sizes = Vec::new();
+            for _ in 0..3 {
+                let jpg = camera_frame(&host, 80).await.expect("image");
+                assert_eq!(&jpg[..2], &[0xFF, 0xD8], "JPEG");
+                sizes.push(jpg.len());
+                tokio::time::sleep(Duration::from_millis(300)).await;
+            }
+            println!("images : {sizes:?} octets");
+            camera_stop(&host, 80).await.expect("arrêt");
+        });
+    }
+
+    /// Préparation d'impression, telle que Snapmaker Orca l'envoie.
+    #[test]
+    fn preprint_script_matches_snapmaker_orca() {
+        let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: false };
+        let s = preprint_script(&o, &[0, 2], false);
+        assert_eq!(
+            s,
+            "SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=0 MAP_EXTRUDER=0\n\
+             SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=2 MAP_EXTRUDER=2\n\
+             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,2\n\
+             SET_PRINT_PREFERENCE KEY=auto_bed_leveling VALUE=true\n\
+             SET_PRINT_PREFERENCE KEY=flow_calibrate VALUE=false\n\
+             SET_PRINT_PREFERENCE KEY=time_lapse_camera VALUE=false"
+        );
+        let old = preprint_script(&StartOptions::default(), &[1], true);
+        assert!(old.ends_with(
+            "SET_PRINT_PREFERENCES AUTO_BED_LEVELING=false FLOW_CALIBRATE=false TIME_LAPSE_CAMERA=false"
+        ));
+    }
+
+    #[test]
+    fn unapplied_options_are_reported() {
+        let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: true };
+        let cfg = serde_json::json!({"auto_bed_leveling": true, "flow_calibrate": false, "time_lapse_camera": false});
+        assert_eq!(unapplied_options(&cfg, &o), vec!["time_lapse_camera"]);
+        assert!(unapplied_options(&serde_json::json!({}), &o).is_empty(), "rien d'exposé : rien à signaler");
     }
 
     /// Bobines chargées, au format réellement émis par la U1.

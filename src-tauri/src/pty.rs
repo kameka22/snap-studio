@@ -182,11 +182,15 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
     cmd.env("COLORTERM", "truecolor");
     // Lancée depuis le Finder, l'application n'hérite pas du `PATH` du
     // terminal : on le complète pour que Claude retrouve ses outils.
-    let path = std::env::var("PATH").unwrap_or_default();
-    cmd.env(
-        "PATH",
-        format!("{path}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"),
-    );
+    let mut path: Vec<std::path::PathBuf> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect())
+        .unwrap_or_default();
+    if cfg!(unix) {
+        path.extend(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].map(Into::into));
+    }
+    if let Ok(p) = std::env::join_paths(path) {
+        cmd.env("PATH", p);
+    }
 
     purge_markers(&mut cmd, std::env::vars().map(|(k, _)| k));
 

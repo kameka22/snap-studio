@@ -42,17 +42,7 @@ pub fn engine() -> Option<PathBuf> {
 }
 
 fn binary(app: &Path) -> Result<PathBuf> {
-    let macos = app.join("Contents/MacOS");
-    let rd = std::fs::read_dir(&macos)?;
-    for e in rd.flatten() {
-        let p = e.path();
-        // L'exécutable principal porte le nom de l'application, les autres
-        // binaires du paquet sont des utilitaires.
-        if p.is_file() && p.file_name().map(|n| n != "crashpad_handler").unwrap_or(false) {
-            return Ok(p);
-        }
-    }
-    Err(anyhow!("exécutable introuvable dans {}", macos.display()))
+    crate::slicers::executable(app)
 }
 
 #[derive(Serialize, Clone)]
@@ -172,7 +162,7 @@ pub fn defaults(machine: &str, process: &str) -> Result<Simple> {
     Ok(Simple::from_config(&cfg))
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Default)]
 pub struct Request {
     pub source: String,
     pub machine: String,
@@ -186,17 +176,101 @@ pub struct Request {
     /// Dossier de destination ; par défaut, à côté du fichier d'origine.
     #[serde(default)]
     pub out_dir: Option<String>,
+    /// Couleur réelle de la bobine de chaque tête (`#rrggbb`), si connue.
+    #[serde(default)]
+    pub colors: Vec<Option<String>>,
+    /// Tête (0 à 3) imprimant chaque extrudeur du modèle : l'entrée `i`
+    /// concerne l'extrudeur `i + 1` du fichier. Vide : modèle monocolore.
+    #[serde(default)]
+    pub extruder_map: Vec<u8>,
+    /// Plateau de la vue Préparer : objets placés. Quand il est fourni, il
+    /// remplace `source` (qui peut rester vide).
+    #[serde(default)]
+    pub scene: Vec<crate::plate::SceneItem>,
+    /// Nom donné au résultat d'une scène (nom du G-code).
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
+/// Angle de surplomb du profil d'impression (`support_threshold_angle`), qui
+/// guide l'orientation automatique ; 30° à défaut ou si le profil vaut 0.
+pub fn support_threshold(process: Option<&str>) -> f64 {
+    let read = || -> Option<f64> {
+        let app = engine()?;
+        let idx = index_for(&app).ok()?;
+        let p = process.map(String::from).or_else(|| idx.selected.get("print").cloned())?;
+        let cfg = idx.flatten(&p)?;
+        let v = cfg.get("support_threshold_angle")?;
+        let s = match v {
+            Value::Array(a) => a.first()?.as_str()?.to_string(),
+            Value::String(s) => s.clone(),
+            Value::Number(n) => n.to_string(),
+            _ => return None,
+        };
+        s.trim().parse::<f64>().ok()
+    };
+    match read() {
+        Some(a) if a > 0.0 && a < 90.0 => a,
+        _ => 30.0,
+    }
+}
+
+/// Plateau d'une machine : dimensions utiles en millimètres et modèle
+/// d'imprimante, qui désigne la plaque et le logo à dessiner.
 #[derive(Serialize, Clone)]
+pub struct Bed {
+    pub w: f32,
+    pub d: f32,
+    pub model: Option<String>,
+}
+
+/// Plateau d'une machine ; celui de la U1 à défaut.
+pub fn bed(machine: Option<&str>) -> Bed {
+    let u1 = Bed { w: 270.0, d: 270.0, model: Some("Snapmaker U1".into()) };
+    let Some(app) = engine() else { return u1 };
+    let Ok(idx) = index_for(&app) else { return u1 };
+    let m = machine
+        .map(String::from)
+        .or_else(|| idx.selected.get("machine").cloned());
+    match m {
+        Some(m) => {
+            let (w, d) = idx.plate_size(&m);
+            Bed { w, d, model: idx.printer_model(&m) }
+        }
+        None => u1,
+    }
+}
+
+#[derive(Serialize, Clone, Default)]
 pub struct Progress {
     pub id: String,
-    /// preparation | slicing | done | error | cancelled
+    /// preparation | slicing | preview | error | cancelled
     pub phase: String,
     pub elapsed_s: f32,
     pub message: Option<String>,
+    /// En phase `preview` : G-code provisoire, dans le dossier de travail.
     pub gcode: Option<String>,
+    /// Avancement annoncé par le moteur, de 0 à 100.
+    pub percent: Option<f32>,
+    /// Bilan de la découpe, en phase `preview`.
+    pub stats: Option<crate::gcode::SliceStats>,
 }
+
+/// Découpe terminée en attente d'une décision : enregistrer, envoyer, jeter.
+struct Preview {
+    work: PathBuf,
+    gcode: PathBuf,
+    source: PathBuf,
+    out_dir: Option<PathBuf>,
+}
+
+fn previews() -> &'static Mutex<std::collections::HashMap<String, Preview>> {
+    static P: OnceLock<Mutex<std::collections::HashMap<String, Preview>>> = OnceLock::new();
+    P.get_or_init(Default::default)
+}
+
+/// Préfixe des dossiers de travail, dans le dossier temporaire du système.
+const WORK_PREFIX: &str = "snapstudio_slice_";
 
 type Jobs = Mutex<std::collections::HashMap<String, u32>>;
 
@@ -275,9 +349,22 @@ const SLICE_TRI_BUDGET: usize = 8_000_000;
 
 /// Réécrit la géométrie d'un 3MF dans un fichier neuf, centrée sur le plateau
 /// et posée à Z = 0.
-fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32)) -> Result<PathBuf> {
-    let mut zip = crate::model3mf::open(source)?;
-    let m = crate::mesh::load_mesh(&mut zip, SLICE_TRI_BUDGET)?;
+///
+/// `extruder_map[i]` donne la tête (0 à 3) qui imprime l'extrudeur `i + 1` du
+/// modèle. Quand le modèle déclare ses extrudeurs, la géométrie devient un
+/// objet unique à plusieurs pièces, chacune affectée à sa tête ; sinon, un
+/// bloc unique laissé au filament de la première tête.
+fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32), extruder_map: &[u8]) -> Result<PathBuf> {
+    let is_stl = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+    let m = if is_stl {
+        crate::stl::read(source)?
+    } else {
+        let mut zip = crate::model3mf::open(source)?;
+        crate::mesh::load_mesh(&mut zip, SLICE_TRI_BUDGET)?
+    };
     if m.truncated {
         return Err(anyhow!(
             "modèle trop dense pour la découpe intégrée ({} triangles)",
@@ -301,16 +388,70 @@ fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32)) -> Result<Pat
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "piece".into());
     let dst = work.join(format!("{name}.3mf"));
-    crate::write3mf::write_scene(
-        &dst,
-        &[crate::write3mf::SceneObject {
-            name,
-            tris: m.tris,
-            transform: t,
-            extruder: None,
-        }],
-    )?;
+
+    // Têtes de destination : une pièce par tête, en regroupant les extrudeurs
+    // du modèle envoyés sur la même tête.
+    let head_of = |model_ext: u8| -> u8 {
+        extruder_map
+            .get(model_ext.saturating_sub(1) as usize)
+            .copied()
+            .unwrap_or(0)
+            .min(15)
+    };
+    let mut groups: std::collections::BTreeMap<u8, Vec<crate::mesh::Tri>> = Default::default();
+    if m.extruders.len() == m.tris.len() {
+        for (tri, e) in m.tris.iter().zip(&m.extruders) {
+            groups.entry(head_of(*e)).or_default().push(*tri);
+        }
+    } else {
+        groups.insert(head_of(1), m.tris);
+    }
+    let parts: Vec<crate::write3mf::Part> = groups
+        .into_iter()
+        .map(|(head, tris)| crate::write3mf::Part {
+            name: format!("{name} — T{head}"),
+            tris,
+            extruder: head + 1,
+        })
+        .collect();
+    crate::write3mf::write_multipart(&dst, &name, &parts, &t)?;
     Ok(dst)
+}
+
+/// Filaments déclarés par un modèle, pour les associer aux têtes.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct ModelInfo {
+    /// Un par extrudeur du modèle (matière, couleur), quand le projet les déclare.
+    pub filaments: Vec<crate::model3mf::ProjectFilament>,
+    /// Extrudeurs réellement employés par les objets du modèle (à partir de 1).
+    pub used: Vec<u8>,
+}
+
+pub fn model_info(source: &Path) -> Result<ModelInfo> {
+    if crate::scan::kind_of(source) != Some("3mf") {
+        return Ok(ModelInfo::default());
+    }
+    let mut zip = crate::model3mf::open(source)?;
+    let filaments = crate::model3mf::project_filaments(&mut zip);
+    let mut used: Vec<u8> = crate::model3mf::extruder_settings(&mut zip)
+        .values()
+        .flat_map(|(obj, parts)| {
+            // L'extrudeur de l'objet ne vaut que pour lui-même s'il n'a pas de
+            // pièces, ou pour ses pièces qui n'en déclarent pas.
+            let obj = (*obj).max(1);
+            if parts.is_empty() {
+                vec![obj]
+            } else {
+                parts.values().map(|e| if *e > 0 { *e } else { obj }).collect()
+            }
+        })
+        .collect();
+    used.sort_unstable();
+    used.dedup();
+    if used.is_empty() {
+        used.push(1);
+    }
+    Ok(ModelInfo { filaments, used })
 }
 
 /// Lance une découpe. Renvoie l'identifiant du travail.
@@ -353,9 +494,10 @@ pub fn run_job(
             elapsed_s: 0.0,
             message: None,
             gcode: None,
+            ..Default::default()
         });
 
-        let work = std::env::temp_dir().join(format!("snapstudio_slice_{job_id}"));
+        let work = std::env::temp_dir().join(format!("{WORK_PREFIX}{job_id}"));
         let fail = |msg: String| {
             report(Progress {
                 id: job_id.clone(),
@@ -363,6 +505,7 @@ pub fn run_job(
                 elapsed_s: el(&t0),
                 message: Some(msg),
                 gcode: None,
+                ..Default::default()
             });
             jobs().lock().unwrap().remove(&job_id);
         };
@@ -378,6 +521,7 @@ pub fn run_job(
             &req.machine,
             &req.process,
             &req.filaments,
+            &req.colors,
             &overrides,
         ) {
             Ok(p) => p,
@@ -389,10 +533,26 @@ pub fn run_job(
         // géométrie dans un fichier neuf, en un seul bloc, posé au centre du
         // plateau. C'est aussi ce qui garantit que la pièce est imprimable là
         // où on la voit.
-        let source = Path::new(&req.source);
+        // Une scène n'a pas de fichier source : le résultat prend le nom du
+        // plateau, dans le dossier de son premier objet.
+        let scene_source = req.scene.first().map(|it| {
+            let name = req.name.clone().unwrap_or_else(|| "plateau".into());
+            Path::new(&it.path).with_file_name(format!("{name}.3mf"))
+        });
+        let source = scene_source.as_deref().unwrap_or(Path::new(&req.source));
         let mut arrange = "0";
-        let input = if crate::scan::kind_of(source) == Some("3mf") {
-            match rewrite_centered(source, &work, idx.plate_size(&req.machine)) {
+        let is_stl = source
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+        let input = if !req.scene.is_empty() {
+            let dst = work.join("plateau.3mf");
+            match crate::plate::write_scene(&req.scene, idx.plate_size(&req.machine), &dst) {
+                Ok(_) => dst,
+                Err(e) => return fail(e.to_string()),
+            }
+        } else if crate::scan::kind_of(source) == Some("3mf") || is_stl {
+            match rewrite_centered(source, &work, idx.plate_size(&req.machine), &req.extruder_map) {
                 Ok(p) => p,
                 Err(e) => return fail(e.to_string()),
             }
@@ -419,13 +579,22 @@ pub fn run_job(
             elapsed_s: el(&t0),
             message: None,
             gcode: None,
+            ..Default::default()
         });
 
-        let child = std::process::Command::new(&bin)
-            .args(["--arrange", arrange, "--allow-newer-file", "--slice", "0"])
+        let mut cmd = std::process::Command::new(&bin);
+        crate::util::no_window(&mut cmd);
+        cmd.args(["--arrange", arrange, "--allow-newer-file", "--slice", "0"])
             .arg("--load-settings").arg(&settings)
             .arg("--load-filaments").arg(&fils)
-            .arg("--outputdir").arg(&out)
+            .arg("--outputdir").arg(&out);
+        // Avancement réel : le moteur écrit des lignes JSON dans un tube nommé.
+        // Sans tube (création impossible, autre système), le compteur suffit.
+        let pipe = progress_pipe(&work).and_then(|p| open_pipe(&p).map(|f| (p, f)));
+        if let Some((p, _)) = &pipe {
+            cmd.arg("--pipe").arg(p);
+        }
+        let child = cmd
             .arg(&input)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -436,7 +605,30 @@ pub fn run_job(
         };
         jobs().lock().unwrap().insert(job_id.clone(), child.id());
 
-        let output = match child.wait_with_output() {
+        // Le lecteur du tube vit le temps de la découpe : un fil à portée
+        // limitée peut donc emprunter `report`.
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        let output = std::thread::scope(|sc| {
+            if let Some((_, f)) = pipe {
+                let (stop, id) = (&stop, job_id.clone());
+                sc.spawn(move || {
+                    progress_loop(f, stop, |percent, message| {
+                        report(Progress {
+                            id: id.clone(),
+                            phase: "slicing".into(),
+                            elapsed_s: t0.elapsed().as_secs_f32(),
+                            message,
+                            percent: Some(percent),
+                            ..Default::default()
+                        })
+                    })
+                });
+            }
+            let out = child.wait_with_output();
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            out
+        });
+        let output = match output {
             Ok(o) => o,
             Err(e) => return fail(e.to_string()),
         };
@@ -450,6 +642,7 @@ pub fn run_job(
                 elapsed_s: el(&t0),
                 message: None,
                 gcode: None,
+                ..Default::default()
             });
         }
 
@@ -480,27 +673,177 @@ pub fn run_job(
             return fail(engine_error(&logs));
         };
 
-        // Le résultat rejoint le dossier du modèle, sous un nom parlant.
-        let dest_dir = req
-            .out_dir
-            .as_ref()
-            .map(PathBuf::from)
-            .or_else(|| source.parent().map(|p| p.to_path_buf()))
-            .unwrap_or_else(std::env::temp_dir);
-        let dest = dest_dir.join(output_name(source, first));
-        if let Err(e) = std::fs::copy(first, &dest) {
-            return fail(format!("copie du résultat impossible : {e}"));
-        }
-        let _ = std::fs::remove_dir_all(&work);
+        // Le G-code reste dans le dossier de travail : c'est un aperçu, que
+        // l'utilisateur enregistrera, enverra à l'imprimante ou jettera.
+        let stats = std::fs::File::open(first)
+            .ok()
+            .and_then(|f| crate::gcode::parse(f).ok())
+            .map(|d| crate::gcode::stats(&d));
+        previews().lock().unwrap().insert(
+            job_id.clone(),
+            Preview {
+                work: work.clone(),
+                gcode: first.clone(),
+                source: source.to_path_buf(),
+                out_dir: req.out_dir.as_ref().map(PathBuf::from),
+            },
+        );
 
         report(Progress {
             id: job_id.clone(),
-            phase: "done".into(),
+            phase: "preview".into(),
             elapsed_s: el(&t0),
-            message: None,
-            gcode: Some(dest.to_string_lossy().to_string()),
+            gcode: Some(first.to_string_lossy().to_string()),
+            stats,
+            ..Default::default()
         });
     }
+}
+
+/// G-code provisoire d'un aperçu.
+pub fn preview_gcode(id: &str) -> Option<PathBuf> {
+    previews().lock().unwrap().get(id).map(|p| p.gcode.clone())
+}
+
+/// Enregistre l'aperçu sous un nom parlant, à côté du modèle par défaut.
+/// L'aperçu reste disponible (pour un envoi à l'imprimante, par exemple).
+pub fn save(id: &str, dir: Option<&str>) -> Result<PathBuf> {
+    // Chemins relevés sous le verrou, copie faite hors de lui.
+    let (gcode, dest) = {
+        let list = previews().lock().unwrap();
+        let p = list.get(id).ok_or_else(|| anyhow!("aperçu introuvable ; relancez la découpe"))?;
+        let dest_dir = dir
+            .map(PathBuf::from)
+            .or_else(|| p.out_dir.clone())
+            .or_else(|| p.source.parent().map(|d| d.to_path_buf()))
+            .unwrap_or_else(std::env::temp_dir);
+        (p.gcode.clone(), dest_dir.join(output_name(&p.source, &p.gcode)))
+    };
+    std::fs::copy(&gcode, &dest).map_err(|e| anyhow!("copie du G-code impossible : {e}"))?;
+    Ok(dest)
+}
+
+/// Nom de fichier proposé pour un aperçu (enregistrement, envoi).
+pub fn preview_name(id: &str) -> Option<String> {
+    let list = previews().lock().unwrap();
+    let p = list.get(id)?;
+    Some(output_name(&p.source, &p.gcode))
+}
+
+/// Abandonne un aperçu : son dossier de travail disparaît.
+pub fn discard(id: &str) {
+    if let Some(p) = previews().lock().unwrap().remove(id) {
+        let _ = std::fs::remove_dir_all(&p.work);
+    }
+}
+
+/// Supprime les dossiers de travail laissés par une session précédente
+/// (application quittée avec un aperçu ouvert, plantage).
+pub fn cleanup_stale() {
+    let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    let day = std::time::Duration::from_secs(24 * 3600);
+    for e in rd.flatten() {
+        if !e.file_name().to_string_lossy().starts_with(WORK_PREFIX) {
+            continue;
+        }
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > day);
+        if old {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+/// Crée le tube nommé par lequel le moteur annonce son avancement.
+#[cfg(unix)]
+fn progress_pipe(work: &Path) -> Option<PathBuf> {
+    let p = work.join("progress.pipe");
+    let _ = std::fs::remove_file(&p);
+    let c = std::ffi::CString::new(p.to_string_lossy().as_bytes()).ok()?;
+    // SAFETY : chemin C valide, terminé par un zéro, le temps de l'appel.
+    let r = unsafe { libc::mkfifo(c.as_ptr(), 0o600) };
+    (r == 0).then_some(p)
+}
+
+#[cfg(not(unix))]
+fn progress_pipe(_work: &Path) -> Option<PathBuf> {
+    None
+}
+
+/// Ouvre le tube en lecture, avant le lancement : le moteur l'ouvre en
+/// écriture non bloquante, ce qui échoue tant qu'aucun lecteur n'existe.
+#[cfg(unix)]
+fn open_pipe(pipe: &Path) -> Option<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(pipe)
+        .ok()
+}
+
+#[cfg(not(unix))]
+fn open_pipe(_pipe: &Path) -> Option<std::fs::File> {
+    None
+}
+
+/// Lit les lignes JSON `{"total_percent": …, "message": …}` du moteur
+/// jusqu'à ce que `stop` passe à vrai.
+fn progress_loop(mut f: std::fs::File, stop: &std::sync::atomic::AtomicBool, on: impl Fn(f32, Option<String>)) {
+    use std::io::Read;
+    let mut buf: Vec<u8> = Vec::new();
+    let mut chunk = [0u8; 4096];
+    let pause = std::time::Duration::from_millis(100);
+    loop {
+        let done = stop.load(std::sync::atomic::Ordering::Relaxed);
+        match f.read(&mut chunk) {
+            Ok(n) if n > 0 => {
+                buf.extend_from_slice(&chunk[..n]);
+                while let Some(i) = buf.iter().position(|b| *b == b'\n') {
+                    let line: Vec<u8> = buf.drain(..=i).collect();
+                    if let Some((pct, msg)) = parse_progress(&String::from_utf8_lossy(&line)) {
+                        on(pct, msg);
+                    }
+                }
+            }
+            // Rien à lire : pas encore d'écrivain, ou tube vide.
+            _ if done => break,
+            _ => std::thread::sleep(pause),
+        }
+    }
+}
+
+/// Une ligne du moteur : avancement global et message éventuel.
+fn parse_progress(line: &str) -> Option<(f32, Option<String>)> {
+    let v: Value = serde_json::from_str(line.trim_matches(|c: char| c == '\0' || c.is_whitespace())).ok()?;
+    let pct = v.get("total_percent").and_then(|x| x.as_f64())? as f32;
+    let msg = v
+        .get("message")
+        .or_else(|| v.get("warning"))
+        .and_then(|x| x.as_str())
+        .filter(|m| !m.is_empty())
+        .map(String::from);
+    Some((pct.clamp(0.0, 100.0), msg))
+}
+
+
+#[cfg(unix)]
+fn terminate(pid: u32) {
+    // SAFETY : simple envoi de signal à un processus que nous avons lancé.
+    unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+}
+
+#[cfg(windows)]
+fn terminate(pid: u32) {
+    let mut cmd = std::process::Command::new("taskkill");
+    crate::util::no_window(&mut cmd);
+    let _ = cmd.args(["/PID", &pid.to_string(), "/T", "/F"]).status();
 }
 
 /// Interrompt une découpe en cours.
@@ -508,9 +851,9 @@ pub fn cancel(id: &str) -> bool {
     let pid = jobs().lock().unwrap().remove(id);
     match pid {
         Some(pid) => {
-            // SIGTERM : le moteur n'a rien à sauvegarder, le dossier de travail
-            // est nettoyé par le fil qui l'attend.
-            unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+            // Le moteur n'a rien à sauvegarder, le dossier de travail est
+            // nettoyé par le fil qui l'attend.
+            terminate(pid);
             true
         }
         None => false,
@@ -582,6 +925,7 @@ mod tests {
                 simple: None,
                 overrides: Map::new(),
                 out_dir: Some(out_dir.to_string_lossy().to_string()),
+                ..Default::default()
             },
             "test".into(),
             &move |p| sink.lock().unwrap().push(p),
@@ -599,8 +943,13 @@ mod tests {
         assert_eq!(phases.first(), Some(&"preparation"));
         assert!(phases.contains(&"slicing"));
         let last = got.last().unwrap();
-        assert_eq!(last.phase, "done", "message : {:?}", last.message);
-        let g = PathBuf::from(last.gcode.clone().unwrap());
+        assert_eq!(last.phase, "preview", "message : {:?}", last.message);
+        let stats = last.stats.clone().expect("bilan joint à l'aperçu");
+        println!("bilan : {stats:?}");
+        assert!(stats.print_time_s.unwrap_or(0) > 0, "temps estimé");
+        let tmp = PathBuf::from(last.gcode.clone().unwrap());
+        assert!(tmp.is_file(), "aperçu dans le dossier de travail");
+        let g = save("test", None).unwrap();
         assert!(g.is_file(), "le G-code est déposé");
         assert!(g.starts_with(&out_dir), "dans le dossier demandé");
         assert!(std::fs::metadata(&g).unwrap().len() > 10_000);
@@ -675,13 +1024,14 @@ mod tests {
                 simple: Some(Simple { layer_height: Some(0.3), infill: Some(5.0), ..Default::default() }),
                 overrides: Map::new(),
                 out_dir: Some(out_dir.to_string_lossy().to_string()),
+                ..Default::default()
             },
             "ovr".into(),
             &move |p| sink.lock().unwrap().push(p),
         );
         let got = seen.lock().unwrap();
         let last = got.last().unwrap();
-        assert_eq!(last.phase, "done", "message : {:?}", last.message);
+        assert_eq!(last.phase, "preview", "message : {:?}", last.message);
         let g = PathBuf::from(last.gcode.clone().unwrap());
         let d = crate::gcode::parse(std::fs::File::open(&g).unwrap()).unwrap();
         println!(
@@ -728,14 +1078,210 @@ mod tests {
                 simple: None,
                 overrides: Map::new(),
                 out_dir: Some(out_dir.to_string_lossy().to_string()),
+                ..Default::default()
             },
             "prod".into(),
             &move |p| sink.lock().unwrap().push(p),
         );
         let got = seen.lock().unwrap();
         let last = got.last().unwrap();
-        assert_eq!(last.phase, "done", "message : {:?}", last.message);
+        assert_eq!(last.phase, "preview", "message : {:?}", last.message);
         println!("→ {}", last.gcode.clone().unwrap());
+    }
+
+    #[test]
+    fn engine_progress_lines_are_read() {
+        let (pct, msg) = parse_progress(r#"{"plate_index":1,"plate_count":1,"plate_percent":40,"total_percent":37,"message":"Generating G-code"}"#).unwrap();
+        assert_eq!(pct, 37.0);
+        assert_eq!(msg.as_deref(), Some("Generating G-code"));
+        assert!(parse_progress("bruit").is_none());
+        let (_, none) = parse_progress("{\"total_percent\":100,\"message\":\"\"}\0\0").unwrap();
+        assert!(none.is_none(), "message vide ignoré, octets nuls tolérés");
+    }
+
+    /// Extrudeurs employés : ceux des pièces, celui de l'objet pour les pièces
+    /// qui n'en déclarent pas ; filaments du projet lus avec leur couleur.
+    #[test]
+    fn model_info_counts_part_extruders() {
+        use std::io::Write;
+        let tmp = std::env::temp_dir().join("snapstudio-model-info.3mf");
+        let mut z = zip::ZipWriter::new(std::fs::File::create(&tmp).unwrap());
+        let o = zip::write::SimpleFileOptions::default();
+        z.start_file("Metadata/model_settings.config", o).unwrap();
+        z.write_all(br#"<config>
+  <object id="7"><metadata key="extruder" value="1"/>
+    <part id="1" subtype="normal_part"><metadata key="extruder" value="2"/></part>
+    <part id="2" subtype="normal_part"><metadata key="extruder" value="3"/></part>
+    <part id="3" subtype="normal_part"/>
+  </object>
+  <object id="9"><metadata key="extruder" value="4"/></object>
+</config>"#).unwrap();
+        z.start_file("Metadata/project_settings.config", o).unwrap();
+        z.write_all(br##"{"filament_type":["PLA","PETG"],"filament_colour":["#FF0000FF","#00FF00"]}"##).unwrap();
+        z.finish().unwrap();
+        let info = model_info(&tmp).unwrap();
+        // Pièce 3 sans extrudeur : celui de l'objet (1) ; l'objet 9, sans pièce, le 4.
+        assert_eq!(info.used, vec![1, 2, 3, 4]);
+        assert_eq!(info.filaments.len(), 2);
+        assert_eq!(info.filaments[0].color.as_deref(), Some("#ff0000"));
+        assert_eq!(info.filaments[1].kind, "PETG");
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    /// Un modèle à deux extrudeurs devient un objet à deux pièces, chacune sur
+    /// la tête demandée.
+    #[test]
+    fn multicolor_model_keeps_its_heads() {
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-multicolor-test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let tri = |z: f32| Tri { v: [[0., 0., z], [10., 0., z], [0., 10., z + 1.]], c: [200, 30, 30] };
+        let src = tmp.join("deux.3mf");
+        crate::write3mf::write_multipart(
+            &src,
+            "deux",
+            &[
+                crate::write3mf::Part { name: "bas".into(), tris: vec![tri(0.)], extruder: 1 },
+                crate::write3mf::Part { name: "haut".into(), tris: vec![tri(20.)], extruder: 2 },
+            ],
+            &Mat::IDENTITY,
+        )
+        .unwrap();
+        let info = model_info(&src).unwrap();
+        assert_eq!(info.used, vec![1, 2]);
+
+        // Extrudeur 1 → tête 3, extrudeur 2 → tête 0.
+        let out = rewrite_centered(&src, &tmp, (270.0, 270.0), &[3, 0]).unwrap();
+        let mut zip = crate::model3mf::open(&out).unwrap();
+        let m = crate::mesh::load_mesh(&mut zip, 1_000).unwrap();
+        assert_eq!(m.extruders.len(), m.tris.len());
+        let low = m.tris.iter().position(|t| t.v[0][2] < 1.0).unwrap();
+        let high = m.tris.iter().position(|t| t.v[0][2] > 10.0).unwrap();
+        assert_eq!(m.extruders[low], 4, "bas sur la tête 3");
+        assert_eq!(m.extruders[high], 1, "haut sur la tête 0");
+        assert!(m.tris[high].v[0][2] > 15.0, "la pièce haute reste en hauteur");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Découpe réelle d'un modèle bicolore (machine avec le moteur installé).
+    #[test]
+    fn multicolor_job_uses_two_heads() {
+        let Some(app) = engine() else { return };
+        let Ok(l) = lists(None) else { return };
+        if l.extruders < 2 {
+            return;
+        }
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-multicolor-slice");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        // Deux cubes de 10 mm superposés.
+        let cube = |z0: f32| -> Vec<Tri> {
+            let s = 10.0;
+            let p = [
+                [0., 0., z0], [s, 0., z0], [s, s, z0], [0., s, z0],
+                [0., 0., z0 + s], [s, 0., z0 + s], [s, s, z0 + s], [0., s, z0 + s],
+            ];
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let src = tmp.join("bicolore.3mf");
+        crate::write3mf::write_multipart(
+            &src,
+            "bicolore",
+            &[
+                crate::write3mf::Part { name: "bas".into(), tris: cube(0.0), extruder: 1 },
+                crate::write3mf::Part { name: "haut".into(), tris: cube(10.0), extruder: 2 },
+            ],
+            &Mat::IDENTITY,
+        )
+        .unwrap();
+        let machine = l.selected.get("machine").cloned().unwrap_or_else(|| l.machines[0].name.clone());
+        let fil = l.filaments.iter().find(|f| f.name.contains("PLA")).unwrap_or(&l.filaments[0]).name.clone();
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                source: src.to_string_lossy().to_string(),
+                machine,
+                process: l.processes[0].name.clone(),
+                filaments: vec![fil.clone(), fil.clone(), fil.clone(), fil],
+                extruder_map: vec![0, 1],
+                ..Default::default()
+            },
+            "bicolore".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let got = seen.lock().unwrap();
+        let last = got.last().unwrap();
+        assert_eq!(last.phase, "preview", "message : {:?}", last.message);
+        let tools = last.stats.clone().unwrap().tools;
+        println!("têtes employées : {tools:?}");
+        assert!(tools.contains(&0) && tools.contains(&1), "les deux têtes extrudent");
+        discard("bicolore");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Découpe réelle d'une scène du plateau : deux objets placés, l'un tourné ;
+    /// le G-code doit les trouver là où le plateau les a mis.
+    #[test]
+    fn plate_scene_job_keeps_placements() {
+        let Some(app) = engine() else { return };
+        let Ok(l) = lists(None) else { return };
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-scene-slice");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let cube = |s: f32| -> Vec<Tri> {
+            let p = [[0., 0., 0.], [s, 0., 0.], [s, s, 0.], [0., s, 0.], [0., 0., s], [s, 0., s], [s, s, s], [0., s, s]];
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let src = tmp.join("cubes.3mf");
+        crate::write3mf::write_scene(&src, &[
+            crate::write3mf::SceneObject { name: "a".into(), tris: cube(15.0), transform: Mat::IDENTITY, extruder: None },
+            crate::write3mf::SceneObject { name: "b".into(), tris: cube(15.0), transform: Mat::IDENTITY, extruder: None },
+        ]).unwrap();
+        let item = |i: usize, x: f32, rz: f32| crate::plate::SceneItem {
+            path: src.to_string_lossy().to_string(),
+            item: i,
+            name: format!("cube {i}"),
+            pos: [x, 60.0],
+            rot: [0.0, 0.0, rz],
+            scale: [1.0, 1.0, 1.0],
+            extruder_map: vec![0],
+        };
+        let machine = l.selected.get("machine").cloned().unwrap_or_else(|| l.machines[0].name.clone());
+        let fil = l.filaments.iter().find(|f| f.name.contains("PLA")).unwrap_or(&l.filaments[0]).name.clone();
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process: l.processes[0].name.clone(),
+                filaments: vec![fil],
+                scene: vec![item(0, 60.0, 0.0), item(1, 180.0, 30.0)],
+                name: Some("scene".into()),
+                ..Default::default()
+            },
+            "scene".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let got = seen.lock().unwrap();
+        let last = got.last().unwrap();
+        assert_eq!(last.phase, "preview", "message : {:?}", last.message);
+        let g = crate::gcode::parse(std::fs::File::open(last.gcode.clone().unwrap()).unwrap()).unwrap();
+        println!("emprise du G-code : {:?} → {:?}", g.min, g.max);
+        assert!(g.min[0] > 40.0 && g.max[0] < 200.0, "les cubes restent autour de X = 60 et X = 180");
+        discard("scene");
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

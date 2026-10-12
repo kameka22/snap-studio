@@ -2,6 +2,8 @@
 
 use anyhow::{anyhow, Result};
 use quick_xml::events::Event;
+use serde::Serialize;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -326,6 +328,174 @@ fn read_model_settings(zip: &mut Zip, meta: &mut Meta) {
     if !names.is_empty() {
         meta.object_names = names;
     }
+}
+
+/// Extrudeur affecté à chaque objet de la scène, et à chacune de ses pièces.
+///
+/// `Metadata/model_settings.config` (Bambu, Orca) : `<object id>` désigne
+/// l'objet du `<build>`, `<part id>` le composant ; la valeur `extruder` part
+/// de 1, et 0 ou l'absence signifie « comme l'objet ».
+pub fn extruder_settings(zip: &mut Zip) -> HashMap<u32, (u8, HashMap<u32, u8>)> {
+    let mut out: HashMap<u32, (u8, HashMap<u32, u8>)> = HashMap::new();
+    let Some(data) = read_entry(zip, "Metadata/model_settings.config") else {
+        return out;
+    };
+    let mut reader = quick_xml::Reader::from_reader(data.as_slice());
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut object: Option<u32> = None;
+    let mut part: Option<u32> = None;
+    loop {
+        let ev = reader.read_event_into(&mut buf);
+        // Une balise auto-fermante n'a pas de contenu : elle n'ouvre rien.
+        let opens = matches!(ev, Ok(Event::Start(_)));
+        match ev {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+                "object" => {
+                    object = attr_str(&e, "id").and_then(|v| v.parse().ok()).filter(|_| opens);
+                    part = None;
+                }
+                "part" => {
+                    let pid: Option<u32> = attr_str(&e, "id").and_then(|v| v.parse().ok());
+                    // Toute pièce est connue, même sans extrudeur déclaré (0 :
+                    // celui de l'objet) ; seule une balise ouvrante attend du contenu.
+                    if let (Some(o), Some(id)) = (object, pid) {
+                        out.entry(o).or_insert((0, HashMap::new())).1.entry(id).or_insert(0);
+                    }
+                    part = pid.filter(|_| opens);
+                }
+                "metadata" if attr_str(&e, "key").as_deref() == Some("extruder") => {
+                    let ext: u8 = attr_str(&e, "value").and_then(|v| v.parse().ok()).unwrap_or(0);
+                    if let Some(o) = object {
+                        let entry = out.entry(o).or_insert((0, HashMap::new()));
+                        match part {
+                            Some(pid) => {
+                                entry.1.insert(pid, ext);
+                            }
+                            None => entry.0 = ext,
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) => match e.local_name().as_ref() {
+                "part" => part = None,
+                "object" => object = None,
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    out
+}
+
+/// Nom et plateau de chaque objet du `<build>`, d'après
+/// `model_settings.config` (Bambu, Orca). Plateau 1 par défaut.
+pub fn object_settings(zip: &mut Zip) -> (HashMap<u32, String>, HashMap<u32, u32>) {
+    let mut names = HashMap::new();
+    let mut plates = HashMap::new();
+    let Some(data) = read_entry(zip, "Metadata/model_settings.config") else {
+        return (names, plates);
+    };
+    let mut reader = quick_xml::Reader::from_reader(data.as_slice());
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    // Contexte : objet (hors pièce) ou plateau en cours de lecture.
+    let mut object: Option<u32> = None;
+    let mut in_part = false;
+    let mut plate: Option<u32> = None;
+    let mut in_plate = false;
+    let mut plate_objects: Vec<u32> = Vec::new();
+    loop {
+        let ev = reader.read_event_into(&mut buf);
+        let opens = matches!(ev, Ok(Event::Start(_)));
+        match ev {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+                "object" if opens => {
+                    object = attr_str(&e, "id").and_then(|v| v.parse().ok());
+                    in_part = false;
+                }
+                "part" if opens => in_part = true,
+                "plate" if opens => {
+                    in_plate = true;
+                    plate = None;
+                    plate_objects.clear();
+                }
+                "metadata" => {
+                    let key = attr_str(&e, "key").unwrap_or_default();
+                    let val = attr_str(&e, "value").unwrap_or_default();
+                    if in_plate {
+                        match key.as_str() {
+                            "plater_id" => plate = val.parse().ok(),
+                            "object_id" => {
+                                if let Ok(id) = val.parse() {
+                                    plate_objects.push(id);
+                                }
+                            }
+                            _ => {}
+                        }
+                    } else if let (Some(o), false, "name") = (object, in_part, key.as_str()) {
+                        if !val.is_empty() {
+                            names.insert(o, val);
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) => match e.local_name().as_ref() {
+                "part" => in_part = false,
+                "object" => object = None,
+                "plate" => {
+                    if let Some(p) = plate {
+                        for id in plate_objects.drain(..) {
+                            plates.insert(id, p);
+                        }
+                    }
+                    in_plate = false;
+                }
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    (names, plates)
+}
+
+/// Un filament déclaré par le projet (`project_settings.config`).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct ProjectFilament {
+    /// Numéro d'extrudeur du modèle, à partir de 1.
+    pub index: u8,
+    pub kind: String,
+    pub color: Option<String>,
+}
+
+/// Filaments du projet : matière et couleur de chaque extrudeur du modèle.
+pub fn project_filaments(zip: &mut Zip) -> Vec<ProjectFilament> {
+    let Some(data) = read_entry(zip, "Metadata/project_settings.config") else {
+        return Vec::new();
+    };
+    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&data) else {
+        return Vec::new();
+    };
+    let list = |k: &str| -> Vec<String> {
+        v.get(k)
+            .and_then(|x| x.as_array())
+            .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
+            .unwrap_or_default()
+    };
+    let (types, colors) = (list("filament_type"), list("filament_colour"));
+    (0..types.len().max(colors.len()).min(16))
+        .map(|i| ProjectFilament {
+            index: i as u8 + 1,
+            kind: types.get(i).cloned().unwrap_or_default(),
+            color: colors.get(i).map(|c| c.chars().take(7).collect::<String>().to_lowercase()),
+        })
+        .collect()
 }
 
 /// Lecture complete des metadonnees d'un fichier 3MF.

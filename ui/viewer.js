@@ -13,12 +13,20 @@ const V = {
   layer: 0,         // couche la plus haute affichée
   showTravel: false,
   grid: null,       // { prog, vao, count }
+  bed: null,        // plaque et logo, voir buildBed
   cam: { yaw: -0.62, pitch: 0.46, dist: 260, target: [0, 0, 0] },
   drag: null,
   path: null,
   showPlate: true,
   raf: 0,
+  /* Aperçu de découpe en cours : bilan, couleurs des têtes, actions. */
+  preview: null,
+  /* « feature » : couleur par trajectoire ; « tool » : par tête. */
+  colorMode: "feature",
 };
+
+/* Couleurs de repli des têtes, quand la bobine n'est pas connue. */
+const TOOL_COLORS = [[0, 122, 255], [255, 149, 0], [52, 199, 89], [175, 82, 222]];
 
 /* Plateau de la Snapmaker U1, en millimètres. */
 const PLATE = { w: 270, d: 270, step: 10 };
@@ -221,7 +229,13 @@ function decodeGcode(buf) {
   const count = { e: 0, t: 0 };
   for (let i = 0; i < n; i++) (attrs[i * 4 + 3] & 1 ? count.t++ : count.e++);
   const out = {
-    e: { pos: new Float32Array(count.e * 6), col: new Float32Array(count.e * 6), ends: new Int32Array(layers + 1) },
+    e: {
+      pos: new Float32Array(count.e * 6),
+      col: new Float32Array(count.e * 6),
+      feat: new Uint8Array(count.e),
+      tool: new Uint8Array(count.e),
+      ends: new Int32Array(layers + 1),
+    },
     t: { pos: new Float32Array(count.t * 6), col: new Float32Array(count.t * 6), ends: new Int32Array(layers + 1) },
   };
   const layerZ = new Float32Array(layers);
@@ -234,7 +248,11 @@ function decodeGcode(buf) {
     const dst = travel ? out.t : out.e;
     const k = travel ? ti++ : ei++;
     for (let v = 0; v < 6; v++) dst.pos[k * 6 + v] = pos[i * 6 + v];
-    if (!travel) feats.add(Math.min(feat, FEATURES.length - 1));
+    if (!travel) {
+      feats.add(Math.min(feat, FEATURES.length - 1));
+      out.e.feat[k] = Math.min(feat, FEATURES.length - 1);
+      out.e.tool[k] = attrs[i * 4 + 3] >> 4;
+    }
     const c = travel ? [96, 104, 126] : FEATURES[Math.min(feat, FEATURES.length - 1)][1];
     for (let v = 0; v < 2; v++) {
       dst.col[k * 6 + v * 3] = c[0] / 255;
@@ -259,6 +277,33 @@ function decodeGcode(buf) {
   return { n, layers, min, max, truncated, out, layerZ, feats: [...feats].sort((a, b) => a - b) };
 }
 
+/* Couleurs des extrusions selon le mode : famille de trajectoire ou tête. */
+function extrusionColors(e, mode, toolColors) {
+  const col = new Float32Array(e.feat.length * 6);
+  for (let k = 0; k < e.feat.length; k++) {
+    const c = mode === "tool"
+      ? toolColors[e.tool[k]] || TOOL_COLORS[e.tool[k] % TOOL_COLORS.length]
+      : FEATURES[e.feat[k]][1];
+    for (let v = 0; v < 2; v++) {
+      col[k * 6 + v * 3] = c[0] / 255;
+      col[k * 6 + v * 3 + 1] = c[1] / 255;
+      col[k * 6 + v * 3 + 2] = c[2] / 255;
+    }
+  }
+  return col;
+}
+
+function setColorMode(mode) {
+  V.colorMode = mode;
+  const p = V.paths;
+  if (!p || !p.extr.colBuf) return;
+  const gl = V.gl;
+  gl.bindBuffer(gl.ARRAY_BUFFER, p.extr.colBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, extrusionColors(p.data, mode, (V.preview && V.preview.toolColors) || []), gl.STATIC_DRAW);
+  renderLegend(p.feats);
+  schedule();
+}
+
 function buildPathBuffers(gl, prog, part) {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -275,7 +320,7 @@ function buildPathBuffers(gl, prog, part) {
   gl.enableVertexAttribArray(aCol);
   gl.vertexAttribPointer(aCol, 3, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
-  return { vao, ends: part.ends };
+  return { vao, ends: part.ends, colBuf: cb };
 }
 
 function buildPaths(gl, data) {
@@ -284,6 +329,7 @@ function buildPaths(gl, data) {
     prog,
     extr: buildPathBuffers(gl, prog, data.out.e),
     trav: buildPathBuffers(gl, prog, data.out.t),
+    data: data.out.e,
     min: data.min,
     max: data.max,
     layers: data.layers,
@@ -318,19 +364,24 @@ function buildMesh(gl, data) {
 }
 
 /* Quadrillage du plateau : lignes tous les 10 mm, bordure accentuée. */
-function buildGrid(gl) {
+function buildGrid(gl, w = PLATE.w, d = PLATE.d) {
   const pos = [];
   const main = [];
   const line = (a, b, strong) => {
     pos.push(a[0], a[1], a[2], b[0], b[1], b[2]);
     main.push(strong, strong);
   };
-  for (let x = 0; x <= PLATE.w; x += PLATE.step) {
-    line([x, 0, 0], [x, PLATE.d, 0], x % 50 === 0 ? 1 : 0);
+  for (let x = 0; x <= w + 1e-6; x += PLATE.step) {
+    line([x, 0, 0], [x, d, 0], x % 50 === 0 ? 1 : 0);
   }
-  for (let y = 0; y <= PLATE.d; y += PLATE.step) {
-    line([0, y, 0], [PLATE.w, y, 0], y % 50 === 0 ? 1 : 0);
+  for (let y = 0; y <= d + 1e-6; y += PLATE.step) {
+    line([0, y, 0], [w, y, 0], y % 50 === 0 ? 1 : 0);
   }
+  // Bordure : le plateau garde un contour net même hors du pas de 10 mm.
+  line([0, 0, 0], [w, 0, 0], 1);
+  line([w, 0, 0], [w, d, 0], 1);
+  line([w, d, 0], [0, d, 0], 1);
+  line([0, d, 0], [0, 0, 0], 1);
   const prog = program(gl, LINE_VS, LINE_FS);
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -348,6 +399,210 @@ function buildGrid(gl) {
   gl.vertexAttribPointer(aMain, 1, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
   return { prog, vao, count: pos.length / 3 };
+}
+
+/* ---------------------------------------------------------------- plateau physique */
+
+/* Plaques connues, d'après les profils de Snapmaker Orca (`bed_model`,
+   `bed_texture` du modèle d'imprimante) : maillage de la plaque, logo. */
+const BED_ASSETS = {
+  "Snapmaker U1": { model: "assets/bed/u1-bed.stl", texture: "assets/bed/u1-texture.svg" },
+};
+/* Couleurs d'Orca : plaque (Bed3D), zone imprimable (PartPlate), lignes. */
+const BED_COLORS = { plate: [0.3255, 0.337, 0.337], area: [0.267, 0.278, 0.278], grid: [0.62, 0.64, 0.64] };
+/* Orca descend la plaque sous le plateau pour qu'elle ne masque pas la grille. */
+const BED_MODEL_Z = -0.43;
+
+const TEX_VS = `#version 300 es
+in vec3 aPos;
+in vec2 aUV;
+uniform mat4 uMVP;
+out vec2 vUV;
+void main() {
+  vUV = aUV;
+  gl_Position = uMVP * vec4(aPos, 1.0);
+}`;
+
+const TEX_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform vec4 uColor;
+uniform bool uUseTex;
+out vec4 frag;
+void main() { frag = uUseTex ? texture(uTex, vUV) * uColor : uColor; }`;
+
+/* Fichiers de plaque, lus une fois pour tous les contextes graphiques. */
+const BED_FILES = new Map();
+function bedFile(url, load) {
+  if (!BED_FILES.has(url)) BED_FILES.set(url, load(url));
+  return BED_FILES.get(url);
+}
+
+/* STL binaire : 80 octets d'en-tête, le nombre de facettes, puis 50 octets
+   par facette (normale, trois sommets, attribut). */
+async function loadStl(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`erreur ${r.status}`);
+  const buf = await r.arrayBuffer();
+  const dv = new DataView(buf);
+  const n = dv.getUint32(80, true);
+  if (84 + n * 50 > buf.byteLength) throw new Error("STL binaire attendu");
+  const pos = new Float32Array(n * 9);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < 9; k++) pos[i * 9 + k] = dv.getFloat32(84 + i * 50 + 12 + k * 4, true);
+  }
+  return pos;
+}
+
+function loadImage(url) {
+  return new Promise((ok, ko) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = () => ko(new Error(`image illisible : ${url}`));
+    img.src = url;
+  });
+}
+
+/* Plateau d'un modèle d'imprimante connu, null sinon. Les fichiers arrivent
+   après coup : `onReady` redemande alors un rendu. */
+function buildBed(gl, w, d, model, onReady) {
+  const a = BED_ASSETS[model];
+  if (!a) return null;
+  const bed = { w, d, model, plate: null, texture: null };
+
+  // Zone imprimable : support du fond et du logo. Le haut de l'image va au
+  // fond du plateau.
+  bed.tex = program(gl, TEX_VS, TEX_FS);
+  bed.quad = gl.createVertexArray();
+  gl.bindVertexArray(bed.quad);
+  const qb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, qb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    0, 0, 0, 0, 1, w, 0, 0, 1, 1, w, d, 0, 1, 0,
+    0, 0, 0, 0, 1, w, d, 0, 1, 0, 0, d, 0, 0, 0,
+  ]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(bed.tex, "aPos");
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 20, 0);
+  const aUV = gl.getAttribLocation(bed.tex, "aUV");
+  gl.enableVertexAttribArray(aUV);
+  gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 20, 12);
+  gl.bindVertexArray(null);
+
+  // Plaque : maillage du constructeur, centré sur la zone imprimable.
+  bedFile(a.model, loadStl)
+    .then((src) => {
+      const pos = new Float32Array(src.length);
+      for (let i = 0; i < src.length; i += 3) {
+        pos[i] = src[i] + w / 2;
+        pos[i + 1] = src[i + 1] + d / 2;
+        pos[i + 2] = src[i + 2] + BED_MODEL_Z;
+      }
+      const prog = program(gl, MESH_VS, MESH_FS);
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const pb = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, pb);
+      gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
+      const p = gl.getAttribLocation(prog, "aPos");
+      gl.enableVertexAttribArray(p);
+      gl.vertexAttribPointer(p, 3, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      bed.plate = { prog, vao, count: pos.length / 3, aCol: gl.getAttribLocation(prog, "aCol") };
+      onReady?.();
+    })
+    .catch((e) => console.warn("plaque :", e.message));
+
+  // Logo : le SVG est tramé à 2048 px au plus, comme dans Orca.
+  bedFile(a.texture, loadImage)
+    .then((img) => {
+      const k = 2048 / Math.max(w, d);
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(w * k);
+      cv.height = Math.round(d * k);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      // Vue rasante : le filtrage anisotrope garde le logo net.
+      const aniso = gl.getExtension("EXT_texture_filter_anisotropic");
+      if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      bed.texture = tex;
+      onReady?.();
+    })
+    .catch((e) => console.warn("logo du plateau :", e.message));
+  return bed;
+}
+
+function disposeBed(gl, bed) {
+  if (!bed) return;
+  gl.deleteVertexArray(bed.quad);
+  gl.deleteProgram(bed.tex);
+  if (bed.plate) {
+    gl.deleteVertexArray(bed.plate.vao);
+    gl.deleteProgram(bed.plate.prog);
+  }
+  if (bed.texture) gl.deleteTexture(bed.texture);
+}
+
+/* Plateau, de bas en haut comme dans Orca : plaque, zone imprimable, grille,
+   logo. Seule la plaque écrit la profondeur ; le reste se superpose, et les
+   objets, dessinés ensuite, passent devant. Sans plaque connue : la grille. */
+function drawBed(gl, bed, grid, vp, view, light) {
+  if (bed?.plate) {
+    const p = bed.plate;
+    gl.useProgram(p.prog);
+    gl.uniformMatrix4fv(gl.getUniformLocation(p.prog, "uMVP"), false, vp);
+    gl.uniformMatrix4fv(gl.getUniformLocation(p.prog, "uMV"), false, view);
+    gl.bindVertexArray(p.vao);
+    gl.vertexAttrib3f(p.aCol, ...BED_COLORS.plate);
+    gl.drawArrays(gl.TRIANGLES, 0, p.count);
+  }
+  gl.depthMask(false);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  if (bed) {
+    gl.useProgram(bed.tex);
+    gl.uniformMatrix4fv(gl.getUniformLocation(bed.tex, "uMVP"), false, vp);
+    gl.uniform1i(gl.getUniformLocation(bed.tex, "uUseTex"), 0);
+    gl.uniform4fv(gl.getUniformLocation(bed.tex, "uColor"), [...BED_COLORS.area, 1]);
+    gl.bindVertexArray(bed.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+  if (grid) {
+    gl.useProgram(grid.prog);
+    gl.uniformMatrix4fv(gl.getUniformLocation(grid.prog, "uMVP"), false, vp);
+    gl.uniform3fv(
+      gl.getUniformLocation(grid.prog, "uColor"),
+      bed ? BED_COLORS.grid : light ? [0.45, 0.48, 0.56] : [0.55, 0.6, 0.72]
+    );
+    gl.bindVertexArray(grid.vao);
+    gl.drawArrays(gl.LINES, 0, grid.count);
+  }
+  if (bed?.texture) {
+    // Texture prémultipliée : bords du logo sans liseré sombre.
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(bed.tex);
+    gl.uniform1i(gl.getUniformLocation(bed.tex, "uUseTex"), 1);
+    gl.uniform4fv(gl.getUniformLocation(bed.tex, "uColor"), [0.92, 0.92, 0.92, 0.92]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, bed.texture);
+    gl.uniform1i(gl.getUniformLocation(bed.tex, "uTex"), 0);
+    gl.bindVertexArray(bed.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+  gl.disable(gl.BLEND);
+  gl.depthMask(true);
+  gl.bindVertexArray(null);
 }
 
 /* ---------------------------------------------------------------- rendu */
@@ -396,19 +651,7 @@ function draw() {
   const proj = m4.perspective(0.72, Math.max(w / Math.max(h, 1), 0.01), Math.max(c.dist / 100, 0.5), c.dist * 12 + 2000);
   const mvp = m4.mul(proj, view);
 
-  if (V.showPlate && V.grid) {
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.useProgram(V.grid.prog);
-    gl.uniformMatrix4fv(gl.getUniformLocation(V.grid.prog, "uMVP"), false, mvp);
-    gl.uniform3fv(
-      gl.getUniformLocation(V.grid.prog, "uColor"),
-      light ? [0.45, 0.48, 0.56] : [0.55, 0.60, 0.72]
-    );
-    gl.bindVertexArray(V.grid.vao);
-    gl.drawArrays(gl.LINES, 0, V.grid.count);
-    gl.disable(gl.BLEND);
-  }
+  if (V.showPlate && V.grid) drawBed(gl, V.bed, V.grid, mvp, view, light);
 
   if (V.paths) {
     const p = V.paths;
@@ -506,10 +749,13 @@ async function openViewer(path, name, kind, bust) {
       return;
     }
     V.grid = buildGrid(V.gl);
+    V.bed = buildBed(V.gl, PLATE.w, PLATE.d, "Snapmaker U1", schedule);
     bindInteractions(canvas);
   }
 
   const gcode = kind === "gcode";
+  // Un aperçu de découpe garde son panneau ; une ouverture ordinaire l'efface.
+  if (!V.preview || V.preview.path !== path) hidePreviewPanel();
   $("v-layers").classList.toggle("hidden", !gcode);
   $("v-legend").classList.toggle("hidden", !gcode);
   $("v-travel").classList.toggle("hidden", !gcode);
@@ -525,6 +771,9 @@ async function openViewer(path, name, kind, bust) {
 
     if (gcode) {
       const data = decodeGcode(buf);
+      if (V.colorMode === "tool") {
+        data.out.e.col = extrusionColors(data.out.e, "tool", (V.preview && V.preview.toolColors) || []);
+      }
       V.paths = buildPaths(V.gl, data);
       V.layer = data.layers - 1;
       setupLayerSlider(data);
@@ -560,10 +809,24 @@ function updateLayerLabel() {
   const n = V.layer + 1;
   $("v-layer-n").textContent = `Couche ${n} / ${p.layers}`;
   const z = p.layerZ[Math.min(V.layer, p.layerZ.length - 1)];
-  $("v-layer-z").textContent = z ? `Z ${z.toFixed(2).replace(".", ",")} mm` : "";
+  const t = V.preview?.stats?.layer_end_s?.[Math.min(V.layer, (V.preview.stats.layer_end_s.length || 1) - 1)];
+  $("v-layer-z").textContent =
+    (z ? `Z ${z.toFixed(2).replace(".", ",")} mm` : "") + (t != null ? ` · ${fmtSpan(t)}` : "");
 }
 
 function renderLegend(feats) {
+  if (V.colorMode === "tool" && V.preview) {
+    const tools = V.preview.stats?.tools?.length ? V.preview.stats.tools : [0];
+    $("v-legend").innerHTML = tools
+      .map((t) => {
+        const c = V.preview.toolColors[t] || TOOL_COLORS[t % TOOL_COLORS.length];
+        return `<span class="leg"><i style="background:rgb(${c[0]},${c[1]},${c[2]})"></i>Tête T${t}${
+          V.preview.toolNames?.[t] ? " · " + esc(V.preview.toolNames[t]) : ""
+        }</span>`;
+      })
+      .join("");
+    return;
+  }
   $("v-legend").innerHTML = feats
     .map((f) => {
       const [name, c] = FEATURES[f];
@@ -585,7 +848,96 @@ function closeViewer() {
   }
   $("viewer").classList.add("hidden");
   V.path = null;
+  if (V.preview) {
+    const pv = V.preview;
+    hidePreviewPanel();
+    if (pv.onClose) pv.onClose();
+  }
 }
+
+/* ------------------------------------------------------------ aperçu de découpe */
+
+const fmtSpan = (s) => {
+  s = Math.max(0, Math.round(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (h) return `${h} h ${String(m).padStart(2, "0")}`;
+  if (m) return `${m} min${m < 10 && sec ? " " + String(sec).padStart(2, "0") + " s" : ""}`;
+  return `${sec} s`;
+};
+const fmtNum = (x, d = 1) => (x ?? 0).toFixed(d).replace(".", ",");
+
+/* Ouvre un G-code de découpe avec son bilan. `opts` : path, name, stats,
+   toolColors ([r,g,b] par tête), toolNames, onSend, onSave, onEdit, onClose. */
+function openPreview(opts) {
+  V.preview = opts;
+  V.colorMode = "feature";
+  $("vp-by-feature").classList.add("on");
+  $("vp-by-tool").classList.remove("on");
+  renderPreviewPanel();
+  $("v-panel").classList.remove("hidden");
+  $("viewer").classList.add("previewing");
+  return openViewer(opts.path, opts.name, "gcode");
+}
+
+function hidePreviewPanel() {
+  V.preview = null;
+  V.colorMode = "feature";
+  $("v-panel").classList.add("hidden");
+  $("viewer").classList.remove("previewing");
+}
+
+function renderPreviewPanel() {
+  const st = V.preview.stats || {};
+  $("vp-time").textContent = st.print_time_s ? fmtSpan(st.print_time_s) : "—";
+  $("vp-first").textContent = [
+    st.first_layer_s ? `première couche ${fmtSpan(st.first_layer_s)}` : "",
+    st.layers ? `${st.layers.toLocaleString("fr-FR")} couches` : "",
+  ].filter(Boolean).join(" · ");
+
+  // Une ligne par tête qui extrude, puis le total.
+  const tools = st.tools?.length ? st.tools : [0];
+  const rows = tools.map((t) => {
+    const c = V.preview.toolColors[t] || TOOL_COLORS[t % TOOL_COLORS.length];
+    const g = st.per_tool_g?.[t], m = st.per_tool_m?.[t];
+    return `<div class="grow-row"><span class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>
+      <span class="k">T${t}${V.preview.toolNames?.[t] ? `<span class="sub">${esc(V.preview.toolNames[t])}</span>` : ""}</span>
+      <span class="val">${g != null ? fmtNum(g) + " g" : ""}${m != null ? `<span class="sub">${fmtNum(m, 2)} m</span>` : ""}</span></div>`;
+  });
+  if (tools.length > 1 || st.cost) {
+    rows.push(`<div class="grow-row total"><span class="k">Total</span><span class="val">${
+      st.filament_g != null ? fmtNum(st.filament_g) + " g" : "—"
+    }${st.cost ? `<span class="sub">${fmtNum(st.cost, 2)} €</span>` : ""}</span></div>`);
+  }
+  $("vp-fil").innerHTML = rows.join("");
+
+  // Répartition : familles de trajectoires puis déplacements, en part du total.
+  const total = (st.features || []).reduce((a, f) => a + f.seconds, 0) + (st.travel_s || 0);
+  const feat = (st.features || []).map((f) => ({ name: FEATURES[Math.min(f.feature, FEATURES.length - 1)][0], c: FEATURES[Math.min(f.feature, FEATURES.length - 1)][1], s: f.seconds }));
+  if (st.travel_s > 0) feat.push({ name: "Déplacements", c: [96, 104, 126], s: st.travel_s });
+  $("vp-feat").innerHTML = feat
+    .map((f) => {
+      const pct = total ? (f.s * 100) / total : 0;
+      return `<div class="grow-row vp-feat"><span class="swatch sq" style="background:rgb(${f.c[0]},${f.c[1]},${f.c[2]})"></span>
+        <span class="k">${esc(f.name)}</span>
+        <span class="vp-bar"><i style="width:${pct.toFixed(1)}%"></i></span>
+        <span class="val">${fmtSpan(f.s)}</span></div>`;
+    })
+    .join("");
+}
+
+$("vp-by-feature").addEventListener("click", () => {
+  $("vp-by-feature").classList.add("on");
+  $("vp-by-tool").classList.remove("on");
+  setColorMode("feature");
+});
+$("vp-by-tool").addEventListener("click", () => {
+  $("vp-by-tool").classList.add("on");
+  $("vp-by-feature").classList.remove("on");
+  setColorMode("tool");
+});
+$("vp-send").addEventListener("click", () => V.preview?.onSend?.());
+$("vp-save").addEventListener("click", () => V.preview?.onSave?.());
+$("vp-edit").addEventListener("click", () => V.preview?.onEdit?.());
 
 /* Déplace la cible de la caméra dans le plan de l'écran. */
 function panBy(dx, dy) {
@@ -681,6 +1033,8 @@ document.addEventListener("keydown", (e) => {
   // Ancré dans une conversation, le clavier appartient au terminal : un « R »
   // au fil d'une phrase ne doit pas recadrer la caméra.
   if (box.classList.contains("hidden") || box.classList.contains("docked")) return;
+  // Une sheet ouverte par-dessus (envoi à l'imprimante) garde le clavier.
+  if (document.querySelector(".modal:not(.hidden)")) return;
   if (e.key === "Escape") closeViewer();
   if (e.key.toLowerCase() === "r") frameCamera();
 });

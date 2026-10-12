@@ -109,6 +109,7 @@ pub fn read(path: &Path) -> Result<MeshData> {
         });
     }
     Ok(MeshData {
+        extruders: Vec::new(),
         tris,
         min,
         max,

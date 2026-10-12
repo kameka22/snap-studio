@@ -96,7 +96,36 @@ function iaStatus(c) {
   return `<span class="ia-badge">○ En attente</span>`;
 }
 
+/* Conversations sous l'entrée IA de la barre latérale, comme les dossiers
+   récents sous Fichiers ; la conversation ouverte y est sélectionnée. */
+const IA_GLYPH = '<svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg>';
+function iaRenderSide() {
+  const box = $("side-ia");
+  box.innerHTML = "";
+  for (const c of IA.list) {
+    const b = document.createElement("button");
+    b.className = "side-item";
+    b.dataset.conv = c.id;
+    b.title = `d'après ${c.source_name}`;
+    b.innerHTML = `<span class="glyph" style="color: #AF52DE">${IA_GLYPH}</span><span class="lbl">${esc(c.title)}</span>`;
+    b.onclick = () => {
+      switchView("ia");
+      if (IA.open !== c.id) iaOpen(c.id);
+    };
+    b.oncontextmenu = (e) =>
+      nativeMenu([
+        { id: "ia:open:" + c.id, label: "Ouvrir la conversation" },
+        { id: "ia:folder:" + c.id, label: "Afficher le dossier de travail" },
+        {},
+        { id: "ia:delete:" + c.id, label: "Supprimer" },
+      ], e.clientX, e.clientY);
+    box.appendChild(b);
+  }
+  sideSync();
+}
+
 function iaRender() {
+  iaRenderSide();
   const detail = !!IA.open;
   $("ia-engine-tag").classList.toggle("hidden", detail);
   $("ia-dacts").classList.toggle("hidden", !detail);
@@ -629,9 +658,8 @@ $("ia-slice").addEventListener("click", () =>
       return;
     }
     iaBack();
-    switchView("files");
-    setSel([path], { scroll: true });
-    openSlice();
+    switchView("prepare");
+    await prepareAddFile(path);
   })
 );
 
@@ -641,3 +669,6 @@ $("ia-reframe").addEventListener("click", () => {
 
 $("ia-expand").addEventListener("click", iaExpand);
 $("ia-stage").addEventListener("dblclick", iaExpand);
+
+// Conversations listées dès le lancement, dans la barre latérale.
+iaRefresh();

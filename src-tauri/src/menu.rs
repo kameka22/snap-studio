@@ -81,6 +81,7 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     };
     let app_sub = Submenu::with_items(app, "Snap Studio", true, &[
         &PredefinedMenuItem::about(app, Some("À propos de Snap Studio"), Some(about))?,
+        &item("app:update", "Rechercher les mises à jour…", None)?,
         &sep()?,
         &item("nav:settings", "Réglages…", Some("CmdOrCtrl+,"))?,
         &sep()?,
@@ -96,7 +97,7 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         &item("files:open", "Ouvrir un dossier…", Some("CmdOrCtrl+O"))?,
         &item("files:refresh", "Actualiser", Some("CmdOrCtrl+R"))?,
         &sep()?,
-        &item("file:plate", "Ajouter au plateau", Some("CmdOrCtrl+Enter"))?,
+        &item("file:plate", "Ajouter au plateau du trancheur", Some("CmdOrCtrl+Enter"))?,
         &item("file:reveal", "Afficher dans le Finder", Some("CmdOrCtrl+Shift+R"))?,
         &item("file:delete", "Mettre à la corbeille", Some("CmdOrCtrl+Backspace"))?,
         &sep()?,
@@ -119,9 +120,10 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         &item("view:grid", "Vignettes", Some("CmdOrCtrl+1"))?,
         &item("view:list", "Liste", Some("CmdOrCtrl+2"))?,
         &sep()?,
-        &item("nav:files", "Fichiers", Some("Alt+CmdOrCtrl+1"))?,
-        &item("nav:library", "Bibliothèque", Some("Alt+CmdOrCtrl+2"))?,
-        &item("nav:ia", "IA", Some("Alt+CmdOrCtrl+3"))?,
+        &item("nav:library", "Bibliothèque", Some("Alt+CmdOrCtrl+1"))?,
+        &item("nav:ia", "IA", Some("Alt+CmdOrCtrl+2"))?,
+        &item("nav:files", "Fichiers", Some("Alt+CmdOrCtrl+3"))?,
+        &item("nav:prepare", "Préparer", Some("Alt+CmdOrCtrl+4"))?,
         &sep()?,
         &PredefinedMenuItem::fullscreen(app, Some("Plein écran"))?,
     ])?;

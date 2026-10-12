@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' thumb: http://thumb.localhost favimg: http://favimg.localhost data: blob:; connect-src 'self' ipc: http://ipc.localhost mesh: http://mesh.localhost gcode: http://gcode.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      "csp": "default-src 'self'; img-src 'self' thumb: http://thumb.localhost favimg: http://favimg.localhost cam: http://cam.localhost data: blob:; connect-src 'self' ipc: http://ipc.localhost mesh: http://mesh.localhost gcode: http://gcode.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {
@@ -39,5 +39,16 @@
     ],
     "category": "Utility",
     "shortDescription": "Explorateur de fichiers 3MF"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENCOURBMTgyMjU4NDBFMTYKUldRV0RvUWxncUdkeXczNC9VNURCTUoyZUQ0VDZmYjRYQm9QangyZHoxeFQzMUlyYVZkUXowVHYK",
+      "endpoints": [
+        "https://github.com/kameka22/snap-studio/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

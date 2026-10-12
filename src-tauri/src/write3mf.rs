@@ -117,7 +117,6 @@ fn weld(tris: &[Tri]) -> (Vec<[f32; 3]>, Vec<[u32; 3]>) {
     (verts, faces)
 }
 
-#[allow(dead_code)]
 fn mat_str(m: &Mat) -> String {
     m.0.iter()
         .map(|v| format!("{v}"))
@@ -125,11 +124,80 @@ fn mat_str(m: &Mat) -> String {
         .join(" ")
 }
 
-/// Écrit un 3MF de géométrie contenant les objets et leurs placements.
-pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
-    if objects.is_empty() {
-        return Err(anyhow!("aucun objet à écrire"));
+/// Identifiant du groupe de matériaux (palette des couleurs).
+const MAT_ID: u32 = 1;
+
+/// Écrit un maillage comme `<object>` du modèle, couleurs comprises.
+fn write_mesh_object<W: Write>(
+    w: &mut W,
+    id: u32,
+    name: &str,
+    tris: &[Tri],
+    color_id: &HashMap<[u8; 3], usize>,
+) -> Result<()> {
+    let (verts, faces) = weld(tris);
+    if faces.is_empty() {
+        return Err(anyhow!("objet « {} » sans triangle exploitable", name));
     }
+    let single = tris.first().map(|t| t.c).filter(|c| tris.iter().all(|t| t.c == *c));
+    match single {
+        Some(c) => writeln!(
+            w,
+            r#"  <object id="{id}" type="model" name="{}" pid="{MAT_ID}" pindex="{}">"#,
+            xml_escape(name),
+            color_id[&c]
+        )?,
+        None => writeln!(
+            w,
+            r#"  <object id="{id}" type="model" name="{}">"#,
+            xml_escape(name)
+        )?,
+    }
+    writeln!(w, "   <mesh>")?;
+    writeln!(w, "    <vertices>")?;
+    for v in &verts {
+        writeln!(
+            w,
+            r#"     <vertex x="{:.6}" y="{:.6}" z="{:.6}"/>"#,
+            v[0], v[1], v[2]
+        )?;
+    }
+    writeln!(w, "    </vertices>")?;
+    writeln!(w, "    <triangles>")?;
+    let mut fi = 0usize;
+    for t in tris {
+        // `weld` a pu écarter des triangles dégénérés : on suit le même ordre.
+        let (a, b, c) = (t.v[0], t.v[1], t.v[2]);
+        let deg = a == b || b == c || a == c;
+        if deg {
+            continue;
+        }
+        let f = faces[fi];
+        fi += 1;
+        if single.is_some() {
+            writeln!(
+                w,
+                r#"     <triangle v1="{}" v2="{}" v3="{}"/>"#,
+                f[0], f[1], f[2]
+            )?;
+        } else {
+            writeln!(
+                w,
+                r#"     <triangle v1="{}" v2="{}" v3="{}" pid="{MAT_ID}" p1="{}"/>"#,
+                f[0], f[1], f[2], color_id[&t.c]
+            )?;
+        }
+    }
+    writeln!(w, "    </triangles>")?;
+    writeln!(w, "   </mesh>")?;
+    writeln!(w, "  </object>")?;
+    Ok(())
+}
+
+type Archive = zip::ZipWriter<BufWriter<File>>;
+
+/// Ouvre l'archive et écrit les parties fixes, jusqu'au début du modèle.
+fn begin_archive(dst: &Path) -> Result<(Archive, zip::write::SimpleFileOptions)> {
     let out = File::create(dst)?;
     let mut z = zip::ZipWriter::new(BufWriter::new(out));
     let opts = zip::write::SimpleFileOptions::default()
@@ -154,7 +222,10 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
     )?;
 
     z.start_file("3D/3dmodel.model", opts)?;
-    let mut w = std::io::BufWriter::with_capacity(1 << 20, &mut z);
+    Ok((z, opts))
+}
+
+fn begin_model<W: Write>(w: &mut W) -> Result<()> {
     writeln!(w, r#"<?xml version="1.0" encoding="UTF-8"?>"#)?;
     writeln!(
         w,
@@ -162,19 +233,21 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
     )?;
     writeln!(w, r#" <metadata name="Application">Snap Studio</metadata>"#)?;
     writeln!(w, " <resources>")?;
+    Ok(())
+}
 
-    // Une palette globale : chaque couleur rencontrée devient un matériau.
+/// Une palette globale : chaque couleur rencontrée devient un matériau.
+fn write_palette<W: Write>(w: &mut W, groups: &[&[Tri]]) -> Result<HashMap<[u8; 3], usize>> {
     let mut palette: Vec<[u8; 3]> = Vec::new();
     let mut color_id: HashMap<[u8; 3], usize> = HashMap::new();
-    for o in objects {
-        for t in &o.tris {
+    for tris in groups {
+        for t in tris.iter() {
             color_id.entry(t.c).or_insert_with(|| {
                 palette.push(t.c);
                 palette.len() - 1
             });
         }
     }
-    const MAT_ID: u32 = 1;
     if !palette.is_empty() {
         writeln!(w, r#"  <basematerials id="{MAT_ID}">"#)?;
         for (i, c) in palette.iter().enumerate() {
@@ -189,65 +262,121 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
         }
         writeln!(w, "  </basematerials>")?;
     }
+    Ok(color_id)
+}
+
+/// Une pièce d'un objet composé, imprimée par une tête donnée (1 à 16).
+pub struct Part {
+    pub name: String,
+    pub tris: Vec<Tri>,
+    pub extruder: u8,
+}
+
+/// Écrit un seul objet fait de plusieurs pièces, chacune avec sa tête.
+///
+/// C'est la forme qu'attend le trancheur pour un modèle multicolore : un objet
+/// unique reste d'un bloc (une pièce posée en hauteur ne retombe pas sur le
+/// plateau), et `model_settings.config` affecte une tête à chaque pièce.
+pub fn write_multipart(dst: &Path, name: &str, parts: &[Part], transform: &Mat) -> Result<()> {
+    write_composites(dst, &[(name, parts, *transform)])
+}
+
+/// Écrit plusieurs objets composés de pièces, placements déjà appliqués aux
+/// triangles (scène du plateau).
+pub fn write_objects(dst: &Path, objects: &[(String, Vec<Part>)]) -> Result<()> {
+    let list: Vec<(&str, &[Part], Mat)> = objects
+        .iter()
+        .map(|(n, p)| (n.as_str(), p.as_slice(), Mat::IDENTITY))
+        .collect();
+    write_composites(dst, &list)
+}
+
+/// Objets composés : chaque pièce est un maillage, chaque objet un assemblage
+/// de ses pièces, placé dans le `<build>`.
+fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> {
+    if objects.is_empty() || objects.iter().any(|(_, p, _)| p.is_empty()) {
+        return Err(anyhow!("aucune pièce à écrire"));
+    }
+    let (mut z, opts) = begin_archive(dst)?;
+    let mut w = std::io::BufWriter::with_capacity(1 << 20, &mut z);
+    begin_model(&mut w)?;
+    let all: Vec<&[Tri]> = objects.iter().flat_map(|(_, parts, _)| parts.iter().map(|p| p.tris.as_slice())).collect();
+    let color_id = write_palette(&mut w, &all)?;
+
+    // Identifiants : pièces d'abord (à partir de 2), puis les objets composés.
+    let mut next = 2u32;
+    let mut part_ids: Vec<Vec<u32>> = Vec::new();
+    for (_, parts, _) in objects {
+        let mut ids = Vec::new();
+        for p in parts.iter() {
+            write_mesh_object(&mut w, next, &p.name, &p.tris, &color_id)?;
+            ids.push(next);
+            next += 1;
+        }
+        part_ids.push(ids);
+    }
+    let mut whole_ids = Vec::new();
+    for ((name, _, _), ids) in objects.iter().zip(&part_ids) {
+        writeln!(w, r#"  <object id="{next}" type="model" name="{}">"#, xml_escape(name))?;
+        writeln!(w, "   <components>")?;
+        for id in ids {
+            writeln!(w, r#"    <component objectid="{id}"/>"#)?;
+        }
+        writeln!(w, "   </components>")?;
+        writeln!(w, "  </object>")?;
+        whole_ids.push(next);
+        next += 1;
+    }
+    writeln!(w, " </resources>")?;
+    writeln!(w, " <build>")?;
+    for ((_, _, xf), id) in objects.iter().zip(&whole_ids) {
+        writeln!(w, r#"  <item objectid="{id}" transform="{}"/>"#, mat_str(xf))?;
+    }
+    writeln!(w, " </build>")?;
+    writeln!(w, "</model>")?;
+    w.flush()?;
+    drop(w);
+
+    z.start_file("Metadata/model_settings.config", opts)?;
+    let mut s = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<config>\n");
+    for (((name, parts, _), ids), whole) in objects.iter().zip(&part_ids).zip(&whole_ids) {
+        s.push_str(&format!("  <object id=\"{whole}\">\n"));
+        s.push_str(&format!("    <metadata key=\"name\" value=\"{}\"/>\n", xml_escape(name)));
+        s.push_str(&format!(
+            "    <metadata key=\"extruder\" value=\"{}\"/>\n",
+            parts[0].extruder.clamp(1, 16)
+        ));
+        for (p, id) in parts.iter().zip(ids) {
+            s.push_str(&format!("    <part id=\"{id}\" subtype=\"normal_part\">\n"));
+            s.push_str(&format!("      <metadata key=\"name\" value=\"{}\"/>\n", xml_escape(&p.name)));
+            s.push_str(&format!(
+                "      <metadata key=\"extruder\" value=\"{}\"/>\n",
+                p.extruder.clamp(1, 16)
+            ));
+            s.push_str("    </part>\n");
+        }
+        s.push_str("  </object>\n");
+    }
+    s.push_str("</config>\n");
+    z.write_all(s.as_bytes())?;
+    z.finish()?;
+    Ok(())
+}
+
+/// Écrit un 3MF de géométrie contenant les objets et leurs placements.
+pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
+    if objects.is_empty() {
+        return Err(anyhow!("aucun objet à écrire"));
+    }
+    let (mut z, opts) = begin_archive(dst)?;
+    let mut w = std::io::BufWriter::with_capacity(1 << 20, &mut z);
+    begin_model(&mut w)?;
+    let all: Vec<&[Tri]> = objects.iter().map(|o| o.tris.as_slice()).collect();
+    let color_id = write_palette(&mut w, &all)?;
 
     for (i, o) in objects.iter().enumerate() {
-        let id = i as u32 + 2; // l'identifiant 1 est pris par les matériaux
-        let (verts, faces) = weld(&o.tris);
-        if faces.is_empty() {
-            return Err(anyhow!("objet « {} » sans triangle exploitable", o.name));
-        }
-        let single = o.tris.first().map(|t| t.c).filter(|c| o.tris.iter().all(|t| t.c == *c));
-        match single {
-            Some(c) => writeln!(
-                w,
-                r#"  <object id="{id}" type="model" name="{}" pid="{MAT_ID}" pindex="{}">"#,
-                xml_escape(&o.name),
-                color_id[&c]
-            )?,
-            None => writeln!(
-                w,
-                r#"  <object id="{id}" type="model" name="{}">"#,
-                xml_escape(&o.name)
-            )?,
-        }
-        writeln!(w, "   <mesh>")?;
-        writeln!(w, "    <vertices>")?;
-        for v in &verts {
-            writeln!(
-                w,
-                r#"     <vertex x="{:.6}" y="{:.6}" z="{:.6}"/>"#,
-                v[0], v[1], v[2]
-            )?;
-        }
-        writeln!(w, "    </vertices>")?;
-        writeln!(w, "    <triangles>")?;
-        let mut fi = 0usize;
-        for t in &o.tris {
-            // `weld` a pu écarter des triangles dégénérés : on suit le même ordre.
-            let (a, b, c) = (t.v[0], t.v[1], t.v[2]);
-            let deg = a == b || b == c || a == c;
-            if deg {
-                continue;
-            }
-            let f = faces[fi];
-            fi += 1;
-            if single.is_some() {
-                writeln!(
-                    w,
-                    r#"     <triangle v1="{}" v2="{}" v3="{}"/>"#,
-                    f[0], f[1], f[2]
-                )?;
-            } else {
-                writeln!(
-                    w,
-                    r#"     <triangle v1="{}" v2="{}" v3="{}" pid="{MAT_ID}" p1="{}"/>"#,
-                    f[0], f[1], f[2], color_id[&t.c]
-                )?;
-            }
-        }
-        writeln!(w, "    </triangles>")?;
-        writeln!(w, "   </mesh>")?;
-        writeln!(w, "  </object>")?;
+        // L'identifiant 1 est pris par les matériaux.
+        write_mesh_object(&mut w, i as u32 + 2, &o.name, &o.tris, &color_id)?;
     }
 
     writeln!(w, " </resources>")?;

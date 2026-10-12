@@ -8,6 +8,8 @@ mod mesh;
 mod model3mf;
 mod presets;
 mod printers;
+mod orient;
+mod plate;
 mod pty;
 mod render;
 mod scan;
@@ -15,6 +17,7 @@ mod slice;
 mod slicers;
 mod stl;
 mod thumbs;
+mod update;
 mod util;
 mod write3mf;
 mod watch;
@@ -353,6 +356,200 @@ async fn slice_defaults(machine: String, process: String) -> Result<slice::Simpl
 #[tauri::command]
 fn slice_start(app: tauri::AppHandle, request: slice::Request) -> Result<String, String> {
     slice::start(app, request).map_err(|e| e.to_string())
+}
+
+/// Enregistre l'aperçu d'une découpe ; renvoie le chemin du G-code écrit.
+#[tauri::command]
+fn slice_save(id: String, dir: Option<String>) -> Result<String, String> {
+    slice::save(&id, dir.as_deref())
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+/// Abandonne l'aperçu d'une découpe.
+#[tauri::command]
+fn slice_discard(id: String) {
+    slice::discard(&id);
+}
+
+/// Objets d'un fichier, à poser sur le plateau de la vue Préparer.
+#[tauri::command]
+async fn plate_items(path: String) -> Result<Vec<plate::PlateItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || plate::items(Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+/// Enveloppe convexe d'un objet du plateau (repère propre).
+#[tauri::command]
+async fn plate_hull(path: String, item: usize) -> Result<orient::Hull, String> {
+    tauri::async_runtime::spawn_blocking(move || plate::hull(Path::new(&path), item))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+/// Orientation automatique (règles d'Orca) : une rotation par objet.
+#[tauri::command]
+async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) -> Result<Vec<[[f64; 3]; 3]>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let threshold = slice::support_threshold(process.as_deref());
+        items.iter().map(|it| plate::orient(it, threshold)).collect::<anyhow::Result<Vec<_>>>()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())
+}
+
+/// Enregistre le plateau en 3MF.
+#[tauri::command]
+async fn plate_save(scene: Vec<plate::SceneItem>, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+/// Plateau de la machine (préréglage) : dimensions et modèle d'imprimante.
+#[tauri::command]
+async fn plate_bed(machine: Option<String>) -> Result<slice::Bed, String> {
+    tauri::async_runtime::spawn_blocking(move || slice::bed(machine.as_deref()))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Filaments déclarés par un modèle, pour les associer aux têtes.
+#[tauri::command]
+async fn slice_model(path: String) -> Result<slice::ModelInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || slice::model_info(Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+#[derive(serde::Deserialize)]
+struct SendRequest {
+    printer_id: String,
+    /// Identifiant de l'aperçu de découpe à envoyer.
+    job: String,
+    /// Têtes qui extrudent, d'après le G-code.
+    tools: Vec<u8>,
+    options: printers::StartOptions,
+}
+
+#[derive(Serialize, Clone)]
+struct SendProgress {
+    /// check | prepare | upload | done | error
+    phase: &'static str,
+    percent: Option<f32>,
+    message: Option<String>,
+}
+
+fn send_progress(app: &tauri::AppHandle, phase: &'static str, percent: Option<f32>, message: Option<String>) {
+    use tauri::Emitter;
+    let _ = app.emit("print-send", SendProgress { phase, percent, message });
+}
+
+/// Envoie l'aperçu d'une découpe à une imprimante et lance l'impression.
+///
+/// Même déroulé que Snapmaker Orca : préparation (têtes et options) par des
+/// macros Klipper, vérification dans `print_task_config`, puis téléversement
+/// avec lancement. Refusé si l'imprimante n'est pas au repos.
+#[tauri::command]
+async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<String, String> {
+    let p = printers::load()
+        .into_iter()
+        .find(|p| p.id == request.printer_id)
+        .ok_or("imprimante inconnue")?;
+    let gcode = slice::preview_gcode(&request.job).ok_or("aperçu introuvable ; relancez la découpe")?;
+    let name = slice::preview_name(&request.job).unwrap_or_else(|| "snapstudio.gcode".into());
+
+    send_progress(&app, "check", None, None);
+    let st = printers::status(&p.host, p.port).await;
+    if !st.online {
+        return Err(format!("{} ne répond pas", p.name));
+    }
+    if matches!(st.state.as_str(), "printing" | "paused") {
+        return Err(format!("{} est déjà en train d'imprimer", p.name));
+    }
+
+    send_progress(&app, "prepare", None, None);
+    let script = printers::preprint_script(&request.options, &request.tools, false);
+    if let Err(e) = printers::gcode_script(&p.host, p.port, &script).await {
+        // Firmware antérieur à 1.3.0 : une seule macro pour les options.
+        if !printers::is_unknown_command(&e) {
+            return Err(format!("préparation refusée : {e}"));
+        }
+        let legacy = printers::preprint_script(&request.options, &request.tools, true);
+        printers::gcode_script(&p.host, p.port, &legacy)
+            .await
+            .map_err(|e| format!("préparation refusée : {e}"))?;
+    }
+    let mut warning = None;
+    if let Some(cfg) = printers::task_config(&p.host, p.port).await {
+        let missing = printers::unapplied_options(&cfg, &request.options);
+        if !missing.is_empty() {
+            warning = Some(format!("options non confirmées par l'imprimante : {}", missing.join(", ")));
+        }
+    }
+
+    let handle = app.clone();
+    printers::upload(&p.host, p.port, &gcode, &name, true, move |sent, total| {
+        let pct = if total > 0 { sent as f32 * 100.0 / total as f32 } else { 0.0 };
+        send_progress(&handle, "upload", Some(pct), None);
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    send_progress(&app, "done", Some(100.0), warning);
+    Ok(name)
+}
+
+fn printer_by_id(id: &str) -> Result<printers::Printer, String> {
+    printers::load().into_iter().find(|p| p.id == id).ok_or_else(|| "imprimante inconnue".to_string())
+}
+
+/// Réveille la caméra d'une imprimante ; à relancer toutes les 10 s.
+#[tauri::command]
+async fn camera_start(printer_id: String) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    printers::camera_start(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn camera_stop(printer_id: String) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    printers::camera_stop(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+/// `cam://localhost/f?id=<imprimante>` : dernière image de sa caméra.
+/// L'imprimante est désignée par son identifiant, jamais par une adresse :
+/// le protocole ne peut viser que les machines enregistrées.
+async fn handle_cam(uri: String) -> Response<Vec<u8>> {
+    let fail = |code: u16| {
+        Response::builder()
+            .status(code)
+            .header("Access-Control-Allow-Origin", "*")
+            .body(Vec::new())
+            .unwrap()
+    };
+    let Some(id) = query_param(&uri, "id") else {
+        return fail(400);
+    };
+    let Ok(p) = printer_by_id(&id) else {
+        return fail(404);
+    };
+    match printers::camera_frame(&p.host, p.port).await {
+        Ok(jpg) => Response::builder()
+            .status(200)
+            .header("Content-Type", "image/jpeg")
+            .header("Cache-Control", "no-store")
+            .header("Access-Control-Allow-Origin", "*")
+            .body(jpg)
+            .unwrap(),
+        Err(_) => fail(502),
+    }
 }
 
 #[tauri::command]
@@ -698,6 +895,19 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
     let is_stl = Path::new(&path)
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+    // `i` : un seul objet du fichier, dans son repère propre (vue Préparer).
+    if let Some(index) = query_param(uri, "i").and_then(|s| s.parse::<usize>().ok()) {
+        return match plate::display_mesh(Path::new(&path), index, budget) {
+            Ok(m) => Response::builder()
+                .status(200)
+                .header("Content-Type", "application/octet-stream")
+                .header("Cache-Control", "public, max-age=3600")
+                .header("Access-Control-Allow-Origin", "*")
+                .body(mesh::encode(&m))
+                .unwrap(),
+            Err(e) => fail(422, &e.to_string()),
+        };
+    }
     let loaded = if is_stl {
         stl::read(Path::new(&path)).map(|mut m| {
             mesh::downsample(&mut m, budget);
@@ -761,6 +971,7 @@ pub fn run() {
     // Avant tout : reprise des données de l'ancienne « 3MF Studio ».
     migrate::run();
     std::thread::spawn(thumbs::prune_old);
+    std::thread::spawn(slice::cleanup_stale);
 
     let builder = tauri::Builder::default();
     // Barre de menus native sur macOS ; ailleurs, l'interface garde ses raccourcis.
@@ -769,6 +980,14 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(update::Pending::default())
+        .register_asynchronous_uri_scheme_protocol("cam", |_app, request: Request<Vec<u8>>, responder| {
+            let uri = request.uri().to_string();
+            tauri::async_runtime::spawn(async move {
+                responder.respond(handle_cam(uri).await);
+            });
+        })
         .register_asynchronous_uri_scheme_protocol("favimg", |_app, request: Request<Vec<u8>>, responder| {
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
@@ -815,6 +1034,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            update::app_version,
+            update::update_check,
+            update::update_install,
             pick_folder,
             scan_folder,
             read_metas,
@@ -829,6 +1051,17 @@ pub fn run() {
             slice_defaults,
             slice_start,
             slice_cancel,
+            slice_save,
+            slice_discard,
+            slice_model,
+            plate_items,
+            plate_bed,
+            plate_hull,
+            plate_orient,
+            plate_save,
+            print_send,
+            camera_start,
+            camera_stop,
             lib_sites,
             lib_open,
             lib_close,

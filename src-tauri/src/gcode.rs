@@ -53,10 +53,30 @@ pub struct GMeta {
     pub profile: Option<String>,
     pub filaments: Vec<String>,
     pub print_time_s: Option<u32>,
+    pub first_layer_s: Option<u32>,
     pub filament_g: Option<f32>,
+    /// Consommation par extrudeur, telle qu'Orca l'écrit en pied de fichier.
+    pub per_tool_mm: Vec<f32>,
+    pub per_tool_cm3: Vec<f32>,
+    pub per_tool_g: Vec<f32>,
+    pub cost: Option<f32>,
     pub layer_height: Option<f32>,
     pub total_layers: Option<u32>,
     pub generator: Option<String>,
+}
+
+/// Temps calculés en parcourant les trajectoires (longueur ÷ vitesse), sans
+/// tenir compte des accélérations : ils servent à répartir le temps total
+/// estimé par le trancheur, pas à le remplacer.
+#[derive(Default, Clone)]
+pub struct RawTimes {
+    /// Secondes d'extrusion par famille de trajectoire (index = `feature_id`).
+    pub feature: [f32; FEATURE_COUNT],
+    pub travel: f32,
+    /// Secondes cumulées à la fin de chaque couche.
+    pub layer_end: Vec<f32>,
+    /// Outils (têtes) qui ont réellement extrudé.
+    pub tools: Vec<u8>,
 }
 
 pub struct GcodeData {
@@ -66,10 +86,13 @@ pub struct GcodeData {
     pub max: [f32; 3],
     pub meta: GMeta,
     pub truncated: bool,
+    pub times: RawTimes,
 }
 
 /// Au-delà, l'affichage n'apporte plus rien et la mémoire s'envole.
 const MAX_SEGS: usize = 3_000_000;
+/// Nombre de familles reconnues par `feature_id`.
+pub const FEATURE_COUNT: usize = 12;
 
 fn num_after(line: &str, key: u8) -> Option<f32> {
     let bytes = line.as_bytes();
@@ -162,6 +185,16 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     let mut last_z = f32::MIN;
     let mut truncated = false;
     let mut line = String::new();
+    // Vitesse courante en mm/min (modale) et temps calculés au fil des segments.
+    let mut feed: f32 = 1800.0;
+    let mut times = RawTimes::default();
+    let mut clock = 0f32;
+    let mut tools_used = [false; 16];
+    let list = |v: &str| -> Vec<f32> {
+        v.split(|c| c == ',' || c == ';')
+            .filter_map(|x| x.trim().parse::<f32>().ok())
+            .collect()
+    };
 
     loop {
         line.clear();
@@ -210,17 +243,45 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                 meta.total_layers = v.parse().ok();
             } else if let Some(v) = comment_value(l, "layer_height") {
                 meta.layer_height = v.parse().ok();
+            } else if let Some(v) = comment_value(l, "estimated first layer printing time (normal mode)") {
+                meta.first_layer_s = meta.first_layer_s.or_else(|| parse_duration(v));
+            } else if let Some(v) = comment_value(l, "model printing time") {
+                // Orca : `; model printing time: 1h 2m; total estimated time: 1h 10m`.
+                // Le total (préchauffe comprise) est la valeur utile ; ne surtout
+                // pas additionner les deux durées de la ligne.
+                let total = v
+                    .split(';')
+                    .find_map(|part| comment_value(part, "total estimated time"))
+                    .unwrap_or(v.split(';').next().unwrap_or(v));
+                if let Some(t) = parse_duration(total) {
+                    meta.print_time_s = Some(t);
+                }
             } else if let Some(v) = comment_value(l, "estimated printing time (normal mode)")
-                .or_else(|| comment_value(l, "model printing time"))
                 .or_else(|| comment_value(l, "total estimated time"))
                 .or_else(|| comment_value(l, "TIME"))
             {
                 meta.print_time_s = meta.print_time_s.or_else(|| parse_duration(v));
+            } else if let Some(v) = comment_value(l, "filament used [mm]") {
+                meta.per_tool_mm = list(v);
+            } else if let Some(v) = comment_value(l, "filament used [cm3]") {
+                meta.per_tool_cm3 = list(v);
+            } else if let Some(v) = comment_value(l, "filament used [g]") {
+                meta.per_tool_g = list(v);
+                if meta.filament_g.is_none() {
+                    let sum: f32 = meta.per_tool_g.iter().sum();
+                    meta.filament_g = (sum > 0.0).then_some(sum);
+                }
+            } else if let Some(v) = comment_value(l, "total filament cost") {
+                meta.cost = v.trim().parse().ok().or(meta.cost);
+            } else if let Some(v) = comment_value(l, "filament cost") {
+                if meta.cost.is_none() {
+                    let sum: f32 = list(v).iter().sum();
+                    meta.cost = (sum > 0.0).then_some(sum);
+                }
             } else if let Some(v) = comment_value(l, "total filament weight [g]")
-                .or_else(|| comment_value(l, "filament used [g]"))
                 .or_else(|| comment_value(l, "total filament used [g]"))
             {
-                meta.filament_g = v.split(',').next().and_then(|s| s.trim().parse().ok());
+                meta.filament_g = v.split(',').next().and_then(|s| s.trim().parse().ok()).or(meta.filament_g);
             } else if let Some(v) = comment_value(l, "generated by") {
                 meta.generator.get_or_insert_with(|| v.to_string());
             }
@@ -276,6 +337,11 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                 let ny = num_after(l, b'Y');
                 let nz = num_after(l, b'Z');
                 let ne = num_after(l, b'E');
+                if let Some(f) = num_after(l, b'F') {
+                    if f > 0.0 {
+                        feed = f;
+                    }
+                }
                 if abs_xyz {
                     x = nx.unwrap_or(x);
                     y = ny.unwrap_or(y);
@@ -310,6 +376,22 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                 if !moved {
                     continue;
                 }
+                // Temps brut du segment : longueur ÷ vitesse programmée.
+                let dist = ((x - px).powi(2) + (y - py).powi(2) + (z - pz).powi(2)).sqrt();
+                let dt = dist / (feed / 60.0);
+                clock += dt;
+                if de > 0.0 {
+                    times.feature[(feature as usize).min(FEATURE_COUNT - 1)] += dt;
+                    tools_used[(tool as usize).min(15)] = true;
+                } else {
+                    times.travel += dt;
+                }
+                let li = layer as usize;
+                if times.layer_end.len() <= li {
+                    let last = times.layer_end.last().copied().unwrap_or(0.0);
+                    times.layer_end.resize(li + 1, last);
+                }
+                times.layer_end[li] = clock;
                 if segs.len() >= MAX_SEGS {
                     truncated = true;
                     continue;
@@ -363,6 +445,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
         max = r.1;
     }
 
+    times.tools = (0..16u8).filter(|t| tools_used[*t as usize]).collect();
     Ok(GcodeData {
         segs,
         layers,
@@ -370,7 +453,72 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
         max,
         meta,
         truncated,
+        times,
     })
+}
+
+/// Temps d'une famille de trajectoires dans l'aperçu.
+#[derive(serde::Serialize, Clone, Debug)]
+pub struct FeatureTime {
+    pub feature: u8,
+    pub seconds: f32,
+}
+
+/// Bilan d'une découpe pour l'aperçu : valeurs du trancheur quand il les donne,
+/// répartitions calculées et ramenées à son temps total.
+#[derive(serde::Serialize, Clone, Debug, Default)]
+pub struct SliceStats {
+    pub print_time_s: Option<u32>,
+    pub first_layer_s: Option<u32>,
+    pub layers: u32,
+    pub filament_g: Option<f32>,
+    pub per_tool_g: Vec<f32>,
+    pub per_tool_m: Vec<f32>,
+    pub per_tool_cm3: Vec<f32>,
+    pub cost: Option<f32>,
+    /// Répartition du temps par famille, de la plus longue à la plus courte.
+    pub features: Vec<FeatureTime>,
+    pub travel_s: f32,
+    /// Temps écoulé à la fin de chaque couche.
+    pub layer_end_s: Vec<f32>,
+    /// Têtes qui extrudent réellement.
+    pub tools: Vec<u8>,
+    /// Vrai quand aucun temps total n'a été trouvé : tout est calculé.
+    pub estimated_only: bool,
+}
+
+pub fn stats(d: &GcodeData) -> SliceStats {
+    let t = &d.times;
+    let raw_total: f32 = t.feature.iter().sum::<f32>() + t.travel;
+    // Le calcul ignore accélérations et préchauffe : on le recale sur le total
+    // annoncé par le trancheur quand il existe.
+    let k = match d.meta.print_time_s {
+        Some(total) if raw_total > 0.0 => total as f32 / raw_total,
+        _ => 1.0,
+    };
+    let mut features: Vec<FeatureTime> = t
+        .feature
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| **s > 0.0)
+        .map(|(i, s)| FeatureTime { feature: i as u8, seconds: s * k })
+        .collect();
+    features.sort_by(|a, b| b.seconds.total_cmp(&a.seconds));
+    SliceStats {
+        print_time_s: d.meta.print_time_s.or_else(|| (raw_total > 0.0).then_some(raw_total as u32)),
+        first_layer_s: d.meta.first_layer_s,
+        layers: d.layers as u32 + 1,
+        filament_g: d.meta.filament_g,
+        per_tool_g: d.meta.per_tool_g.clone(),
+        per_tool_m: d.meta.per_tool_mm.iter().map(|mm| mm / 1000.0).collect(),
+        per_tool_cm3: d.meta.per_tool_cm3.clone(),
+        cost: d.meta.cost,
+        features,
+        travel_s: t.travel * k,
+        layer_end_s: t.layer_end.iter().map(|s| s * k).collect(),
+        tools: t.tools.clone(),
+        estimated_only: d.meta.print_time_s.is_none(),
+    }
 }
 
 /// Sérialisation pour le visualiseur.
@@ -498,6 +646,33 @@ G1 X10 Y10 E0.4
 G1 X30 Y30 F9000
 ; estimated printing time (normal mode) = 1h 37m 12s
 ";
+
+    /// Pied de fichier d'Orca : consommations par tête, coût, temps total sans
+    /// additionner les deux durées de la ligne « model printing time ».
+    #[test]
+    fn orca_footer_statistics() {
+        let g = "; HEADER\n;TYPE:Outer wall\nG1 F600\nG1 X10 Y0 E1\n;LAYER_CHANGE\nT1\n;TYPE:Sparse infill\nG1 X10 Y20 E2\nG1 X0 Y20\n\
+; filament used [mm] = 1200.50, 300.00\n\
+; filament used [cm3] = 2.89, 0.72\n\
+; filament used [g] = 3.58, 0.90\n\
+; filament cost = 0.07, 0.02\n\
+; total filament cost = 0.09\n\
+; estimated first layer printing time (normal mode) = 1m 30s\n\
+; model printing time: 1h 2m 3s; total estimated time: 1h 10m 0s\n";
+        let d = parse(g.as_bytes()).unwrap();
+        assert_eq!(d.meta.print_time_s, Some(4200), "le total, pas la somme des deux");
+        assert_eq!(d.meta.first_layer_s, Some(90));
+        assert_eq!(d.meta.per_tool_g, vec![3.58, 0.90]);
+        assert_eq!(d.meta.cost, Some(0.09));
+        let st = stats(&d);
+        assert_eq!(st.tools, vec![0, 1]);
+        assert_eq!(st.per_tool_m, vec![1.2005, 0.3]);
+        let sum: f32 = st.features.iter().map(|f| f.seconds).sum::<f32>() + st.travel_s;
+        assert!((sum - 4200.0).abs() < 1.0, "répartition recalée sur le total : {sum}");
+        assert_eq!(st.features[0].feature, 5, "remplissage (20 mm) avant la paroi (10 mm)");
+        assert_eq!(st.layer_end_s.len(), 2);
+        assert!((st.layer_end_s[1] - 4200.0).abs() < 1.0);
+    }
 
     #[test]
     fn parse_basics() {
