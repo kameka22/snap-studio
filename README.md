@@ -83,7 +83,8 @@ propre et à jour. Il affiche la version actuelle et celle à publier, demande
 confirmation, incrémente la version (`tauri.conf.json`, `Cargo.toml`), commite
 « Version x.y.z », pousse, puis lance `.github/workflows/build.yml`, qui
 construit macOS, Windows et Linux, signe les paquets et publie la release
-`vx.y.z` avec son `latest.json`. `--minor` / `--major` pour changer de niveau ;
+`vx.y.z` avec son `latest.json`. `--minor` / `--major` pour changer de niveau,
+`--version 1.2.3` pour une version exacte (plus récente que la dernière) ;
 une version pas encore publiée (build en échec) est réutilisée sans bump.
 
 La signature des mises à jour utilise la clé des secrets GitHub
