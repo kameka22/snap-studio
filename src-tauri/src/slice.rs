@@ -54,6 +54,34 @@ pub struct PresetLists {
     pub selected: std::collections::HashMap<String, String>,
     pub extruders: usize,
     pub engine: Option<String>,
+    /// Plateaux de la machine et celui par défaut.
+    pub bed_types: Vec<presets::BedType>,
+    pub bed_type: String,
+}
+
+/// Contenu effectif d'un préréglage pour la fenêtre de détail : ce que le
+/// moteur recevra, réglages rapides, plateau et couleur de bobine compris.
+pub fn details(
+    name: &str,
+    machine: &str,
+    simple: Option<Simple>,
+    overrides: &Map<String, Value>,
+    color: Option<&str>,
+) -> Result<presets::Details> {
+    let app = engine().ok_or_else(|| anyhow!("aucun trancheur détecté"))?;
+    let idx = index_for(&app)?;
+    let extra = match idx.kind_of(name) {
+        Some(presets::Kind::Process) => {
+            let mut o = simple.unwrap_or_default().to_overrides();
+            for (k, v) in overrides {
+                o.insert(k.clone(), v.clone());
+            }
+            presets::process_extra(&idx, machine, &o)
+        }
+        Some(presets::Kind::Filament) => presets::filament_extra(color),
+        _ => Map::new(),
+    };
+    idx.details(name, &extra).ok_or_else(|| anyhow!("préréglage inconnu : {name}"))
 }
 
 /// Listes proposables, filtrées pour la machine demandée.
@@ -67,7 +95,10 @@ pub fn lists(machine: Option<&str>) -> Result<PresetLists> {
         .filter(|m| machines.iter().any(|x| &x.name == m))
         .or_else(|| machines.first().map(|m| m.name.clone()))
         .ok_or_else(|| anyhow!("aucune machine disponible"))?;
+    let (bed_types, bed_type) = idx.bed_types(&chosen);
     Ok(PresetLists {
+        bed_types,
+        bed_type,
         processes: idx.processes_for(&chosen),
         filaments: idx.filaments_for(&chosen),
         extruders: idx.extruder_count(&chosen),
@@ -721,6 +752,11 @@ pub fn save(id: &str, dir: Option<&str>) -> Result<PathBuf> {
     };
     std::fs::copy(&gcode, &dest).map_err(|e| anyhow!("copie du G-code impossible : {e}"))?;
     Ok(dest)
+}
+
+/// Modèle d'origine d'un aperçu.
+pub fn preview_source(id: &str) -> Option<String> {
+    previews().lock().unwrap().get(id).map(|p| p.source.to_string_lossy().to_string())
 }
 
 /// Nom de fichier proposé pour un aperçu (enregistrement, envoi).

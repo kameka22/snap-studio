@@ -80,6 +80,7 @@ fn read_ascii(text: &str) -> Vec<[[f32; 3]; 3]> {
 
 /// Charge un STL, binaire ou texte.
 pub fn read(path: &Path) -> Result<MeshData> {
+    crate::access::ensure_file(path);
     let data = std::fs::read(path)?;
     if data.len() < 15 {
         return Err(anyhow!("fichier STL vide"));
@@ -124,6 +125,7 @@ pub fn read(path: &Path) -> Result<MeshData> {
 /// octets.
 pub fn count(path: &Path) -> Option<usize> {
     use std::io::Read;
+    crate::access::ensure_file(path);
     let mut f = std::fs::File::open(path).ok()?;
     let mut head = [0u8; HEADER];
     f.read_exact(&mut head).ok()?;

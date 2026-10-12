@@ -54,6 +54,54 @@ pub struct Index {
     pub selected: HashMap<String, String>,
 }
 
+/// Clés de gestion des préréglages, sans intérêt pour l'utilisateur.
+const META: &[&str] = &["name", "type", "from", "inherits", "instantiation", "setting_id", "filament_id", "version", "is_custom_defined"];
+
+/// Contenu d'un préréglage pour la fenêtre de détail.
+#[derive(Serialize, Debug)]
+pub struct Details {
+    pub name: String,
+    pub kind: Kind,
+    pub user: bool,
+    /// Du préréglage vers ses ancêtres.
+    pub chain: Vec<String>,
+    /// Valeurs effectives : héritage résolu, ajouts de Snap Studio compris.
+    pub values: Map<String, Value>,
+    /// Réglages modifiés par Snap Studio pour cette découpe.
+    pub snap: Vec<String>,
+    /// Préréglage personnel : réglages qui diffèrent du préréglage système.
+    pub custom: Vec<String>,
+}
+
+/// Ce que Snap Studio ajoute au préréglage d'impression : le plateau (par
+/// défaut celui de la machine), puis les surcharges de l'utilisateur.
+pub fn process_extra(index: &Index, machine: &str, overrides: &Map<String, Value>) -> Map<String, Value> {
+    let (_, bed) = index.bed_types(machine);
+    let mut out = Map::new();
+    out.insert("curr_bed_type".into(), Value::String(bed));
+    for (k, v) in overrides {
+        out.insert(k.clone(), v.clone());
+    }
+    out
+}
+
+/// Ce que Snap Studio ajoute à un préréglage filament : la couleur réelle de
+/// la bobine.
+pub fn filament_extra(color: Option<&str>) -> Map<String, Value> {
+    let mut out = Map::new();
+    if let Some(c) = color.filter(|c| is_hex_color(c)) {
+        out.insert("filament_colour".into(), Value::Array(vec![Value::String(c.to_uppercase())]));
+    }
+    out
+}
+
+/// Type de plateau : valeur attendue par le moteur, libellé affiché.
+#[derive(Serialize, Clone, Debug)]
+pub struct BedType {
+    pub value: String,
+    pub label: String,
+}
+
 #[derive(Serialize, Clone)]
 pub struct PresetDto {
     pub name: String,
@@ -153,8 +201,62 @@ impl Index {
         Some(out)
     }
 
-    fn kind_of(&self, name: &str) -> Option<Kind> {
+    pub fn kind_of(&self, name: &str) -> Option<Kind> {
         self.entries.get(name).map(|e| e.kind)
+    }
+
+    /// Chaîne d'héritage, du préréglage vers ses ancêtres.
+    pub fn chain(&self, name: &str) -> Vec<String> {
+        let mut out = vec![];
+        let mut cur = Some(name.to_string());
+        while let Some(n) = cur.take() {
+            if out.contains(&n) || out.len() > 16 {
+                break;
+            }
+            cur = self
+                .entries
+                .get(&n)
+                .and_then(|e| e.json.get("inherits"))
+                .and_then(|v| v.as_str())
+                .filter(|p| !p.is_empty())
+                .map(String::from);
+            out.push(n);
+        }
+        out
+    }
+
+    /// Contenu d'un préréglage tel qu'il part au moteur : héritage résolu,
+    /// puis `extra`, ce que Snap Studio y ajoute pour cette découpe.
+    pub fn details(&self, name: &str, extra: &Map<String, Value>) -> Option<Details> {
+        let e = self.entries.get(name)?;
+        let mut values = self.flatten(name)?;
+        let mut snap = vec![];
+        for (k, v) in extra {
+            if values.get(k) != Some(v) {
+                snap.push(k.clone());
+            }
+            values.insert(k.clone(), v.clone());
+        }
+        let chain = self.chain(name);
+        // Préréglage personnel : ce qui diffère de son premier ancêtre système.
+        let custom = chain
+            .iter()
+            .skip(1)
+            .find(|n| self.entries.get(*n).is_some_and(|x| !x.user))
+            .filter(|_| e.user)
+            .and_then(|base| self.flatten(base))
+            .map(|base| {
+                let own = self.flatten(name).unwrap_or_default();
+                own.iter()
+                    .filter(|(k, v)| base.get(*k) != Some(*v) && !META.contains(&k.as_str()))
+                    .map(|(k, _)| k.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        for k in META {
+            values.remove(*k);
+        }
+        Some(Details { name: name.to_string(), kind: e.kind, user: e.user, chain, values, snap, custom })
     }
 
     /// Préréglages d'un type donné, proposables à l'utilisateur.
@@ -280,6 +382,48 @@ impl Index {
             .map(String::from)
     }
 
+    /// Plateaux proposés pour une machine, et celui par défaut.
+    ///
+    /// La température du plateau dépend du plateau choisi : chaque profil
+    /// filament en porte une par type (`textured_plate_temp`,
+    /// `cool_plate_temp`…). Sans `curr_bed_type`, le moteur prend la Cool
+    /// Plate — 35 °C pour le PLA de la U1, au lieu de 65 °C.
+    pub fn bed_types(&self, machine: &str) -> (Vec<BedType>, String) {
+        let cfg = self.flatten(machine).unwrap_or_default();
+        let u1 = cfg
+            .get("printer_model")
+            .and_then(|v| v.as_str())
+            .is_some_and(|m| m.contains("U1"));
+        // Mêmes listes que l'interface d'Orca (`PrintConfig.cpp`).
+        let list: &[(&str, &str)] = if u1 {
+            &[
+                ("Textured PEI Plate", "PEI texturé"),
+                ("High Temp Plate", "PEI lisse"),
+                ("Graphic Effect Plate", "Plateau à effet graphique"),
+            ]
+        } else {
+            &[
+                ("Textured PEI Plate", "PEI texturé"),
+                ("High Temp Plate", "PEI lisse (High Temp)"),
+                ("Cool Plate", "Cool Plate lisse"),
+                ("Textured Cool Plate", "Cool Plate texturé"),
+                ("Engineering Plate", "Engineering Plate"),
+                ("Supertack Plate", "Cool Plate (SuperTack)"),
+            ]
+        };
+        let types: Vec<BedType> = list
+            .iter()
+            .map(|(value, label)| BedType { value: value.to_string(), label: label.to_string() })
+            .collect();
+        let default = cfg
+            .get("default_bed_type")
+            .and_then(|v| v.as_str())
+            .filter(|d| types.iter().any(|t| t.value == *d))
+            .unwrap_or(list[0].0)
+            .to_string();
+        (types, default)
+    }
+
     /// Nombre de têtes déclarées par une machine.
     pub fn extruder_count(&self, machine: &str) -> usize {
         self.flatten(machine)
@@ -398,8 +542,10 @@ pub fn prepare(
     if let Some(nd) = machine_cfg.get("nozzle_diameter") {
         process_cfg.insert("nozzle_diameter".into(), nd.clone());
     }
-    for (k, v) in overrides {
-        process_cfg.insert(k.clone(), v.clone());
+    // Plateau par défaut de la machine ; le choix de l'utilisateur, passé
+    // dans `overrides`, l'emporte.
+    for (k, v) in process_extra(index, machine, overrides) {
+        process_cfg.insert(k, v);
     }
     declare_compatible(&mut process_cfg, machine);
 
@@ -420,10 +566,8 @@ pub fn prepare(
             .flatten(name)
             .ok_or_else(|| anyhow!("héritage irrésoluble pour {name}"))?;
         declare_compatible(&mut cfg, machine);
-        if let Some(Some(c)) = colors.get(i) {
-            if is_hex_color(c) {
-                cfg.insert("filament_colour".into(), Value::Array(vec![Value::String(c.to_uppercase())]));
-            }
+        for (k, v) in filament_extra(colors.get(i).and_then(|c| c.as_deref())) {
+            cfg.insert(k, v);
         }
         paths.push(write_config(dir, Kind::Filament, name, cfg, &format!("_{i}"))?);
     }
@@ -501,6 +645,42 @@ mod tests {
         );
     }
 
+    /// Profils du clone de référence d'OrcaSlicer, s'il est là (non versionné).
+    fn repo_index() -> Option<Index> {
+        let readme = Path::new(env!("CARGO_MANIFEST_DIR")).join("../OrcaSlicer/README.md");
+        readme.is_file().then(|| Index::build(&readme).ok()).flatten()
+    }
+
+    /// Le détail affiché est exactement ce que reçoit le moteur.
+    #[test]
+    fn details_match_what_the_engine_gets() {
+        let Some(idx) = repo_index().or_else(index) else { return };
+        let machine = "Snapmaker U1 (0.4 nozzle)";
+        let process = idx.processes_for(machine)[0].name.clone();
+        let filament = idx.filaments_for(machine).into_iter().find(|f| f.name.contains("PLA")).unwrap().name;
+        let mut over = Map::new();
+        over.insert("curr_bed_type".into(), "High Temp Plate".into());
+        over.insert("wall_loops".into(), "5".into());
+
+        let d = idx.details(&process, &process_extra(&idx, machine, &over)).unwrap();
+        assert_eq!(d.kind, Kind::Process);
+        assert!(d.chain.len() > 1, "héritage : {:?}", d.chain);
+        assert!(d.snap.contains(&"curr_bed_type".to_string()));
+        assert!(!d.values.contains_key("inherits"), "clés de gestion retirées");
+
+        let dir = std::env::temp_dir().join("snapstudio_details_test");
+        let p = prepare(&idx, &dir, machine, &process, &[filament.clone()], &[Some("#ff8800".into())], &over).unwrap();
+        let written: Value = serde_json::from_slice(&std::fs::read(&p.process).unwrap()).unwrap();
+        for k in ["curr_bed_type", "wall_loops", "layer_height", "sparse_infill_density"] {
+            assert_eq!(written.get(k), d.values.get(k), "{k}");
+        }
+        let f = idx.details(&filament, &filament_extra(Some("#ff8800"))).unwrap();
+        let fw: Value = serde_json::from_slice(&std::fs::read(&p.filaments[0]).unwrap()).unwrap();
+        assert_eq!(fw["filament_colour"], f.values["filament_colour"]);
+        assert_eq!(fw["hot_plate_temp"], f.values["hot_plate_temp"]);
+        println!("{} : {:?} · plateau {} → {}", process, d.chain, d.values["curr_bed_type"], f.values["hot_plate_temp"]);
+    }
+
     #[test]
     fn prepares_complete_configs() {
         let Some(idx) = index() else { return };
@@ -522,6 +702,7 @@ mod tests {
             pr.get("nozzle_diameter").is_some(),
             "nozzle_diameter recopié : c'est ce qui évite le plantage"
         );
+        assert_eq!(pr["curr_bed_type"], "Textured PEI Plate", "plateau par défaut de la U1");
         println!("process « {process} », filament « {filament} » → {}", dir.display());
     }
 

@@ -106,6 +106,10 @@ pub struct Status {
     pub speed_factor: Option<f32>,
     pub layer: Option<(u32, u32)>,
     pub error: Option<String>,
+    /// Objets d'impression illisibles cette fois-ci (délai dépassé…) : l'état
+    /// n'est pas celui de l'impression, il ne prouve pas qu'elle est finie.
+    #[serde(skip)]
+    pub partial: bool,
 }
 
 fn client() -> &'static reqwest::Client {
@@ -164,7 +168,7 @@ fn long_client() -> &'static reqwest::Client {
 }
 
 /// Options de lancement proposées par Snapmaker Orca pour la U1.
-#[derive(Deserialize, Clone, Copy, Default, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Default, Debug)]
 pub struct StartOptions {
     /// Nivellement automatique du plateau.
     pub bed_leveling: bool,
@@ -239,6 +243,22 @@ pub async fn gcode_script(host: &str, port: u16, script: &str) -> Result<()> {
 pub fn is_unknown_command(err: &anyhow::Error) -> bool {
     let m = err.to_string().to_ascii_lowercase();
     m.contains("unknown command")
+}
+
+/// Pause, reprise ou annulation de l'impression en cours.
+pub async fn print_action(host: &str, port: u16, action: &str) -> Result<()> {
+    let action = match action {
+        "pause" | "resume" | "cancel" => action,
+        _ => return Err(anyhow!("action inconnue : {action}")),
+    };
+    let r = client()
+        .post(format!("{}/printer/print/{action}", base(host, port)))
+        .send()
+        .await?;
+    if !r.status().is_success() {
+        return Err(anyhow!("l'imprimante refuse : {}", r.status()));
+    }
+    Ok(())
 }
 
 /// `print_task_config` tel que l'imprimante le voit, pour vérifier les options.
@@ -410,6 +430,7 @@ pub async fn status(host: &str, port: u16) -> Status {
         if st.state == "offline" {
             st.state = "standby".into();
         }
+        st.partial = true;
         return st;
     };
     apply_objects(&v, &mut st);

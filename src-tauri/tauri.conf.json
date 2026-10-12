@@ -38,7 +38,10 @@
       "icons/icon.ico"
     ],
     "category": "Utility",
-    "shortDescription": "Explorateur de fichiers 3MF"
+    "shortDescription": "Explorateur de fichiers 3MF",
+    "macOS": {
+      "signingIdentity": "-"
+    }
   },
   "plugins": {
     "updater": {

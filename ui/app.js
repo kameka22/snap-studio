@@ -77,6 +77,14 @@ const fmtDuration = (s) => {
 const fmtWeight = (g) => (g == null ? null : `${g < 10 ? g.toFixed(1).replace(".", ",") : Math.round(g)} g`);
 
 const dtf = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+/* Heure du jour, « 16 h 40 » ; la date s'ajoute si ce n'est pas aujourd'hui. */
+function fmtClock(ms) {
+  const d = new Date(ms);
+  const hm = `${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
+  return d.toDateString() === new Date().toDateString()
+    ? hm
+    : `${d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })} ${hm}`;
+}
 const fmtDate = (secs) => dtf.format(new Date(secs * 1000));
 
 /* --------------------------------------------------------------- vignettes */
@@ -204,6 +212,14 @@ function sideSync() {
   if (v === "files" && state.dir) target = document.querySelector(`#side-recents [data-dir="${CSS.escape(state.dir)}"]`);
   if (v === "printers" && typeof P !== "undefined" && P.sel) target = document.querySelector(`#side-printers [data-id="${CSS.escape(P.sel)}"]`);
   if (v === "ia" && typeof IA !== "undefined" && IA.open) target = document.querySelector(`#side-ia [data-conv="${CSS.escape(IA.open)}"]`);
+  if (v === "prints" && typeof PJ !== "undefined" && PJ.sel) {
+    target = document.querySelector(`#side-prints [data-pj="${CSS.escape(PJ.sel)}"]`);
+    // Une impression en cours lancée par Snap Studio : son entrée « live ».
+    if (!target && PJ.sel.startsWith("job:")) {
+      const j = PJ.jobs.find((x) => "job:" + x.id === PJ.sel);
+      if (j?.state === "printing") target = document.querySelector(`#side-prints [data-pj="live:${CSS.escape(j.printer_id)}"]`);
+    }
+  }
   if (!target) target = document.querySelector(`.sidebar .side-item[data-view="${v}"]`);
   document.querySelectorAll(".sidebar .side-item").forEach((el) => el.classList.toggle("on", el === target));
   // Le décompte du dossier ouvert s'affiche sur son entrée.

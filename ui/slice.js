@@ -146,12 +146,22 @@ function matchMachine(printer, machines) {
   return scored[0]?.m.name || null;
 }
 
+/* Plateaux de la machine : le choix fixe la température du plateau, lue dans
+   le profil filament pour ce type de plateau. */
+function fillBeds(saved) {
+  const sel = $("s-bed");
+  const types = SL.lists?.bed_types || [];
+  sel.innerHTML = types.map((t) => `<option value="${esc(t.value)}">${esc(t.label)}</option>`).join("");
+  sel.value = types.some((t) => t.value === saved) ? saved : SL.lists?.bed_type || types[0]?.value || "";
+}
+
 async function onMachineChange(mem) {
   const machine = $("s-machine").value;
   try {
     SL.lists = await invoke("slice_lists", { machine });
     const m = mem || rememberFor(machine);
     fillSelect($("s-process"), SL.lists.processes, m.process || SL.lists.selected.print);
+    fillBeds(m.bed);
     renderHeads(m.filaments || (m.filament ? [m.filament] : null), false);
     renderModelMap(false);
     await loadDefaults(m.simple);
@@ -212,9 +222,11 @@ function renderHeads(saved, fromPrinter) {
       <select data-head="${i}">${list
         .map((p) => `<option value="${esc(p.name)}"${p.name === chosen ? " selected" : ""}>${esc(p.name)}${p.user ? " — perso" : ""}</option>`)
         .join("")}</select>
+      <button class="btn info-btn" data-info="head" data-head="${i}" title="Détails du profil">${INFO_ICON}</button>
     </div>`);
   }
   $("s-heads").innerHTML = rows.join("");
+  pdBedLine();
 }
 
 /* Têtes choisies pour chaque extrudeur de chaque fichier du plateau. */
@@ -355,7 +367,8 @@ async function startSlice() {
   });
 
   const simple = currentSimple();
-  remember(machine, { process, filaments, simple });
+  const bed = $("s-bed").value;
+  remember(machine, { process, filaments, simple, bed });
   const printer = currentPrinter();
   rememberPrinter(printer?.id || "");
   if (printer) {
@@ -368,9 +381,13 @@ async function startSlice() {
   setSliceProgress(0);
   try {
     SL.job = await invoke("slice_start", {
-      request: { source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors },
+      request: {
+        source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
+        overrides: bed ? { curr_bed_type: bed } : {},
+      },
     });
-    SL.request = { printer: printer?.id || "", filaments, colors };
+    const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";
+    SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel };
   } catch (e) {
     showSliceBusy(false);
     setSliceProgress(null);
@@ -495,11 +512,21 @@ async function openSend() {
 
 const sendPrinter = () => SL.printers.find((p) => p.id === $("snd-printer").value);
 
-/* État de l'imprimante visée : on n'envoie qu'à une machine au repos. */
+/* Imprimante libre : lancer, ou mettre en file. Occupée ou injoignable :
+   seulement la file d'attente. */
+function setSendMode(mode) {
+  SL.sendMode = mode;
+  $("snd-go").textContent = mode === "queue" ? "Ajouter à la file d'attente" : "Lancer l'impression";
+  $("snd-queue").classList.toggle("hidden", mode !== "launch");
+}
+
+/* État de l'imprimante visée : on ne lance que sur une machine au repos. */
 async function checkSendPrinter() {
   const p = sendPrinter();
   const el = $("snd-state");
   $("snd-go").disabled = true;
+  setSendMode("launch");
+  $("snd-queue").classList.add("hidden");
   if (!p) return;
   el.className = "pf-test busy";
   el.textContent = "Interrogation de l'imprimante…";
@@ -507,12 +534,17 @@ async function checkSendPrinter() {
   if (sendPrinter() !== p) return;
   if (!st || !st.online) {
     el.className = "pf-test err";
-    el.textContent = `${p.name} ne répond pas.`;
+    el.textContent = `${p.name} ne répond pas : l'impression peut attendre dans la file.`;
+    setSendMode("queue");
+    $("snd-go").disabled = false;
     return;
   }
   if (["printing", "paused"].includes(st.state)) {
-    el.className = "pf-test err";
-    el.textContent = `${p.name} est déjà en train d'imprimer.`;
+    const end = st.remaining_s ? ` — fin prévue vers ${fmtClock(Date.now() + st.remaining_s * 1000)}` : "";
+    el.className = "pf-test warn";
+    el.textContent = `${p.name} imprime « ${(st.job || "").replace(/\.gcode$/, "")} »${end}.`;
+    setSendMode("queue");
+    $("snd-go").disabled = false;
     return;
   }
   // Têtes du G-code sans bobine sur cette machine : à signaler avant l'envoi.
@@ -523,6 +555,7 @@ async function checkSendPrinter() {
     ? `Tête ${missing.map((t) => "T" + t).join(", ")} sans bobine sur ${p.name}.`
     : `${p.name} est prête.`;
   $("snd-go").disabled = missing.length > 0;
+  setSendMode("launch");
 }
 
 function setSendMessage(text, cls) {
@@ -537,29 +570,56 @@ function setSendProgress(pct) {
 function setSendBusy(busy) {
   SL.sending = busy;
   $("snd-go").classList.toggle("hidden", busy);
+  // Après un échec, les choix d'avant reviennent (dont « Mettre en file »).
+  if (busy) $("snd-queue").classList.add("hidden");
+  else if (SL.sendMode) setSendMode(SL.sendMode);
   $("snd-cancel").classList.toggle("hidden", busy);
   ["snd-printer", "snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).disabled = busy));
 }
 
-async function sendPrint() {
+async function sendPrint(queue = SL.sendMode === "queue") {
   const pv = SL.preview, p = sendPrinter();
-  if (!pv || !p || $("snd-go").disabled) return;
+  if (!pv || !p || (!queue && $("snd-go").disabled)) return;
   setSendBusy(true);
-  setSendProgress(0);
-  setSendMessage("Préparation de l'imprimante…", "busy");
+  setSendProgress(queue ? null : 0);
+  setSendMessage(queue ? "Ajout à la file d'attente…" : "Préparation de l'imprimante…", "busy");
+  const r = SL.request || {};
   try {
-    await invoke("print_send", {
+    const id = await invoke("print_send", {
       request: {
         printer_id: p.id,
         job: pv.job,
+        queue,
         tools: pv.stats.tools?.length ? pv.stats.tools : [0],
         options: {
           bed_leveling: $("snd-level").checked,
           flow_calibration: $("snd-flow").checked,
           timelapse: $("snd-timelapse").checked,
         },
+        profile: {
+          machine: r.machine || "",
+          process: r.process || "",
+          filaments: r.filaments || [],
+          bed: r.bed || null,
+          bed_label: r.bedLabel || null,
+          colors: r.colors || [],
+        },
       },
     });
+    if (!queue) {
+      // L'instantané des imprimantes peut encore dire « libre » : la fiche
+      // se désigne par le travail, pas par l'imprimante.
+      await pjLoad();
+      pjShow(id ? "job:" + id : null);
+    } else {
+      setSendBusy(false);
+      closeSheet($("sendmodal"));
+      closeViewer();
+      await pjLoad();
+      const pos = pjQueue().findIndex((j) => j.id === id) + 1;
+      toast(`Ajoutée à la file d'attente de ${p.name}${pos ? ` (${pos}${pos === 1 ? "re" : "e"} position)` : ""}`);
+      pjShow("job:" + id);
+    }
   } catch (e) {
     setSendBusy(false);
     setSendProgress(null);
@@ -582,11 +642,6 @@ listen("print-send", (e) => {
     toast(`Impression lancée sur ${p?.name || "l'imprimante"}`);
     if (s.message) toast(s.message, true);
     closeViewer();
-    if (p) {
-      P.sel = p.id;
-      prnRenderDetail();
-    }
-    switchView("printers");
   }
 });
 
@@ -602,13 +657,16 @@ $("s-stop").addEventListener("click", () => {
 });
 document.addEventListener("keydown", (e) => {
   if ($("smodal").classList.contains("hidden")) return;
+  // Le détail d'un profil, ouvert par-dessus, garde ses touches.
+  if (!$("pdmodal").classList.contains("hidden")) return;
   if (e.key === "Escape" && !SL.job) closeSheet($("smodal"));
   if (e.key === "Enter" && !SL.job && e.target.tagName !== "SELECT") startSlice();
 });
 
 $("snd-printer").addEventListener("change", checkSendPrinter);
-$("snd-go").addEventListener("click", sendPrint);
+$("snd-go").addEventListener("click", () => sendPrint());
 $("snd-cancel").addEventListener("click", () => closeSheet($("sendmodal")));
+$("snd-queue").addEventListener("click", () => sendPrint(true));
 document.addEventListener("keydown", (e) => {
   if ($("sendmodal").classList.contains("hidden") || SL.sending) return;
   if (e.key === "Escape") closeSheet($("sendmodal"));

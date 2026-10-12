@@ -43,6 +43,14 @@
       </button>
     </div>
     <div class="side-block">
+      <button class="side-item" data-view="prints">
+        <span class="glyph" style="color: #FF2D55"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-2 5.5 7 4.5-7 4.5z"/></svg></span>
+        <span class="lbl">Impressions</span>
+        <span class="count" id="count-prints"></span>
+      </button>
+      <div id="side-prints" class="side-group side-sub"></div>
+    </div>
+    <div class="side-block">
       <div class="side-section">Imprimantes</div>
       <div id="side-printers" class="side-group"></div>
       <button id="prn-add" class="side-item side-add">
@@ -249,6 +257,13 @@
       </div>
       <div id="p-multi" class="vp-sub hidden"></div>
     </aside>
+  </div>
+</section>
+
+<section id="view-prints" class="view hidden">
+  <div class="pj">
+    <div id="pj-overview" class="pj-overview"></div>
+    <div id="pj-detail" class="pj-detail hidden"></div>
   </div>
 </section>
 
@@ -590,8 +605,10 @@
 
     <div class="form">
       <label>Imprimante<select id="s-printer"></select></label>
-      <label>Préréglage machine<select id="s-machine"></select></label>
-      <label>Profil d'impression<select id="s-process"></select></label>
+      <label>Préréglage machine<span class="sel-row"><select id="s-machine"></select><button class="btn info-btn" data-info="machine" title="Détails du profil"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button></span></label>
+      <label>Profil d'impression<span class="sel-row"><select id="s-process"></select><button class="btn info-btn" data-info="process" title="Détails du profil"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button></span></label>
+      <label>Plateau<select id="s-bed"></select></label>
+      <div id="s-bedtemp" class="s-bedtemp"></div>
     </div>
 
     <div class="set-section">Têtes et filaments <span id="s-heads-note" class="set-note"></span></div>
@@ -753,6 +770,7 @@
     <div id="snd-msg" class="pf-test"></div>
     <div class="modal-actions">
       <button id="snd-cancel" class="btn" data-cancel>Annuler</button>
+      <button id="snd-queue" class="btn left hidden">Mettre en file</button>
       <button id="snd-go" class="btn primary">Lancer l'impression</button>
     </div>
   </div>
@@ -778,6 +796,47 @@
       <button id="pf-probe" class="btn left">Tester la connexion</button>
       <button id="pf-cancel" class="btn" data-cancel>Annuler</button>
       <button id="pf-save" class="btn primary">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div id="pdmodal" class="modal hidden">
+  <div class="modal-box pd-box">
+    <div class="pd-head">
+      <div class="pd-title">
+        <h3 id="pd-name"></h3>
+        <div id="pd-sub" class="det-sub"></div>
+      </div>
+      <button id="pd-close" class="btn" data-cancel>Fermer</button>
+    </div>
+    <div id="pd-summary" class="pd-summary"></div>
+    <div class="pd-tools">
+      <input id="pd-search" class="field" type="search" placeholder="Rechercher un réglage" spellcheck="false" />
+      <label class="pd-all"><input id="pd-all" type="checkbox" class="sw" /> Tous les réglages</label>
+    </div>
+    <div id="pd-tabs" class="seg pd-tabs"></div>
+    <div id="pd-body" class="pd-body"></div>
+  </div>
+</div>
+
+<div id="qmodal" class="modal hidden">
+  <div class="modal-box">
+    <div id="q-done" class="q-done hidden"></div>
+    <h3 id="q-title">Lancer la prochaine impression ?</h3>
+    <div class="q-next">
+      <img id="q-thumb" class="q-thumb" alt="" />
+      <div class="q-info">
+        <b id="q-name"></b>
+        <small id="q-sub"></small>
+        <small id="q-sub2"></small>
+      </div>
+    </div>
+    <label class="q-check"><input id="q-free" type="checkbox" /> Le plateau est libre et propre</label>
+    <div id="q-progress" class="progress hidden"><i></i></div>
+    <div id="q-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="q-later" class="btn" data-cancel>Plus tard</button>
+      <button id="q-go" class="btn primary" disabled>Lancer</button>
     </div>
   </div>
 </div>
@@ -882,6 +941,8 @@
 <script src="printers.js"></script>
 <script src="viewer.js"></script>
 <script src="slice.js"></script>
+<script src="profiles.js"></script>
+<script src="prints.js"></script>
 <script src="prepare.js"></script>
 <script src="library.js"></script>
 <script src="vendor/xterm.js"></script>

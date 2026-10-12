@@ -30,6 +30,8 @@ function switchView(v) {
     stopLive();
     camStop();
   }
+  if (v === "prints") pjRender();
+  else if (typeof pjCamStop === "function") pjCamStop();
   // Les vues natives de la Bibliothèque ne doivent vivre que dans son onglet.
   libSetVisible(v === "library");
   if (v === "settings") refreshCacheSize();

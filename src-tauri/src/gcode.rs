@@ -458,7 +458,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
 }
 
 /// Temps d'une famille de trajectoires dans l'aperçu.
-#[derive(serde::Serialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct FeatureTime {
     pub feature: u8,
     pub seconds: f32,
@@ -466,7 +466,8 @@ pub struct FeatureTime {
 
 /// Bilan d'une découpe pour l'aperçu : valeurs du trancheur quand il les donne,
 /// répartitions calculées et ramenées à son temps total.
-#[derive(serde::Serialize, Clone, Debug, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct SliceStats {
     pub print_time_s: Option<u32>,
     pub first_layer_s: Option<u32>,

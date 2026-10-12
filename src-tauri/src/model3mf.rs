@@ -70,6 +70,7 @@ impl ThumbPref {
 }
 
 pub fn open(path: &Path) -> Result<Zip> {
+    crate::access::ensure_file(path);
     let f = File::open(path)?;
     let z = zip::ZipArchive::new(BufReader::new(f))?;
     Ok(z)

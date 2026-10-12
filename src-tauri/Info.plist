@@ -11,5 +11,16 @@
     <string>_snapmaker._tcp</string>
     <string>_moonraker._tcp</string>
   </array>
+  <!-- Dossiers protégés : texte affiché dans la demande d'autorisation. -->
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>Snap Studio affiche et prépare les modèles 3D rangés dans ce dossier.</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Snap Studio affiche et prépare les modèles 3D rangés dans ce dossier.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>Snap Studio affiche et prépare les modèles 3D rangés dans ce dossier.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>Snap Studio affiche et prépare les modèles 3D rangés sur ce disque.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>Snap Studio affiche et prépare les modèles 3D rangés sur ce volume réseau.</string>
 </dict>
 </plist>

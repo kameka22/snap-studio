@@ -23,9 +23,19 @@ annuler / rétablir, enregistrer le plateau en 3MF.
 
 **Découpe** — le moteur de Snapmaker Orca tourne en arrière-plan. Les bobines
 montées sur l'imprimante sont lues pour choisir les filaments, tête par tête ;
-les couleurs d'un modèle multicolore sont associées aux têtes. Aperçu des
-trajectoires avec durée, filament et coût, puis enregistrement du G-code ou
-envoi à l'imprimante (nivellement, calibration du débit, timelapse).
+les couleurs d'un modèle multicolore sont associées aux têtes. Choix du
+plateau (PEI texturé, PEI lisse, effet graphique), qui fixe la température du
+plateau lue dans chaque filament. Détail de chaque profil (ⓘ) tel qu'il part
+au moteur, avec les onglets d'Orca en français. Aperçu des trajectoires avec
+durée, filament et coût, puis enregistrement du G-code ou envoi à
+l'imprimante (nivellement, calibration du débit, timelapse).
+
+**Impressions** — impressions en cours et file d'attente dans la barre
+latérale. Une imprimante occupée ? La découpe part en file ; à la fin de
+l'impression, Snap Studio propose de lancer la suivante (jamais seul, plateau
+libéré confirmé) et envoie une notification. Fiche de chaque impression :
+vignette, progression, bilan de la découpe, profils, températures, caméra,
+pause / reprise / annulation ; historique des 20 dernières.
 
 **Imprimantes** — recherche automatique des U1 sur le réseau local (mDNS,
 comme Snapmaker Orca) ; statut en direct par WebSocket Moonraker : état,
@@ -110,6 +120,8 @@ A disposer, ⌘D dupliquer, flèches 1 mm (⇧ : 10 mm), ⌘Z / ⇧⌘Z.
 
 ```
 ui/               interface HTML/CSS/JS, un fichier par vue
+  assets/orca-settings.json   onglets et libellés d'Orca en français
+                  (généré par scripts/gen-orca-settings.py)
   assets/bed/     plaque et logo de la U1 (profils Snapmaker Orca, AGPL-3.0)
 src-tauri/src/
   lib.rs          commandes Tauri, protocoles mesh:// gcode:// thumb:// cam://
@@ -124,6 +136,8 @@ src-tauri/src/
   menu.rs         menus natifs                 migrate.rs    reprise de 3MF Studio
   update.rs       mises à jour (GitHub, signature, installation)
   discover.rs     recherche des imprimantes sur le réseau (mDNS)
+  jobs.rs         impressions : file d'attente, historique, suivi de fond
+  access.rs       premier accès aux dossiers protégés de macOS (une demande)
 ```
 
 Snap Studio s'appelait auparavant 3MF Studio : ses données (réglages,

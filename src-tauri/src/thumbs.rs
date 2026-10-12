@@ -214,6 +214,7 @@ fn generate(path: &Path, size: u32, pref: ThumbPref) -> Result<Thumb> {
 
 /// Vignette d'un fichier : cache disque, sinon generation.
 pub fn get(path: &Path, size: u32, pref: ThumbPref) -> Result<Thumb> {
+    crate::access::ensure_file(path);
     let key = cache_key(path, size, pref);
     if let Some(t) = read_cache(&key) {
         if t.source == ThumbSource::None {
