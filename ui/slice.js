@@ -65,12 +65,22 @@ async function openSlice() {
   if (!scene) return;
   SL.source = scene;
   SL.job = null;
+  SL.touched = new Set();
   $("s-file").textContent =
     `${scene.items.length} objet${scene.items.length > 1 ? "s" : ""} sur le plateau` +
     (scene.skipped ? ` · ${scene.skipped} à côté, non découpé${scene.skipped > 1 ? "s" : ""}` : "");
   setSliceMessage("");
   setSliceProgress(null);
   showSliceBusy(false);
+  // Vignette du premier objet du plateau, si elle se laisse lire.
+  const first = scene.items[0]?.path;
+  const th = $("s-thumb");
+  th.classList.add("hidden");
+  if (first) {
+    th.onload = () => th.classList.remove("hidden");
+    th.onerror = () => th.classList.add("hidden");
+    th.src = `thumb://localhost/t?p=${encodeURIComponent(first)}&s=160&k=0`;
+  }
   openSheet($("smodal"));
 
   try {
@@ -95,6 +105,8 @@ async function openSlice() {
       .join("");
     const keep = printers.some((p) => p.id === SL.memory.printer) ? SL.memory.printer : printers[0]?.id || "";
     $("s-printer").value = keep;
+    SL.pstate = {};
+    slRenderPrinters();
     await onPrinterChange();
   } catch (e) {
     setSliceMessage(String(e), "err");
@@ -108,26 +120,32 @@ async function onPrinterChange() {
   const printer = currentPrinter();
   SL.slots = [];
   $("s-heads-note").textContent = printer ? "lecture des bobines…" : "";
+  slPrinterState(printer ? "checking" : null);
   SL.lists = await invoke("slice_lists", { machine: SL.memory.last || null });
 
   const machines = SL.lists.machines;
   let machine = SL.memory.last || SL.lists.selected.machine || machines[0]?.name;
   if (printer) {
     const saved = SL.memory["printer:" + printer.id];
-    machine = (saved && machines.some((m) => m.name === saved) && saved) || matchMachine(printer, machines) || machine;
+    machine = (saved && machines.some((m) => m.name === saved) && saved) || matchMachine(printer, machines, machine) || machine;
   }
   fillSelect($("s-machine"), machines, machine);
+  slRenderMachine();
   await onMachineChange(null);
 
   if (printer) {
     try {
       const st = await invoke("printer_status", { host: printer.host, port: printer.port });
+      // Son état vaut même si l'utilisateur est passé à une autre entre-temps.
+      slPrinterState(st.online ? st.state : "offline", printer.id);
       if (currentPrinter() !== printer) return;
       SL.slots = st.filaments || [];
       $("s-heads-note").textContent = !st.online
         ? "imprimante injoignable"
         : SL.slots.length ? "bobines lues sur l'imprimante" : "bobines non exposées";
     } catch {
+      slPrinterState("offline", printer.id);
+      if (currentPrinter() !== printer) return;
       $("s-heads-note").textContent = "imprimante injoignable";
     }
     renderHeads(null, true);
@@ -136,14 +154,18 @@ async function onPrinterChange() {
 }
 
 /* Préréglage machine dont le nom contient le modèle de l'imprimante. */
-function matchMachine(printer, machines) {
+/* À égalité (les profils U1 ne diffèrent que par la buse), `preferred` — le
+   profil déjà choisi dans Orca ou ici — l'emporte, puis la buse de 0,4. */
+function matchMachine(printer, machines, preferred) {
   const words = (printer.model || printer.name || "").toLowerCase().split(/\s+/).filter((w) => w.length > 1);
   if (!words.length) return null;
   const scored = machines
     .map((m) => ({ m, n: words.filter((w) => m.name.toLowerCase().includes(w)).length }))
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n || a.m.name.length - b.m.name.length);
-  return scored[0]?.m.name || null;
+  if (!scored.length) return null;
+  const top = scored.filter((x) => x.n === scored[0].n).map((x) => x.m.name);
+  return top.find((n) => n === preferred) || top.find((n) => /\(0\.4 nozzle\)/i.test(n)) || top[0];
 }
 
 /* Plateaux de la machine : le choix fixe la température du plateau, lue dans
@@ -153,14 +175,37 @@ function fillBeds(saved) {
   const types = SL.lists?.bed_types || [];
   sel.innerHTML = types.map((t) => `<option value="${esc(t.value)}">${esc(t.label)}</option>`).join("");
   sel.value = types.some((t) => t.value === saved) ? saved : SL.lists?.bed_type || types[0]?.value || "";
+  // Tuiles : une par plateau, avec la température qu'il donnera.
+  const tex = { "Textured PEI Plate": "textured", "High Temp Plate": "smooth", "Graphic Effect Plate": "graphic" };
+  $("s-beds").innerHTML = types
+    .map(
+      (t) => `<button class="sl-bed${t.value === sel.value ? " on" : ""}" data-bed="${esc(t.value)}">
+        <span class="sl-bed-tex ${tex[t.value] || "plain"}"></span>
+        <b>${esc(t.label)}</b><small data-bedtemp="${esc(t.value)}">—</small></button>`
+    )
+    .join("");
 }
+
+$("s-beds").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-bed]");
+  if (!b || b.disabled) return;
+  $("s-bed").value = b.dataset.bed;
+  document.querySelectorAll("#s-beds .sl-bed").forEach((x) => x.classList.toggle("on", x === b));
+  $("s-bed").dispatchEvent(new Event("change", { bubbles: true }));
+  slSummary();
+});
 
 async function onMachineChange(mem) {
   const machine = $("s-machine").value;
   try {
     SL.lists = await invoke("slice_lists", { machine });
     const m = mem || rememberFor(machine);
-    fillSelect($("s-process"), SL.lists.processes, m.process || SL.lists.selected.print);
+    // Le premier choix connu et proposé pour cette machine ; à défaut, le
+    // profil standard de 0,20 mm.
+    const known = (n) => n && SL.lists.processes.some((p) => p.name === n);
+    fillSelect($("s-process"), SL.lists.processes, [m.process, SL.lists.selected.print].find(known) || slProcessFor(0.2, "Standard"));
+    slRenderMachine();
+    slQuality();
     fillBeds(m.bed);
     renderHeads(m.filaments || (m.filament ? [m.filament] : null), false);
     renderModelMap(false);
@@ -209,23 +254,27 @@ function renderHeads(saved, fromPrinter) {
     const slot = SL.slots.find((s) => s.index === i);
     const auto = slot && slot.present ? bestFilament(slot, list) : null;
     const chosen = (fromPrinter && auto) || saved?.[i] || prev[i] || auto || fallback;
-    const what = slot
-      ? slot.present
-        ? `${esc([slot.kind, slot.sub_type].filter(Boolean).join(" ") || "?")}${slot.vendor ? ` · ${esc(slot.vendor)}` : ""}${
-            auto ? "" : ` <span class="warn">aucun préréglage ${esc(slot.kind)}</span>`
-          }`
-        : '<span class="warn">vide</span>'
-      : "";
-    rows.push(`<div class="grow-row head">
-      ${swatch(slot?.present ? slot.color : null)}
-      <span class="k"><b>T${i}</b>${what ? `<span class="sub">${what}</span>` : ""}</span>
-      <select data-head="${i}">${list
-        .map((p) => `<option value="${esc(p.name)}"${p.name === chosen ? " selected" : ""}>${esc(p.name)}${p.user ? " — perso" : ""}</option>`)
+    // Carte bobine : couleur réelle en aplat, matière, préréglage choisi.
+    const present = slot?.present;
+    const kind = present ? [slot.kind, slot.sub_type].filter(Boolean).join(" ") || "?" : slot ? "Vide" : "";
+    const sub = present
+      ? slot.vendor || (auto ? "" : `aucun préréglage ${slot.kind || ""}`)
+      : slot ? "aucune bobine" : "bobine inconnue";
+    const color = present && slot.color ? slot.color : null;
+    rows.push(`<div class="sl-headcard${slot && !present ? " is-empty" : ""}" data-card="${i}">
+      <div class="sl-spool${color ? "" : " none"}"${color ? ` style="--c:${esc(color)}"` : ""}></div>
+      <div class="sl-hc-top"><b>T${i}</b><span>${esc(kind)}</span></div>
+      <small class="sl-hc-sub${present && !auto ? " warn" : ""}">${esc(sub)}</small>
+      <select class="hidden" data-head="${i}" tabindex="-1">${list
+        .map((p) => `<option value="${esc(p.name)}"${p.name === chosen ? " selected" : ""}>${esc(p.name)}</option>`)
         .join("")}</select>
-      <button class="btn info-btn" data-info="head" data-head="${i}" title="Détails du profil">${INFO_ICON}</button>
+      <span class="sel-row"><button class="sl-hc-preset" data-pick-head="${i}" title="Changer de profil filament"></button><button class="btn info-btn" data-info="head" data-head="${i}" title="Détails du profil">${INFO_ICON}</button></span>
+      <small class="sl-hc-temp" data-temp="${i}"></small>
     </div>`);
   }
   $("s-heads").innerHTML = rows.join("");
+  for (let i = 0; i < headCount(); i++) slHeadLabel(i);
+  slUsedHeads();
   pdBedLine();
 }
 
@@ -247,18 +296,33 @@ function renderModelMap(fromPrinter) {
       taken.add(head);
       const color = m.used.length === 1 ? "" : `Couleur ${e}`;
       const label = several ? [m.stem, color].filter(Boolean).join(" · ") : color || "Modèle";
-      rows.push(`<div class="grow-row">
+      rows.push(`<div class="sl-maprow" draggable="true" data-drag="${key}" title="Glisser sur une bobine pour l'attribuer">
         ${swatch(fil?.color)}
-        <span class="k"><b>${esc(label)}</b>${fil?.kind ? `<span class="sub">${esc(fil.kind)}</span>` : ""}</span>
-        <select data-key="${key}" data-file="${fi}" data-ext="${e}">${Array.from({ length: n }, (_, h) => {
+        <span class="sl-map-label"><b>${esc(label)}</b>${fil?.kind ? `<small>${esc(fil.kind)}</small>` : ""}</span>
+        <span class="sl-arrow">→</span>
+        <span class="sl-tokens" data-tokens="${key}"></span>
+        <select class="hidden" tabindex="-1" data-key="${key}" data-file="${fi}" data-ext="${e}">${Array.from({ length: n }, (_, h) => {
           const slot = SL.slots.find((s) => s.index === h);
           const desc = slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · vide") : "";
-          return `<option value="${h}"${h === head ? " selected" : ""}>Tête T${h}${esc(desc)}</option>`;
+          return `<option value="${h}"${h === head ? " selected" : ""}>T${h}${esc(desc)}</option>`;
         }).join("")}</select>
       </div>`);
     }
   });
   $("s-map").innerHTML = rows.join("");
+  slUsedHeads();
+  // Les températures de plateau dépendent des têtes employées.
+  pdBedLine();
+}
+
+/* Têtes employées par le modèle : leur carte ressort, les autres s'effacent ;
+   la pastille de chaque couleur prend celle de la bobine visée. */
+function slUsedHeads() {
+  const used = slUsedSet();
+  document.querySelectorAll("#s-heads .sl-headcard").forEach((c) => c.classList.toggle("unused", used.size > 0 && !used.has(+c.dataset.card)));
+  slTokens();
+  slSummary();
+  return used;
 }
 
 /* Tête la plus vraisemblable pour une couleur du modèle : même matière et
@@ -293,12 +357,65 @@ async function loadDefaults(saved) {
     d = await invoke("slice_defaults", { machine, process });
   } catch {}
   const v = { ...d, ...(saved || {}) };
-  setRange("s-layer", v.layer_height ?? 0.2, (x) => x.toFixed(2).replace(".", ",") + " mm");
+  // La hauteur de couche est celle du profil (pastilles « Qualité ») : elle
+  // n'est jamais surchargée, donc lue dans son nom ou ses valeurs.
+  const h = parseProcess(process)?.h ?? d.layer_height;
+  $("s-layer-val").textContent = h ? `${(+h).toFixed(2).replace(".", ",")} mm` : "—";
   setRange("s-infill", v.infill ?? 15, (x) => Math.round(x) + " %");
   setRange("s-walls", v.walls ?? 2, (x) => String(Math.round(x)));
   $("s-supports").checked = !!v.supports;
   $("s-brim").checked = !!v.brim;
+  slQuality();
+  slSummary();
 }
+
+document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-step]");
+  if (!b) return;
+  const el = $("s-walls");
+  el.value = Math.max(+el.min, Math.min(+el.max, +el.value + +b.dataset.step));
+  el.dispatchEvent(new Event("input"));
+  slTouch("s-walls");
+  slSummary();
+});
+
+/* Têtes employées par le modèle (couleurs → têtes) ; vide si inconnu. */
+function slUsedSet() {
+  return new Set([...document.querySelectorAll("#s-map select")].map((s) => +s.value));
+}
+
+/* Barre du bas : ce qui partira au moteur, en une ligne. */
+function slSummary() {
+  const used = slUsedSet();
+  const bed = $("s-bed").selectedOptions[0]?.textContent || "";
+  const temp = typeof PD !== "undefined" ? PD.bedTemps?.[$("s-bed").value] : null;
+  const n = used.size || 1;
+  const parts = [
+    `${n} bobine${n > 1 ? "s" : ""}`,
+    bed && `${bed}${temp ? ` ${temp}` : ""}`,
+    $("s-layer-val").textContent,
+    `${$("s-infill-val").textContent} remplissage`,
+    `${$("s-walls-val").textContent} parois`,
+    $("s-supports").checked && "supports",
+    $("s-brim").checked && "bordure",
+  ].filter(Boolean);
+  $("s-summary").innerHTML = parts.map((p) => `<span>${esc(p)}</span>`).join("");
+}
+
+/* Ajustements touchés à la main : ils survivent à un changement de profil. */
+const SL_TOUCH = { "s-infill": "infill", "s-walls": "walls", "s-supports": "supports", "s-brim": "brim" };
+function slTouch(id) {
+  (SL.touched ||= new Set()).add(SL_TOUCH[id]);
+}
+
+$("smodal").addEventListener("input", (e) => {
+  if (e.target.id in SL_TOUCH && e.isTrusted) slTouch(e.target.id);
+  if (e.target.matches("#s-infill, #s-supports, #s-brim")) slSummary();
+});
+$("smodal").addEventListener("change", (e) => {
+  if (e.target.matches("#s-map select")) slUsedHeads();
+  if (e.target.matches("#s-supports, #s-brim")) slSummary();
+});
 
 function setRange(id, value, fmt) {
   const el = $(id);
@@ -310,7 +427,6 @@ function setRange(id, value, fmt) {
 
 function currentSimple() {
   return {
-    layer_height: +$("s-layer").value,
     infill: +$("s-infill").value,
     walls: +$("s-walls").value,
     supports: $("s-supports").checked,
@@ -337,8 +453,11 @@ function showSliceBusy(busy) {
   $("s-cancel").classList.toggle("hidden", busy);
   $("s-stop").classList.toggle("hidden", !busy);
   document
-    .querySelectorAll("#smodal select, #smodal input")
+    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-cols button:not(.info-btn)")
     .forEach((el) => (el.disabled = busy));
+  if (busy) closePicker();
+  // Déverrouillé : les jetons des têtes vides doivent rester inactifs.
+  else slTokens();
 }
 
 async function startSlice() {
@@ -649,7 +768,12 @@ listen("print-send", (e) => {
 
 $("s-printer").addEventListener("change", onPrinterChange);
 $("s-machine").addEventListener("change", () => onMachineChange(null));
-$("s-process").addEventListener("change", () => loadDefaults(null));
+// Changer de profil (hauteur, style) applique ses valeurs, sauf pour les
+// ajustements que l'utilisateur a déjà touchés dans cette fenêtre.
+$("s-process").addEventListener("change", () => {
+  const cur = currentSimple();
+  loadDefaults(Object.fromEntries([...(SL.touched || [])].map((k) => [k, cur[k]])));
+});
 $("s-go").addEventListener("click", startSlice);
 $("s-cancel").addEventListener("click", () => closeSheet($("smodal")));
 $("s-stop").addEventListener("click", () => {

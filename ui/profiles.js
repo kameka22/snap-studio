@@ -214,41 +214,56 @@ async function pdOpen(name, head) {
 
 /* ------------------------------------------------------------ plateau */
 
-/* Sous « Plateau » : la température qui partira à l'imprimante, par tête. */
+/* Températures selon les filaments choisis : sur chaque tuile de plateau,
+   sur chaque carte bobine (buse) ; sous les tuiles, le détail par tête quand
+   les filaments employés ne s'accordent pas. */
 async function pdBedLine() {
-  const box = $("s-bedtemp");
-  const bed = $("s-bed").value;
-  const key = BED_TEMP_KEY[bed];
   const heads = [...document.querySelectorAll("#s-heads select")].map((s) => s.value);
-  if (!key || !heads.length) {
-    box.textContent = "";
-    return;
-  }
-  const want = `${bed}|${heads.join("|")}`;
-  box.dataset.want = want;
-  const temps = [];
-  for (const name of heads) {
-    if (!PD.temps.has(name)) {
-      try {
-        const d = await invoke("slice_details", { name, machine: $("s-machine").value });
-        PD.temps.set(name, d.values);
-      } catch {
-        PD.temps.set(name, {});
-      }
+  if (!heads.length) return;
+  const want = heads.join("|");
+  PD.want = want;
+  for (const name of new Set(heads)) {
+    if (PD.temps.has(name)) continue;
+    try {
+      const d = await invoke("slice_details", { name, machine: $("s-machine").value });
+      PD.temps.set(name, d.values);
+    } catch {
+      PD.temps.set(name, {});
     }
-    const v = PD.temps.get(name);
-    temps.push({ first: one(v[key + "_initial_layer"]), rest: one(v[key]) });
   }
-  if (box.dataset.want !== want) return;
-  const groups = new Map();
-  temps.forEach((t, i) => {
-    const k = t.first === t.rest ? `${t.rest} °C` : `${t.rest} °C (1re couche ${t.first} °C)`;
-    groups.set(k, [...(groups.get(k) || []), `T${i}`]);
+  if (PD.want !== want) return;
+  // Têtes employées par le modèle ; à défaut, toutes.
+  const mapped = [...slUsedSet()].filter((i) => i < heads.length);
+  const used = mapped.length ? mapped : heads.map((_, i) => i);
+
+  heads.forEach((name, i) => {
+    const el = document.querySelector(`#s-heads [data-temp="${i}"]`);
+    const t = one(PD.temps.get(name)?.nozzle_temperature);
+    if (el) el.textContent = t ? `buse ${t} °C` : "";
   });
+
+  PD.bedTemps = {};
+  for (const [bed, key] of Object.entries(BED_TEMP_KEY)) {
+    const ts = used.map((i) => +one(PD.temps.get(heads[i])?.[key])).filter((x) => !isNaN(x) && x > 0);
+    if (!ts.length) continue;
+    const lo = Math.min(...ts), hi = Math.max(...ts);
+    PD.bedTemps[bed] = lo === hi ? `${hi} °C` : `${lo}–${hi} °C`;
+  }
+  document.querySelectorAll("#s-beds [data-bedtemp]").forEach((el) => (el.textContent = PD.bedTemps[el.dataset.bedtemp] || "—"));
+
+  const key = BED_TEMP_KEY[$("s-bed").value];
+  const box = $("s-bedtemp");
+  const groups = new Map();
+  for (const i of used) {
+    const t = one((PD.temps.get(heads[i]) || {})[key]);
+    if (t == null || t === "") continue;
+    groups.set(`${t} °C`, [...(groups.get(`${t} °C`) || []), `T${i}`]);
+  }
   box.innerHTML =
-    groups.size === 1
-      ? `Plateau à <b>${esc([...groups.keys()][0])}</b> avec ces filaments`
-      : `Plateau : ${[...groups].map(([t, h]) => `<b>${esc(t)}</b> (${h.join(", ")})`).join(" · ")}`;
+    key && groups.size > 1
+      ? `Températures différentes selon les filaments : ${[...groups].map(([t, h]) => `<b>${esc(t)}</b> (${h.join(", ")})`).join(" · ")}`
+      : "";
+  if (typeof slSummary === "function") slSummary();
 }
 
 /* ------------------------------------------------------------ événements */
@@ -265,7 +280,7 @@ $("smodal").addEventListener("click", (e) => {
   }
 });
 $("smodal").addEventListener("change", (e) => {
-  if (e.target.matches("#s-bed, #s-heads select, #s-machine")) pdBedLine();
+  if (e.target.matches("#s-bed, #s-heads select, #s-machine, #s-map select")) pdBedLine();
 });
 $("pd-tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-page]");
