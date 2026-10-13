@@ -1,0 +1,35 @@
+{
+  "engine": "snapmaker-orca",
+  "version": "2.4.0",
+  "source": "https://github.com/Snapmaker/OrcaSlicer/tree/v2.4.0",
+  "platforms": {
+    "linux-x86_64": {
+      "url": "https://github.com/kameka22/snap-studio/releases/download/engine-orca-2.4.0/snap-studio-engine-orca-2.4.0-linux-x86_64.tar.zst",
+      "size": 38108645,
+      "sha256": "8026092c766b9f09beb95f85b024df5550f8c471be7b7e9b439fb5ebec7188f9",
+      "unpacked": 138166725,
+      "entry": "AppRun"
+    },
+    "macos-aarch64": {
+      "url": "https://github.com/kameka22/snap-studio/releases/download/engine-orca-2.4.0/snap-studio-engine-orca-2.4.0-macos-aarch64.tar.zst",
+      "size": 29941931,
+      "sha256": "2de369373e28e4067d002552f76bd06684c608a907ebef128f8343cb534f4144",
+      "unpacked": 120339998,
+      "entry": "Snapmaker Orca.app"
+    },
+    "macos-x86_64": {
+      "url": "https://github.com/kameka22/snap-studio/releases/download/engine-orca-2.4.0/snap-studio-engine-orca-2.4.0-macos-x86_64.tar.zst",
+      "size": 34043730,
+      "sha256": "cce67a1094855cd5a10ced3f95efa943cd0704684f10042b9453de818dcbe7fc",
+      "unpacked": 131078783,
+      "entry": "Snapmaker Orca.app"
+    },
+    "windows-x86_64": {
+      "url": "https://github.com/kameka22/snap-studio/releases/download/engine-orca-2.4.0/snap-studio-engine-orca-2.4.0-windows-x86_64.tar.zst",
+      "size": 33293236,
+      "sha256": "2e681c74562d387335d7d92a49c7b8677d67d028985e6e0ea3be14937d6794b8",
+      "unpacked": 114900780,
+      "entry": "snapmaker-orca.exe"
+    }
+  }
+}
