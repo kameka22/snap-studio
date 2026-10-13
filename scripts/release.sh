@@ -61,6 +61,19 @@ if [ -n "$(git rev-list "HEAD..origin/$ref")" ]; then
   exit 1
 fi
 
+# Le moteur de découpe référencé doit être publié : sinon l'application
+# publiée ne saurait pas le télécharger.
+engine="src-tauri/engine.json"
+if [ -f "$engine" ]; then
+  ev=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$engine" | head -1)
+  for url in $(sed -n 's/^ *"url": "\(.*\)",$/\1/p' "$engine"); do
+    if ! curl -sfIL -o /dev/null "$url"; then
+      echo "✗ Moteur $ev introuvable ($url) : lancez d'abord scripts/engine.sh $ev." >&2
+      exit 1
+    fi
+  done
+fi
+
 current=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$conf" | head -1)
 [ -n "$current" ] || { echo "version introuvable dans $conf" >&2; exit 1; }
 IFS=. read -r major minor patch <<<"$current"

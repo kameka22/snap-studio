@@ -33,12 +33,30 @@ fn index_for(app: &Path) -> Result<Arc<Index>> {
 }
 
 /// Application servant de moteur : Snapmaker Orca de préférence.
+///
+/// `SNAPSTUDIO_ENGINE` désigne un moteur précis (`.app`, exécutable ou
+/// `AppRun`) : c'est ainsi que la CI éprouve un moteur allégé.
 pub fn engine() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("SNAPSTUDIO_ENGINE").filter(|p| !p.is_empty()) {
+        return Some(PathBuf::from(p));
+    }
     let list = crate::slicers::list();
     list.iter()
         .find(|s| s.name == "Snapmaker Orca")
         .or_else(|| list.first())
         .map(|s| PathBuf::from(&s.path))
+}
+
+/// Dossier de données du moteur (journaux, cache) : celui de Snap Studio, pour
+/// ne jamais écrire dans celui de Snapmaker Orca ni en créer un.
+fn engine_datadir() -> PathBuf {
+    let d = dirs::config_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("fr.carlini.snapstudio")
+        .join("engine")
+        .join("data");
+    let _ = std::fs::create_dir_all(&d);
+    d
 }
 
 fn binary(app: &Path) -> Result<PathBuf> {
@@ -616,6 +634,7 @@ pub fn run_job(
         let mut cmd = std::process::Command::new(&bin);
         crate::util::no_window(&mut cmd);
         cmd.args(["--arrange", arrange, "--allow-newer-file", "--slice", "0"])
+            .arg("--datadir").arg(engine_datadir())
             .arg("--load-settings").arg(&settings)
             .arg("--load-filaments").arg(&fils)
             .arg("--outputdir").arg(&out);
@@ -1264,6 +1283,79 @@ mod tests {
 
     /// Découpe réelle d'une scène du plateau : deux objets placés, l'un tourné ;
     /// le G-code doit les trouver là où le plateau les a mis.
+    /// Test de fumée d'un moteur : profils U1 0,4 mm réels, deux cubes sur
+    /// deux têtes. Lancé par la CI « moteur » sur chaque moteur allégé :
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_smoke -- --ignored`.
+    #[test]
+    #[ignore]
+    fn engine_smoke() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE : moteur à éprouver");
+        println!("moteur : {}", app.display());
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profils lisibles dans le moteur");
+        assert!(l.machines.iter().any(|m| m.name == machine), "profil machine U1 0,4");
+        let process = l
+            .processes
+            .iter()
+            .find(|p| p.name.starts_with("0.20mm Standard"))
+            .unwrap_or(&l.processes[0])
+            .name
+            .clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("un filament PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-smoke");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let cube = |s: f32| -> Vec<Tri> {
+            let p = [[0., 0., 0.], [s, 0., 0.], [s, s, 0.], [0., s, 0.], [0., 0., s], [s, 0., s], [s, s, s], [0., s, s]];
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let src = tmp.join("cubes.3mf");
+        crate::write3mf::write_scene(&src, &[
+            crate::write3mf::SceneObject { name: "a".into(), tris: cube(12.0), transform: Mat::IDENTITY, extruder: None },
+            crate::write3mf::SceneObject { name: "b".into(), tris: cube(12.0), transform: Mat::IDENTITY, extruder: None },
+        ]).unwrap();
+        // Un cube par tête : T0 et T1.
+        let item = |i: usize, x: f32, head: u8| crate::plate::SceneItem {
+            path: src.to_string_lossy().to_string(),
+            item: i,
+            name: format!("cube {i}"),
+            pos: [x, 100.0],
+            rot: [0.0, 0.0, 0.0],
+            scale: [1.0, 1.0, 1.0],
+            extruder_map: vec![head],
+        };
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        let t0 = std::time::Instant::now();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla.clone(), pla],
+                scene: vec![item(0, 100.0, 0), item(1, 170.0, 1)],
+                name: Some("smoke".into()),
+                ..Default::default()
+            },
+            "smoke".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let got = seen.lock().unwrap();
+        let last = got.last().unwrap();
+        assert_eq!(last.phase, "preview", "découpe échouée : {:?}", last.message);
+        let path = last.gcode.clone().unwrap();
+        let stats = last.stats.clone().expect("bilan");
+        println!("G-code en {:.1} s : {} · {:?} · têtes {:?}", t0.elapsed().as_secs_f32(), path, stats.print_time_s, stats.tools);
+        assert!(std::fs::metadata(&path).unwrap().len() > 10_000, "G-code non vide");
+        assert!(stats.tools.contains(&0) && stats.tools.contains(&1), "les deux têtes servent");
+        discard("smoke");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     #[test]
     fn plate_scene_job_keeps_placements() {
         let Some(app) = engine() else { return };

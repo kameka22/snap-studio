@@ -1,0 +1,46 @@
+# Fichiers du paquet officiel Snapmaker Orca gardés dans le moteur allégé.
+#
+# Liste AUTORISÉE : tout ce qui n'y figure pas est retiré. Un fichier ajouté
+# par Snapmaker dans une version future n'est donc jamais embarqué par
+# accident ; s'il devient nécessaire, le test de découpe de la CI le signale.
+#
+# Chemins relatifs à la racine extraite du paquet officiel, motifs glob
+# (`**` : tous les sous-dossiers). La structure est conservée telle quelle :
+# le moteur cherche `resources` par rapport à son exécutable.
+
+[macos]
+Snapmaker Orca.app/Contents/Info.plist
+Snapmaker Orca.app/Contents/MacOS/*
+Snapmaker Orca.app/Contents/Frameworks/**
+Snapmaker Orca.app/Contents/Resources/profiles/Snapmaker.json
+Snapmaker Orca.app/Contents/Resources/profiles/Snapmaker/**
+Snapmaker Orca.app/Contents/Resources/printers/**
+Snapmaker Orca.app/Contents/Resources/info/**
+Snapmaker Orca.app/Contents/Resources/data/**
+Snapmaker Orca.app/Contents/Resources/cert/**
+Snapmaker Orca.app/Contents/Resources/shaders/**
+
+[windows]
+*.exe
+*.dll
+LICENSE.txt
+resources/profiles/Snapmaker.json
+resources/profiles/Snapmaker/**
+resources/printers/**
+resources/info/**
+resources/data/**
+resources/cert/**
+resources/shaders/**
+
+[linux]
+AppRun
+bin/**
+lib/**
+libexec/**
+resources/profiles/Snapmaker.json
+resources/profiles/Snapmaker/**
+resources/printers/**
+resources/info/**
+resources/data/**
+resources/cert/**
+resources/shaders/**

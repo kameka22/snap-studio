@@ -40,6 +40,12 @@ jobs:
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          # Le moteur de découpe référencé doit être publié.
+          if [ -f src-tauri/engine.json ]; then
+            for url in $(jq -r '.platforms[].url' src-tauri/engine.json); do
+              curl -sfIL -o /dev/null "$url" || { echo "::error::Moteur introuvable : $url (scripts/engine.sh)"; exit 1; }
+            done
+          fi
 
   build:
     needs: version

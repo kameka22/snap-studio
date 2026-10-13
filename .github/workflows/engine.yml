@@ -1,0 +1,215 @@
+# Moteur de découpe embarqué : Snapmaker Orca officiel, allégé.
+#
+# Lancé à la main, une fois par version d'Orca (`scripts/engine.sh 2.4.0`).
+# Pour chaque plateforme : paquet officiel → liste autorisée (engine/keep.txt)
+# → [macOS : architecture séparée, signature ad hoc] → VRAIE DÉCOUPE de test
+# → archive tar.zst. Publication dans la release `engine-orca-<version>` avec
+# `engine.json` (adresse, taille, SHA-256 par plateforme). Une plateforme en
+# échec : rien n'est publié.
+#
+# La release n'est jamais marquée « dernière » : la mise à jour de Snap Studio
+# lit `releases/latest`.
+
+name: Moteur
+
+on:
+  workflow_dispatch:
+    inputs:
+      orca_version:
+        description: "Version de Snapmaker Orca (ex. 2.4.0)"
+        required: true
+      force:
+        description: "Remplacer la release si elle existe déjà"
+        type: boolean
+        default: false
+
+concurrency:
+  group: engine
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  V: ${{ inputs.orca_version }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: macos-aarch64
+            os: macos-latest
+            platform: macos
+            arch: arm64
+            asset: Snapmaker_Orca_Mac_universal_V{v}.dmg
+            entry: Snapmaker Orca.app
+          - key: macos-x86_64
+            os: macos-15-intel
+            platform: macos
+            arch: x86_64
+            asset: Snapmaker_Orca_Mac_universal_V{v}.dmg
+            entry: Snapmaker Orca.app
+          - key: windows-x86_64
+            os: windows-latest
+            platform: windows
+            asset: Snapmaker_Orca_Windows_V{v}_portable.zip
+            entry: snapmaker-orca.exe
+          - key: linux-x86_64
+            os: ubuntu-24.04
+            platform: linux
+            asset: Snapmaker_Orca_Linux_AppImage_Ubuntu2404_V{v}.AppImage
+            entry: AppRun
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      KEY: ${{ matrix.key }}
+      ENTRY: ${{ matrix.entry }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install zstandard
+
+      - name: Paquet officiel
+        run: |
+          asset="${{ matrix.asset }}"
+          asset="${asset//\{v\}/$V}"
+          curl -fsSL -o "pkg-$asset" "https://github.com/Snapmaker/OrcaSlicer/releases/download/v$V/$asset"
+          echo "PKG=pkg-$asset" >> "$GITHUB_ENV"
+          python -c "import hashlib,sys; print('sha256 du paquet officiel :', hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "pkg-$asset"
+
+      - name: Extraction (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          hdiutil attach "$PKG" -nobrowse -readonly -mountpoint /tmp/orca-src
+          echo "SRC=/tmp/orca-src" >> "$GITHUB_ENV"
+
+      - name: Extraction (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          unzip -q "$PKG" -d src
+          echo "SRC=src/$(ls src | head -1)" >> "$GITHUB_ENV"
+
+      - name: Extraction (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          chmod +x "$PKG"
+          "./$PKG" --appimage-extract >/dev/null
+          echo "SRC=squashfs-root" >> "$GITHUB_ENV"
+
+      - name: Allègement
+        run: python engine/package.py prune --platform ${{ matrix.platform }} --src "$SRC" --dst engine-out
+
+      # Une seule architecture, puis signature ad hoc : retirer des ressources
+      # invalide le sceau de Snapmaker sur l'ensemble de l'app.
+      - name: Architecture et signature (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          app="engine-out/Snapmaker Orca.app"
+          for f in "$app"/Contents/MacOS/* "$app"/Contents/Frameworks/*; do
+            [ -f "$f" ] || continue
+            if lipo -archs "$f" 2>/dev/null | grep -qw "${{ matrix.arch }}"; then
+              lipo "$f" -thin "${{ matrix.arch }}" -output "$f.thin" 2>/dev/null && mv "$f.thin" "$f" || true
+            fi
+          done
+          for f in "$app"/Contents/Frameworks/* "$app"/Contents/MacOS/crashpad_handler; do
+            [ -e "$f" ] && codesign --force --sign - "$f"
+          done
+          codesign --force --sign - --preserve-metadata=entitlements "$app"
+          codesign --verify --deep --strict "$app"
+          lipo -archs "$app/Contents/MacOS/Snapmaker_Orca"
+          hdiutil detach /tmp/orca-src
+
+      - name: Licence et notice
+        run: |
+          [ -f engine-out/LICENSE.txt ] || curl -fsSL -o engine-out/LICENSE.txt \
+            "https://raw.githubusercontent.com/Snapmaker/OrcaSlicer/v$V/LICENSE.txt"
+          extra=""
+          [ "${{ matrix.platform }}" = macos ] && extra=" Architecture ${{ matrix.arch }} seule, signature ad hoc."
+          cat > engine-out/NOTICE.txt <<EOF
+          Moteur de découpe de Snap Studio : Snapmaker Orca v$V.
+
+          Binaire officiel publié par Snapmaker, non modifié ; ressources
+          inutiles à la découpe retirées (profils des autres marques, interface,
+          polices, images…).$extra
+
+          Licence : GNU Affero General Public License v3 (LICENSE.txt).
+          Code source : https://github.com/Snapmaker/OrcaSlicer/tree/v$V
+          EOF
+
+      # Test de découpe réelle avec la préparation des profils de Snap Studio.
+      - name: Dépendances Linux
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev xvfb \
+            libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libegl1 libgl1
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Découpe de test
+        working-directory: src-tauri
+        run: |
+          export SNAPSTUDIO_ENGINE="$GITHUB_WORKSPACE/engine-out/$ENTRY"
+          run=""
+          [ "${{ matrix.platform }}" = linux ] && run="xvfb-run -a"
+          $run cargo test --lib engine_smoke -- --ignored --nocapture
+
+      - name: Archive
+        run: |
+          name="snap-studio-engine-orca-$V-$KEY.tar.zst"
+          mkdir -p dist
+          python engine/package.py archive --dir engine-out --out "dist/$name" --entry "$ENTRY" \
+            --platform-key "$KEY" \
+            --url "https://github.com/${{ github.repository }}/releases/download/engine-orca-$V/$name"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-${{ matrix.key }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: engine.json
+        run: |
+          python3 engine/package.py manifest --version "$V" --out engine.json dist/*.json
+          mv engine.json dist/
+
+      - name: Release
+        run: |
+          tag="engine-orca-$V"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            if [ "${{ inputs.force }}" = true ]; then
+              gh release delete "$tag" --yes --cleanup-tag
+            else
+              echo "::error::$tag existe déjà (option force pour la remplacer)."
+              exit 1
+            fi
+          fi
+          gh release create "$tag" dist/*.tar.zst dist/engine.json \
+            --target "${{ github.sha }}" \
+            --latest=false \
+            --title "Moteur de découpe — Snapmaker Orca $V" \
+            --notes "Moteur de découpe téléchargé par Snap Studio : binaire officiel Snapmaker Orca v$V, allégé (ressources inutiles retirées) et éprouvé par une découpe réelle sur chaque plateforme. Licence AGPL-3.0 ; code source : https://github.com/Snapmaker/OrcaSlicer/tree/v$V"
