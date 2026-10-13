@@ -733,6 +733,11 @@
       <span id="v-stats" data-tauri-drag-region></span>
     </div>
     <div class="v-actions">
+      <div id="v-colors" class="seg hidden" role="group" aria-label="Coloration">
+        <button class="seg-btn" data-mode="material" title="Couleur du filament, nuancée par trajectoire">Matière</button>
+        <button class="seg-btn" data-mode="feature" title="Une couleur par type de trajectoire">Trajectoires</button>
+        <button class="seg-btn" data-mode="tool" title="Couleur pure de chaque filament">Filaments</button>
+      </div>
       <button id="v-travel" class="btn hidden">Déplacements</button>
       <button id="v-plate" class="btn on">Plateau</button>
       <button id="v-reset" class="btn" title="Recadrer (R)">Recadrer</button>
@@ -758,11 +763,6 @@
     <div class="vp-section">Répartition du temps <span class="set-note">estimation</span></div>
     <div id="vp-feat" class="group"></div>
 
-    <div class="vp-section">Coloration</div>
-    <div class="seg vp-seg" role="group" aria-label="Coloration">
-      <button id="vp-by-feature" class="seg-btn on">Trajectoires</button>
-      <button id="vp-by-tool" class="seg-btn">Filaments</button>
-    </div>
 
     <div class="vp-actions">
       <button id="vp-send" class="btn primary wide">Envoyer à l'imprimante…</button>

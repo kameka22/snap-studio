@@ -22,7 +22,11 @@ const V = {
   /* Aperçu de découpe en cours : bilan, couleurs des têtes, actions. */
   preview: null,
   /* « feature » : couleur par trajectoire ; « tool » : par tête. */
-  colorMode: "feature",
+  /* « material » : couleur du filament nuancée par famille (défaut) ;
+     « feature » : couleur par trajectoire ; « tool » : couleur pure par tête. */
+  colorMode: "material",
+  /* Couleurs des filaments écrites dans le G-code ([r,g,b] ou null par tête). */
+  fileColors: [],
 };
 
 /* Couleurs de repli des têtes, quand la bobine n'est pas connue. */
@@ -132,6 +136,58 @@ uniform float uAlpha;
 out vec4 frag;
 void main() { frag = vec4(vCol, uAlpha); }`;
 
+/* Extrusions en rubans : chaque segment (une instance) devient un quadrilatère
+   tourné vers l'écran, de la largeur réelle d'extrusion, ombré comme un
+   cylindre — clair au centre, sombre sur les bords. Les tampons de positions
+   et de couleurs des lignes servent tels quels (pas de copie). */
+const RIB_VS = `#version 300 es
+in vec3 aA;
+in vec3 aB;
+in vec3 aCol;
+in float aW;
+uniform mat4 uMVP;
+uniform vec2 uViewport;
+uniform float uPxPerMm;
+out vec3 vCol;
+out float vSide;
+void main() {
+  // Six sommets : deux triangles ; t le long du segment, s en travers.
+  int id = gl_VertexID;
+  float t = (id == 1 || id == 2 || id == 4) ? 1.0 : 0.0;
+  float s = (id == 2 || id == 4 || id == 5) ? 1.0 : -1.0;
+  vec4 pa = uMVP * vec4(aA, 1.0);
+  vec4 pb = uMVP * vec4(aB, 1.0);
+  vec2 sa = pa.xy / pa.w * uViewport, sb = pb.xy / pb.w * uViewport;
+  vec2 dir = sb - sa;
+  dir = length(dir) > 1e-4 ? normalize(dir) : vec2(1.0, 0.0);
+  vec2 nrm = vec2(-dir.y, dir.x);
+  vec4 p = mix(pa, pb, t);
+  // Demi-largeur en pixels à cette profondeur ; un pixel au minimum.
+  float hw = max(0.5, 0.5 * aW * uPxPerMm / p.w);
+  // Les extrémités dépassent d'une demi-largeur : les jointures se recouvrent.
+  vec2 off = nrm * s * hw + dir * (t * 2.0 - 1.0) * hw;
+  p.xy += off / uViewport * p.w;
+  gl_Position = p;
+  vCol = aCol;
+  vSide = s;
+}`;
+
+const RIB_FS = `#version 300 es
+precision highp float;
+in vec3 vCol;
+in float vSide;
+out vec4 frag;
+void main() {
+  float c = sqrt(max(0.0, 1.0 - vSide * vSide));
+  vec3 col = vCol * (0.45 + 0.6 * c) + pow(c, 12.0) * 0.18;
+  frag = vec4(col, 1.0);
+}`;
+
+/* Au-delà, on revient aux lignes simples : le rendu reste fluide. */
+const RIBBON_MAX = 2_500_000;
+/* Largeur supposée quand le G-code ne l'indique pas (mm). */
+const DEFAULT_WIDTH = 0.42;
+
 /* Couleurs des familles, identiques à celles des vignettes calculées en Rust. */
 const FEATURES = [
   ["Autre", [150, 158, 175]],
@@ -224,6 +280,17 @@ function decodeGcode(buf) {
   const max = [dv.getFloat32(28, true), dv.getFloat32(32, true), dv.getFloat32(36, true)];
   const pos = new Float32Array(buf, 40, n * 6);
   const attrs = new Uint8Array(buf, 40 + n * 24, n * 4);
+  // Version 2 : largeur par segment, puis couleurs des filaments.
+  const version = dv.getUint8(4);
+  const widths = version >= 2 ? new Uint8Array(buf, 40 + n * 28, n) : null;
+  const fileColors = [];
+  if (version >= 2) {
+    let o = 40 + n * 29;
+    const k = dv.getUint8(o++);
+    for (let i = 0; i < k; i++, o += 4) {
+      fileColors.push(dv.getUint8(o) ? [dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3)] : null);
+    }
+  }
 
   // Séparation extrusions / déplacements ; l'ordre par couche est conservé.
   const count = { e: 0, t: 0 };
@@ -234,6 +301,7 @@ function decodeGcode(buf) {
       col: new Float32Array(count.e * 6),
       feat: new Uint8Array(count.e),
       tool: new Uint8Array(count.e),
+      width: new Float32Array(count.e),
       ends: new Int32Array(layers + 1),
     },
     t: { pos: new Float32Array(count.t * 6), col: new Float32Array(count.t * 6), ends: new Int32Array(layers + 1) },
@@ -252,6 +320,7 @@ function decodeGcode(buf) {
       feats.add(Math.min(feat, FEATURES.length - 1));
       out.e.feat[k] = Math.min(feat, FEATURES.length - 1);
       out.e.tool[k] = attrs[i * 4 + 3] >> 4;
+      out.e.width[k] = widths && widths[i] ? widths[i] / 100 : DEFAULT_WIDTH;
     }
     const c = travel ? [96, 104, 126] : FEATURES[Math.min(feat, FEATURES.length - 1)][1];
     for (let v = 0; v < 2; v++) {
@@ -274,15 +343,56 @@ function decodeGcode(buf) {
     d.ends[layers] = d === out.e ? count.e : count.t;
   }
   for (let l = 1; l < layers; l++) if (layerZ[l] === 0) layerZ[l] = layerZ[l - 1];
-  return { n, layers, min, max, truncated, out, layerZ, feats: [...feats].sort((a, b) => a - b) };
+  return { n, layers, min, max, truncated, out, layerZ, fileColors, feats: [...feats].sort((a, b) => a - b) };
 }
 
-/* Couleurs des extrusions selon le mode : famille de trajectoire ou tête. */
-function extrusionColors(e, mode, toolColors) {
+/* Couleur d'une tête : bobine lue sur l'imprimante (aperçu de découpe), sinon
+   celle que le trancheur a écrite dans le G-code, sinon la palette. */
+function toolRgb(t) {
+  return V.preview?.toolColors?.[t] || V.fileColors?.[t] || TOOL_COLORS[t % TOOL_COLORS.length];
+}
+
+/* Mode « Matière » : la couleur du filament, nuancée par famille pour garder
+   la lecture de la structure. `k` assombrit, `w` éclaircit vers le blanc,
+   `g` désature vers le gris. Indices de `FEATURES`. */
+const MATERIAL_SHADE = [
+  { k: 0.85 }, // autre
+  { k: 1 }, // paroi extérieure
+  { k: 0.8 }, // paroi intérieure
+  { w: 0.18 }, // surface supérieure
+  { k: 0.9 }, // surface inférieure
+  { k: 0.62 }, // remplissage
+  { k: 0.74 }, // remplissage plein
+  { w: 0.12 }, // pont
+  { g: 0.75, k: 0.78 }, // support
+  { k: 0.88 }, // jupe et bordure
+  { g: 0.6, k: 0.72 }, // tour de purge
+  { w: 0.06 }, // surplomb
+];
+
+function shade(rgb, feat) {
+  let [r, g, b] = rgb.map((x) => x / 255);
+  const sh = MATERIAL_SHADE[feat] || {};
+  // Un filament très sombre s'éclaircit un peu : sinon ses nuances disparaissent.
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  if (lum < 0.12) [r, g, b] = [r, g, b].map((x) => x + (0.12 - lum));
+  if (sh.g) {
+    const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    [r, g, b] = [r, g, b].map((x) => x + (l - x) * sh.g);
+  }
+  if (sh.w) [r, g, b] = [r, g, b].map((x) => x + (1 - x) * sh.w);
+  if (sh.k) [r, g, b] = [r, g, b].map((x) => x * sh.k);
+  return [r, g, b].map((x) => Math.max(0, Math.min(1, x)) * 255);
+}
+
+/* Couleurs des extrusions selon le mode : matière (défaut), famille de
+   trajectoire, ou tête en couleur pure. */
+function extrusionColors(e, mode) {
   const col = new Float32Array(e.feat.length * 6);
   for (let k = 0; k < e.feat.length; k++) {
-    const c = mode === "tool"
-      ? toolColors[e.tool[k]] || TOOL_COLORS[e.tool[k] % TOOL_COLORS.length]
+    const c =
+      mode === "material" ? shade(toolRgb(e.tool[k]), e.feat[k])
+      : mode === "tool" ? toolRgb(e.tool[k])
       : FEATURES[e.feat[k]][1];
     for (let v = 0; v < 2; v++) {
       col[k * 6 + v * 3] = c[0] / 255;
@@ -299,7 +409,8 @@ function setColorMode(mode) {
   if (!p || !p.extr.colBuf) return;
   const gl = V.gl;
   gl.bindBuffer(gl.ARRAY_BUFFER, p.extr.colBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, extrusionColors(p.data, mode, (V.preview && V.preview.toolColors) || []), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, extrusionColors(p.data, mode), gl.STATIC_DRAW);
+  document.querySelectorAll("#v-colors [data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   renderLegend(p.feats);
   schedule();
 }
@@ -320,14 +431,51 @@ function buildPathBuffers(gl, prog, part) {
   gl.enableVertexAttribArray(aCol);
   gl.vertexAttribPointer(aCol, 3, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
-  return { vao, ends: part.ends, colBuf: cb };
+  return { vao, ends: part.ends, colBuf: cb, posBuf: pb };
+}
+
+/* Rubans : une instance par segment, lue dans les tampons des lignes
+   (positions a puis b, couleur du premier sommet), plus la largeur. */
+function buildRibbons(gl, prog, part, lines) {
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, lines.posBuf);
+  const aA = gl.getAttribLocation(prog, "aA"), aB = gl.getAttribLocation(prog, "aB");
+  gl.enableVertexAttribArray(aA);
+  gl.vertexAttribPointer(aA, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribDivisor(aA, 1);
+  gl.enableVertexAttribArray(aB);
+  gl.vertexAttribPointer(aB, 3, gl.FLOAT, false, 24, 12);
+  gl.vertexAttribDivisor(aB, 1);
+  gl.bindBuffer(gl.ARRAY_BUFFER, lines.colBuf);
+  const aCol = gl.getAttribLocation(prog, "aCol");
+  gl.enableVertexAttribArray(aCol);
+  gl.vertexAttribPointer(aCol, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribDivisor(aCol, 1);
+  const wb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, wb);
+  gl.bufferData(gl.ARRAY_BUFFER, part.width, gl.STATIC_DRAW);
+  const aW = gl.getAttribLocation(prog, "aW");
+  gl.enableVertexAttribArray(aW);
+  gl.vertexAttribPointer(aW, 1, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(aW, 1);
+  gl.bindVertexArray(null);
+  return { vao, widthBuf: wb };
 }
 
 function buildPaths(gl, data) {
   const prog = program(gl, PATH_VS, PATH_FS);
+  const extr = buildPathBuffers(gl, prog, data.out.e);
+  // Rubans ombrés, sauf pour un G-code démesuré : lignes simples.
+  let ribbons = null;
+  if (data.out.e.feat.length <= RIBBON_MAX) {
+    const rprog = program(gl, RIB_VS, RIB_FS);
+    ribbons = { prog: rprog, ...buildRibbons(gl, rprog, data.out.e, extr) };
+  }
   return {
     prog,
-    extr: buildPathBuffers(gl, prog, data.out.e),
+    ribbons,
+    extr,
     trav: buildPathBuffers(gl, prog, data.out.t),
     data: data.out.e,
     min: data.min,
@@ -667,9 +815,20 @@ function draw() {
       gl.drawArrays(gl.LINES, 0, p.trav.ends[upto] * 2);
       gl.disable(gl.BLEND);
     }
-    gl.uniform1f(alpha, 1);
-    gl.bindVertexArray(p.extr.vao);
-    gl.drawArrays(gl.LINES, 0, p.extr.ends[upto] * 2);
+    if (p.ribbons) {
+      const r = p.ribbons;
+      gl.useProgram(r.prog);
+      gl.uniformMatrix4fv(gl.getUniformLocation(r.prog, "uMVP"), false, mvp);
+      // Pixels par unité d'écran normalisée, et par millimètre à la distance 1.
+      gl.uniform2f(gl.getUniformLocation(r.prog, "uViewport"), w / 2, h / 2);
+      gl.uniform1f(gl.getUniformLocation(r.prog, "uPxPerMm"), proj[5] * h / 2);
+      gl.bindVertexArray(r.vao);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, p.extr.ends[upto]);
+    } else {
+      gl.uniform1f(alpha, 1);
+      gl.bindVertexArray(p.extr.vao);
+      gl.drawArrays(gl.LINES, 0, p.extr.ends[upto] * 2);
+    }
   }
 
   if (V.mesh) {
@@ -721,9 +880,16 @@ function disposeScene() {
     V.mesh = null;
   }
   if (V.paths) {
-    gl.deleteVertexArray(V.paths.extr.vao);
-    gl.deleteVertexArray(V.paths.trav.vao);
-    gl.deleteProgram(V.paths.prog);
+    const p = V.paths;
+    gl.deleteVertexArray(p.extr.vao);
+    gl.deleteVertexArray(p.trav.vao);
+    for (const b of [p.extr.posBuf, p.extr.colBuf, p.trav.posBuf, p.trav.colBuf]) gl.deleteBuffer(b);
+    if (p.ribbons) {
+      gl.deleteVertexArray(p.ribbons.vao);
+      gl.deleteBuffer(p.ribbons.widthBuf);
+      gl.deleteProgram(p.ribbons.prog);
+    }
+    gl.deleteProgram(p.prog);
     V.paths = null;
   }
 }
@@ -759,6 +925,7 @@ async function openViewer(path, name, kind, bust) {
   $("v-layers").classList.toggle("hidden", !gcode);
   $("v-legend").classList.toggle("hidden", !gcode);
   $("v-travel").classList.toggle("hidden", !gcode);
+  $("v-colors").classList.toggle("hidden", !gcode);
 
   try {
     const buf = await fetchBinary(gcode ? "gcode" : "mesh", path, bust);
@@ -771,10 +938,13 @@ async function openViewer(path, name, kind, bust) {
 
     if (gcode) {
       const data = decodeGcode(buf);
-      if (V.colorMode === "tool") {
-        data.out.e.col = extrusionColors(data.out.e, "tool", (V.preview && V.preview.toolColors) || []);
-      }
+      // Couleurs écrites par le trancheur : base du mode « Matière ».
+      V.fileColors = data.fileColors;
+      // Couleurs du G-code connues : le panneau de l'aperçu les reprend.
+      if (V.preview && V.preview.path === path) renderPreviewPanel();
+      if (V.colorMode !== "feature") data.out.e.col = extrusionColors(data.out.e, V.colorMode);
       V.paths = buildPaths(V.gl, data);
+      document.querySelectorAll("#v-colors [data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === V.colorMode));
       V.layer = data.layers - 1;
       setupLayerSlider(data);
       renderLegend(data.feats);
@@ -815,22 +985,24 @@ function updateLayerLabel() {
 }
 
 function renderLegend(feats) {
-  if (V.colorMode === "tool" && V.preview) {
-    const tools = V.preview.stats?.tools?.length ? V.preview.stats.tools : [0];
-    $("v-legend").innerHTML = tools
-      .map((t) => {
-        const c = V.preview.toolColors[t] || TOOL_COLORS[t % TOOL_COLORS.length];
-        return `<span class="leg"><i style="background:rgb(${c[0]},${c[1]},${c[2]})"></i>Tête T${t}${
-          V.preview.toolNames?.[t] ? " · " + esc(V.preview.toolNames[t]) : ""
-        }</span>`;
-      })
-      .join("");
+  const tools = [...new Set(V.paths?.data.tool || [])].sort((a, b) => a - b);
+  const name = (t) => V.preview?.toolNames?.[t];
+  const sw = (c) => `<i style="background:rgb(${c.map(Math.round).join(",")})"></i>`;
+  if (V.colorMode === "tool" || V.colorMode === "material") {
+    const heads = tools.map((t) => `<span class="leg">${sw(toolRgb(t))}T${t}${name(t) ? " · " + esc(name(t)) : ""}</span>`);
+    // Matière : les nuances de la première tête, pour lire la structure.
+    const base = toolRgb(tools[0] ?? 0);
+    const shades =
+      V.colorMode === "material"
+        ? feats.map((f) => `<span class="leg sub">${sw(shade(base, f))}${FEATURES[f][0]}</span>`)
+        : [];
+    $("v-legend").innerHTML = heads.join("") + (shades.length ? '<span class="leg-sep"></span>' + shades.join("") : "");
     return;
   }
   $("v-legend").innerHTML = feats
     .map((f) => {
-      const [name, c] = FEATURES[f];
-      return `<span class="leg"><i style="background:rgb(${c[0]},${c[1]},${c[2]})"></i>${name}</span>`;
+      const [label, c] = FEATURES[f];
+      return `<span class="leg">${sw(c)}${label}</span>`;
     })
     .join("");
 }
@@ -870,9 +1042,8 @@ const fmtNum = (x, d = 1) => (x ?? 0).toFixed(d).replace(".", ",");
    toolColors ([r,g,b] par tête), toolNames, onSend, onSave, onEdit, onClose. */
 function openPreview(opts) {
   V.preview = opts;
-  V.colorMode = "feature";
-  $("vp-by-feature").classList.add("on");
-  $("vp-by-tool").classList.remove("on");
+  V.colorMode = "material";
+  V.fileColors = [];
   renderPreviewPanel();
   $("v-panel").classList.remove("hidden");
   $("viewer").classList.add("previewing");
@@ -881,7 +1052,8 @@ function openPreview(opts) {
 
 function hidePreviewPanel() {
   V.preview = null;
-  V.colorMode = "feature";
+  // Chaque ouverture repart en mode « Matière ».
+  V.colorMode = "material";
   $("v-panel").classList.add("hidden");
   $("viewer").classList.remove("previewing");
 }
@@ -897,7 +1069,7 @@ function renderPreviewPanel() {
   // Une ligne par tête qui extrude, puis le total.
   const tools = st.tools?.length ? st.tools : [0];
   const rows = tools.map((t) => {
-    const c = V.preview.toolColors[t] || TOOL_COLORS[t % TOOL_COLORS.length];
+    const c = toolRgb(t);
     const g = st.per_tool_g?.[t], m = st.per_tool_m?.[t];
     return `<div class="grow-row"><span class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>
       <span class="k">T${t}${V.preview.toolNames?.[t] ? `<span class="sub">${esc(V.preview.toolNames[t])}</span>` : ""}</span>
@@ -925,15 +1097,9 @@ function renderPreviewPanel() {
     .join("");
 }
 
-$("vp-by-feature").addEventListener("click", () => {
-  $("vp-by-feature").classList.add("on");
-  $("vp-by-tool").classList.remove("on");
-  setColorMode("feature");
-});
-$("vp-by-tool").addEventListener("click", () => {
-  $("vp-by-tool").classList.add("on");
-  $("vp-by-feature").classList.remove("on");
-  setColorMode("tool");
+$("v-colors").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-mode]");
+  if (b) setColorMode(b.dataset.mode);
 });
 $("vp-send").addEventListener("click", () => V.preview?.onSend?.());
 $("vp-save").addEventListener("click", () => V.preview?.onSave?.());
