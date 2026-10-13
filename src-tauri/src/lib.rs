@@ -2,6 +2,7 @@ mod menu;
 mod migrate;
 mod access;
 mod discover;
+mod engine;
 mod favorites;
 mod gcode;
 mod ia;
@@ -351,6 +352,28 @@ fn fav_done(id: String, done: bool) -> Result<Vec<favorites::Favorite>, String> 
 }
 
 // ---------------------------------------------------------------- découpe
+
+/// Moteur de découpe embarqué : version, installé ou non, tailles.
+#[tauri::command]
+fn engine_status() -> engine::Status {
+    engine::status()
+}
+
+/// Télécharge et installe le moteur ; progression par `engine-progress`.
+#[tauri::command]
+async fn engine_install(app: tauri::AppHandle) -> Result<engine::Status, String> {
+    engine::install(app).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn engine_cancel() {
+    engine::cancel();
+}
+
+#[tauri::command]
+fn engine_remove() -> Result<engine::Status, String> {
+    engine::remove().map_err(|e| e.to_string())
+}
 
 /// Contenu effectif d'un préréglage, pour la fenêtre de détail.
 #[tauri::command]
@@ -1239,6 +1262,10 @@ pub fn run() {
             open_in_slicer,
             slice_lists,
             slice_details,
+            engine_status,
+            engine_install,
+            engine_cancel,
+            engine_remove,
             slice_defaults,
             slice_start,
             slice_cancel,

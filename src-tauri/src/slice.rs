@@ -32,13 +32,18 @@ fn index_for(app: &Path) -> Result<Arc<Index>> {
     Ok(idx)
 }
 
-/// Application servant de moteur : Snapmaker Orca de préférence.
+/// Moteur de découpe : celui que Snap Studio a téléchargé (`engine.rs`).
 ///
 /// `SNAPSTUDIO_ENGINE` désigne un moteur précis (`.app`, exécutable ou
-/// `AppRun`) : c'est ainsi que la CI éprouve un moteur allégé.
+/// `AppRun`) : c'est ainsi que la CI éprouve un moteur allégé. Tant
+/// qu'aucun moteur n'est référencé (version de développement), Snapmaker
+/// Orca installé sert de repli.
 pub fn engine() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("SNAPSTUDIO_ENGINE").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(p));
+    }
+    if crate::engine::referenced() {
+        return crate::engine::installed();
     }
     let list = crate::slicers::list();
     list.iter()
@@ -86,7 +91,7 @@ pub fn details(
     overrides: &Map<String, Value>,
     color: Option<&str>,
 ) -> Result<presets::Details> {
-    let app = engine().ok_or_else(|| anyhow!("aucun trancheur détecté"))?;
+    let app = engine().ok_or_else(|| anyhow!(crate::engine::MISSING))?;
     let idx = index_for(&app)?;
     let extra = match idx.kind_of(name) {
         Some(presets::Kind::Process) => {
@@ -104,7 +109,7 @@ pub fn details(
 
 /// Listes proposables, filtrées pour la machine demandée.
 pub fn lists(machine: Option<&str>) -> Result<PresetLists> {
-    let app = engine().ok_or_else(|| anyhow!("aucun trancheur détecté"))?;
+    let app = engine().ok_or_else(|| anyhow!(crate::engine::MISSING))?;
     let idx = index_for(&app)?;
     let machines = idx.machines();
     let chosen = machine
@@ -202,7 +207,7 @@ impl Simple {
 
 /// Valeurs de départ d'un préréglage donné.
 pub fn defaults(machine: &str, process: &str) -> Result<Simple> {
-    let app = engine().ok_or_else(|| anyhow!("aucun trancheur détecté"))?;
+    let app = engine().ok_or_else(|| anyhow!(crate::engine::MISSING))?;
     let idx = index_for(&app)?;
     let _ = machine;
     let cfg = idx
@@ -513,7 +518,7 @@ pub fn start(app_handle: AppHandle, req: Request) -> Result<String> {
             .unwrap_or(0)
             .to_le_bytes(),
     ]));
-    let engine_app = engine().ok_or_else(|| anyhow!("aucun trancheur détecté"))?;
+    let engine_app = engine().ok_or_else(|| anyhow!(crate::engine::MISSING))?;
     let bin = binary(&engine_app)?;
     let idx = index_for(&engine_app)?;
     let job_id = id.clone();

@@ -62,6 +62,8 @@ jobs:
             asset: Snapmaker_Orca_Linux_AppImage_Ubuntu2404_V{v}.AppImage
             entry: AppRun
     runs-on: ${{ matrix.os }}
+    # Un moteur bloqué ne doit pas occuper un runner six heures.
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -159,6 +161,8 @@ jobs:
 
       - name: Découpe de test
         working-directory: src-tauri
+        # Compilation comprise (les runners Intel sont les plus lents).
+        timeout-minutes: 60
         run: |
           export SNAPSTUDIO_ENGINE="$GITHUB_WORKSPACE/engine-out/$ENTRY"
           run=""

@@ -509,6 +509,11 @@
       </div>
     </div>
 
+    <div class="set-section">Moteur de découpe</div>
+    <div class="group">
+      <div id="set-engine" class="grow-row eng-row"></div>
+    </div>
+
     <div class="set-section">Navigation 3D</div>
     <div class="group">
       <div class="grow-row">
@@ -608,6 +613,7 @@
       </div>
     </div>
 
+    <div id="s-engine" class="sl-engine hidden"></div>
     <div class="sl-cols">
       <div class="sl-col">
         <div class="set-section">Imprimante</div>
@@ -956,6 +962,13 @@
         </section>
 
         <section class="w-step">
+          <div class="w-badge" style="--c: #ff9500"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7m7.4-2.5a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5z"/></svg></div>
+          <h1>Moteur de découpe</h1>
+          <p class="w-lead">Snap Studio découpe vos modèles avec le moteur de Snapmaker Orca. Il se télécharge une seule fois, en une minute environ.</p>
+          <div id="w-engine" class="w-engine"></div>
+        </section>
+
+        <section class="w-step">
           <div class="w-final">
             <canvas id="w-confetti"></canvas>
             <img class="w-icon big" src="assets/app-icon.png" alt="" />
@@ -972,7 +985,7 @@
     </div>
     <div class="w-nav">
       <button id="w-back" class="btn">Retour</button>
-      <div id="w-dots" class="w-dots"><i></i><i></i><i></i><i></i></div>
+      <div id="w-dots" class="w-dots"><i></i><i></i><i></i><i></i><i></i></div>
       <button id="w-next" class="btn primary">Continuer</button>
     </div>
   </div>
@@ -983,6 +996,7 @@
 <script src="viewer.js"></script>
 <script src="slice.js"></script>
 <script src="slice-ui.js"></script>
+<script src="engine.js"></script>
 <script src="profiles.js"></script>
 <script src="prints.js"></script>
 <script src="prepare.js"></script>

@@ -4,9 +4,11 @@ Objectif : Snap Studio ne dépend plus d'une installation de Snapmaker Orca. Il
 télécharge **son propre moteur** — le binaire officiel de Snapmaker, allégé de
 tout ce qui ne sert pas à découper — et ne se sert que de lui.
 
-**État :** étape 1 écrite (`engine/keep.txt`, `engine/package.py`,
-`.github/workflows/engine.yml`, `scripts/engine.sh`, test `engine_smoke`,
-garde-fous de `release.sh` et `build.yml`) — à lancer sur GitHub.
+**État :** étapes 1 à 4 écrites — CI et scripts, `engine.rs`, interface
+(assistant, fenêtre de découpe, Réglages), garde-fous et README. Reste la
+validation (étape 5) une fois `engine-orca-2.4.0` publiée et `engine.json`
+mis à jour. Tant que `src-tauri/engine.json` est vide, Snapmaker Orca installé
+sert de repli.
 
 Décisions prises :
 
@@ -197,6 +199,28 @@ d'Orca.
   boutons **Réinstaller** et **Supprimer** ; lien « Licence et code source ».
 - Message d'erreur clair si le téléchargement échoue (hors ligne, empreinte
   invalide) avec **Réessayer**.
+
+## 4 bis. Nouvelle version du moteur
+
+Une nouvelle version du moteur arrive **toujours avec une mise à jour de
+Snap Studio** (version figée dans `engine.json`) : l'application n'interroge
+jamais GitHub pour un moteur plus récent.
+
+- Après la mise à jour de Snap Studio, le moteur référencé n'est pas installé
+  mais un **ancien** l'est (`previous` dans le statut).
+- **Au lancement**, le nouveau se télécharge **en arrière-plan** (4 s après
+  le démarrage) ; toast « Moteur de découpe mis à jour (2.5.0) » à la fin.
+  Une première installation, elle, reste à l'initiative de l'utilisateur.
+- Partout (fenêtre de découpe, Réglages), la carte annonce une **mise à
+  jour** : « Mise à jour du moteur de découpe : 2.4.0 → 2.5.0 », bouton
+  « Mettre à jour ». Si l'utilisateur ouvre la découpe pendant le
+  téléchargement de fond, il en voit la progression ; la fenêtre se remplit
+  à la fin.
+- Échec du téléchargement de fond (hors ligne…) : silencieux ; la fenêtre de
+  découpe propose « Réessayer ».
+- Pas de découpe avec l'ancien moteur en attendant : Snap Studio n'a été
+  éprouvé qu'avec la version référencée.
+- L'ancien moteur est supprimé une fois le nouveau installé.
 
 ## 5. Release de Snap Studio
 

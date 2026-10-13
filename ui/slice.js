@@ -83,14 +83,42 @@ async function openSlice() {
   }
   openSheet($("smodal"));
 
+  // Moteur attendu mais absent : la fenêtre propose d'abord de le télécharger.
+  await engStatus();
+  if (engNeeded()) {
+    slEngineGate(true);
+    return;
+  }
+  slEngineGate(false);
+  await sliceLoad();
+}
+
+/* Le moteur manque : sa carte remplace le contenu, la découpe attend. */
+function slEngineGate(on) {
+  $("s-engine").classList.toggle("hidden", !on);
+  document.querySelector("#smodal .sl-box").classList.toggle("needs-engine", on);
+  $("s-go").disabled = on;
+  if (on) {
+    engMount($("s-engine"), {
+      onDone: () => {
+        engUnmount($("s-engine"));
+        slEngineGate(false);
+        sliceLoad();
+      },
+    });
+  }
+}
+
+/* Imprimantes, couleurs du modèle, profils : le contenu de la fenêtre. */
+async function sliceLoad() {
   try {
     const [printers, ...models] = await Promise.all([
       invoke("printers_list").catch(() => []),
-      ...scene.files.map((path) => invoke("slice_model", { path }).catch(() => null)),
+      ...SL.source.files.map((path) => invoke("slice_model", { path }).catch(() => null)),
     ]);
     SL.printers = printers;
     // Couleurs du modèle, fichier par fichier.
-    SL.models = scene.files.map((path, i) => {
+    SL.models = SL.source.files.map((path, i) => {
       const m = models[i];
       return {
         path,

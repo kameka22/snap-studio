@@ -13,7 +13,8 @@ const W = {
   added: [],
   confetti: 0,
 };
-const W_STEPS = 4;
+const W_STEPS = 5;
+/* Étapes : 0 bienvenue, 1 modèles, 2 imprimante, 3 moteur, 4 prêt. */
 const W_KEY = "snapstudio.welcome";
 const W_ORCA = "https://github.com/Snapmaker/OrcaSlicer/releases/latest";
 
@@ -43,7 +44,8 @@ function wGo(n) {
   // La recherche réseau ne tourne que sur l'étape Imprimante.
   if (from === 2 && W.step !== 2) discoverStop();
   if (W.step === 2 && (from !== 2 || !DISC.view)) discoveryList($("w-disc"), wPick);
-  if (W.step === 3) wSummary();
+  if (W.step === 3) wEngine();
+  if (W.step === 4) wSummary();
   $("w-track").style.transform = `translateX(${-100 * W.step}%)`;
   document.querySelectorAll("#welcome .w-step").forEach((el, i) => {
     el.classList.toggle("on", i === W.step);
@@ -59,7 +61,11 @@ function wNav() {
   $("w-back").classList.toggle("invisible", W.step === 0);
   $("w-next").classList.toggle("invisible", last);
   $("w-skip").classList.toggle("invisible", last);
-  const done = W.step === 1 ? !!W.dir : W.step === 2 ? W.added.length > 0 : true;
+  const done =
+    W.step === 1 ? !!W.dir
+    : W.step === 2 ? W.added.length > 0
+    : W.step === 3 ? !engNeeded()
+    : true;
   $("w-next").textContent = done ? "Continuer" : "Passer";
   $("w-next").classList.toggle("primary", done);
 }
@@ -183,6 +189,13 @@ async function wAdd() {
 
 /* ------------------------------------------------------------ fin */
 
+/* Étape « Moteur » : le bloc commun, et la suite dès qu'il est installé. */
+async function wEngine() {
+  await engStatus();
+  engMount($("w-engine"), { onDone: wNav });
+  wNav();
+}
+
 async function wSummary() {
   const ul = $("w-summary");
   const row = (ok, title, sub, extra = "") =>
@@ -194,12 +207,20 @@ async function wSummary() {
   const printers = W.added.length
     ? row(true, W.added.length > 1 ? "Imprimantes" : "Imprimante", W.added.map(esc).join(", "))
     : row(null, "Imprimante", "À ajouter plus tard depuis la barre latérale");
-  ul.innerHTML = folder + printers + row(true, "Snapmaker Orca", "Recherche…");
-  const slicers = await invoke("slicers_list").catch(() => []);
-  const orca = slicers.find((s) => s.name === "Snapmaker Orca");
-  const html = orca
-    ? row(true, "Snapmaker Orca", "Détecté : la découpe est disponible")
-    : row(false, "Snapmaker Orca non trouvé", "Il est nécessaire pour découper", ' <button class="w-link" id="w-orca">Télécharger</button>');
+  ul.innerHTML = folder + printers + row(true, "Moteur de découpe", "Vérification…");
+  const s = await engStatus();
+  let html;
+  if (s?.referenced) {
+    html = s.installed
+      ? row(true, "Moteur de découpe", `Snapmaker Orca ${esc(s.version)} installé : la découpe est disponible`)
+      : row(null, "Moteur de découpe", "Il se téléchargera à la première découpe");
+  } else {
+    // Version de développement : Snapmaker Orca installé sert de moteur.
+    const slicers = await invoke("slicers_list").catch(() => []);
+    html = slicers.some((x) => x.name === "Snapmaker Orca")
+      ? row(true, "Snapmaker Orca", "Détecté : la découpe est disponible")
+      : row(false, "Snapmaker Orca non trouvé", "Il est nécessaire pour découper", ' <button class="w-link" id="w-orca">Télécharger</button>');
+  }
   ul.lastElementChild.outerHTML = html;
   $("w-orca")?.addEventListener("click", () =>
     invoke("plugin:opener|open_url", { url: W_ORCA }).catch((e) => toast(String(e), true))

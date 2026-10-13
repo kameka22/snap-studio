@@ -75,10 +75,16 @@ la nouvelle version, la télécharge, vérifie sa signature et redémarre
 (Réglages → Application ; menu Snap Studio → Rechercher les mises à jour). Sous
 Linux, seule l'AppImage se met à jour ; le `.deb` renvoie vers GitHub.
 
-La découpe nécessite [Snapmaker Orca](https://github.com/Snapmaker/OrcaSlicer)
-installé (moteur et préréglages), cherché dans `/Applications` (macOS),
-`Program Files` (Windows), ou en AppImage dans `~/Applications`,
-`~/Downloads`, `/opt` (Linux).
+**Moteur de découpe** : Snap Studio n'a pas besoin de Snapmaker Orca installé.
+Il télécharge au premier besoin (assistant de bienvenue ou première découpe)
+son propre moteur, environ 30 Mo : le binaire officiel de
+[Snapmaker Orca](https://github.com/Snapmaker/OrcaSlicer), allégé de ce qui ne
+sert pas à découper (profils des autres marques, interface, polices…) et
+éprouvé par une découpe réelle sur chaque plateforme. Il est rangé dans les
+données de Snap Studio (rien n'apparaît dans Applications) ; Réglages → Moteur
+de découpe pour le réinstaller ou le supprimer. Licence AGPL-3.0, code source
+lié depuis les Réglages. Les profils personnels de Snapmaker Orca, s'il est
+installé, restent proposés.
 
 ## Développement
 
@@ -97,9 +103,17 @@ construit macOS, Windows et Linux, signe les paquets et publie la release
 `--version 1.2.3` pour une version exacte (plus récente que la dernière) ;
 une version pas encore publiée (build en échec) est réutilisée sans bump.
 
+**Changer de version du moteur** : `scripts/engine.sh 2.5.0` lance le workflow
+« Moteur » (`.github/workflows/engine.yml`) : paquet officiel → liste autorisée
+(`engine/keep.txt`) → découpe de test → release `engine-orca-2.5.0`, puis met
+à jour `src-tauri/engine.json`. La release suivante de Snap Studio l'embarque ;
+`release.sh` refuse un moteur référencé introuvable.
+
 La signature des mises à jour utilise la clé des secrets GitHub
 `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ; sa clé
-publique est dans `tauri.conf.json` (voir `PLAN-MAJ.md`).
+publique est dans `tauri.conf.json`.
+
+Plans de travail en cours et idées pour la suite : [`docs/plans/`](docs/plans/).
 
 ## Raccourcis
 
@@ -137,6 +151,7 @@ src-tauri/src/
   update.rs       mises à jour (GitHub, signature, installation)
   discover.rs     recherche des imprimantes sur le réseau (mDNS)
   jobs.rs         impressions : file d'attente, historique, suivi de fond
+  engine.rs       moteur de découpe embarqué : téléchargement, vérification
   access.rs       premier accès aux dossiers protégés de macOS (une demande)
 ```
 

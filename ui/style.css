@@ -2398,3 +2398,39 @@ body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
 .picker-empty { padding: 16px; text-align: center; font-size: 12px; color: var(--text-secondary); }
 .picker-foot { border: 0; border-top: 1px solid var(--separator); background: none; padding: 9px; color: var(--accent); font: inherit; font-size: 12px; }
 .picker-foot:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+/* ------------------------------------------------------------ moteur de découpe */
+
+.eng { display: flex; flex-direction: column; gap: 10px; }
+.eng-text { display: flex; flex-direction: column; gap: 3px; }
+.eng-text b { font-size: 13px; font-weight: 600; }
+.eng-text small { font-size: 12px; color: var(--text-secondary); }
+.eng-text .eng-err { color: var(--danger); }
+.eng-bar { height: 6px; }
+.eng-actions { display: flex; gap: 8px; }
+.eng-actions:empty { display: none; }
+.eng-source { align-self: flex-start; font-size: 12px; }
+.grow-row.eng-row { flex-direction: column; align-items: stretch; }
+.w-engine {
+  width: 100%;
+  max-width: 440px;
+  padding: 14px 16px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  text-align: left;
+}
+.w-engine .eng-actions { justify-content: flex-end; }
+/* Fenêtre de découpe sans moteur : sa carte remplace le contenu. */
+.sl-engine {
+  margin: 28px auto;
+  width: min(480px, calc(100% - 44px));
+  padding: 18px 20px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+}
+.sl-engine .eng-actions { justify-content: flex-end; }
+.sl-box.needs-engine .sl-cols,
+.sl-box.needs-engine .sl-summary { display: none; }
+.sl-box.needs-engine .sl-foot-row { justify-content: flex-end; }
