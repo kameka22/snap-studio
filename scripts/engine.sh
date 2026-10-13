@@ -31,6 +31,7 @@ workflow="engine.yml"
 tag="engine-orca-$version"
 manifest="src-tauri/engine.json"
 cd "$(dirname "$0")/.."
+source scripts/lib-run.sh
 
 command -v gh >/dev/null || { echo "gh introuvable : brew install gh" >&2; exit 1; }
 
@@ -58,7 +59,12 @@ assets=$(gh release view "v$version" --repo Snapmaker/OrcaSlicer --json assets \
   -q '.assets[] | "\(.name)\t\(.size)"' 2>/dev/null || true)
 [ -n "$assets" ] || { echo "✗ Snapmaker Orca v$version introuvable dans les releases Snapmaker." >&2; exit 1; }
 
-current=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$manifest" 2>/dev/null | head -1)
+# Aucun moteur encore publié : pas d'engine.json (sans ce garde, l'échec de
+# sed arrêterait le script en silence, à cause de `set -e`).
+current=""
+if [ -f "$manifest" ]; then
+  current=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$manifest" | head -1)
+fi
 exists=false
 gh release view "$tag" >/dev/null 2>&1 && exists=true
 if $exists && ! $force; then
@@ -72,7 +78,7 @@ echo "  Moteur à publier             : Snapmaker Orca v$version ($tag)$($exists
 echo "  Paquets officiels :"
 echo "$assets" | grep -E '\.(dmg|zip|AppImage)	' | while IFS=$'\t' read -r name size; do
   awk -v n="$name" -v s="$size" 'BEGIN { printf "    %-60s %6.1f Mo\n", n, s / 1e6 }'
-done
+done || true
 echo "  → commit « Moteur Snapmaker Orca $version » de $manifest sur $ref"
 echo
 
@@ -84,11 +90,7 @@ if ! $yes; then
   esac
 fi
 
-gh workflow run "$workflow" --ref "$ref" -f orca_version="$version" -f force="$force"
-echo "Workflow lancé, en attente de l'exécution…"
-sleep 5
-id=$(gh run list --workflow "$workflow" --branch "$ref" --event workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
-gh run watch "$id" --exit-status
+run_and_watch "$workflow" "$ref" -f orca_version="$version" -f force="$force"
 
 gh release download "$tag" -p engine.json -O "$manifest" --clobber
 git add "$manifest"

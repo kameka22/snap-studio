@@ -41,6 +41,7 @@ fi
 workflow="build.yml"
 conf="src-tauri/tauri.conf.json"
 cd "$(dirname "$0")/.."
+source scripts/lib-run.sh
 
 command -v gh >/dev/null || { echo "gh introuvable : brew install gh" >&2; exit 1; }
 
@@ -138,9 +139,5 @@ if $bump; then
 fi
 git push -q origin "HEAD:$ref"
 
-gh workflow run "$workflow" --ref "$ref"
-echo "Workflow lancé sur $ref, en attente de l'exécution…"
-sleep 5
-id=$(gh run list --workflow "$workflow" --branch "$ref" --event workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
-gh run watch "$id" --exit-status
+run_and_watch "$workflow" "$ref"
 echo "Release : $(gh release view "v$next" --json url -q .url)"
