@@ -772,13 +772,6 @@ fn slicers_list() -> Vec<slicers::Slicer> {
     slicers::list()
 }
 
-/// Opens the files in a slicer; `add` sends a copy stripped of its project
-/// settings, to simply lay it on the current plate.
-#[tauri::command]
-async fn open_in_slicer(paths: Vec<String>, app: Option<String>, add: bool) -> Result<(), String> {
-    slicers::open_with(&paths, app.as_deref(), add).map_err(|e| e.to_string())
-}
-
 #[tauri::command]
 fn quick_places() -> Vec<PlaceDto> {
     let mut v = Vec::new();
@@ -1423,7 +1416,6 @@ pub fn run() {
             open_file,
             quick_places,
             slicers_list,
-            open_in_slicer,
             slice_lists,
             slice_details,
             engine_status,

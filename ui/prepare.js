@@ -832,6 +832,7 @@ function prStatus() {
   $("p-empty").classList.toggle("hidden", n > 0);
   $("p-del").disabled = PR.sel.size === 0;
   $("p-dup").disabled = PR.sel.size === 0;
+  $("p-save").disabled = $("p-clear").disabled = n === 0;
   $("p-arrange").disabled = !PR.objects.some((o) => bedState(o) !== "out");
   $("p-orient").disabled = PR.orienting || !PR.objects.length;
   $("p-slice").disabled = n === 0;
@@ -1442,14 +1443,9 @@ function prepareScene() {
 
 /* ------------------------------------------------------------ events */
 
-$("p-add").addEventListener("click", (e) =>
-  menuUnder(e.currentTarget, [
-    { id: "prep:add", label: tr("prepare.menu.add") },
-    { id: "prep:save", label: tr("prepare.menu.save"), enabled: PR.objects.length > 0 },
-    {},
-    { id: "prep:clear", label: tr("prepare.menu.clear"), enabled: PR.objects.length > 0 },
-  ])
-);
+$("p-add").addEventListener("click", prAddFiles);
+$("p-save").addEventListener("click", prSavePlate);
+$("p-clear").addEventListener("click", prClear);
 onMenu("prep", async (what) => {
   if (what === "dup") prDuplicate();
   if (what === "center") prCenterSelection();
@@ -1459,23 +1455,29 @@ onMenu("prep", async (what) => {
   if (what === "orient") prOrient(false);
   if (what === "facetool") prSetTool("face");
   if (what === "save") prSavePlate();
-  if (what === "add") {
-    const picked = await window.__TAURI__.dialog
-      .open({ multiple: true, filters: [{ name: tr("prepare.filter"), extensions: ["3mf", "stl"] }] })
-      .catch(() => null);
-    for (const p of [].concat(picked || [])) await prepareAddFile(typeof p === "string" ? p : p.path);
-  }
-  if (what === "clear") {
-    const ok = await confirmDelete(tr("prepare.clear.title"), tr("prepare.clear.text"), tr("prepare.clear.ok"));
-    if (!ok) return;
-    prRemember();
-    PR.objects = [];
-    PR.sel.clear();
-    prSave();
-    prRenderInspector();
-    prSchedule();
-  }
+  if (what === "add") prAddFiles();
+  if (what === "clear") prClear();
 });
+
+/* Files picked from disk, added to the plate. */
+async function prAddFiles() {
+  const picked = await window.__TAURI__.dialog
+    .open({ multiple: true, filters: [{ name: tr("prepare.filter"), extensions: ["3mf", "stl"] }] })
+    .catch(() => null);
+  for (const p of [].concat(picked || [])) await prepareAddFile(typeof p === "string" ? p : p.path);
+}
+
+async function prClear() {
+  if (!PR.objects.length) return;
+  const ok = await confirmDelete(tr("prepare.clear.title"), tr("prepare.clear.text"), tr("prepare.clear.ok"));
+  if (!ok) return;
+  prRemember();
+  PR.objects = [];
+  PR.sel.clear();
+  prSave();
+  prRenderInspector();
+  prSchedule();
+}
 $("p-del").addEventListener("click", prRemoveSelection);
 $("p-dup").addEventListener("click", prDuplicate);
 $("p-rotate").addEventListener("click", () => prSetTool("rotate"));
@@ -1484,18 +1486,21 @@ $("p-orient").addEventListener("click", (e) => prOrient(e.shiftKey));
 $("p-arrange").addEventListener("click", prArrange);
 $("p-slice").addEventListener("click", () => openSlice());
 
-/* Files: "Prepare" adds the selected model to the plate. */
-$("act-slice").addEventListener("click", async () => {
-  const path = [...state.sel][0];
-  const f = state.files.find((x) => x.path === path);
-  if (!f) return;
-  if (f.kind === "gcode") {
-    toast(tr("prepare.already_sliced"), true);
+/* Files: "Prepare" adds the selected models to the plate and shows it.
+   G-code files are already sliced: they are left out. */
+async function prepareFiles(paths) {
+  const models = paths
+    .map((p) => state.files.find((x) => x.path === p))
+    .filter((f) => f && f.kind !== "gcode");
+  if (!models.length) {
+    if (paths.length) toast(tr("prepare.already_sliced"), true);
     return;
   }
   switchView("prepare");
-  await prepareAddFile(f.path);
-});
+  for (const f of models) await prepareAddFile(f.path);
+}
+
+$("act-slice").addEventListener("click", () => prepareFiles([...state.sel].slice(0, 1)));
 
 /* View keyboard: the menu bar does not have these commands, and ⌘Z/⇧⌘Z
    are intercepted here before the Edit menu (which keeps them in text

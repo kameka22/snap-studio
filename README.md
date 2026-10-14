@@ -143,7 +143,7 @@ add a language:
 | ⌥⌘1 … ⌥⌘4 | Library / AI / Files / Prepare |
 | ⌘O · ⌘R · ⌘F | open a folder · refresh · search |
 | ⌘1 / ⌘2 | thumbnails / list |
-| ⏎ · ⌘⏎ | open in the slicer · add to its plate |
+| ⏎ · double-click | prepare (add to the plate); G-code: toolpaths |
 | V | 3D view |
 | ⌘⌫ | move to Trash |
 | ⌘, | Settings |

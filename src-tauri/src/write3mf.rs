@@ -1,14 +1,7 @@
 //! Writing 3MF files.
 //!
-//! Two uses, deliberately distinct:
-//!
-//! * [`strip_project`] copies an existing 3MF while leaving out its project
-//!   settings. The geometry bytes are not touched: nothing to re-encode, no
-//!   precision lost. It is what lets a part be added to a slicer's plate
-//!   without overwriting its session, and it is also the workaround for
-//!   Snapmaker Orca's command line crashing on project files.
-//! * [`write_multipart`] / [`write_objects`] compose a new 3MF from parts, each
-//!   with its head, for a plate one arranges oneself or an AI result.
+//! [`write_multipart`] / [`write_objects`] compose a new 3MF from parts, each
+//! with its head, for a plate one arranges oneself or an AI result.
 //!
 //! Beware downstream: Orca's command line rearranges the plate on its own. For
 //! the placement written here to be the one printed, it must be called with
@@ -19,57 +12,8 @@ use crate::mesh::{Mat, Tri};
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufWriter, Read, Write};
+use std::io::{BufWriter, Write};
 use std::path::Path;
-
-/// Project entries a slicer reads as "this is a project, not a model":
-/// leaving them out turns the file into plain geometry.
-const PROJECT_ENTRIES: &[&str] = &[
-    "metadata/project_settings.config",
-    "metadata/slice_info.config",
-    "metadata/cut_information.xml",
-];
-
-fn is_project_entry(name: &str) -> bool {
-    let l = name.to_ascii_lowercase();
-    PROJECT_ENTRIES.contains(&l.as_str())
-        || l.starts_with("metadata/plate_")
-        || l.starts_with("metadata/top_")
-        || l.starts_with("metadata/pick_")
-}
-
-/// Copies `src` to `dst` without its project settings.
-///
-/// Returns the number of entries left out.
-pub fn strip_project(src: &Path, dst: &Path) -> Result<usize> {
-    let mut zin = crate::model3mf::open(src)?;
-    let out = File::create(dst)?;
-    let mut zout = zip::ZipWriter::new(BufWriter::new(out));
-    let mut dropped = 0;
-
-    let names: Vec<String> = zin.file_names().map(|s| s.to_string()).collect();
-    for name in names {
-        if is_project_entry(&name) {
-            dropped += 1;
-            continue;
-        }
-        let mut f = zin.by_name(&name)?;
-        if f.is_dir() {
-            continue;
-        }
-        let mut buf = Vec::with_capacity(f.size().min(256 << 20) as usize);
-        f.read_to_end(&mut buf)?;
-        drop(f);
-        zout.start_file(
-            &name,
-            zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Deflated),
-        )?;
-        zout.write_all(&buf)?;
-    }
-    zout.finish()?;
-    Ok(dropped)
-}
 
 /// An object to put on the plate.
 #[cfg(test)]
@@ -422,6 +366,7 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
 mod tests {
     use super::*;
     use crate::mesh;
+    use std::io::Read;
 
     fn cube(size: f32, color: [u8; 3]) -> Vec<Tri> {
         let s = size;
@@ -541,32 +486,5 @@ mod tests {
             size[0],
             size[1]
         );
-    }
-
-    /// The slimmed file must keep its geometry and lose its settings.
-    #[test]
-    fn strip_keeps_geometry() {
-        let Ok(src) = std::env::var("STRIP_SRC") else {
-            return;
-        };
-        let dst = std::env::temp_dir().join("snapstudio_stripped.3mf");
-        let dropped = strip_project(Path::new(&src), &dst).unwrap();
-        println!("entries left out: {dropped}");
-
-        let mut a = crate::model3mf::open(Path::new(&src)).unwrap();
-        let ma = mesh::load_mesh(&mut a, 2_000_000).unwrap();
-        let mut b = crate::model3mf::open(&dst).unwrap();
-        let mb = mesh::load_mesh(&mut b, 2_000_000).unwrap();
-        assert_eq!(ma.tris.len(), mb.tris.len(), "same number of triangles");
-        for k in 0..3 {
-            assert!((ma.min[k] - mb.min[k]).abs() < 1e-4);
-            assert!((ma.max[k] - mb.max[k]).abs() < 1e-4);
-        }
-        let names = crate::model3mf::entry_names(&b);
-        assert!(
-            !names.iter().any(|n| n.to_ascii_lowercase().contains("project_settings")),
-            "the project settings are gone"
-        );
-        println!("{} entries kept", names.len());
     }
 }

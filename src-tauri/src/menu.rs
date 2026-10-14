@@ -99,7 +99,7 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         &item("files:open", "menu.file.open", Some("CmdOrCtrl+O"))?,
         &item("files:refresh", "menu.file.refresh", Some("CmdOrCtrl+R"))?,
         &sep()?,
-        &item("file:plate", "menu.file.plate", Some("CmdOrCtrl+Enter"))?,
+        &item("file:prepare", "nav.prepare", None)?,
         &item("file:reveal", "menu.file.reveal", Some("CmdOrCtrl+Shift+R"))?,
         &item("file:delete", "menu.file.trash", Some("CmdOrCtrl+Backspace"))?,
         &sep()?,

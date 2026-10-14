@@ -244,6 +244,21 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .tb-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tb-btn:disabled { opacity: 0.45; pointer-events: none; }
 .tb-btn.on { color: var(--accent); }
+/* Icon and text side by side: actions that are not obvious from an icon. */
+.tb-btn.labeled { width: auto; gap: 5px; padding: 0 10px 0 8px; font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.tb-btn.labeled svg { width: 14px; height: 14px; flex: none; }
+/* Destructive actions read red, icon and text. */
+.tb-btn.danger { color: var(--danger); }
+/* Groups of related tools, apart from one another. */
+.tb-actions > .tb-group + .tb-group { padding-left: 10px; border-left: 1px solid var(--separator); }
+.tb-add { margin-left: 4px; }
+/* A narrow window: the plate's tools fold back to their icons (the title
+   keeps saying what they do), the add buttons keep their text. */
+.toolbar { container-type: inline-size; }
+@container (max-width: 1080px) {
+  .tb-actions[data-for="prepare"]:not(.tb-add) .tb-btn.labeled span { display: none; }
+  .tb-actions[data-for="prepare"]:not(.tb-add) .tb-btn.labeled { width: 28px; padding: 0; }
+}
 .toolbar input[type=range] { width: 80px; }
 .toolbar .seg { height: 28px; align-items: center; }
 
@@ -505,8 +520,8 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   word-break: break-word;
 }
 .det-sub { color: var(--text-secondary); font-size: 12px; }
-.det-actions { display: flex; gap: 6px; margin: 12px 0; }
-.det-actions .btn { flex: 1; justify-content: center; }
+.det-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.det-actions .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
 .info {
   margin: 0 0 12px;
   display: grid;
@@ -1492,7 +1507,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   border: 0;
   border-radius: 50%;
   background: var(--control-bg-hover);
-  color: var(--text-secondary);
+  color: var(--danger);
   font-size: 10px;
   opacity: 0;
   transition: opacity 120ms ease;

@@ -1,12 +1,6 @@
-//! Sending a file to an installed slicer.
-//!
-//! Two distinct gestures:
-//!
-//! * **Open** passes the file as is. For a project, the slicer will offer to
-//!   open it as a project and will replace its plate.
-//! * **Add to plate** passes a copy stripped of its project settings (see
-//!   [`crate::write3mf::strip_project`]): the slicer then imports it as plain
-//!   geometry, without touching the current session.
+//! Slicers installed on the machine. Snap Studio slices with its own engine;
+//! an installed Snapmaker Orca still lends its custom profiles, and serves
+//! as the engine in development builds.
 
 use anyhow::{anyhow, Result};
 use serde::Serialize;
@@ -255,115 +249,6 @@ fn appimage_resources(app: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Folder of stripped copies, emptied of the previous day's files.
-fn plate_dir() -> PathBuf {
-    let dir = dirs::cache_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("plate");
-    let _ = std::fs::create_dir_all(&dir);
-    if let Ok(rd) = std::fs::read_dir(&dir) {
-        let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(24 * 3600);
-        for e in rd.flatten() {
-            let old = e
-                .metadata()
-                .and_then(|m| m.modified())
-                .map(|t| t < cutoff)
-                .unwrap_or(false);
-            if old {
-                let _ = std::fs::remove_file(e.path());
-            }
-        }
-    }
-    dir
-}
-
-/// Prepares the file to pass on: as is, or stripped for an addition.
-fn prepare(path: &Path, add: bool) -> Result<PathBuf> {
-    if !add || crate::scan::kind_of(path) != Some("3mf") {
-        return Ok(path.to_path_buf());
-    }
-    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "object".into());
-    let dst = plate_dir().join(format!("{stem}.3mf"));
-    match crate::write3mf::strip_project(path, &dst) {
-        Ok(n) => {
-            log(&format!("{stem}: {n} project entries left out"));
-            Ok(dst)
-        }
-        // An unreadable file goes as is: the slicer will say better than us what
-        // is wrong.
-        Err(e) => {
-            log(&format!("could not strip ({e}), sending as is"));
-            Ok(path.to_path_buf())
-        }
-    }
-}
-
-fn log(msg: &str) {
-    eprintln!("[slicers] {msg}");
-}
-
-/// Opens the files in the requested slicer, or in the system's default
-/// application if none is given.
-pub fn open_with(paths: &[String], app: Option<&str>, add: bool) -> Result<()> {
-    if paths.is_empty() {
-        return Err(anyhow!(crate::t!("err.no_file")));
-    }
-    let mut files = Vec::new();
-    for p in paths {
-        files.push(prepare(Path::new(p), add)?);
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        let mut cmd = std::process::Command::new("open");
-        if let Some(app) = app.filter(|a| !a.is_empty()) {
-            if !Path::new(app).exists() {
-                return Err(anyhow!(crate::t!("err.no_app", app = app)));
-            }
-            cmd.arg("-a").arg(app);
-        }
-        // A single call for all files: macOS passes them together to the running
-        // instance, which puts them on the same plate.
-        cmd.args(&files);
-        let status = cmd.status()?;
-        if !status.success() {
-            return Err(anyhow!(crate::t!("err.open_failed", code = format!("{:?}", status.code()))));
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        match app.filter(|a| !a.is_empty()) {
-            Some(app) => {
-                let exe = executable(Path::new(app))?;
-                let mut cmd = std::process::Command::new(exe);
-                crate::util::no_window(&mut cmd);
-                cmd.args(&files).spawn()?;
-            }
-            // System default application, file by file.
-            None => {
-                for f in &files {
-                    #[cfg(windows)]
-                    let mut cmd = {
-                        let mut c = std::process::Command::new("cmd");
-                        c.args(["/C", "start", ""]).arg(f);
-                        c
-                    };
-                    #[cfg(not(windows))]
-                    let mut cmd = {
-                        let mut c = std::process::Command::new("xdg-open");
-                        c.arg(f);
-                        c
-                    };
-                    crate::util::no_window(&mut cmd);
-                    cmd.spawn()?;
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -378,27 +263,5 @@ mod tests {
         // Nothing installed on a build machine: only check consistency, not
         // presence.
         assert!(l.iter().all(|s| KNOWN.iter().any(|k| k.name == s.name)));
-    }
-
-    /// A project must produce a stripped copy in the working folder.
-    #[test]
-    fn prepare_strips_a_project() {
-        let Ok(src) = std::env::var("PREPARE_SRC") else {
-            return;
-        };
-        let out = prepare(Path::new(&src), true).unwrap();
-        assert_ne!(out, Path::new(&src), "a copy was made");
-        assert!(out.starts_with(plate_dir()), "put in the working folder");
-        let z = crate::model3mf::open(&out).unwrap();
-        let names = crate::model3mf::entry_names(&z);
-        assert!(!names.iter().any(|n| n.to_ascii_lowercase().contains("project_settings")));
-        assert!(names.iter().any(|n| n == "3D/3dmodel.model"), "the geometry is there");
-        println!("{} → {} ({} entries)", src, out.display(), names.len());
-    }
-
-    #[test]
-    fn prepare_passes_gcode_through() {
-        let p = Path::new("/tmp/inexistant.gcode");
-        assert_eq!(prepare(p, true).unwrap(), p, "a G-code is not stripped");
     }
 }

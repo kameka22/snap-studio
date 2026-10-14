@@ -309,13 +309,18 @@ function pjRenderDetail({ job, live, active }) {
     // Launched, but the background tracking has not yet seen the printer
     // start (or it no longer answers).
     kicker = `${esc(printerName)} · ${esc(tr(live?.status.online === false ? "prints.unreachable" : "printers.cam.starting"))}`;
-    actions = live?.status.online === false ? `<button class="btn" data-act="remove">${esc(tr("prints.remove_list"))}</button>` : "";
+    actions = live?.status.online === false ? `<button class="btn danger" data-act="remove">${esc(tr("prints.remove_list"))}</button>` : "";
   } else {
     kicker = `${esc(printerName)}${job.finished ? ` · ${fmtDate(job.finished)}` : ""}`;
     actions = `<button class="btn primary" data-act="requeue">${esc(tr("prints.requeue"))}</button>
-      <button class="btn" data-act="remove">${esc(tr("prints.remove_history"))}</button>`;
+      <button class="btn danger" data-act="remove">${esc(tr("prints.remove_history"))}</button>`;
   }
-  if (job?.file) actions += `<button class="btn" data-act="paths">${esc(tr("files.view_paths"))}</button>`;
+  // Before the destructive button, which always comes last.
+  if (job?.file) {
+    const paths = `<button class="btn" data-act="paths">${esc(tr("files.view_paths"))}</button>`;
+    const i = actions.lastIndexOf('<button class="btn danger"');
+    actions = i < 0 ? actions + paths : actions.slice(0, i) + paths + actions.slice(i);
+  }
 
   const thumb = pjThumb(job, 640);
   box.innerHTML = `

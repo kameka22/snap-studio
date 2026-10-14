@@ -29,7 +29,6 @@ const DEFAULTS = {
   recursive: false,
   detailsWidth: 340,
   invertWheel: false,
-  slicer: null,
   wheelAction: "zoom",
   wheelSpeed: 1,
   dir: null,
@@ -51,10 +50,10 @@ const state = {
 };
 
 function save() {
-  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, slicer, dir, recents } = state;
+  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents } = state;
   localStorage.setItem(
     "snapstudio",
-    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, slicer, dir, recents })
+    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents })
   );
 }
 
@@ -677,6 +676,8 @@ async function updateDetails() {
     const files = state.files.filter((f) => state.sel.has(f.path));
     $("multi-title").textContent = tr("files.selected", { n });
     $("multi-size").textContent = tr("files.total", { size: fmtSize(files.reduce((s, f) => s + f.size, 0)) });
+    $("multi-prepare").classList.toggle("hidden", files.every((f) => f.kind === "gcode"));
+    $("multi-delete").textContent = tr("files.trash_many", { n });
     return;
   }
   if (n !== 1) return;
@@ -741,9 +742,8 @@ async function updateDetails() {
   // Geometry analysis only applies to meshes.
   const isGcode = f.kind === "gcode";
   $("act-analyze").classList.toggle("hidden", !!a || isGcode);
-  $("act-plate").classList.toggle("hidden", isGcode);
-  $("act-slice").parentElement.classList.toggle("hidden", isGcode);
-  $("det-ia").classList.toggle("hidden", isGcode);
+  // A G-code is already sliced: its own action is the toolpath view.
+  $("det-model").classList.toggle("hidden", isGcode);
   $("det-3d").querySelector("[data-i18n]").textContent = tr(isGcode ? "viewer.color.paths" : "files.view3d");
   $("det-desc").textContent = m.description || "";
 }
@@ -811,8 +811,7 @@ function openMenu(x, y, path) {
   const f0 = state.files.find((f) => f.path === path);
   const id = (what) => `ctxfile:${what}:${path}`;
   nativeMenu([
-    { id: id("open"), label: many ? tr("files.open_many", { n: state.sel.size }) : tr("common.open") },
-    ...(f0?.kind !== "gcode" ? [{ id: id("plate"), label: tr("menu.file.plate") }] : []),
+    ...(f0?.kind !== "gcode" ? [{ id: id("prepare"), label: tr("nav.prepare") }] : []),
     ...(many ? [] : [
       {},
       { id: id("view3d"), label: f0?.kind === "gcode" ? tr("files.view_paths") : tr("files.view3d") },
@@ -825,8 +824,7 @@ function openMenu(x, y, path) {
 }
 
 function fileAction(what, path) {
-  if (what === "open") sendToSlicer(false);
-  if (what === "plate") sendToSlicer(true);
+  if (what === "prepare") prepareFiles([...state.sel]);
   if (what === "view3d") open3d(path);
   if (what === "reveal") invoke("reveal", { path }).catch((e) => toast(String(e), true));
   if (what === "copy") copy(path);
@@ -894,7 +892,7 @@ $("items").addEventListener("mousedown", (e) => {
 
 $("items").addEventListener("dblclick", (e) => {
   const node = e.target.closest("[data-path]");
-  if (node) sendToSlicer(false);
+  if (node) openFile(node.dataset.path);
 });
 
 $("items").addEventListener("contextmenu", (e) => {
@@ -938,8 +936,9 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); askDelete(); return; }
-  if (e.key === "Enter") {
-    sendToSlicer(mod);   // ⌘⏎ adds to the plate
+  if (e.key === "Enter" && !mod) {
+    const p = [...state.sel][0];
+    if (p) openFile(p);
     return;
   }
   const cols = columns();
@@ -967,14 +966,7 @@ $("btn-sort").addEventListener("click", (e) =>
 );
 onMenu("sort", (k) => { state.sort = k; save(); applyView(); syncHead(); });
 onMenu("order", (o) => { state.asc = o === "asc"; save(); applyView(); syncHead(); });
-$("btn-add").addEventListener("click", (e) =>
-  menuUnder(e.currentTarget, [
-    { id: "files:open", label: tr("menu.file.open"), accel: "CmdOrCtrl+O" },
-    { id: "files:refresh", label: tr("menu.file.refresh"), accel: "CmdOrCtrl+R", enabled: !!state.dir },
-    {},
-    { id: "files:reveal", label: tr("menu.file.reveal"), enabled: !!state.dir },
-  ])
-);
+$("btn-add").addEventListener("click", pickFolder);
 onMenu("nav", (v) => switchView(v));
 onMenu("view", (v) => { switchView("files"); setView(v); });
 onMenu("edit", (what) => {
@@ -996,19 +988,15 @@ $("btn-open2").addEventListener("click", pickFolder);
 $("btn-refresh").addEventListener("click", refresh);
 $("view-grid").addEventListener("click", () => setView("grid"));
 $("view-list").addEventListener("click", () => setView("list"));
-function sendToSlicer(add) {
-  const paths = [...state.sel];
-  if (!paths.length) return;
-  invoke("open_in_slicer", { paths, app: state.slicer || null, add })
-    .then(() => {
-      const n = paths.length;
-      if (add) toast(tr("files.added_to_plate", { n }));
-    })
-    .catch((e) => toast(String(e), true));
+/* Double-click and ⏎: a model goes to the plate (with the rest of the
+   selection), a G-code shows its toolpaths. */
+function openFile(path) {
+  const f = state.files.find((x) => x.path === path);
+  if (!f) return;
+  if (f.kind === "gcode") open3d(path);
+  else prepareFiles([...state.sel]);
 }
 
-$("act-open").addEventListener("click", () => sendToSlicer(false));
-$("act-plate").addEventListener("click", () => sendToSlicer(true));
 $("act-reveal").addEventListener("click", () => {
   const p = [...state.sel][0];
   if (p) invoke("reveal", { path: p }).catch((e) => toast(String(e), true));
@@ -1029,6 +1017,7 @@ function open3d(path) {
   if (f) openViewer(f.path, f.name, f.kind);
 }
 $("multi-delete").addEventListener("click", askDelete);
+$("multi-prepare").addEventListener("click", () => prepareFiles([...state.sel]));
 $("act-analyze").addEventListener("click", analyzeSelected);
 $("selbar-all").addEventListener("click", selectAll);
 $("selbar-none").addEventListener("click", () => setSel([]));
@@ -1074,26 +1063,6 @@ $("set-wheel-speed").addEventListener("input", () => {
   $("set-wheel-speed-val").textContent = fmtDec(state.wheelSpeed, 1) + "×";
   save();
 });
-$("opt-slicer").addEventListener("change", () => {
-  state.slicer = $("opt-slicer").value || null;
-  save();
-});
-
-async function fillSlicers() {
-  const list = await invoke("slicers_list");
-  const sel = $("opt-slicer");
-  sel.innerHTML =
-    `<option value="">${esc(tr("settings.slicer.default"))}</option>` +
-    list.map((s) => `<option value="${esc(s.path)}">${esc(s.name)}</option>`).join("");
-  // First launch: keep the best-ranked slicer, Snapmaker Orca heading the
-  // list of known applications.
-  if (state.slicer === null && list.length) {
-    state.slicer = list[0].path;
-    save();
-  }
-  sel.value = state.slicer || "";
-}
-
 $("opt-recursive").addEventListener("change", () => {
   state.recursive = $("opt-recursive").checked;
   save();
@@ -1224,7 +1193,6 @@ async function boot() {
   setView(state.view);
   syncHead();
 
-  await fillSlicers();
   await fillPlaces();
 
   const arg = await invoke("initial_dir");
@@ -1242,7 +1210,6 @@ window.addEventListener("langchange", () => {
   updateDetails();
   updateSelBar();
   updateStatus();
-  fillSlicers();
   fillPlaces();
   refreshCacheSize();
   $("set-wheel-speed-val").textContent = fmtDec(state.wheelSpeed, 1) + "×";

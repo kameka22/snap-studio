@@ -146,7 +146,7 @@ Rust (menus, messages). Pour ajouter une langue :
 | ⌥⌘1 … ⌥⌘4 | Bibliothèque / IA / Fichiers / Préparer |
 | ⌘O · ⌘R · ⌘F | ouvrir un dossier · actualiser · rechercher |
 | ⌘1 / ⌘2 | vignettes / liste |
-| ⏎ · ⌘⏎ | ouvrir dans le trancheur · ajouter à son plateau |
+| ⏎ · double-clic | préparer (ajouter au plateau) ; G-code : trajectoires |
 | V | vue 3D |
 | ⌘⌫ | mettre à la corbeille |
 | ⌘, | Réglages |
