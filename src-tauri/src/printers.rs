@@ -1,8 +1,8 @@
-//! Gestion des imprimantes et lecture de leur statut.
+//! Printer management and status reading.
 //!
-//! La Snapmaker U1 embarque Klipper + Moonraker : le statut se lit en HTTP sur
-//! l'API Moonraker, sans cloud ni authentification. Les mêmes requêtes
-//! fonctionnent sur toute imprimante Klipper (Voron, Prusa Core One, etc.).
+//! The Snapmaker U1 embeds Klipper + Moonraker: status is read over HTTP from
+//! the Moonraker API, without cloud nor authentication. The same requests work
+//! on any Klipper printer (Voron, Prusa Core One, etc.).
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -53,7 +53,7 @@ pub fn new_id() -> String {
     format!("{:x}", crate::util::fnv1a(&[&n.to_le_bytes()]))
 }
 
-/* ------------------------------------------------------------- statut */
+/* ------------------------------------------------------------- status */
 
 #[derive(Serialize, Default, Clone)]
 pub struct Temp {
@@ -61,21 +61,21 @@ pub struct Temp {
     pub target: f32,
 }
 
-/// Une bobine chargée dans un des emplacements de la machine.
+/// A spool loaded in one of the machine's slots.
 #[derive(Serialize, Clone, Default)]
 pub struct Filament {
     pub index: u8,
     pub kind: String,
     pub sub_type: String,
-    /// Couleur au format "#rrggbb".
+    /// Color in "#rrggbb" format.
     pub color: Option<String>,
     pub vendor: String,
     pub present: bool,
-    /// Emplacement employé par l'impression en cours.
+    /// Slot used by the current print.
     pub used: bool,
 }
 
-/// La U1 possède quatre têtes (T0 à T3) : `extruder`, `extruder1`, `extruder2`, `extruder3`.
+/// The U1 has four heads (T0 to T3): `extruder`, `extruder1`, `extruder2`, `extruder3`.
 #[derive(Serialize, Clone)]
 pub struct Nozzle {
     pub index: u8,
@@ -93,7 +93,7 @@ pub struct Status {
     pub hostname: Option<String>,
     pub klipper: Option<String>,
     pub job: Option<String>,
-    /// 0.0 à 1.0
+    /// 0.0 to 1.0
     pub progress: Option<f32>,
     pub elapsed_s: Option<f32>,
     pub remaining_s: Option<f32>,
@@ -106,8 +106,8 @@ pub struct Status {
     pub speed_factor: Option<f32>,
     pub layer: Option<(u32, u32)>,
     pub error: Option<String>,
-    /// Objets d'impression illisibles cette fois-ci (délai dépassé…) : l'état
-    /// n'est pas celui de l'impression, il ne prouve pas qu'elle est finie.
+    /// Print objects unreadable this time (timeout…): the state is not the
+    /// print's, it does not prove the print is over.
     #[serde(skip)]
     pub partial: bool,
 }
@@ -153,9 +153,9 @@ fn temp_of(v: Option<&Value>) -> Option<Temp> {
     })
 }
 
-// ------------------------------------------------------------ envoi d'une impression
+// ------------------------------------------------------------ sending a print
 
-/// Client sans délai global : un téléversement peut durer plusieurs minutes.
+/// Client without a global timeout: an upload can last several minutes.
 fn long_client() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| {
@@ -167,19 +167,19 @@ fn long_client() -> &'static reqwest::Client {
     })
 }
 
-/// Options de lancement proposées par Snapmaker Orca pour la U1.
+/// Launch options offered by Snapmaker Orca for the U1.
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Debug)]
 pub struct StartOptions {
-    /// Nivellement automatique du plateau.
+    /// Automatic bed leveling.
     pub bed_leveling: bool,
-    /// Calibration du débit d'extrusion.
+    /// Extrusion flow calibration.
     pub flow_calibration: bool,
-    /// Caméra timelapse.
+    /// Timelapse camera.
     pub timelapse: bool,
 }
 
 impl StartOptions {
-    /// Clés de `print_task_config`, dans l'ordre où Snapmaker Orca les envoie.
+    /// `print_task_config` keys, in the order Snapmaker Orca sends them.
     fn entries(&self) -> [(&'static str, bool); 3] {
         [
             ("auto_bed_leveling", self.bed_leveling),
@@ -189,14 +189,14 @@ impl StartOptions {
     }
 }
 
-/// G-code de préparation envoyé avant le lancement, comme le fait Snapmaker
-/// Orca : correspondance outil → tête, têtes employées, options.
+/// Preparation G-code sent before the launch, as Snapmaker Orca does: tool
+/// → head mapping, heads used, options.
 ///
-/// Firmware ≥ 1.3.0 : une macro `SET_PRINT_PREFERENCE` par option. Avant :
-/// une seule `SET_PRINT_PREFERENCES` (`legacy`).
+/// Firmware ≥ 1.3.0: one `SET_PRINT_PREFERENCE` macro per option. Before: a
+/// single `SET_PRINT_PREFERENCES` (`legacy`).
 pub fn preprint_script(opts: &StartOptions, tools: &[u8], legacy: bool) -> String {
     let mut lines: Vec<String> = Vec::new();
-    // Les outils du G-code sont déjà les têtes : correspondance identité.
+    // The G-code tools are already the heads: identity mapping.
     for t in tools {
         lines.push(format!("SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER={t} MAP_EXTRUDER={t}"));
     }
@@ -219,7 +219,7 @@ pub fn preprint_script(opts: &StartOptions, tools: &[u8], legacy: bool) -> Strin
     lines.join("\n")
 }
 
-/// Exécute un script G-code ; l'erreur rapporte la réponse de Klipper.
+/// Runs a G-code script; the error reports Klipper's answer.
 pub async fn gcode_script(host: &str, port: u16, script: &str) -> Result<()> {
     let r = long_client()
         .post(format!("{}/printer/gcode/script", base(host, port)))
@@ -235,41 +235,41 @@ pub async fn gcode_script(host: &str, port: u16, script: &str) -> Result<()> {
     let msg = body
         .pointer("/error/message")
         .and_then(|v| v.as_str())
-        .unwrap_or("réponse inattendue");
-    Err(anyhow!("HTTP {code} : {msg}"))
+        .unwrap_or("unexpected response");
+    Err(anyhow!("HTTP {code}: {msg}"))
 }
 
-/// Vrai quand Klipper ne connaît pas la commande (firmware plus ancien).
+/// True when Klipper does not know the command (older firmware).
 pub fn is_unknown_command(err: &anyhow::Error) -> bool {
     let m = err.to_string().to_ascii_lowercase();
     m.contains("unknown command")
 }
 
-/// Pause, reprise ou annulation de l'impression en cours.
+/// Pause, resume or cancel the running print.
 pub async fn print_action(host: &str, port: u16, action: &str) -> Result<()> {
     let action = match action {
         "pause" | "resume" | "cancel" => action,
-        _ => return Err(anyhow!("action inconnue : {action}")),
+        _ => return Err(anyhow!("unknown action: {action}")),
     };
     let r = client()
         .post(format!("{}/printer/print/{action}", base(host, port)))
         .send()
         .await?;
     if !r.status().is_success() {
-        return Err(anyhow!("l'imprimante refuse : {}", r.status()));
+        return Err(anyhow!(crate::t!("err.printer_refuses", status = r.status())));
     }
     Ok(())
 }
 
-/// `print_task_config` tel que l'imprimante le voit, pour vérifier les options.
+/// `print_task_config` as the printer sees it, to check the options.
 pub async fn task_config(host: &str, port: u16) -> Option<Value> {
     let url = format!("{}/printer/objects/query?print_task_config", base(host, port));
     let v = get_json(&url).await.ok()?;
     v.pointer("/result/status/print_task_config").cloned()
 }
 
-/// Options que l'imprimante n'a pas prises en compte (vide si tout va bien,
-/// ou si elle ne les expose pas).
+/// Options the printer did not take into account (empty when all is well,
+/// or when it does not expose them).
 pub fn unapplied_options(cfg: &Value, opts: &StartOptions) -> Vec<&'static str> {
     opts.entries()
         .iter()
@@ -283,8 +283,8 @@ pub fn unapplied_options(cfg: &Value, opts: &StartOptions) -> Vec<&'static str> 
         .collect()
 }
 
-/// Téléverse un G-code dans `gcodes/` et, si demandé, lance l'impression.
-/// `progress(envoyé, total)` suit les octets au fil de l'envoi.
+/// Uploads a G-code into `gcodes/` and, if asked, starts the print.
+/// `progress(sent, total)` follows the bytes as they go.
 pub async fn upload(
     host: &str,
     port: u16,
@@ -317,17 +317,17 @@ pub async fn upload(
     if !r.status().is_success() {
         let code = r.status().as_u16();
         let body: Value = r.json().await.unwrap_or(Value::Null);
-        let msg = body.pointer("/error/message").and_then(|v| v.as_str()).unwrap_or("refusé");
-        return Err(anyhow!("téléversement refusé (HTTP {code}) : {msg}"));
+        let msg = body.pointer("/error/message").and_then(|v| v.as_str()).unwrap_or("refused");
+        return Err(anyhow!(crate::t!("err.upload_refused", code = code, msg = msg)));
     }
     Ok(())
 }
 
-// ------------------------------------------------------------ caméra
+// ------------------------------------------------------------ camera
 
-/// Appelle une méthode JSON-RPC sur le websocket de Moonraker et attend sa
-/// réponse. Les méthodes propres à Snapmaker (`camera.*`) ne sont pas
-/// relayées en HTTP par le nginx de la U1 : le websocket est la seule voie.
+/// Calls a JSON-RPC method on Moonraker's websocket and waits for its answer.
+/// Snapmaker's own methods (`camera.*`) are not relayed over HTTP by the U1's
+/// nginx: the websocket is the only way.
 pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Result<Value> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
@@ -345,7 +345,7 @@ pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Resu
             let Message::Text(t) = msg? else { continue };
             let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
             if v.get("id").and_then(|i| i.as_i64()) != Some(1) {
-                continue; // notifications de statut, sans rapport
+                continue; // status notifications, unrelated
             }
             let _ = ws.close(None).await;
             if let Some(e) = v.get("error") {
@@ -354,20 +354,20 @@ pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Resu
             }
             return Ok(v.get("result").cloned().unwrap_or(Value::Null));
         }
-        Err(anyhow!("{method} : connexion fermée sans réponse"))
+        Err(anyhow!(crate::t!("err.ws_closed", method = method)))
     };
     tokio::time::timeout(Duration::from_secs(8), run)
         .await
-        .map_err(|_| anyhow!("{method} : pas de réponse"))?
+        .map_err(|_| anyhow!(crate::t!("err.ws_no_answer", method = method)))?
 }
 
-/// Réveille la caméra de la U1 : elle publie alors une image renouvelée en
-/// continu, et s'éteint d'elle-même si on ne la relance pas (environ 10 s).
+/// Wakes the U1's camera: it then publishes a continuously renewed image,
+/// and switches itself off unless restarted (about 10 s).
 pub async fn camera_start(host: &str, port: u16) -> Result<()> {
     let r = ws_call(host, port, "camera.start_monitor", serde_json::json!({ "domain": "lan", "interval": 0 })).await?;
     match r.get("state").and_then(|s| s.as_str()) {
         Some("success") | None => Ok(()),
-        Some(other) => Err(anyhow!("caméra : {other}")),
+        Some(other) => Err(anyhow!(crate::t!("err.camera", err = other))),
     }
 }
 
@@ -377,7 +377,7 @@ pub async fn camera_stop(host: &str, port: u16) -> Result<()> {
         .map(|_| ())
 }
 
-/// Dernière image de la caméra (JPEG), comme la lit Snapmaker Orca.
+/// Latest camera image (JPEG), as Snapmaker Orca reads it.
 pub async fn camera_frame(host: &str, port: u16) -> Result<Vec<u8>> {
     let url = format!("{}/server/files/camera/monitor.jpg", base(host, port));
     let r = client().get(url).send().await?;
@@ -387,7 +387,7 @@ pub async fn camera_frame(host: &str, port: u16) -> Result<Vec<u8>> {
     Ok(r.bytes().await?.to_vec())
 }
 
-/// Objets Klipper interrogés à chaque rafraîchissement.
+/// Klipper objects queried at each refresh.
 const OBJECTS: &str = "print_task_config&print_stats&display_status&virtual_sdcard&extruder&extruder1&extruder2&extruder3&heater_bed&toolhead&gcode_move&fan";
 
 pub async fn status(host: &str, port: u16) -> Status {
@@ -397,7 +397,7 @@ pub async fn status(host: &str, port: u16) -> Status {
         ..Default::default()
     };
 
-    // 1. Moonraker est-il joignable et Klipper prêt ?
+    // 1. Is Moonraker reachable and Klipper ready?
     match get_json(&format!("{b}/server/info")).await {
         Ok(v) => {
             st.online = true;
@@ -405,7 +405,7 @@ pub async fn status(host: &str, port: u16) -> Status {
             st.klipper = r.get("klippy_state").and_then(|s| s.as_str()).map(String::from);
             if r.get("klippy_connected").and_then(|b| b.as_bool()) == Some(false) {
                 st.state = "error".into();
-                st.message = Some("Klipper n'est pas connecté à Moonraker".into());
+                st.message = Some(crate::t!("err.klipper_not_connected"));
             }
         }
         Err(e) => {
@@ -425,7 +425,7 @@ pub async fn status(host: &str, port: u16) -> Status {
         }
     }
 
-    // 2. Objets d'impression.
+    // 2. Print objects.
     let Ok(v) = get_json(&format!("{b}/printer/objects/query?{OBJECTS}")).await else {
         if st.state == "offline" {
             st.state = "standby".into();
@@ -437,7 +437,7 @@ pub async fn status(host: &str, port: u16) -> Status {
     st
 }
 
-/// Traduit la réponse de `/printer/objects/query` en statut affichable.
+/// Turns the `/printer/objects/query` answer into a displayable status.
 pub fn apply_objects(v: &Value, st: &mut Status) {
     let s = v
         .get("result")
@@ -447,7 +447,7 @@ pub fn apply_objects(v: &Value, st: &mut Status) {
     apply_status(&s, st);
 }
 
-/// Même traitement à partir de l'objet `status` seul (flux WebSocket).
+/// Same processing from the `status` object alone (WebSocket feed).
 pub fn apply_status(s: &Value, st: &mut Status) {
     if let Some(ps) = s.get("print_stats") {
         if let Some(state) = ps.get("state").and_then(|x| x.as_str()) {
@@ -472,21 +472,21 @@ pub fn apply_status(s: &Value, st: &mut Status) {
         }
     }
 
-    // Progression : display_status si présent, sinon avancement dans le fichier.
+    // Progress: display_status if present, otherwise progress in the file.
     st.progress = s
         .get("display_status")
         .and_then(|d| d.get("progress"))
         .and_then(f32_of)
         .or_else(|| s.get("virtual_sdcard").and_then(|d| d.get("progress")).and_then(f32_of));
 
-    // Estimation du temps restant à partir de la progression (Moonraker ne la fournit pas).
+    // Remaining time estimated from the progress (Moonraker does not give it).
     if let (Some(p), Some(e)) = (st.progress, st.elapsed_s) {
         if p > 0.02 && p < 1.0 && st.state == "printing" {
             st.remaining_s = Some(e * (1.0 - p) / p);
         }
     }
 
-    // Tête active : `toolhead.extruder` donne son nom ("extruder1" par exemple).
+    // Active head: `toolhead.extruder` gives its name ("extruder1" for instance).
     let active = s
         .get("toolhead")
         .and_then(|t| t.get("extruder"))
@@ -522,12 +522,12 @@ pub struct Probe {
     pub detail: String,
     pub hostname: Option<String>,
     pub api: Option<String>,
-    /// Port qui a répondu : Moonraker écoute en 7125 et derrière nginx en 80.
+    /// Port that answered: Moonraker listens on 7125 and behind nginx on 80.
     pub port: u16,
 }
 
-/// Vérifie une adresse saisie par l'utilisateur avant de l'enregistrer.
-/// Essaie le port indiqué, puis l'autre port habituel de Moonraker.
+/// Checks an address typed by the user before saving it. Tries the given
+/// port, then Moonraker's other usual port.
 pub async fn probe(host: &str, port: u16) -> Probe {
     let first = probe_one(host, port).await;
     if first.ok {
@@ -550,10 +550,14 @@ async fn probe_one(host: &str, port: u16) -> Probe {
             let state = r.get("state").and_then(|s| s.as_str()).unwrap_or("?");
             return Probe {
                 ok: true,
-                detail: format!(
-                    "Moonraker répond sur le port {port} — Klipper « {}»{}",
-                    state,
-                    hostname.as_deref().map(|h| format!(", hôte {h}")).unwrap_or_default()
+                detail: crate::t!(
+                    "probe.moonraker",
+                    port = port,
+                    state = state,
+                    host = hostname
+                        .as_deref()
+                        .map(|h| crate::t!("probe.host", host = h))
+                        .unwrap_or_default()
                 ),
                 hostname,
                 api: Some("moonraker".into()),
@@ -561,13 +565,18 @@ async fn probe_one(host: &str, port: u16) -> Probe {
             };
         }
         Err(e1) => {
-            // Repli : identification compatible OctoPrint.
+            // Fallback: OctoPrint-compatible identification.
             match get_json(&format!("{b}/api/version")).await {
                 Ok(v) => Probe {
                     ok: true,
-                    detail: format!(
-                        "Réponse de {} sur le port {port}",
-                        v.get("text").and_then(|s| s.as_str()).unwrap_or("l'imprimante")
+                    detail: crate::t!(
+                        "probe.octoprint",
+                        port = port,
+                        name = v
+                            .get("text")
+                            .and_then(|s| s.as_str())
+                            .map(String::from)
+                            .unwrap_or_else(|| crate::t!("probe.the_printer"))
                     ),
                     hostname: None,
                     api: Some("octoprint".into()),
@@ -575,7 +584,7 @@ async fn probe_one(host: &str, port: u16) -> Probe {
                 },
                 Err(e2) => Probe {
                     ok: false,
-                    detail: format!("Aucune réponse sur le port {port} ({e1} ; {e2})"),
+                    detail: crate::t!("probe.none", port = port, e1 = e1, e2 = e2),
                     hostname: None,
                     api: None,
                     port,
@@ -589,7 +598,7 @@ async fn probe_one(host: &str, port: u16) -> Probe {
 mod tests {
     use super::*;
 
-    /// Réponse type d'une Snapmaker U1 (Klipper + Moonraker) en cours d'impression.
+    /// Typical answer of a Snapmaker U1 (Klipper + Moonraker) while printing.
     const SAMPLE: &str = r#"{"result":{"eventtime":4210.1,"status":{
       "print_stats":{"filename":"Frame_200x200_PLA_1h28m.gcode","state":"printing",
         "print_duration":1832.4,"total_duration":1901.0,"filament_used":4218.7,"message":"",
@@ -615,11 +624,11 @@ mod tests {
         assert_eq!(st.job.as_deref(), Some("Frame_200x200_PLA_1h28m.gcode"));
         assert_eq!(st.layer, Some((42, 118)));
         assert!((st.progress.unwrap() - 0.3612).abs() < 1e-4);
-        // Temps restant déduit de la progression : 1832 s pour 36 % => ~3241 s.
+        // Remaining time from the progress: 1832 s for 36 % => ~3241 s.
         let rem = st.remaining_s.unwrap();
         assert!((rem - 3240.0).abs() < 60.0, "restant = {rem}");
 
-        // Quatre têtes, la T1 active.
+        // Four heads, T1 active.
         assert_eq!(st.nozzles.len(), 4);
         assert_eq!(st.nozzles[1].index, 1);
         assert!(st.nozzles[1].active);
@@ -631,13 +640,13 @@ mod tests {
         assert!((st.speed_factor.unwrap() - 1.15).abs() < 0.01);
     }
 
-    /// Caméra d'une vraie U1 : `CAMERA_HOST=192.168.x.x cargo test camera_on_real_printer`.
+    /// Camera of a real U1: `CAMERA_HOST=192.168.x.x cargo test camera_on_real_printer`.
     #[test]
     fn camera_on_real_printer() {
         let Ok(host) = std::env::var("CAMERA_HOST") else { return };
         let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         rt.block_on(async {
-            camera_start(&host, 80).await.expect("démarrage");
+            camera_start(&host, 80).await.expect("start");
             tokio::time::sleep(Duration::from_millis(1500)).await;
             let mut sizes = Vec::new();
             for _ in 0..3 {
@@ -647,11 +656,11 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(300)).await;
             }
             println!("images : {sizes:?} octets");
-            camera_stop(&host, 80).await.expect("arrêt");
+            camera_stop(&host, 80).await.expect("stop");
         });
     }
 
-    /// Préparation d'impression, telle que Snapmaker Orca l'envoie.
+    /// Print preparation, as Snapmaker Orca sends it.
     #[test]
     fn preprint_script_matches_snapmaker_orca() {
         let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: false };
@@ -676,10 +685,10 @@ mod tests {
         let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: true };
         let cfg = serde_json::json!({"auto_bed_leveling": true, "flow_calibrate": false, "time_lapse_camera": false});
         assert_eq!(unapplied_options(&cfg, &o), vec!["time_lapse_camera"]);
-        assert!(unapplied_options(&serde_json::json!({}), &o).is_empty(), "rien d'exposé : rien à signaler");
+        assert!(unapplied_options(&serde_json::json!({}), &o).is_empty(), "nothing exposed: nothing to report");
     }
 
-    /// Bobines chargées, au format réellement émis par la U1.
+    /// Loaded spools, in the format the U1 actually emits.
     #[test]
     fn decode_loaded_filaments() {
         let v: Value = serde_json::from_str(
@@ -702,12 +711,12 @@ mod tests {
         assert_eq!(st.filaments[2].color.as_deref(), Some("#003776"));
         assert_eq!(st.filaments[3].kind, "PETG");
         assert!(st.filaments[1].present);
-        assert!(!st.filaments[3].present, "T3 est signalé vide");
-        assert!(st.filaments[2].used, "T2 est utilisé par le travail");
+        assert!(!st.filaments[3].present, "T3 is reported empty");
+        assert!(st.filaments[2].used, "T2 is used by the job");
         assert!(!st.filaments[0].used);
     }
 
-    /// Repli quand seul l'entier ARGB est fourni.
+    /// Fallback when only the ARGB integer is given.
     #[test]
     fn decode_filament_color_from_int() {
         let v: Value = serde_json::from_str(
@@ -718,10 +727,10 @@ mod tests {
         let mut st = Status::default();
         apply_objects(&v, &mut st);
         assert_eq!(st.filaments[0].color.as_deref(), Some("#003776"));
-        assert!(st.filaments[0].present, "type renseigné => emplacement occupé");
+        assert!(st.filaments[0].present, "type given => slot occupied");
     }
 
-    /// Une imprimante Klipper simple (une seule buse, pas de compteur de couches).
+    /// A plain Klipper printer (single nozzle, no layer counter).
     #[test]
     fn decode_minimal_klipper() {
         let v: Value = serde_json::from_str(
@@ -738,7 +747,7 @@ mod tests {
         assert!(st.nozzles[0].active);
         assert!(st.progress.is_none());
         assert!(st.remaining_s.is_none());
-        assert!(st.filaments.is_empty(), "pas de print_task_config sur une Klipper ordinaire");
+        assert!(st.filaments.is_empty(), "no print_task_config on an ordinary Klipper");
     }
 }
 
@@ -750,7 +759,7 @@ fn str_at(v: Option<&Value>, i: usize) -> String {
         .to_string()
 }
 
-/// Couleur d'un emplacement : chaîne "RRGGBBAA" ou entier ARGB selon le micrologiciel.
+/// Color of a slot: "RRGGBBAA" string or ARGB integer depending on firmware.
 fn slot_color(cfg: &Value, i: usize) -> Option<String> {
     if let Some(s) = cfg
         .get("filament_color_rgba")
@@ -766,8 +775,8 @@ fn slot_color(cfg: &Value, i: usize) -> Option<String> {
     Some(format!("#{:06x}", n & 0x00ff_ffff))
 }
 
-/// `print_task_config` : objet Klipper propre à la Snapmaker U1 décrivant les
-/// bobines chargées, un tableau de quatre valeurs par champ.
+/// `print_task_config`: Klipper object specific to the Snapmaker U1
+/// describing the loaded spools, an array of four values per field.
 pub fn apply_filaments(cfg: Option<&Value>, st: &mut Status) {
     let Some(cfg) = cfg else { return };
     let len = ["filament_type", "filament_exist", "filament_color_rgba", "filament_color"]
@@ -777,7 +786,7 @@ pub fn apply_filaments(cfg: Option<&Value>, st: &mut Status) {
         .unwrap_or(0)
         .min(8);
 
-    // `extruders_used` liste soit des indices, soit un booléen par emplacement.
+    // `extruders_used` lists either indices, or a boolean per slot.
     let used = cfg.get("extruders_used").and_then(|x| x.as_array());
     let is_used = |i: usize| -> bool {
         let Some(u) = used else { return false };

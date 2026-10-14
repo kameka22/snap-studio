@@ -4,6 +4,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Snap Studio",
         "width": 1380,
         "height": 900,

@@ -1,15 +1,15 @@
-//! Menus natifs : menus surgissants demandés par l'interface.
+//! Native menus: pop-up menus requested by the UI.
 //!
-//! L'interface décrit le menu (libellés, coches, séparateurs) ; chaque entrée
-//! porte un identifiant `verbe:argument`. Un seul gestionnaire, installé au
-//! démarrage, renvoie l'identifiant choisi à la webview sous l'événement `menu`.
+//! The UI describes the menu (labels, check marks, separators); each entry
+//! carries a `verb:argument` id. A single handler, installed at startup, sends
+//! the chosen id back to the webview as the `menu` event.
 
 use serde::Deserialize;
 use std::sync::{Mutex, OnceLock};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::{AppHandle, Emitter, LogicalPosition, Manager, Runtime, Window};
 
-/// Une entrée décrite par l'interface. Sans `id`, c'est un séparateur.
+/// An entry described by the UI. Without `id`, it is a separator.
 #[derive(Deserialize)]
 pub struct Entry {
     id: Option<String>,
@@ -43,14 +43,14 @@ fn build<R: Runtime>(app: &AppHandle<R>, items: &[Entry]) -> tauri::Result<Menu<
     Ok(menu)
 }
 
-/// Dernier menu surgissant affiché. Sous Linux, l'affichage est asynchrone :
-/// le menu doit survivre à la commande jusqu'au choix de l'utilisateur.
+/// Last pop-up menu shown. On Linux display is asynchronous: the menu must
+/// outlive the command until the user chooses.
 fn last_popup() -> &'static Mutex<Option<Menu<tauri::Wry>>> {
     static LAST: OnceLock<Mutex<Option<Menu<tauri::Wry>>>> = OnceLock::new();
     LAST.get_or_init(|| Mutex::new(None))
 }
 
-/// Affiche un menu natif aux coordonnées de la page (points logiques).
+/// Shows a native menu at page coordinates (logical points).
 #[tauri::command]
 pub fn popup_menu(window: Window, items: Vec<Entry>, x: f64, y: f64) -> Result<(), String> {
     let menu = build(window.app_handle(), &items).map_err(|e| e.to_string())?;
@@ -61,18 +61,20 @@ pub fn popup_menu(window: Window, items: Vec<Entry>, x: f64, y: f64) -> Result<(
     Ok(())
 }
 
-/// Gestionnaire unique : toute entrée choisie part vers la webview.
+/// Single handler: every chosen entry goes to the webview.
 pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
     let _ = app.emit("menu", id.to_string());
 }
 
-/// Barre de menus de l'application (macOS). Les raccourcis vivent ici, dans
-/// les accélérateurs, et non dans le JavaScript de l'interface.
+/// Application menu bar (macOS). Shortcuts live here, as accelerators, not in
+/// the UI's JavaScript. Rebuilt whenever the language changes.
 #[cfg(target_os = "macos")]
 pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    use crate::t;
     use tauri::menu::{AboutMetadata, Submenu};
-    let item = |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, label, true, accel);
+    let item = |id: &str, key: &str, accel: Option<&str>| MenuItem::with_id(app, id, t!(key), true, accel);
     let sep = || PredefinedMenuItem::separator(app);
+    let tr = |key: &str| Some(t!(key));
 
     let about = AboutMetadata {
         name: Some("Snap Studio".into()),
@@ -80,59 +82,59 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         ..Default::default()
     };
     let app_sub = Submenu::with_items(app, "Snap Studio", true, &[
-        &PredefinedMenuItem::about(app, Some("À propos de Snap Studio"), Some(about))?,
-        &item("app:update", "Rechercher les mises à jour…", None)?,
+        &PredefinedMenuItem::about(app, tr("menu.about").as_deref(), Some(about))?,
+        &item("app:update", "menu.update", None)?,
         &sep()?,
-        &item("nav:settings", "Réglages…", Some("CmdOrCtrl+,"))?,
+        &item("nav:settings", "menu.settings", Some("CmdOrCtrl+,"))?,
         &sep()?,
-        &PredefinedMenuItem::services(app, Some("Services"))?,
+        &PredefinedMenuItem::services(app, tr("menu.services").as_deref())?,
         &sep()?,
-        &PredefinedMenuItem::hide(app, Some("Masquer Snap Studio"))?,
-        &PredefinedMenuItem::hide_others(app, Some("Masquer les autres"))?,
-        &PredefinedMenuItem::show_all(app, Some("Tout afficher"))?,
+        &PredefinedMenuItem::hide(app, tr("menu.hide").as_deref())?,
+        &PredefinedMenuItem::hide_others(app, tr("menu.hide_others").as_deref())?,
+        &PredefinedMenuItem::show_all(app, tr("menu.show_all").as_deref())?,
         &sep()?,
-        &PredefinedMenuItem::quit(app, Some("Quitter Snap Studio"))?,
+        &PredefinedMenuItem::quit(app, tr("menu.quit").as_deref())?,
     ])?;
-    let file_sub = Submenu::with_items(app, "Fichier", true, &[
-        &item("files:open", "Ouvrir un dossier…", Some("CmdOrCtrl+O"))?,
-        &item("files:refresh", "Actualiser", Some("CmdOrCtrl+R"))?,
+    let file_sub = Submenu::with_items(app, t!("menu.file"), true, &[
+        &item("files:open", "menu.file.open", Some("CmdOrCtrl+O"))?,
+        &item("files:refresh", "menu.file.refresh", Some("CmdOrCtrl+R"))?,
         &sep()?,
-        &item("file:plate", "Ajouter au plateau du trancheur", Some("CmdOrCtrl+Enter"))?,
-        &item("file:reveal", "Afficher dans le Finder", Some("CmdOrCtrl+Shift+R"))?,
-        &item("file:delete", "Mettre à la corbeille", Some("CmdOrCtrl+Backspace"))?,
+        &item("file:plate", "menu.file.plate", Some("CmdOrCtrl+Enter"))?,
+        &item("file:reveal", "menu.file.reveal", Some("CmdOrCtrl+Shift+R"))?,
+        &item("file:delete", "menu.file.trash", Some("CmdOrCtrl+Backspace"))?,
         &sep()?,
-        &PredefinedMenuItem::close_window(app, Some("Fermer la fenêtre"))?,
+        &PredefinedMenuItem::close_window(app, tr("menu.file.close").as_deref())?,
     ])?;
-    let edit_sub = Submenu::with_items(app, "Édition", true, &[
-        &PredefinedMenuItem::undo(app, Some("Annuler"))?,
-        &PredefinedMenuItem::redo(app, Some("Rétablir"))?,
+    let edit_sub = Submenu::with_items(app, t!("menu.edit"), true, &[
+        &PredefinedMenuItem::undo(app, tr("menu.edit.undo").as_deref())?,
+        &PredefinedMenuItem::redo(app, tr("menu.edit.redo").as_deref())?,
         &sep()?,
-        &PredefinedMenuItem::cut(app, Some("Couper"))?,
-        &PredefinedMenuItem::copy(app, Some("Copier"))?,
-        &PredefinedMenuItem::paste(app, Some("Coller"))?,
-        // Sélection native : champs, pages de la Bibliothèque, terminal. La vue
-        // Fichiers intercepte ⌘A pour sélectionner ses fichiers.
-        &PredefinedMenuItem::select_all(app, Some("Tout sélectionner"))?,
+        &PredefinedMenuItem::cut(app, tr("menu.edit.cut").as_deref())?,
+        &PredefinedMenuItem::copy(app, tr("menu.edit.copy").as_deref())?,
+        &PredefinedMenuItem::paste(app, tr("menu.edit.paste").as_deref())?,
+        // Native selection: fields, Library pages, terminal. The Files view
+        // intercepts ⌘A to select its files.
+        &PredefinedMenuItem::select_all(app, tr("menu.edit.select_all").as_deref())?,
         &sep()?,
-        &item("edit:find", "Rechercher", Some("CmdOrCtrl+F"))?,
+        &item("edit:find", "menu.edit.find", Some("CmdOrCtrl+F"))?,
     ])?;
-    let view_sub = Submenu::with_items(app, "Présentation", true, &[
-        &item("view:grid", "Vignettes", Some("CmdOrCtrl+1"))?,
-        &item("view:list", "Liste", Some("CmdOrCtrl+2"))?,
+    let view_sub = Submenu::with_items(app, t!("menu.view"), true, &[
+        &item("view:grid", "menu.view.grid", Some("CmdOrCtrl+1"))?,
+        &item("view:list", "menu.view.list", Some("CmdOrCtrl+2"))?,
         &sep()?,
-        &item("nav:library", "Bibliothèque", Some("Alt+CmdOrCtrl+1"))?,
-        &item("nav:ia", "IA", Some("Alt+CmdOrCtrl+2"))?,
-        &item("nav:files", "Fichiers", Some("Alt+CmdOrCtrl+3"))?,
-        &item("nav:prepare", "Préparer", Some("Alt+CmdOrCtrl+4"))?,
+        &item("nav:library", "nav.library", Some("Alt+CmdOrCtrl+1"))?,
+        &item("nav:ia", "nav.ia", Some("Alt+CmdOrCtrl+2"))?,
+        &item("nav:files", "nav.files", Some("Alt+CmdOrCtrl+3"))?,
+        &item("nav:prepare", "nav.prepare", Some("Alt+CmdOrCtrl+4"))?,
         &sep()?,
-        &PredefinedMenuItem::fullscreen(app, Some("Plein écran"))?,
+        &PredefinedMenuItem::fullscreen(app, tr("menu.view.fullscreen").as_deref())?,
     ])?;
-    let window_sub = Submenu::with_items(app, "Fenêtre", true, &[
-        &PredefinedMenuItem::minimize(app, Some("Placer dans le Dock"))?,
-        &PredefinedMenuItem::maximize(app, Some("Réduire/agrandir"))?,
+    let window_sub = Submenu::with_items(app, t!("menu.window"), true, &[
+        &PredefinedMenuItem::minimize(app, tr("menu.window.minimize").as_deref())?,
+        &PredefinedMenuItem::maximize(app, tr("menu.window.zoom").as_deref())?,
     ])?;
-    let help_sub = Submenu::with_items(app, "Aide", true, &[
-        &item("welcome:open", "Assistant de bienvenue", None)?,
+    let help_sub = Submenu::with_items(app, t!("menu.help"), true, &[
+        &item("welcome:open", "menu.help.welcome", None)?,
     ])?;
     let _ = window_sub.set_as_windows_menu_for_nsapp();
     let _ = help_sub.set_as_help_menu_for_nsapp();

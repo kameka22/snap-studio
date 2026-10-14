@@ -1,15 +1,15 @@
-# Release de Snap Studio : macOS (universel), Windows et Linux.
+# Snap Studio release: macOS (universal), Windows and Linux.
 #
-# Déclenchement manuel uniquement, par `scripts/release.sh` (ou le bouton
-# « Run workflow » de l'onglet Actions).
+# Manual trigger only, by `scripts/release.sh` (or the "Run workflow" button
+# of the Actions tab).
 #
-# Version : celle de src-tauri/tauri.conf.json, incrémentée et commitée par
-# `scripts/release.sh` avant le lancement. Le workflow refuse une version déjà
-# publiée.
+# Version: the one of src-tauri/tauri.conf.json, bumped and committed by
+# `scripts/release.sh` before the start. The workflow refuses a version
+# already published.
 #
-# Mises à jour : les paquets sont signés avec la clé des secrets
-# TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD, et la release
-# porte `latest.json`, que l'application installée consulte.
+# Updates: packages are signed with the key from the secrets
+# TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD, and the
+# release carries `latest.json`, which the installed app reads.
 
 name: Release
 
@@ -36,14 +36,14 @@ jobs:
         run: |
           v=$(jq -r .version src-tauri/tauri.conf.json)
           if gh release view "v$v" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "::error::v$v est déjà publiée : lancez scripts/release.sh, qui incrémente la version."
+            echo "::error::v$v is already published: run scripts/release.sh, which bumps the version."
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          # Le moteur de découpe référencé doit être publié.
+          # The referenced slicing engine must be published.
           if [ -f src-tauri/engine.json ]; then
             for url in $(jq -r '.platforms[].url' src-tauri/engine.json); do
-              curl -sfIL -o /dev/null "$url" || { echo "::error::Moteur introuvable : $url (scripts/engine.sh)"; exit 1; }
+              curl -sfIL -o /dev/null "$url" || { echo "::error::Engine not found: $url (scripts/engine.sh)"; exit 1; }
             done
           fi
 
@@ -73,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Dépendances Linux
+      - name: Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -91,15 +91,15 @@ jobs:
         with:
           node-version: 22
 
-      # Paquets de mise à jour activés ici seulement : un build local, sans
-      # clé de signature, reste possible.
+      # Update packages enabled here only: a local build, without a signing
+      # key, stays possible.
       - name: Build
         working-directory: src-tauri
         run: |
           npx --yes @tauri-apps/cli@^2 build ${{ matrix.args }} \
             --config '{"bundle":{"createUpdaterArtifacts":true}}'
 
-      - name: Paquets (macOS)
+      - name: Packages (macOS)
         if: runner.os == 'macOS'
         run: |
           b=src-tauri/target/universal-apple-darwin/release/bundle
@@ -109,7 +109,7 @@ jobs:
           cp "$b/macos/Snap Studio.app.tar.gz" "dist/$n.app.tar.gz"
           cp "$b/macos/Snap Studio.app.tar.gz.sig" "dist/$n.app.tar.gz.sig"
 
-      - name: Paquets (Windows)
+      - name: Packages (Windows)
         if: runner.os == 'Windows'
         run: |
           b=src-tauri/target/release/bundle/nsis
@@ -118,7 +118,7 @@ jobs:
           cp "$b"/*-setup.exe "dist/$n"
           cp "$b"/*-setup.exe.sig "dist/$n.sig"
 
-      - name: Paquets (Linux)
+      - name: Packages (Linux)
         if: runner.os == 'Linux'
         run: |
           b=src-tauri/target/release/bundle
@@ -150,8 +150,8 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # Notes : les commits depuis la release précédente.
-      - name: Notes de version
+      # Notes: the commits since the previous release.
+      - name: Release notes
         run: |
           prev=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
           if [ -n "$prev" ]; then
@@ -162,8 +162,8 @@ jobs:
           [ -s notes.md ] || echo "- Reconstruction sans changement" > notes.md
           cat notes.md
 
-      # Fichier lu par l'application installée : une entrée par plateforme,
-      # avec l'adresse du paquet et sa signature.
+      # File read by the installed app: one entry per platform, with the
+      # package's URL and its signature.
       - name: latest.json
         run: |
           base="https://github.com/${{ github.repository }}/releases/download/v$VERSION"

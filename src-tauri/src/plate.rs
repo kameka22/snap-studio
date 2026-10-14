@@ -1,40 +1,40 @@
-//! Plateau de la vue « Préparer » : objets des fichiers, maillage de chacun,
-//! et scène écrite pour la découpe.
+//! Plate of the "Prepare" view: the files' objects, each one's mesh, and
+//! the scene written for slicing.
 //!
-//! Un objet du plateau est une occurrence du `<build>` d'un fichier, isolée
-//! dans son repère propre (centrée sur sa boîte englobante, orientée comme dans
-//! le fichier). Son placement sur le plateau tient en trois valeurs :
+//! A plate object is an occurrence of a file's `<build>`, isolated in its own
+//! frame (centered on its bounding box, oriented as in the file). Its
+//! placement on the plate fits in three values:
 //!
-//! 1. `scale` : échelle par axe ;
-//! 2. `rot` : rotations en degrés autour de X, puis Y, puis Z ;
-//! 3. `pos` : position (X, Y) du centre ; l'objet est posé sur le plateau, son
-//!    point le plus bas à Z = 0.
+//! 1. `scale`: scale per axis;
+//! 2. `rot`: rotations in degrees around X, then Y, then Z;
+//! 3. `pos`: (X, Y) position of the center; the object rests on the plate,
+//!    its lowest point at Z = 0.
 //!
-//! L'interface applique exactement la même règle pour l'affichage.
+//! The UI applies exactly the same rule for display.
 
 use crate::mesh::{MeshData, Tri};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// Au-delà, la découpe intégrée renonce (comme pour un fichier seul).
+/// Beyond this, the bundled slicing gives up (as for a single file).
 const FULL_BUDGET: usize = 8_000_000;
 
-/// Un objet proposé au plateau.
+/// An object offered to the plate.
 #[derive(Serialize, Clone, Debug)]
 pub struct PlateItem {
-    /// Rang de l'occurrence dans le `<build>` du fichier.
+    /// Rank of the occurrence in the file's `<build>`.
     pub index: usize,
     pub name: String,
-    /// Centre de l'objet dans la scène du fichier (mm) : les plateaux d'un 3MF
-    /// multi-plateaux y gardent leur décalage.
+    /// Center of the object in the file's scene (mm): the plates of a
+    /// multi-plate 3MF keep their offset there.
     pub center: [f32; 3],
-    /// Dimensions de la boîte englobante, orientation du fichier.
+    /// Bounding box dimensions, file orientation.
     pub size: [f32; 3],
     pub triangles: usize,
-    /// Plateau d'origine dans le fichier (1 par défaut).
+    /// Original plate in the file (1 by default).
     pub plate: u32,
-    /// Extrudeurs du modèle employés par l'objet (à partir de 1).
+    /// Model extruders used by the object (from 1).
     pub extruders: Vec<u8>,
 }
 
@@ -44,11 +44,11 @@ fn is_stl(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("stl"))
 }
 
-/// Maillage d'un objet, centré ; renvoie aussi son centre dans le fichier.
+/// Mesh of an object, centered; also returns its center in the file.
 pub fn load(path: &Path, index: usize, budget: usize) -> Result<(MeshData, [f32; 3])> {
     if is_stl(path) {
         if index != 0 {
-            return Err(anyhow!("un STL ne contient qu'un objet"));
+            return Err(anyhow!("an STL holds a single object"));
         }
         let mut m = crate::stl::read(path)?;
         crate::mesh::downsample(&mut m, budget);
@@ -75,12 +75,12 @@ pub fn load(path: &Path, index: usize, budget: usize) -> Result<(MeshData, [f32;
     Ok((it.mesh, it.center))
 }
 
-/// Objets d'un fichier, prêts à poser sur le plateau.
+/// A file's objects, ready to put on the plate.
 pub fn items(path: &Path) -> Result<Vec<PlateItem>> {
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "objet".into());
+        .unwrap_or_else(|| "object".into());
     if is_stl(path) {
         let (m, c) = load(path, 0, FULL_BUDGET)?;
         return Ok(vec![PlateItem {
@@ -126,8 +126,8 @@ fn size_of(m: &MeshData) -> [f32; 3] {
     [m.max[0] - m.min[0], m.max[1] - m.min[1], m.max[2] - m.min[2]]
 }
 
-/// Maillage d'affichage d'un objet. Les triangles sans couleur propre prennent
-/// celle du filament que le projet associe à leur extrudeur.
+/// Display mesh of an object. Triangles without their own color take the
+/// filament color the project associates with their extruder.
 pub fn display_mesh(path: &Path, index: usize, budget: usize) -> Result<MeshData> {
     let (mut m, _) = load(path, index, budget)?;
     if !is_stl(path) && m.extruders.len() == m.tris.len() {
@@ -156,9 +156,9 @@ fn hex_rgb(s: &str) -> Option<[u8; 3]> {
     Some([(n >> 16) as u8, (n >> 8) as u8, n as u8])
 }
 
-// ------------------------------------------------------------ scène à découper
+// ------------------------------------------------------------ scene to slice
 
-/// Un objet posé sur le plateau, tel que l'interface le décrit.
+/// An object resting on the plate, as the UI describes it.
 #[derive(Deserialize, Clone, Debug)]
 pub struct SceneItem {
     pub path: String,
@@ -170,7 +170,7 @@ pub struct SceneItem {
     pub rot: [f32; 3],
     #[serde(default = "unit_scale")]
     pub scale: [f32; 3],
-    /// Tête (0 à 3) de chaque extrudeur du modèle, comme pour un fichier seul.
+    /// Head (0 to 3) of each model extruder, as for a single file.
     #[serde(default)]
     pub extruder_map: Vec<u8>,
 }
@@ -179,7 +179,7 @@ fn unit_scale() -> [f32; 3] {
     [1.0, 1.0, 1.0]
 }
 
-/// Matrice de rotation : X d'abord, puis Y, puis Z (angles en degrés).
+/// Rotation matrix: X first, then Y, then Z (angles in degrees).
 pub fn rotation(rot: [f32; 3]) -> [[f32; 3]; 3] {
     let (a, b, c) = (rot[0].to_radians(), rot[1].to_radians(), rot[2].to_radians());
     let (sa, ca, sb, cb, sc, cc) = (a.sin(), a.cos(), b.sin(), b.cos(), c.sin(), c.cos());
@@ -191,7 +191,7 @@ pub fn rotation(rot: [f32; 3]) -> [[f32; 3]; 3] {
     ]
 }
 
-/// Pose les triangles (centrés) sur le plateau selon le placement de l'objet.
+/// Lays the (centered) triangles on the plate following the object's placement.
 pub fn place(tris: &mut [Tri], it: &SceneItem) {
     let r = rotation(it.rot);
     let s = it.scale;
@@ -206,7 +206,7 @@ pub fn place(tris: &mut [Tri], it: &SceneItem) {
             ];
             zmin = zmin.min(v[2]);
         }
-        // Une échelle négative retourne les faces : on rétablit le sens.
+        // A negative scale flips the faces: restore the winding.
         if s[0] * s[1] * s[2] < 0.0 {
             t.v.swap(1, 2);
         }
@@ -220,24 +220,24 @@ pub fn place(tris: &mut [Tri], it: &SceneItem) {
     }
 }
 
-/// Bilan de l'écriture d'une scène.
+/// Outcome of writing a scene.
 #[derive(Debug, Default)]
 pub struct Written {
     pub kept: usize,
-    /// Objets entièrement hors plateau, non découpés.
+    /// Objects entirely off the plate, not sliced.
     pub skipped: Vec<String>,
 }
 
-/// Écrit la scène dans un 3MF prêt pour le moteur (placements appliqués,
-/// pièces multicolores réparties sur leurs têtes).
+/// Writes the scene into a 3MF ready for the engine (placements applied,
+/// multicolor parts spread over their heads).
 ///
-/// Un objet entièrement hors du plateau est écarté (objets des autres plateaux
-/// d'un 3MF, par exemple) ; un objet qui dépasse en partie arrête tout.
+/// An object entirely off the plate is left out (objects of a 3MF's other
+/// plates, for instance); an object partly sticking out stops everything.
 pub fn write_scene(scene: &[SceneItem], bed: (f32, f32), dst: &Path) -> Result<Written> {
     write_items(scene, Some(bed), dst)
 }
 
-/// Enregistre tout le plateau en 3MF, sans contrôle de plateau.
+/// Saves the whole plate as 3MF, without plate checks.
 pub fn save_scene(scene: &[SceneItem], dst: &Path) -> Result<()> {
     write_items(scene, None, dst).map(|_| ())
 }
@@ -248,9 +248,9 @@ fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Resu
     for it in scene {
         let path = Path::new(&it.path);
         let (mut m, _) = load(path, it.item, FULL_BUDGET)?;
-        let name = if it.name.is_empty() { format!("objet {}", objects.len() + 1) } else { it.name.clone() };
+        let name = if it.name.is_empty() { format!("object {}", objects.len() + 1) } else { it.name.clone() };
         if m.truncated {
-            return Err(anyhow!("« {name} » est trop dense pour la découpe intégrée"));
+            return Err(anyhow!(crate::t!("err.too_dense", name = name)));
         }
         place(&mut m.tris, it);
         let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
@@ -263,7 +263,7 @@ fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Resu
             }
         }
         if let Some(bed) = bed {
-            // Tolérance d'un dixième de millimètre sur les bords.
+            // Tolerance of a tenth of a millimeter on the edges.
             let eps = 0.1;
             let outside = x1 < -eps || y1 < -eps || x0 > bed.0 + eps || y0 > bed.1 + eps;
             if outside {
@@ -271,7 +271,7 @@ fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Resu
                 continue;
             }
             if x0 < -eps || y0 < -eps || x1 > bed.0 + eps || y1 > bed.1 + eps {
-                return Err(anyhow!("« {name} » dépasse du plateau : ramenez-le entièrement dessus"));
+                return Err(anyhow!(crate::t!("err.sticks_out", name = name)));
             }
         }
 
@@ -293,7 +293,7 @@ fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Resu
         objects.push((name, parts));
     }
     if objects.is_empty() {
-        return Err(anyhow!("aucun objet sur le plateau"));
+        return Err(anyhow!(crate::t!("prepare.nothing")));
     }
     written.kept = objects.len();
     crate::write3mf::write_objects(dst, &objects)?;
@@ -302,14 +302,14 @@ fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Resu
 
 // ------------------------------------------------------------ orientation
 
-/// Enveloppe convexe d'un objet, dans son repère propre (celui du maillage
-/// d'affichage) : sert à le poser exactement et à calculer son empreinte.
+/// Convex hull of an object, in its own frame (the display mesh's): used to
+/// rest it exactly and compute its footprint.
 pub fn hull(path: &Path, index: usize) -> Result<crate::orient::Hull> {
     let (m, _) = load(path, index, 1_500_000)?;
     crate::orient::convex_hull(&crate::orient::unique_points(&m.tris))
 }
 
-/// Objet à orienter : l'échelle compte (elle change les angles des faces).
+/// Object to orient: the scale matters (it changes the face angles).
 #[derive(Deserialize, Clone, Debug)]
 pub struct OrientItem {
     pub path: String,
@@ -318,8 +318,8 @@ pub struct OrientItem {
     pub scale: [f32; 3],
 }
 
-/// Rotation (lignes) qui amène la meilleure direction de l'objet vers le haut,
-/// d'après les règles d'Orca (`orient.rs`), dans le repère propre de l'objet.
+/// Rotation (rows) bringing the object's best direction upwards, following
+/// Orca's rules (`orient.rs`), in the object's own frame.
 pub fn orient(it: &OrientItem, threshold_deg: f64) -> Result<[[f64; 3]; 3]> {
     let (mut m, _) = load(Path::new(&it.path), it.item, 300_000)?;
     let s = it.scale;
@@ -349,11 +349,11 @@ mod tests {
 
     #[test]
     fn rotation_order_is_x_then_y_then_z() {
-        // 90° autour de Z envoie X sur Y.
+        // 90° around Z sends X onto Y.
         let r = rotation([0., 0., 90.]);
         let v = [r[0][0], r[1][0], r[2][0]];
         assert!((v[0]).abs() < 1e-6 && (v[1] - 1.0).abs() < 1e-6);
-        // X puis Z : l'axe Y, tourné de 90° autour de X, devient Z ; Z reste Z.
+        // X then Z: the Y axis, rotated 90° around X, becomes Z; Z stays Z.
         let r = rotation([90., 0., 90.]);
         let y = [r[0][1], r[1][1], r[2][1]];
         assert!((y[2] - 1.0).abs() < 1e-6, "{y:?}");
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn placing_rests_the_object_on_the_bed() {
-        let mut t = cube(-5.0, 10.0); // centré en Z sur 0
+        let mut t = cube(-5.0, 10.0); // centered in Z on 0
         let it = SceneItem {
             path: String::new(),
             item: 0,
@@ -374,23 +374,23 @@ mod tests {
         place(&mut t, &it);
         let zmin = t.iter().flat_map(|t| t.v).map(|v| v[2]).fold(f32::MAX, f32::min);
         let zmax = t.iter().flat_map(|t| t.v).map(|v| v[2]).fold(f32::MIN, f32::max);
-        assert!(zmin.abs() < 1e-4, "posé : {zmin}");
-        assert!((zmax - 20.0).abs() < 1e-3, "échelle 2 : {zmax}");
+        assert!(zmin.abs() < 1e-4, "rested: {zmin}");
+        assert!((zmax - 20.0).abs() < 1e-3, "scale 2: {zmax}");
     }
 
-    /// Un fichier de deux objets, l'un sur le plateau, l'autre très loin (un
-    /// second plateau) : le second est écarté, le premier écrit à sa place.
+    /// A file of two objects, one on the plate, the other far away (a second
+    /// plate): the second is left out, the first written in place.
     #[test]
     fn scene_keeps_bed_objects_and_skips_the_others() {
         let tmp = std::env::temp_dir().join("snapstudio-plate-test");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-        let src = tmp.join("deux.3mf");
+        let src = tmp.join("two.3mf");
         crate::write3mf::write_scene(
             &src,
             &[
                 crate::write3mf::SceneObject { name: "ici".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
-                crate::write3mf::SceneObject { name: "là-bas".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
+                crate::write3mf::SceneObject { name: "far away".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
             ],
         )
         .unwrap();
@@ -414,14 +414,14 @@ mod tests {
 
         let mut zip = crate::model3mf::open(&out).unwrap();
         let m = crate::mesh::load_mesh(&mut zip, 10_000).unwrap();
-        assert!((m.min[2]).abs() < 1e-3, "posé à Z = 0");
+        assert!((m.min[2]).abs() < 1e-3, "rested at Z = 0");
         let cx = (m.min[0] + m.max[0]) / 2.0;
-        assert!((cx - 100.0).abs() < 0.01, "centré en X = 100 : {cx}");
-        assert!(m.extruders.iter().all(|e| *e == 3), "extrudeur 1 du modèle → tête 2");
+        assert!((cx - 100.0).abs() < 0.01, "centered at X = 100: {cx}");
+        assert!(m.extruders.iter().all(|e| *e == 3), "model extruder 1 → head 2");
 
-        // Un objet qui dépasse arrête la découpe.
+        // An object sticking out stops slicing.
         let err = write_scene(&[item(0, 268.0)], (270.0, 270.0), &out).unwrap_err();
-        assert!(err.to_string().contains("dépasse"), "{err}");
+        assert!(err.to_string().contains("sticks out"), "{err}");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }

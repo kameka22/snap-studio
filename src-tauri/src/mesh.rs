@@ -1,11 +1,11 @@
-//! Lecture de la geometrie 3MF (coeur + extension "production" multi-fichiers).
+//! Reading 3MF geometry (core + multi-file "production" extension).
 
 use crate::model3mf::{read_entry, Zip};
 use anyhow::{anyhow, Result};
 use quick_xml::events::Event;
 use std::collections::HashMap;
 
-/// Matrice 4x3 du 3MF : ligne 3 = translation, point' = [x y z 1] * M.
+/// 3MF 4x3 matrix: row 3 = translation, point' = [x y z 1] * M.
 #[derive(Clone, Copy, Debug)]
 pub struct Mat(pub [f32; 12]);
 
@@ -30,7 +30,7 @@ impl Mat {
         ]
     }
 
-    /// `self` appliquee d'abord, puis `parent`.
+    /// `self` applied first, then `parent`.
     fn then(&self, parent: &Mat) -> Mat {
         let (c, p) = (&self.0, &parent.0);
         let mut o = [0f32; 12];
@@ -50,7 +50,7 @@ impl Mat {
 struct Obj {
     verts: Vec<[f32; 3]>,
     tris: Vec<[u32; 3]>,
-    /// Couleur eventuelle par triangle (attribut p1 -> groupe de materiaux).
+    /// Optional color per triangle (p1 attribute -> material group).
     tri_colors: Vec<Option<[u8; 3]>>,
     color: Option<[u8; 3]>,
     components: Vec<(Option<String>, u32, Mat)>,
@@ -73,8 +73,8 @@ pub struct MeshData {
     pub min: [f32; 3],
     pub max: [f32; 3],
     pub truncated: bool,
-    /// Extrudeur du modèle pour chaque triangle (1 à 16), quand le fichier le
-    /// déclare (`model_settings.config`) ; vide sinon.
+    /// Model extruder for each triangle (1 to 16), when the file declares it
+    /// (`model_settings.config`); empty otherwise.
     pub extruders: Vec<u8>,
 }
 
@@ -100,7 +100,7 @@ fn parse_color(s: &str) -> Option<[u8; 3]> {
     ])
 }
 
-/// Analyse un fichier .model (racine ou objet externe).
+/// Parses a .model file (root or external object).
 fn parse_part(data: &[u8]) -> Part {
     let mut part = Part::default();
     let mut reader = quick_xml::Reader::from_reader(data);
@@ -108,7 +108,7 @@ fn parse_part(data: &[u8]) -> Part {
     reader.config_mut().check_end_names = false;
     let mut buf = Vec::new();
 
-    // Groupes de couleurs : id -> palette
+    // Color groups: id -> palette
     let mut groups: HashMap<u32, Vec<[u8; 3]>> = HashMap::new();
     let mut cur_group: Option<u32> = None;
 
@@ -235,7 +235,7 @@ fn parse_part(data: &[u8]) -> Part {
                 "basematerials" | "colorgroup" => cur_group = None,
                 "object" => {
                     if let Some(id) = cur_id.take() {
-                        // Couleurs differees : les groupes peuvent etre declares apres l'objet.
+                        // Deferred colors: groups may be declared after the object.
                         let mut obj = std::mem::take(&mut cur);
                         obj.color = cur_pid
                             .and_then(|pid| groups.get(&pid))
@@ -256,17 +256,17 @@ fn parse_part(data: &[u8]) -> Part {
         buf.clear();
     }
 
-    // Deuxieme passe pour les objets dont le groupe de couleurs n'etait pas encore lu.
+    // Second pass for objects whose color group had not been read yet.
     let group_keys: Vec<u32> = groups.keys().copied().collect();
     let _ = group_keys;
     part
 }
 
-/// Une occurrence d'objet dans la scene, deja resolue (fichier, id, transformation).
+/// An object occurrence in the scene, already resolved (file, id, transform).
 struct Inst {
     part_key: String,
     objid: u32,
-    /// Objet du `<build>` dont cette occurrence descend.
+    /// `<build>` object this occurrence comes from.
     root: u32,
     xf: Mat,
     color: Option<[u8; 3]>,
@@ -278,7 +278,7 @@ struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
-    /// Charge un fichier .model du conteneur (une seule fois).
+    /// Loads a .model file of the container (only once).
     fn part(&mut self, key: &str) -> bool {
         if self.parts.contains_key(key) {
             return true;
@@ -290,7 +290,7 @@ impl<'a> Ctx<'a> {
         true
     }
 
-    /// Resout recursivement les composants sans toucher aux maillages.
+    /// Resolves components recursively without touching the meshes.
     #[allow(clippy::too_many_arguments)]
     fn collect(
         &mut self,
@@ -330,7 +330,7 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// Charge et aplatit la geometrie du fichier 3MF.
+/// Loads and flattens the 3MF file's geometry.
 pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
     let root_key = "3D/3dmodel.model".to_string();
     let mut ctx = Ctx {
@@ -338,10 +338,10 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
         parts: HashMap::new(),
     };
     if !ctx.part(&root_key) {
-        return Err(anyhow!("modele introuvable"));
+        return Err(anyhow!(crate::t!("err.no_model")));
     }
 
-    // 1. Resolution de la scene : quels objets, ou, de quelle couleur.
+    // 1. Scene resolution: which objects, where, in what color.
     let build: Vec<(u32, Mat, Option<String>)> = ctx
         .parts
         .get(&root_key)
@@ -349,7 +349,7 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
         .unwrap_or_default();
     let mut insts = Vec::new();
     if build.is_empty() {
-        // Certains exports n'ont pas de <build> : on prend tous les objets.
+        // Some exports have no <build>: take all the objects.
         let ids: Vec<u32> = ctx
             .parts
             .get(&root_key)
@@ -369,7 +369,7 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
 }
 
 
-/// Émission des triangles transformés des occurrences, sans copier les maillages.
+/// Emits the transformed triangles of the occurrences, without copying meshes.
 fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
     let total: usize = insts
         .iter()
@@ -382,7 +382,7 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
         1
     };
     let mut tris: Vec<Tri> = Vec::with_capacity(total.min(budget) + 8);
-    // Extrudeur de chaque occurrence : celui de la pièce, sinon celui de l'objet.
+    // Extruder of each occurrence: the part's, otherwise the object's.
     let settings = crate::model3mf::extruder_settings(ctx.zip);
     let mut extruders: Vec<u8> = Vec::new();
     let mut min = [f32::MAX; 3];
@@ -397,8 +397,8 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
             parts.get(&inst.objid).copied().filter(|e| *e > 0).unwrap_or(*obj).max(1)
         });
         for (i, t) in obj.tris.iter().enumerate() {
-            // Sur les maillages tres denses on echantillonne au lieu de tronquer :
-            // la silhouette reste correcte.
+            // On very dense meshes, sample instead of truncating: the silhouette stays
+            // right.
             if step > 1 && i % step != 0 {
                 continue;
             }
@@ -429,9 +429,9 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
     }
 
     if tris.is_empty() {
-        return Err(anyhow!("aucune geometrie"));
+        return Err(anyhow!(crate::t!("err.no_geometry")));
     }
-    // Des occurrences sans réglage sont rattachées à l'extrudeur 1.
+    // Occurrences without a setting are attached to extruder 1.
     if !extruders.is_empty() {
         extruders.resize(tris.len(), 1);
     }
@@ -443,19 +443,19 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
         truncated: step > 1,
     })}
 
-/// Une occurrence du `<build>` : objet, placement dans la scène.
+/// An occurrence of the `<build>`: object, placement in the scene.
 #[derive(Clone, Copy, Debug)]
 pub struct BuildItem {
     pub objid: u32,
     pub xf: Mat,
 }
 
-/// Occurrences du `<build>` du modèle principal, dans l'ordre du fichier.
+/// Occurrences of the main model's `<build>`, in file order.
 pub fn build_items(zip: &mut Zip) -> Result<Vec<BuildItem>> {
     let root_key = "3D/3dmodel.model".to_string();
     let mut ctx = Ctx { zip, parts: HashMap::new() };
     if !ctx.part(&root_key) {
-        return Err(anyhow!("modele introuvable"));
+        return Err(anyhow!(crate::t!("err.no_model")));
     }
     let part = ctx.parts.get(&root_key).unwrap();
     let mut items: Vec<BuildItem> = part.build.iter().map(|(id, xf, _)| BuildItem { objid: *id, xf: *xf }).collect();
@@ -467,27 +467,27 @@ pub fn build_items(zip: &mut Zip) -> Result<Vec<BuildItem>> {
     Ok(items)
 }
 
-/// Un objet du `<build>`, isolé pour le plateau.
+/// An object of the `<build>`, isolated for the plate.
 pub struct ItemMesh {
-    /// Triangles centrés sur le centre de la boîte englobante, orientés comme
-    /// dans le fichier (la partie linéaire du placement est appliquée).
+    /// Triangles centered on the bounding box center, oriented as in the file
+    /// (the linear part of the placement is applied).
     pub mesh: MeshData,
-    /// Position du centre dans la scène du fichier.
+    /// Position of the center in the file's scene.
     pub center: [f32; 3],
 }
 
-/// Charge l'occurrence `index` du `<build>`, dans son repère propre.
+/// Loads occurrence `index` of the `<build>`, in its own frame.
 pub fn load_item(zip: &mut Zip, index: usize, budget: usize) -> Result<ItemMesh> {
     let root_key = "3D/3dmodel.model".to_string();
     let item = *build_items(zip)?
         .get(index)
-        .ok_or_else(|| anyhow!("objet {index} absent du fichier"))?;
+        .ok_or_else(|| anyhow!(crate::t!("err.no_object", index = index)))?;
     let mut ctx = Ctx { zip, parts: HashMap::new() };
     if !ctx.part(&root_key) {
-        return Err(anyhow!("modele introuvable"));
+        return Err(anyhow!(crate::t!("err.no_model")));
     }
-    // Orientation et échelle du fichier conservées, translation retirée :
-    // la position devient celle du plateau.
+    // The file's orientation and scale kept, translation removed: the position
+    // becomes the plate's.
     let mut lin = item.xf;
     let t = [lin.0[9], lin.0[10], lin.0[11]];
     lin.0[9] = 0.0;
@@ -515,28 +515,27 @@ pub fn load_item(zip: &mut Zip, index: usize, budget: usize) -> Result<ItemMesh>
     Ok(ItemMesh { mesh, center: [c[0] + t[0], c[1] + t[1], c[2] + t[2]] })
 }
 
-/// Ce qu'on sait dire d'un maillage sans le découper.
+/// What can be said about a mesh without slicing it.
 #[derive(serde::Serialize, Clone, Copy)]
 pub struct Stats {
     pub triangles: usize,
     pub size: [f32; 3],
-    /// Volume en centimètres cubes, calculé par la somme des tétraèdres.
-    /// N'a de sens que si le maillage est fermé.
+    /// Volume in cubic centimeters, computed as a sum of tetrahedra. Only
+    /// meaningful if the mesh is closed.
     pub volume_cm3: f32,
-    /// `None` quand le maillage est trop dense pour qu'on vérifie sans peine.
+    /// `None` when the mesh is too dense to check cheaply.
     pub watertight: Option<bool>,
 }
 
-/// Au-delà, la vérification d'étanchéité coûte plus qu'elle ne rapporte : elle
-/// indexe trois arêtes par face, et retarderait d'autant l'aperçu qu'elle
-/// accompagne.
+/// Beyond this, the watertightness check costs more than it brings: it
+/// indexes three edges per face, and would delay the preview it comes with.
 const WATERTIGHT_BUDGET: usize = 400_000;
 
-/// Étanche au sens des arêtes : chacune doit être partagée par exactement deux
-/// faces. C'est le test qui prédit le mieux si un trancheur acceptera la pièce.
+/// Watertight in the edge sense: each edge must be shared by exactly two
+/// faces. It is the test that best predicts whether a slicer accepts the part.
 ///
-/// Les sommets sont arrondis au micron avant comparaison : deux flottants issus
-/// de calculs différents décrivent souvent le même point sans être identiques.
+/// Vertices are rounded to the micron before comparing: two floats from
+/// different computations often describe the same point without being equal.
 fn edges_are_paired(tris: &[Tri]) -> bool {
     let key = |p: [f32; 3]| -> [i64; 3] {
         [
@@ -554,7 +553,7 @@ fn edges_are_paired(tris: &[Tri]) -> bool {
             v[k] = *ids.entry(key(*p)).or_insert(next);
         }
         if v[0] == v[1] || v[1] == v[2] || v[0] == v[2] {
-            continue; // triangle dégénéré : il ne ferme rien
+            continue; // degenerate triangle: it closes nothing
         }
         for (a, b) in [(v[0], v[1]), (v[1], v[2]), (v[2], v[0])] {
             let e = if a < b { (a, b) } else { (b, a) };
@@ -581,10 +580,10 @@ pub fn stats(m: &MeshData) -> Stats {
     }
 }
 
-/// Réduit un maillage au budget du visualiseur.
+/// Reduces a mesh to the viewer's budget.
 ///
-/// La boîte englobante reste celle du maillage complet : c'est l'affichage
-/// qu'on allège, pas l'objet qu'on rogne.
+/// The bounding box stays the full mesh's: the display is lightened, the object
+/// is not trimmed.
 pub fn downsample(mesh: &mut MeshData, budget: usize) {
     if budget == 0 || mesh.tris.len() <= budget {
         return;
@@ -599,13 +598,13 @@ pub fn downsample(mesh: &mut MeshData, budget: usize) {
     mesh.truncated = true;
 }
 
-/// Sérialise le maillage pour le visualiseur WebGL.
+/// Serializes the mesh for the WebGL viewer.
 ///
-/// Disposition, tout en petit-boutiste :
-/// `"3MFM"` | version u8 | drapeaux u8 (bit 0 : maillage échantillonné) |
-/// réservé u8×2 | nombre de triangles u32 |
-/// min x,y,z f32 | max x,y,z f32 | positions (9 f32 par triangle) |
-/// couleurs (3 u8 par triangle).
+/// Layout, all little-endian:
+/// `"3MFM"` | version u8 | flags u8 (bit 0: sampled mesh) |
+/// reserved u8×2 | triangle count u32 |
+/// min x,y,z f32 | max x,y,z f32 | positions (9 f32 per triangle) |
+/// colors (3 u8 per triangle).
 pub fn encode(mesh: &MeshData) -> Vec<u8> {
     let n = mesh.tris.len();
     let mut out = Vec::with_capacity(24 + n * (36 + 3));
@@ -634,7 +633,7 @@ pub fn encode(mesh: &MeshData) -> Vec<u8> {
 mod tests {
     use super::*;
 
-    /// Écrit le maillage encodé d'un vrai fichier, pour l'essai du visualiseur.
+    /// Writes the encoded mesh of a real file, for the viewer test.
     #[test]
     fn dump_for_viewer() {
         let (Ok(src), Ok(out)) = (std::env::var("DUMP_3MF"), std::env::var("DUMP_OUT")) else {
@@ -652,7 +651,7 @@ mod tests {
         std::fs::write(out, bytes).unwrap();
     }
 
-    /// L'encodage doit être cohérent avec ce que lit le visualiseur.
+    /// The encoding must match what the viewer reads.
     #[test]
     fn encode_layout() {
         let m = MeshData {
@@ -668,13 +667,13 @@ mod tests {
         let b = encode(&m);
         assert_eq!(&b[0..4], b"3MFM");
         assert_eq!(b[4], 1, "version");
-        assert_eq!(b[5], 1, "drapeau d'échantillonnage");
+        assert_eq!(b[5], 1, "sampling flag");
         assert_eq!(u32::from_le_bytes(b[8..12].try_into().unwrap()), 2);
         assert_eq!(b.len(), 36 + 2 * 36 + 2 * 3);
-        // Première coordonnée du deuxième sommet du premier triangle.
+        // First coordinate of the second vertex of the first triangle.
         let off = 36 + 3 * 4;
         assert_eq!(f32::from_le_bytes(b[off..off + 4].try_into().unwrap()), 1.0);
-        // Couleurs en fin de tampon.
+        // Colors at the end of the buffer.
         assert_eq!(&b[b.len() - 6..], &[10, 20, 30, 40, 50, 60]);
     }
 }
@@ -696,14 +695,14 @@ mod stats_tests {
         let s = stats(&m);
         assert_eq!(s.triangles, 12);
         assert_eq!(s.watertight, Some(true));
-        // 10 mm de côté : 1 cm³.
+        // 10 mm sides: 1 cm³.
         assert!((s.volume_cm3 - 1.0).abs() < 1e-3, "volume {}", s.volume_cm3);
     }
 
     #[test]
     fn an_open_cube_is_not() {
         let mut tris = crate::stl::tests_cube();
-        tris.truncate(10); // on retire une face
+        tris.truncate(10); // remove one face
         let m = MeshData {
             extruders: Vec::new(),
             min: [0.; 3],

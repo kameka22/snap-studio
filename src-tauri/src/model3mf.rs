@@ -1,4 +1,4 @@
-//! Lecture du conteneur 3MF : metadonnees, vignettes integrees, infos de decoupe.
+//! Reading the 3MF container: metadata, embedded thumbnails, slicing info.
 
 use anyhow::{anyhow, Result};
 use quick_xml::events::Event;
@@ -27,7 +27,7 @@ pub struct Meta {
     pub application: Option<String>,
     pub creation_date: Option<String>,
     pub object_names: Vec<String>,
-    /// Duree estimee de la premiere plaque, en secondes.
+    /// Estimated duration of the first plate, in seconds.
     pub print_time_s: Option<u32>,
     pub weight_g: Option<f32>,
     pub filaments: Vec<Filament>,
@@ -36,7 +36,7 @@ pub struct Meta {
     pub has_embedded_thumb: bool,
 }
 
-/// D'ou vient l'image affichee.
+/// Where the image shown comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThumbSource {
     Plate,
@@ -45,16 +45,16 @@ pub enum ThumbSource {
     None,
 }
 
-/// Preference d'aperçu choisie par l'utilisateur.
+/// Preview preference chosen by the user.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThumbPref {
-    /// Vignette integree si elle existe, sinon rendu du maillage.
+    /// Embedded thumbnail if there is one, otherwise a mesh render.
     Auto,
-    /// Priorite a l'apercu de plateau du slicer.
+    /// Prefer the slicer's plate preview.
     Plate,
-    /// Priorite a la photo / image du modele.
+    /// Prefer the model's photo / picture.
     Model,
-    /// Toujours rendre la geometrie.
+    /// Always render the geometry.
     Render,
 }
 
@@ -92,13 +92,13 @@ fn is_image(name: &str) -> bool {
     l.ends_with(".png") || l.ends_with(".jpg") || l.ends_with(".jpeg") || l.ends_with(".webp")
 }
 
-/// Note chaque image du conteneur ; la meilleure sert de vignette.
+/// Scores each image of the container; the best one becomes the thumbnail.
 fn score_image(name: &str, pref: ThumbPref) -> i32 {
     let l = name.to_ascii_lowercase();
     if !is_image(&l) {
         return -1;
     }
-    // Images techniques inutilisables comme apercu.
+    // Technical images unusable as previews.
     if l.contains("pick_") || l.contains("no_light") || l.contains("/top_") || l.starts_with("top_")
     {
         return -1;
@@ -147,7 +147,7 @@ fn score_image(name: &str, pref: ThumbPref) -> i32 {
     .max(if plate == 0 && model == 0 { 10 } else { 0 })
 }
 
-/// Renvoie (nom de l'entree, octets) de la meilleure vignette integree.
+/// Returns (entry name, bytes) of the best embedded thumbnail.
 pub fn find_thumbnail(zip: &mut Zip, pref: ThumbPref) -> Option<(String, Vec<u8>, ThumbSource)> {
     let mut best: Option<(i32, String)> = None;
     for name in entry_names(zip) {
@@ -169,7 +169,7 @@ pub fn find_thumbnail(zip: &mut Zip, pref: ThumbPref) -> Option<(String, Vec<u8>
     Some((name, data, src))
 }
 
-/// Valeur d'attribut avec references d'entites resolues.
+/// Attribute value with entity references resolved.
 pub fn aval<'a>(a: &quick_xml::events::attributes::Attribute<'a>) -> std::borrow::Cow<'a, str> {
     a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
         .unwrap_or_else(|_| a.value.clone())
@@ -184,11 +184,11 @@ fn attr_str(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
     None
 }
 
-/// Lit l'entete de 3D/3dmodel.model : metadonnees + noms d'objets (les maillages sont sautes).
+/// Reads the header of 3D/3dmodel.model: metadata + object names (meshes are skipped).
 fn read_model_header(zip: &mut Zip, meta: &mut Meta) -> Result<()> {
     let f = zip
         .by_name("3D/3dmodel.model")
-        .map_err(|_| anyhow!("3dmodel.model absent"))?;
+        .map_err(|_| anyhow!("3dmodel.model missing"))?;
     let mut reader = quick_xml::Reader::from_reader(BufReader::new(f));
     reader.config_mut().trim_text(true);
     reader.config_mut().check_end_names = false;
@@ -205,7 +205,7 @@ fn read_model_header(zip: &mut Zip, meta: &mut Meta) -> Result<()> {
                         }
                     }
                 }
-                // Les gros blocs sont sautes sans interpretation.
+                // Large blocks are skipped without parsing.
                 "vertices" | "triangles" => {
                     let name = e.name().into_inner().to_string();
                     let mut skip = Vec::new();
@@ -250,7 +250,7 @@ fn parse_color(s: &str) -> Option<[u8; 3]> {
     Some([r, g, b])
 }
 
-/// Metadata/slice_info.config (Bambu / Orca) : duree, poids, filaments.
+/// Metadata/slice_info.config (Bambu / Orca): duration, weight, filaments.
 fn read_slice_info(zip: &mut Zip, meta: &mut Meta) {
     let Some(data) = read_entry(zip, "Metadata/slice_info.config") else {
         return;
@@ -294,7 +294,7 @@ fn read_slice_info(zip: &mut Zip, meta: &mut Meta) {
     }
 }
 
-/// Metadata/model_settings.config (Bambu) : noms d'objets reels.
+/// Metadata/model_settings.config (Bambu): real object names.
 fn read_model_settings(zip: &mut Zip, meta: &mut Meta) {
     let Some(data) = read_entry(zip, "Metadata/model_settings.config") else {
         return;
@@ -331,11 +331,11 @@ fn read_model_settings(zip: &mut Zip, meta: &mut Meta) {
     }
 }
 
-/// Extrudeur affecté à chaque objet de la scène, et à chacune de ses pièces.
+/// Extruder assigned to each object of the scene, and to each of its parts.
 ///
-/// `Metadata/model_settings.config` (Bambu, Orca) : `<object id>` désigne
-/// l'objet du `<build>`, `<part id>` le composant ; la valeur `extruder` part
-/// de 1, et 0 ou l'absence signifie « comme l'objet ».
+/// `Metadata/model_settings.config` (Bambu, Orca): `<object id>` designates
+/// the `<build>` object, `<part id>` the component; the `extruder` value starts
+/// at 1, and 0 or absence means "same as the object".
 pub fn extruder_settings(zip: &mut Zip) -> HashMap<u32, (u8, HashMap<u32, u8>)> {
     let mut out: HashMap<u32, (u8, HashMap<u32, u8>)> = HashMap::new();
     let Some(data) = read_entry(zip, "Metadata/model_settings.config") else {
@@ -348,7 +348,7 @@ pub fn extruder_settings(zip: &mut Zip) -> HashMap<u32, (u8, HashMap<u32, u8>)> 
     let mut part: Option<u32> = None;
     loop {
         let ev = reader.read_event_into(&mut buf);
-        // Une balise auto-fermante n'a pas de contenu : elle n'ouvre rien.
+        // A self-closing tag has no content: it opens nothing.
         let opens = matches!(ev, Ok(Event::Start(_)));
         match ev {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref() {
@@ -358,8 +358,8 @@ pub fn extruder_settings(zip: &mut Zip) -> HashMap<u32, (u8, HashMap<u32, u8>)> 
                 }
                 "part" => {
                     let pid: Option<u32> = attr_str(&e, "id").and_then(|v| v.parse().ok());
-                    // Toute pièce est connue, même sans extrudeur déclaré (0 :
-                    // celui de l'objet) ; seule une balise ouvrante attend du contenu.
+                    // Every part is known, even without a declared extruder (0: the object's);
+                    // only an opening tag expects content.
                     if let (Some(o), Some(id)) = (object, pid) {
                         out.entry(o).or_insert((0, HashMap::new())).1.entry(id).or_insert(0);
                     }
@@ -392,8 +392,8 @@ pub fn extruder_settings(zip: &mut Zip) -> HashMap<u32, (u8, HashMap<u32, u8>)> 
     out
 }
 
-/// Nom et plateau de chaque objet du `<build>`, d'après
-/// `model_settings.config` (Bambu, Orca). Plateau 1 par défaut.
+/// Name and plate of each `<build>` object, from `model_settings.config`
+/// (Bambu, Orca). Plate 1 by default.
 pub fn object_settings(zip: &mut Zip) -> (HashMap<u32, String>, HashMap<u32, u32>) {
     let mut names = HashMap::new();
     let mut plates = HashMap::new();
@@ -403,7 +403,7 @@ pub fn object_settings(zip: &mut Zip) -> (HashMap<u32, String>, HashMap<u32, u32
     let mut reader = quick_xml::Reader::from_reader(data.as_slice());
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
-    // Contexte : objet (hors pièce) ou plateau en cours de lecture.
+    // Context: object (outside a part) or plate being read.
     let mut object: Option<u32> = None;
     let mut in_part = false;
     let mut plate: Option<u32> = None;
@@ -466,16 +466,16 @@ pub fn object_settings(zip: &mut Zip) -> (HashMap<u32, String>, HashMap<u32, u32
     (names, plates)
 }
 
-/// Un filament déclaré par le projet (`project_settings.config`).
+/// A filament declared by the project (`project_settings.config`).
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct ProjectFilament {
-    /// Numéro d'extrudeur du modèle, à partir de 1.
+    /// Model extruder number, starting at 1.
     pub index: u8,
     pub kind: String,
     pub color: Option<String>,
 }
 
-/// Filaments du projet : matière et couleur de chaque extrudeur du modèle.
+/// Project filaments: material and color of each model extruder.
 pub fn project_filaments(zip: &mut Zip) -> Vec<ProjectFilament> {
     let Some(data) = read_entry(zip, "Metadata/project_settings.config") else {
         return Vec::new();
@@ -499,7 +499,7 @@ pub fn project_filaments(zip: &mut Zip) -> Vec<ProjectFilament> {
         .collect()
 }
 
-/// Lecture complete des metadonnees d'un fichier 3MF.
+/// Full metadata reading of a 3MF file.
 pub fn read_meta(zip: &mut Zip) -> Meta {
     let mut meta = Meta::default();
     meta.has_embedded_thumb = entry_names(zip)

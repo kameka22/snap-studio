@@ -1,0 +1,2 @@
+/* English is the development language: Info.plist holds the texts. This file
+   only declares the localization so macOS lists it. */

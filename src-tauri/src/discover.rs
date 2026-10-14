@@ -1,14 +1,14 @@
-//! Recherche des imprimantes sur le réseau local (mDNS / Bonjour).
+//! Printer discovery on the local network (mDNS / Bonjour).
 //!
-//! Même méthode que Snapmaker Orca (`SSWCP.cpp`) : chaque U1 s'annonce sous
-//! `_snapmaker._tcp.local`, avec une fiche TXT (`sn`, `device_name`,
-//! `machine_type`, `version`, `ip`…). Une requête de réveil
-//! `_services._dns-sd._udp` part d'abord : certains routeurs Wi-Fi ne relaient
-//! le multicast qu'après en avoir vu passer. Les autres Klipper qui
-//! s'annoncent (`_moonraker._tcp`) sont recherchés en même temps.
+//! Same method as Snapmaker Orca (`SSWCP.cpp`): each U1 announces itself as
+//! `_snapmaker._tcp.local`, with a TXT record (`sn`, `device_name`,
+//! `machine_type`, `version`, `ip`…). A wake-up query for
+//! `_services._dns-sd._udp` goes first: some Wi-Fi routers only relay
+//! multicast after seeing some go by. Other Klipper machines announcing
+//! themselves (`_moonraker._tcp`) are searched at the same time.
 //!
-//! Chaque imprimante résolue part aussitôt vers l'interface (`printer-found`),
-//! la fin de la recherche est signalée par `printer-discover-done`.
+//! Each resolved printer goes straight to the UI (`printer-found`); the end of
+//! the search is signaled by `printer-discover-done`.
 
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use serde::Serialize;
@@ -22,24 +22,24 @@ const SERVICES: &[(&str, &str)] = &[
     ("_snapmaker._tcp.local.", "snapmaker"),
     ("_moonraker._tcp.local.", "moonraker"),
 ];
-/// Durée d'écoute, comme Orca.
+/// Listening time, as in Orca.
 const LISTEN: Duration = Duration::from_secs(20);
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Found {
-    /// Numéro de série (U1), sinon absent.
+    /// Serial number (U1), otherwise absent.
     pub sn: Option<String>,
     pub name: String,
     pub model: Option<String>,
     pub ip: String,
-    /// Port annoncé : celui du service, pas forcément celui de Moonraker.
+    /// Announced port: the service's, not necessarily Moonraker's.
     pub port: u16,
     pub firmware: Option<String>,
-    /// « snapmaker » ou « moonraker ».
+    /// "snapmaker" or "moonraker".
     pub service: String,
 }
 
-/// Recherche en cours : un drapeau pour l'arrêter.
+/// Search in progress: a flag to stop it.
 #[derive(Default)]
 pub struct Discovery(Mutex<Option<Arc<AtomicBool>>>);
 
@@ -51,16 +51,16 @@ impl Discovery {
     }
 }
 
-/// Lance une recherche ; une recherche précédente est arrêtée.
+/// Starts a search; a previous search is stopped.
 #[tauri::command]
 pub fn printer_discover_start(app: AppHandle, state: State<'_, Discovery>) -> Result<(), String> {
     state.stop();
-    let daemon = ServiceDaemon::new().map_err(|e| format!("recherche réseau indisponible : {e}"))?;
+    let daemon = ServiceDaemon::new().map_err(|e| crate::t!("err.discovery", err = e))?;
     let stop = Arc::new(AtomicBool::new(false));
     *state.0.lock().unwrap() = Some(stop.clone());
     std::thread::spawn(move || {
         run(&daemon, &stop, |f| {
-            log(&format!("{} — {} ({}, {})", f.service, f.name, f.ip, f.sn.as_deref().unwrap_or("sans n° de série")));
+            log(&format!("{} — {} ({}, {})", f.service, f.name, f.ip, f.sn.as_deref().unwrap_or("no serial number")));
             let _ = app.emit("printer-found", f);
         });
         let _ = daemon.shutdown();
@@ -74,10 +74,10 @@ pub fn printer_discover_stop(state: State<'_, Discovery>) {
     state.stop();
 }
 
-/// Écoute jusqu'à la fin du délai ou l'arrêt demandé.
+/// Listens until the timeout or a stop request.
 fn run(daemon: &ServiceDaemon, stop: &AtomicBool, mut on_found: impl FnMut(Found)) {
-    // La réponse au réveil ne nous intéresse pas : seul compte le trafic
-    // qu'elle provoque.
+    // The answer to the wake-up does not interest us: only the traffic it
+    // triggers matters.
     let _wake = daemon.browse(WAKEUP);
     let receivers: Vec<_> = SERVICES
         .iter()
@@ -120,7 +120,7 @@ fn run(daemon: &ServiceDaemon, stop: &AtomicBool, mut on_found: impl FnMut(Found
     }
 }
 
-/// Fiche d'une imprimante à partir d'une réponse mDNS ; IPv4 seulement.
+/// A printer's record from an mDNS response; IPv4 only.
 fn found(
     kind: &str,
     fullname: &str,
@@ -129,8 +129,8 @@ fn found(
     ips: &[std::net::Ipv4Addr],
     txt: impl Fn(&str) -> Option<String>,
 ) -> Option<Found> {
-    // L'adresse annoncée dans la fiche passe avant celles de l'enregistrement :
-    // c'est celle que l'imprimante dit utiliser.
+    // The address announced in the TXT record comes before the record's own:
+    // it is the one the printer says it uses.
     let ip = txt("ip")
         .filter(|v| v.parse::<std::net::Ipv4Addr>().is_ok())
         .or_else(|| {
@@ -209,8 +209,8 @@ mod tests {
         assert!(found("snapmaker", "x._snapmaker._tcp.local.", "x.local.", 1, &[], txt(&[])).is_none());
     }
 
-    /// Bout en bout sur la machine : une fausse U1 s'annonce, la recherche
-    /// doit la trouver. Dépend du réseau (multicast) : lancé à la main.
+    /// End to end on the machine: a fake U1 announces itself, the search must
+    /// find it. Depends on the network (multicast): run by hand.
     #[test]
     #[ignore]
     fn finds_an_announced_u1() {
@@ -223,7 +223,7 @@ mod tests {
             "u1-test.local.",
             ip.as_str(),
             8883,
-            &[("sn", "SNTEST"), ("device_name", "U1 de test"), ("machine_type", "Snapmaker U1")][..],
+            &[("sn", "SNTEST"), ("device_name", "Test U1"), ("machine_type", "Snapmaker U1")][..],
         )
         .unwrap();
         host.register(info).unwrap();
@@ -240,7 +240,7 @@ mod tests {
         });
         let _ = t;
         println!("{hits:?}");
-        assert!(hits.iter().any(|f| f.sn.as_deref() == Some("SNTEST") && f.name == "U1 de test"));
+        assert!(hits.iter().any(|f| f.sn.as_deref() == Some("SNTEST") && f.name == "Test U1"));
     }
 
     fn local_ip() -> String {

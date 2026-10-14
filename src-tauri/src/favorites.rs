@@ -1,9 +1,9 @@
-//! Favoris : les modèles mis de côté depuis la Bibliothèque.
+//! Favorites: models set aside from the Library.
 //!
-//! Une vue web distante n'a pas de pont vers l'application : on ne peut pas lui
-//! demander le titre de la page. On récupère donc l'URL depuis la vue, et le
-//! reste — titre, description, vignette — en relisant la page côté Rust à
-//! travers ses balises `og:`, celles-là mêmes qui servent aux aperçus de lien.
+//! A remote web view has no bridge to the app: it cannot be asked for the
+//! page title. So the URL is taken from the view, and the rest — title,
+//! description, thumbnail — by reading the page again in Rust through its
+//! `og:` tags, the very ones used for link previews.
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub struct Favorite {
     pub title: String,
     #[serde(default)]
     pub description: String,
-    /// Nom du fichier de vignette en cache, servi par le protocole `favimg`.
+    /// File name of the cached thumbnail, served by the `favimg` protocol.
     #[serde(default)]
     pub image: Option<String>,
     pub added_at: u64,
@@ -52,7 +52,7 @@ pub fn list() -> Vec<Favorite> {
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
-    // À faire d'abord, puis du plus récent au plus ancien.
+    // To do first, then newest to oldest.
     v.sort_by(|a, b| a.done.cmp(&b.done).then(b.added_at.cmp(&a.added_at)));
     v
 }
@@ -85,7 +85,7 @@ pub fn set_done(id: &str, done: bool) -> Result<Vec<Favorite>> {
     Ok(list())
 }
 
-/// Nom lisible d'un site à partir de son hôte.
+/// Readable name of a site from its host.
 fn site_name(host: &str) -> String {
     let h = host.trim_start_matches("www.").to_ascii_lowercase();
     match h.split('.').next().unwrap_or(&h) {
@@ -103,8 +103,8 @@ fn site_name(host: &str) -> String {
     }
 }
 
-/// Dernier segment d'URL transformé en titre : « 1284937-vase-spirale » donne
-/// « Vase spirale ». Sert de repli quand la page ne livre pas ses balises.
+/// Last URL segment turned into a title: "1284937-vase-spirale" gives
+/// "Vase spirale". Fallback when the page does not deliver its tags.
 fn title_from_url(u: &url::Url) -> String {
     let seg = u
         .path_segments()
@@ -118,7 +118,7 @@ fn title_from_url(u: &url::Url) -> String {
         .replace('_', " ");
     let t = cleaned.trim();
     if t.is_empty() {
-        return u.host_str().unwrap_or("Modèle").to_string();
+        return u.host_str().unwrap_or("Model").to_string();
     }
     let mut c = t.chars();
     match c.next() {
@@ -127,10 +127,10 @@ fn title_from_url(u: &url::Url) -> String {
     }
 }
 
-/// Balises `<meta>` d'une page, indexées par `property` ou `name`.
+/// `<meta>` tags of a page, indexed by `property` or `name`.
 ///
-/// Un analyseur XML refuserait du HTML réel ; on balaie donc les balises à la
-/// main, ce qui suffit largement pour des attributs simples.
+/// An XML parser would reject real HTML; so the tags are scanned by hand,
+/// which is plenty for simple attributes.
 pub fn meta_tags(html: &str) -> HashMap<String, String> {
     let mut out = HashMap::new();
     let lower = html.to_ascii_lowercase();
@@ -182,19 +182,19 @@ fn client() -> reqwest::Client {
         .unwrap_or_default()
 }
 
-/// Ajoute une page aux favoris.
+/// Adds a page to the favorites.
 ///
-/// Si la page ne se laisse pas relire — accès restreint, protection anti-robot —
-/// le favori est tout de même enregistré avec un titre déduit de son adresse :
-/// mieux vaut un favori imparfait qu'un favori perdu.
+/// If the page cannot be read again — restricted access, anti-bot protection —
+/// the favorite is still saved with a title derived from its address: better
+/// an imperfect favorite than a lost one.
 pub async fn add(url: &str) -> Result<Vec<Favorite>> {
     let parsed = url::Url::parse(url)?;
     if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(anyhow!("adresse non navigable"));
+        return Err(anyhow!(crate::t!("err.fav_url")));
     }
     let mut v = list();
     if let Some(existing) = v.iter().find(|f| f.url == url) {
-        return Err(anyhow!("« {} » est déjà dans vos favoris", existing.title));
+        return Err(anyhow!(crate::t!("err.fav_exists", name = existing.title)));
     }
 
     let id = format!(
@@ -246,7 +246,7 @@ pub async fn add(url: &str) -> Result<Vec<Favorite>> {
     Ok(list())
 }
 
-/// Télécharge la vignette et renvoie son nom de fichier en cache.
+/// Downloads the thumbnail and returns its cached file name.
 async fn fetch_image(url: &url::Url, id: &str) -> Option<String> {
     let resp = client().get(url.clone()).send().await.ok()?;
     let ext = match resp
@@ -279,14 +279,14 @@ mod tests {
             <meta charset="utf-8">
             <meta property="og:title" content="Vase spiralé &amp; léger">
             <meta property="og:image" content="/img/cover.jpg">
-            <meta name="description" content="Un joli vase">
+            <meta name="description" content="A pretty vase">
             <meta property="og:site_name" content='MakerWorld'>
         </head><body></body></html>"#;
         let m = meta_tags(html);
         assert_eq!(m.get("og:title").map(|s| decode_entities(s)).unwrap(), "Vase spiralé & léger");
         assert_eq!(m.get("og:image").unwrap(), "/img/cover.jpg");
-        assert_eq!(m.get("description").unwrap(), "Un joli vase");
-        assert_eq!(m.get("og:site_name").unwrap(), "MakerWorld", "guillemets simples acceptés");
+        assert_eq!(m.get("description").unwrap(), "A pretty vase");
+        assert_eq!(m.get("og:site_name").unwrap(), "MakerWorld", "single quotes accepted");
     }
 
     #[test]
@@ -299,7 +299,7 @@ mod tests {
         assert_eq!(title_from_url(&p), "Support telephone");
         assert_eq!(site_name(p.host_str().unwrap()), "Printables");
 
-        // Une adresse sans segment parlant ne doit pas produire un titre vide.
+        // An address without a meaningful segment must not produce an empty title.
         let bare = url::Url::parse("https://makerworld.com/").unwrap();
         assert!(!title_from_url(&bare).is_empty());
     }
@@ -312,7 +312,7 @@ mod tests {
             id: "test-fav".into(),
             url: "https://example.com/x".into(),
             site: "Example".into(),
-            title: "Pièce".into(),
+            title: "Part".into(),
             description: String::new(),
             image: None,
             added_at: 42,

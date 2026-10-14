@@ -1,15 +1,14 @@
-//! Impressions : file d'attente, impressions lancées, historique.
+//! Prints: queue, started prints, history.
 //!
-//! Les aperçus de découpe vivent dans un dossier temporaire ; une impression
-//! mise en file doit survivre à un redémarrage. Chaque travail garde donc son
-//! G-code dans `jobs/<id>.gcode`, et le magasin `jobs.json` le décrit : état,
-//! imprimante, options de lancement, profils, bilan. L'ordre des travaux
-//! `queued` dans le magasin est l'ordre de la file.
+//! Slice previews live in a temporary folder; a queued print must survive a
+//! restart. So each job keeps its G-code in `jobs/<id>.gcode`, and the
+//! `jobs.json` store describes it: state, printer, launch options, profiles,
+//! summary. The order of `queued` jobs in the store is the queue order.
 //!
-//! Une tâche de fond interroge les imprimantes : elle publie l'instantané des
-//! impressions (`prints-status`), clôt les travaux terminés et, quand une
-//! imprimante est libre avec une file non vide, demande à l'interface s'il
-//! faut lancer la suivante (`queue-next`). Rien ne part sans l'utilisateur.
+//! A background task polls the printers: it publishes the prints snapshot
+//! (`prints-status`), closes finished jobs and, when a printer is free with a
+//! non-empty queue, asks the UI whether to start the next one
+//! (`queue-next`). Nothing starts without the user.
 
 use crate::gcode::SliceStats;
 use crate::printers::{self, StartOptions, Status};
@@ -21,15 +20,15 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
-/// Impressions terminées conservées.
+/// Finished prints kept.
 const HISTORY: usize = 20;
-/// Intervalle d'interrogation des imprimantes.
+/// Printer polling interval.
 const POLL: Duration = Duration::from_secs(8);
-/// Juste après le lancement, l'imprimante peut encore se dire libre : un
-/// travail aussi récent n'est pas clos.
+/// Right after the launch, the printer may still say it is free: a job that
+/// recent is not closed.
 const GRACE_S: u64 = 90;
 
-/// Profils de la découpe, pour la fiche.
+/// Slicing profiles, for the record.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(default)]
 pub struct Profile {
@@ -37,7 +36,7 @@ pub struct Profile {
     pub process: String,
     pub filaments: Vec<String>,
     pub bed: Option<String>,
-    /// Libellé du plateau tel qu'affiché à la découpe.
+    /// Plate label as shown when slicing.
     pub bed_label: Option<String>,
     pub colors: Vec<Option<String>>,
 }
@@ -45,12 +44,12 @@ pub struct Profile {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Job {
     pub id: String,
-    /// Nom affiché, sans extension.
+    /// Display name, without extension.
     pub name: String,
     pub printer_id: String,
-    /// G-code conservé par Snap Studio.
+    /// G-code kept by Snap Studio.
     pub file: String,
-    /// Nom du fichier sur l'imprimante (connu une fois lancé).
+    /// File name on the printer (known once started).
     #[serde(default)]
     pub remote: String,
     /// queued | printing | complete | cancelled | error | finished
@@ -86,8 +85,8 @@ fn dir() -> PathBuf {
     d
 }
 
-/// Le magasin est lu et écrit sous ce verrou : interface et tâche de fond y
-/// touchent toutes deux.
+/// The store is read and written under this lock: the UI and the background
+/// task both touch it.
 fn lock() -> std::sync::MutexGuard<'static, ()> {
     static L: OnceLock<Mutex<()>> = OnceLock::new();
     L.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner())
@@ -108,7 +107,7 @@ fn save_unlocked(list: &[Job]) -> Result<()> {
     Ok(())
 }
 
-/// Modifie le magasin d'un bloc.
+/// Changes the store in one go.
 fn update<T>(f: impl FnOnce(&mut Vec<Job>) -> Result<T>) -> Result<T> {
     let _g = lock();
     let mut list = load_unlocked();
@@ -118,8 +117,7 @@ fn update<T>(f: impl FnOnce(&mut Vec<Job>) -> Result<T>) -> Result<T> {
     Ok(out)
 }
 
-/// Garde les `HISTORY` dernières impressions terminées ; les autres partent
-/// avec leur G-code.
+/// Keeps the last `HISTORY` finished prints; the others go with their G-code.
 fn prune(list: &mut Vec<Job>) {
     let mut done: Vec<(u64, String)> = list
         .iter()
@@ -154,11 +152,11 @@ pub fn get(id: &str) -> Option<Job> {
     list().into_iter().find(|j| j.id == id)
 }
 
-/// Ce que l'interface sait de la découpe au moment de l'ajout.
+/// What the UI knows about the slice when adding.
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(default)]
 pub struct NewJob {
-    /// Identifiant choisi d'avance (il entre dans le nom du fichier envoyé).
+    /// Id chosen in advance (it goes into the name of the file sent).
     pub id: Option<String>,
     pub name: String,
     pub printer_id: String,
@@ -166,24 +164,24 @@ pub struct NewJob {
     pub tools: Vec<u8>,
     pub profile: Profile,
     pub source: Option<String>,
-    /// Bilan déjà connu (remise en file) ; sinon recalculé depuis le G-code.
+    /// Summary already known (requeue); otherwise recomputed from the G-code.
     #[serde(skip)]
     pub stats: Option<SliceStats>,
 }
 
-/// Nom du fichier sur l'imprimante : unique par travail, pour que deux
-/// impressions du même modèle ne s'écrasent pas et restent distinguables.
+/// File name on the printer: unique per job, so that two prints of the same
+/// model do not overwrite each other and stay distinguishable.
 pub fn remote_name(name: &str, id: &str) -> String {
     format!("{}-{}.gcode", name, &id[..id.len().min(6)])
 }
 
-/// Copie le G-code dans le magasin et enregistre le travail. Lent (copie,
-/// analyse du G-code) : à appeler hors du fil asynchrone.
+/// Copies the G-code into the store and saves the job. Slow (copy, G-code
+/// parsing): call it off the async thread.
 pub fn add(gcode: &Path, new: NewJob, state: &str, remote: &str) -> Result<Job> {
     let id = new.id.clone().unwrap_or_else(printers::new_id);
     let file = dir().join(format!("{id}.gcode"));
     std::fs::copy(gcode, &file)?;
-    // Bilan recalculé depuis le fichier : il voyage avec le travail.
+    // Summary recomputed from the file: it travels with the job.
     let stats = new.stats.clone().or_else(|| {
         std::fs::File::open(&file)
             .ok()
@@ -217,13 +215,13 @@ pub fn add(gcode: &Path, new: NewJob, state: &str, remote: &str) -> Result<Job> 
 pub fn remove(id: &str) -> Result<()> {
     update(|list| {
         if let Some(j) = list.iter().find(|j| j.id == id) {
-            // Seule une impression qui tourne vraiment est protégée : une
-            // imprimante supprimée, injoignable ou libre ne la clora jamais.
+            // Only a print that really runs is protected: a printer that was deleted,
+            // is unreachable or free will never close it.
             let running = snapshot()
                 .iter()
                 .any(|l| l.printer_id == j.printer_id && l.status.online && busy(&l.status.state));
             if j.state == "printing" && running {
-                return Err(anyhow!("impression en cours : annulez-la d'abord"));
+                return Err(anyhow!(crate::t!("err.job_running")));
             }
             let _ = std::fs::remove_file(&j.file);
         }
@@ -232,7 +230,7 @@ pub fn remove(id: &str) -> Result<()> {
     })
 }
 
-/// Déplace un travail dans la file (`delta` : -1 vers le haut, +1 vers le bas).
+/// Moves a job in the queue (`delta`: -1 up, +1 down).
 pub fn shift(id: &str, delta: i32) -> Result<()> {
     update(|list| {
         let queued: Vec<usize> = list.iter().enumerate().filter(|(_, j)| j.state == "queued").map(|(i, _)| i).collect();
@@ -248,10 +246,10 @@ pub fn shift(id: &str, delta: i32) -> Result<()> {
     })
 }
 
-/// Change l'imprimante ou les options d'un travail en attente.
+/// Changes the printer or options of a queued job.
 pub fn edit(id: &str, printer_id: Option<String>, options: Option<StartOptions>) -> Result<Job> {
     update(|list| {
-        let j = list.iter_mut().find(|j| j.id == id).ok_or_else(|| anyhow!("travail inconnu"))?;
+        let j = list.iter_mut().find(|j| j.id == id).ok_or_else(|| anyhow!(crate::t!("err.job_unknown")))?;
         if let Some(p) = printer_id {
             j.printer_id = p;
         }
@@ -262,9 +260,9 @@ pub fn edit(id: &str, printer_id: Option<String>, options: Option<StartOptions>)
     })
 }
 
-/// Remet en file une impression de l'historique (nouvelle entrée).
+/// Queues a print from the history again (new entry).
 pub fn requeue(id: &str) -> Result<Job> {
-    let old = get(id).ok_or_else(|| anyhow!("travail inconnu"))?;
+    let old = get(id).ok_or_else(|| anyhow!(crate::t!("err.job_unknown")))?;
     add(
         Path::new(&old.file),
         NewJob {
@@ -282,12 +280,12 @@ pub fn requeue(id: &str) -> Result<Job> {
     )
 }
 
-/// Le travail vient de partir sur l'imprimante.
+/// The job just left for the printer.
 pub fn mark_started(id: &str, remote: &str) -> Result<()> {
     update(|list| {
-        // Un travail est ajouté en fin de liste : il passe à la suite de
-        // l'historique, hors de la file.
-        let i = list.iter().position(|j| j.id == id).ok_or_else(|| anyhow!("travail inconnu"))?;
+        // A job is added at the end of the list: it goes after the history, out of
+        // the queue.
+        let i = list.iter().position(|j| j.id == id).ok_or_else(|| anyhow!(crate::t!("err.job_unknown")))?;
         let mut j = list.remove(i);
         j.state = "printing".into();
         j.remote = remote.to_string();
@@ -297,7 +295,7 @@ pub fn mark_started(id: &str, remote: &str) -> Result<()> {
     })
 }
 
-/// Clôt les travaux en cours d'une imprimante qui ne l'est plus.
+/// Closes the running jobs of a printer that no longer is.
 fn close_printing(printer_id: &str, state: &str) -> Vec<Job> {
     let out = update(|list| {
         let mut closed = vec![];
@@ -320,9 +318,9 @@ fn next_for(printer_id: &str) -> Option<Job> {
     list().into_iter().find(|j| j.printer_id == printer_id && j.state == "queued")
 }
 
-/* ------------------------------------------------------------ suivi */
+/* ------------------------------------------------------------ tracking */
 
-/// Une imprimante dans l'instantané des impressions.
+/// A printer in the prints snapshot.
 #[derive(Serialize, Clone)]
 pub struct Live {
     pub printer_id: String,
@@ -334,18 +332,18 @@ pub struct Live {
 struct QueueNext {
     printer_id: String,
     printer_name: String,
-    /// Impression qui vient de se terminer, si on l'a vue finir.
+    /// Print that just finished, if it was seen finishing.
     finished: Option<Job>,
     next: Job,
 }
 
 #[derive(Default)]
 struct Monitor {
-    /// Dernier état confirmé par imprimante.
+    /// Last confirmed state per printer.
     states: HashMap<String, String>,
-    /// Passages consécutifs où l'imprimante s'est dite libre.
+    /// Consecutive passes where the printer said it was free.
     idle: HashMap<String, u32>,
-    /// Imprimantes pour lesquelles la question a déjà été posée.
+    /// Printers for which the question was already asked.
     asked: HashSet<String>,
     snapshot: Vec<Live>,
 }
@@ -359,18 +357,18 @@ fn busy(state: &str) -> bool {
     matches!(state, "printing" | "paused")
 }
 
-/// Dernier instantané connu.
+/// Last known snapshot.
 pub fn snapshot() -> Vec<Live> {
     monitor().lock().unwrap().snapshot.clone()
 }
 
-/// « Plus tard » : pas de nouvelle question avant la prochaine impression.
+/// "Later": no new question before the next print.
 pub fn dismiss(printer_id: &str) {
     monitor().lock().unwrap().asked.insert(printer_id.to_string());
 }
 
-/// Pose à nouveau la question pour les imprimantes libres avec une file
-/// (au démarrage de l'interface, ou à la demande).
+/// Asks the question again for free printers with a queue (when the UI
+/// starts, or on demand).
 pub fn ask_again(app: &AppHandle) {
     let mut m = monitor().lock().unwrap();
     m.asked.clear();
@@ -402,7 +400,7 @@ fn offer_next(app: &AppHandle, live: &Live, finished: Option<Job>) {
     );
 }
 
-/// Tâche de fond : une passe toutes les `POLL` secondes, tant que l'application vit.
+/// Background task: one pass every `POLL` seconds, while the app lives.
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
@@ -427,11 +425,11 @@ async fn tick(app: &AppHandle) {
     let _ = app.emit("prints-status", snap);
 }
 
-/// Transitions d'une imprimante joignable.
+/// Transitions of a reachable printer.
 ///
-/// Une fin d'impression n'est retenue que confirmée par deux passages
-/// consécutifs et un état complet : une réponse incomplète ou un hoquet de
-/// Klipper ne doivent pas clore une impression qui tourne encore.
+/// An end of print is only kept when confirmed by two consecutive passes and
+/// a complete state: an incomplete answer or a Klipper hiccup must not close a
+/// print that is still running.
 fn observe(app: &AppHandle, live: &Live) {
     if live.status.partial {
         return;
@@ -442,7 +440,7 @@ fn observe(app: &AppHandle, live: &Live) {
         let mut m = monitor().lock().unwrap();
         m.states.insert(id.clone(), state.to_string());
         m.idle.insert(id.clone(), 0);
-        // Nouvelle impression : la question pourra être reposée à sa fin.
+        // New print: the question may be asked again when it ends.
         m.asked.remove(id);
         return;
     }
@@ -459,8 +457,8 @@ fn observe(app: &AppHandle, live: &Live) {
         m.states.insert(id.clone(), state.to_string());
         was_busy
     };
-    // Libre : ce qu'on croyait en cours est terminé (vu finir, ou fini
-    // pendant que l'application était fermée).
+    // Free: what was believed running is over (seen finishing, or finished
+    // while the app was closed).
     let outcome = match state {
         "cancelled" => "cancelled",
         "error" => "error",
@@ -474,14 +472,16 @@ fn observe(app: &AppHandle, live: &Live) {
             .first()
             .map(|j| j.name.clone())
             .or_else(|| live.status.job.clone())
-            .unwrap_or_else(|| "L'impression".into());
-        let verb = match outcome {
-            "cancelled" => "a été annulée",
-            "error" => "s'est arrêtée sur une erreur",
-            _ => "est terminée",
+            .unwrap_or_else(|| crate::t!("prints.print"));
+        let key = match outcome {
+            "cancelled" => "queue.done.cancelled",
+            "error" => "queue.done.error",
+            _ => "queue.done.ok",
         };
-        let next = next_for(id).map(|j| format!(" Suivante en attente : {}.", j.name)).unwrap_or_default();
-        notify(app, &format!("{name} {verb}"), &format!("{}.{next}", live.printer_name));
+        let next = next_for(id)
+            .map(|j| format!(" {}", crate::t!("notify.next", name = j.name)))
+            .unwrap_or_default();
+        notify(app, &crate::t!(key, name = name), &format!("{}.{next}", live.printer_name));
     }
     offer_next(app, live, closed.into_iter().next());
 }
@@ -517,8 +517,8 @@ mod tests {
         list.push(mk(100, "queued"));
         prune(&mut list);
         assert_eq!(list.iter().filter(|j| is_done(&j.state)).count(), HISTORY);
-        assert!(list.iter().any(|j| j.id == "j29"), "les plus récentes restent");
-        assert!(!list.iter().any(|j| j.id == "j0"), "les plus anciennes partent");
-        assert!(list.iter().any(|j| j.state == "queued"), "la file n'est jamais élaguée");
+        assert!(list.iter().any(|j| j.id == "j29"), "the most recent stay");
+        assert!(!list.iter().any(|j| j.id == "j0"), "the oldest go");
+        assert!(list.iter().any(|j| j.state == "queued"), "the queue is never pruned");
     }
 }

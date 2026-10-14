@@ -1,21 +1,21 @@
 "use strict";
-/* Découpe : imprimante et bobines, préréglages, réglages rapides, puis aperçu
-   du résultat dans le visualiseur, d'où l'on enregistre le G-code ou l'envoie
-   à l'imprimante. Le moteur de Snapmaker Orca tourne en tâche de fond ; son
-   avancement arrive par l'évènement `slice-progress`. */
+/* Slicing: printer and spools, presets, quick settings, then a preview
+   of the result in the viewer, from which the G-code is saved or sent to
+   the printer. The Snapmaker Orca engine runs in the background; its
+   progress arrives through the `slice-progress` event. */
 
 const SL = {
   lists: null,
   source: null,
   job: null,
-  /* Imprimantes enregistrées et bobines lues sur celle qui est choisie. */
+  /* Saved printers and the spools read on the chosen one. */
   printers: [],
   slots: [],
-  /* Filaments déclarés par le modèle : { filaments: [{index, kind, color}], used: [1, 2…] }. */
+  /* Filaments declared by the model: { filaments: [{index, kind, color}], used: [1, 2…] }. */
   models: [],
-  /* Dernier aperçu produit, en attente d'une décision. */
+  /* Last preview produced, awaiting a decision. */
   preview: null,
-  /* Choix conservés : par préréglage machine, et dernière imprimante. */
+  /* Choices kept: per machine preset, and the last printer. */
   memory: JSON.parse(localStorage.getItem("snapstudio.slice") || "{}"),
 };
 
@@ -41,7 +41,7 @@ const fillSelect = (el, items, value) => {
   if (value && items.some((p) => p.name === value)) el.value = value;
 };
 
-/* ------------------------------------------------------------ couleurs */
+/* ------------------------------------------------------------ colors */
 
 const hexToRgb = (h) => {
   const m = /^#?([0-9a-f]{6})/i.exec(h || "");
@@ -57,22 +57,20 @@ const colorDistance = (a, b) => {
 const swatch = (color) =>
   `<span class="swatch${color ? "" : " none"}" style="${color ? `background:${esc(color)}` : ""}"></span>`;
 
-/* ------------------------------------------------------------ ouverture */
+/* ------------------------------------------------------------ opening */
 
-/* La découpe porte sur le plateau de la vue Préparer. */
+/* Slicing works on the Prepare view's plate. */
 async function openSlice() {
   const scene = prepareScene();
   if (!scene) return;
   SL.source = scene;
   SL.job = null;
   SL.touched = new Set();
-  $("s-file").textContent =
-    `${scene.items.length} objet${scene.items.length > 1 ? "s" : ""} sur le plateau` +
-    (scene.skipped ? ` · ${scene.skipped} à côté, non découpé${scene.skipped > 1 ? "s" : ""}` : "");
+  slFileLine();
   setSliceMessage("");
   setSliceProgress(null);
   showSliceBusy(false);
-  // Vignette du premier objet du plateau, si elle se laisse lire.
+  // Thumbnail of the plate's first object, if it can be read.
   const first = scene.items[0]?.path;
   const th = $("s-thumb");
   th.classList.add("hidden");
@@ -83,7 +81,7 @@ async function openSlice() {
   }
   openSheet($("smodal"));
 
-  // Moteur attendu mais absent : la fenêtre propose d'abord de le télécharger.
+  // Engine expected but missing: the sheet first offers to download it.
   await engStatus();
   if (engNeeded()) {
     slEngineGate(true);
@@ -93,7 +91,15 @@ async function openSlice() {
   await sliceLoad();
 }
 
-/* Le moteur manque : sa carte remplace le contenu, la découpe attend. */
+/* Objects on the plate, and those left off it. */
+function slFileLine() {
+  const scene = SL.source;
+  $("s-file").textContent =
+    tr("slice.objects", { n: scene.items.length }) +
+    (scene.skipped ? " · " + tr("slice.skipped", { n: scene.skipped }) : "");
+}
+
+/* The engine is missing: its card replaces the content, slicing waits. */
 function slEngineGate(on) {
   $("s-engine").classList.toggle("hidden", !on);
   document.querySelector("#smodal .sl-box").classList.toggle("needs-engine", on);
@@ -109,7 +115,7 @@ function slEngineGate(on) {
   }
 }
 
-/* Imprimantes, couleurs du modèle, profils : le contenu de la fenêtre. */
+/* Printers, model colors, profiles: the sheet's content. */
 async function sliceLoad() {
   try {
     const [printers, ...models] = await Promise.all([
@@ -117,7 +123,7 @@ async function sliceLoad() {
       ...SL.source.files.map((path) => invoke("slice_model", { path }).catch(() => null)),
     ]);
     SL.printers = printers;
-    // Couleurs du modèle, fichier par fichier.
+    // Model colors, file by file.
     SL.models = SL.source.files.map((path, i) => {
       const m = models[i];
       return {
@@ -127,7 +133,7 @@ async function sliceLoad() {
         used: m?.used?.length ? m.used : [1],
       };
     });
-    const opts = [{ id: "", name: "Sans imprimante" }, ...printers];
+    const opts = [{ id: "", name: tr("slice.no_printer") }, ...printers];
     $("s-printer").innerHTML = opts
       .map((p) => `<option value="${esc(p.id)}">${esc(p.name || p.host)}</option>`)
       .join("");
@@ -143,11 +149,11 @@ async function sliceLoad() {
 
 const currentPrinter = () => SL.printers.find((p) => p.id === $("s-printer").value) || null;
 
-/* Une imprimante choisie impose sa machine et fait lire ses bobines. */
+/* A chosen printer imposes its machine and gets its spools read. */
 async function onPrinterChange() {
   const printer = currentPrinter();
   SL.slots = [];
-  $("s-heads-note").textContent = printer ? "lecture des bobines…" : "";
+  $("s-heads-note").textContent = printer ? tr("slice.reading_spools") : "";
   slPrinterState(printer ? "checking" : null);
   SL.lists = await invoke("slice_lists", { machine: SL.memory.last || null });
 
@@ -164,26 +170,26 @@ async function onPrinterChange() {
   if (printer) {
     try {
       const st = await invoke("printer_status", { host: printer.host, port: printer.port });
-      // Son état vaut même si l'utilisateur est passé à une autre entre-temps.
+      // Its state holds even if the user moved to another one meanwhile.
       slPrinterState(st.online ? st.state : "offline", printer.id);
       if (currentPrinter() !== printer) return;
       SL.slots = st.filaments || [];
-      $("s-heads-note").textContent = !st.online
-        ? "imprimante injoignable"
-        : SL.slots.length ? "bobines lues sur l'imprimante" : "bobines non exposées";
+      $("s-heads-note").textContent = tr(!st.online
+        ? "prints.unreachable"
+        : SL.slots.length ? "slice.spools_read" : "slice.spools_hidden");
     } catch {
       slPrinterState("offline", printer.id);
       if (currentPrinter() !== printer) return;
-      $("s-heads-note").textContent = "imprimante injoignable";
+      $("s-heads-note").textContent = tr("prints.unreachable");
     }
     renderHeads(null, true);
     renderModelMap(true);
   }
 }
 
-/* Préréglage machine dont le nom contient le modèle de l'imprimante. */
-/* À égalité (les profils U1 ne diffèrent que par la buse), `preferred` — le
-   profil déjà choisi dans Orca ou ici — l'emporte, puis la buse de 0,4. */
+/* Machine preset whose name contains the printer's model. */
+/* On a tie (U1 profiles only differ by nozzle), `preferred` — the profile
+   already chosen in Orca or here — wins, then the 0.4 nozzle. */
 function matchMachine(printer, machines, preferred) {
   const words = (printer.model || printer.name || "").toLowerCase().split(/\s+/).filter((w) => w.length > 1);
   if (!words.length) return null;
@@ -196,14 +202,14 @@ function matchMachine(printer, machines, preferred) {
   return top.find((n) => n === preferred) || top.find((n) => /\(0\.4 nozzle\)/i.test(n)) || top[0];
 }
 
-/* Plateaux de la machine : le choix fixe la température du plateau, lue dans
-   le profil filament pour ce type de plateau. */
+/* The machine's plates: the choice sets the bed temperature, read from the
+   filament profile for that plate type. */
 function fillBeds(saved) {
   const sel = $("s-bed");
   const types = SL.lists?.bed_types || [];
   sel.innerHTML = types.map((t) => `<option value="${esc(t.value)}">${esc(t.label)}</option>`).join("");
   sel.value = types.some((t) => t.value === saved) ? saved : SL.lists?.bed_type || types[0]?.value || "";
-  // Tuiles : une par plateau, avec la température qu'il donnera.
+  // Tiles: one per plate, with the temperature it will give.
   const tex = { "Textured PEI Plate": "textured", "High Temp Plate": "smooth", "Graphic Effect Plate": "graphic" };
   $("s-beds").innerHTML = types
     .map(
@@ -228,8 +234,8 @@ async function onMachineChange(mem) {
   try {
     SL.lists = await invoke("slice_lists", { machine });
     const m = mem || rememberFor(machine);
-    // Le premier choix connu et proposé pour cette machine ; à défaut, le
-    // profil standard de 0,20 mm.
+    // The first choice known and offered for this machine; failing that, the
+    // standard 0.20 mm profile.
     const known = (n) => n && SL.lists.processes.some((p) => p.name === n);
     fillSelect($("s-process"), SL.lists.processes, [m.process, SL.lists.selected.print].find(known) || slProcessFor(0.2, "Standard"));
     slRenderMachine();
@@ -243,12 +249,12 @@ async function onMachineChange(mem) {
   }
 }
 
-/* ------------------------------------------------------------ têtes */
+/* ------------------------------------------------------------ heads */
 
 const headCount = () => Math.max(1, SL.lists?.extruders || 1);
 
-/* Préréglage le plus proche d'une bobine : matière obligatoire, puis
-   fabricant, puis sous-type ; un préréglage générique sert de repli. */
+/* Closest preset to a spool: material required, then vendor, then
+   sub-type; a generic preset serves as fallback. */
 function bestFilament(slot, list) {
   const kind = (slot.kind || "").trim().toUpperCase();
   if (!kind) return null;
@@ -272,7 +278,7 @@ function bestFilament(slot, list) {
   return best?.name || null;
 }
 
-/* Une ligne par tête : bobine réelle (si connue) et préréglage filament. */
+/* One row per head: real spool (if known) and filament preset. */
 function renderHeads(saved, fromPrinter) {
   const list = SL.lists?.filaments || [];
   const fallback = SL.lists?.selected?.filament || list[0]?.name;
@@ -282,12 +288,12 @@ function renderHeads(saved, fromPrinter) {
     const slot = SL.slots.find((s) => s.index === i);
     const auto = slot && slot.present ? bestFilament(slot, list) : null;
     const chosen = (fromPrinter && auto) || saved?.[i] || prev[i] || auto || fallback;
-    // Carte bobine : couleur réelle en aplat, matière, préréglage choisi.
+    // Spool card: real color as a flat fill, material, chosen preset.
     const present = slot?.present;
-    const kind = present ? [slot.kind, slot.sub_type].filter(Boolean).join(" ") || "?" : slot ? "Vide" : "";
+    const kind = present ? [slot.kind, slot.sub_type].filter(Boolean).join(" ") || "?" : slot ? tr("slice.empty") : "";
     const sub = present
-      ? slot.vendor || (auto ? "" : `aucun préréglage ${slot.kind || ""}`)
-      : slot ? "aucune bobine" : "bobine inconnue";
+      ? slot.vendor || (auto ? "" : tr("slice.no_preset", { kind: slot.kind || "" }))
+      : tr(slot ? "slice.no_spool" : "slice.spool_unknown");
     const color = present && slot.color ? slot.color : null;
     rows.push(`<div class="sl-headcard${slot && !present ? " is-empty" : ""}" data-card="${i}">
       <div class="sl-spool${color ? "" : " none"}"${color ? ` style="--c:${esc(color)}"` : ""}></div>
@@ -296,7 +302,7 @@ function renderHeads(saved, fromPrinter) {
       <select class="hidden" data-head="${i}" tabindex="-1">${list
         .map((p) => `<option value="${esc(p.name)}"${p.name === chosen ? " selected" : ""}>${esc(p.name)}</option>`)
         .join("")}</select>
-      <span class="sel-row"><button class="sl-hc-preset" data-pick-head="${i}" title="Changer de profil filament"></button><button class="btn info-btn" data-info="head" data-head="${i}" title="Détails du profil">${INFO_ICON}</button></span>
+      <span class="sel-row"><button class="sl-hc-preset" data-pick-head="${i}" title="${esc(tr("slice.change_filament"))}"></button><button class="btn info-btn" data-info="head" data-head="${i}" title="${esc(tr("slice.profile_details"))}">${INFO_ICON}</button></span>
       <small class="sl-hc-temp" data-temp="${i}"></small>
     </div>`);
   }
@@ -306,7 +312,7 @@ function renderHeads(saved, fromPrinter) {
   pdBedLine();
 }
 
-/* Têtes choisies pour chaque extrudeur de chaque fichier du plateau. */
+/* Heads chosen for each extruder of each file on the plate. */
 function renderModelMap(fromPrinter) {
   const n = headCount();
   const prev = Object.fromEntries(
@@ -322,16 +328,16 @@ function renderModelMap(fromPrinter) {
       let head = fromPrinter ? null : prev[key];
       if (head == null || head >= n) head = autoHead(fil, e, taken);
       taken.add(head);
-      const color = m.used.length === 1 ? "" : `Couleur ${e}`;
-      const label = several ? [m.stem, color].filter(Boolean).join(" · ") : color || "Modèle";
-      rows.push(`<div class="sl-maprow" draggable="true" data-drag="${key}" title="Glisser sur une bobine pour l'attribuer">
+      const color = m.used.length === 1 ? "" : tr("slice.color_n", { n: e });
+      const label = several ? [m.stem, color].filter(Boolean).join(" · ") : color || tr("printers.form.model");
+      rows.push(`<div class="sl-maprow" draggable="true" data-drag="${key}" title="${esc(tr("slice.drag_hint"))}">
         ${swatch(fil?.color)}
         <span class="sl-map-label"><b>${esc(label)}</b>${fil?.kind ? `<small>${esc(fil.kind)}</small>` : ""}</span>
         <span class="sl-arrow">→</span>
         <span class="sl-tokens" data-tokens="${key}"></span>
         <select class="hidden" tabindex="-1" data-key="${key}" data-file="${fi}" data-ext="${e}">${Array.from({ length: n }, (_, h) => {
           const slot = SL.slots.find((s) => s.index === h);
-          const desc = slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · vide") : "";
+          const desc = slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : "";
           return `<option value="${h}"${h === head ? " selected" : ""}>T${h}${esc(desc)}</option>`;
         }).join("")}</select>
       </div>`);
@@ -339,12 +345,12 @@ function renderModelMap(fromPrinter) {
   });
   $("s-map").innerHTML = rows.join("");
   slUsedHeads();
-  // Les températures de plateau dépendent des têtes employées.
+  // Bed temperatures depend on the heads used.
   pdBedLine();
 }
 
-/* Têtes employées par le modèle : leur carte ressort, les autres s'effacent ;
-   la pastille de chaque couleur prend celle de la bobine visée. */
+/* Heads used by the model: their card stands out, the others fade; each
+   color's dot takes the targeted spool's. */
 function slUsedHeads() {
   const used = slUsedSet();
   document.querySelectorAll("#s-heads .sl-headcard").forEach((c) => c.classList.toggle("unused", used.size > 0 && !used.has(+c.dataset.card)));
@@ -353,9 +359,9 @@ function slUsedHeads() {
   return used;
 }
 
-/* Tête la plus vraisemblable pour une couleur du modèle : même matière et
-   couleur la plus proche parmi les bobines présentes, sans réutiliser une tête
-   déjà prise si possible. */
+/* Most likely head for a model color: same material and closest color
+   among the spools present, without reusing a head already taken if
+   possible. */
 function autoHead(fil, ext, taken) {
   const n = headCount();
   const present = SL.slots.filter((s) => s.present && s.index < n);
@@ -372,10 +378,10 @@ function autoHead(fil, ext, taken) {
   return (ext - 1) % n;
 }
 
-/* ------------------------------------------------------------ réglages rapides */
+/* ------------------------------------------------------------ quick settings */
 
-/* Valeurs de départ : celles du préréglage, sauf si l'utilisateur en a déjà
-   choisi d'autres pour cette imprimante. */
+/* Starting values: the preset's, unless the user already chose others for
+   this printer. */
 async function loadDefaults(saved) {
   const machine = $("s-machine").value;
   const process = $("s-process").value;
@@ -385,10 +391,10 @@ async function loadDefaults(saved) {
     d = await invoke("slice_defaults", { machine, process });
   } catch {}
   const v = { ...d, ...(saved || {}) };
-  // La hauteur de couche est celle du profil (pastilles « Qualité ») : elle
-  // n'est jamais surchargée, donc lue dans son nom ou ses valeurs.
+  // The layer height is the profile's ("Quality" chips): it is never
+  // overridden, so it is read from its name or its values.
   const h = parseProcess(process)?.h ?? d.layer_height;
-  $("s-layer-val").textContent = h ? `${(+h).toFixed(2).replace(".", ",")} mm` : "—";
+  $("s-layer-val").textContent = h ? `${fmtDec(+h, 2)} mm` : "—";
   setRange("s-infill", v.infill ?? 15, (x) => Math.round(x) + " %");
   setRange("s-walls", v.walls ?? 2, (x) => String(Math.round(x)));
   $("s-supports").checked = !!v.supports;
@@ -407,30 +413,30 @@ document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
   slSummary();
 });
 
-/* Têtes employées par le modèle (couleurs → têtes) ; vide si inconnu. */
+/* Heads used by the model (colors → heads); empty if unknown. */
 function slUsedSet() {
   return new Set([...document.querySelectorAll("#s-map select")].map((s) => +s.value));
 }
 
-/* Barre du bas : ce qui partira au moteur, en une ligne. */
+/* Bottom bar: what will go to the engine, in one line. */
 function slSummary() {
   const used = slUsedSet();
   const bed = $("s-bed").selectedOptions[0]?.textContent || "";
   const temp = typeof PD !== "undefined" ? PD.bedTemps?.[$("s-bed").value] : null;
   const n = used.size || 1;
   const parts = [
-    `${n} bobine${n > 1 ? "s" : ""}`,
+    tr("slice.sum.spools", { n }),
     bed && `${bed}${temp ? ` ${temp}` : ""}`,
     $("s-layer-val").textContent,
-    `${$("s-infill-val").textContent} remplissage`,
-    `${$("s-walls-val").textContent} parois`,
-    $("s-supports").checked && "supports",
-    $("s-brim").checked && "bordure",
+    tr("slice.sum.infill", { v: $("s-infill-val").textContent }),
+    tr("slice.sum.walls", { v: $("s-walls-val").textContent }),
+    $("s-supports").checked && tr("slice.sum.supports"),
+    $("s-brim").checked && tr("slice.sum.brim"),
   ].filter(Boolean);
   $("s-summary").innerHTML = parts.map((p) => `<span>${esc(p)}</span>`).join("");
 }
 
-/* Ajustements touchés à la main : ils survivent à un changement de profil. */
+/* Adjustments touched by hand: they survive a profile change. */
 const SL_TOUCH = { "s-infill": "infill", "s-walls": "walls", "s-supports": "supports", "s-brim": "brim" };
 function slTouch(id) {
   (SL.touched ||= new Set()).add(SL_TOUCH[id]);
@@ -462,7 +468,7 @@ function currentSimple() {
   };
 }
 
-/* ------------------------------------------------------------ exécution */
+/* ------------------------------------------------------------ execution */
 
 function setSliceMessage(text, cls) {
   const el = $("s-msg");
@@ -470,7 +476,7 @@ function setSliceMessage(text, cls) {
   el.className = "pf-test" + (cls ? " " + cls : "");
 }
 
-/* Barre d'avancement ; `null` la masque. */
+/* Progress bar; `null` hides it. */
 function setSliceProgress(pct) {
   $("s-progress").classList.toggle("hidden", pct == null);
   if (pct != null) $("s-progress").firstElementChild.style.width = Math.max(2, pct) + "%";
@@ -484,7 +490,7 @@ function showSliceBusy(busy) {
     .querySelectorAll("#smodal select, #smodal input, #smodal .sl-cols button:not(.info-btn)")
     .forEach((el) => (el.disabled = busy));
   if (busy) closePicker();
-  // Déverrouillé : les jetons des têtes vides doivent rester inactifs.
+  // Unlocked: the chips of empty heads must stay inactive.
   else slTokens();
 }
 
@@ -493,11 +499,10 @@ async function startSlice() {
   const process = $("s-process").value;
   const filaments = [...document.querySelectorAll("#s-heads select")].map((s) => s.value);
   if (!machine || !process || !filaments.length || filaments.some((f) => !f)) {
-    setSliceMessage("Choisissez une machine, un profil et un filament par tête.", "err");
+    setSliceMessage(tr("slice.need_profiles"), "err");
     return;
   }
-  // Extrudeur du modèle → tête, fichier par fichier ; l'entrée i concerne
-  // l'extrudeur i + 1.
+  // Model extruder → head, file by file; entry i is about extruder i + 1.
   const maps = SL.models.map(() => []);
   document.querySelectorAll("#s-map select").forEach((s) => (maps[+s.dataset.file][+s.dataset.ext - 1] = +s.value));
   for (const m of maps) for (let i = 0; i < m.length; i++) if (m[i] == null) m[i] = 0;
@@ -505,7 +510,7 @@ async function startSlice() {
   const heads = [...new Set(maps.flat())];
   const empty = heads.filter((h) => SL.slots.find((s) => s.index === h && !s.present));
   if (empty.length) {
-    setSliceMessage(`La tête ${empty.map((h) => "T" + h).join(", ")} n'a pas de bobine.`, "err");
+    setSliceMessage(tr("slice.head_empty", { heads: empty.map((h) => "T" + h).join(", ") }), "err");
     return;
   }
   const colors = filaments.map((_, i) => {
@@ -524,7 +529,7 @@ async function startSlice() {
   }
 
   showSliceBusy(true);
-  setSliceMessage("Préparation…", "busy");
+  setSliceMessage(tr("slice.preparing"), "busy");
   setSliceProgress(0);
   try {
     SL.job = await invoke("slice_start", {
@@ -546,12 +551,12 @@ listen("slice-progress", async (e) => {
   const p = e.payload;
   if (!SL.job || p.id !== SL.job) return;
   if (p.phase === "preparation") {
-    setSliceMessage("Préparation du modèle et des profils…", "busy");
+    setSliceMessage(tr("slice.preparing_model"), "busy");
   } else if (p.phase === "slicing") {
     if (p.percent != null) {
       stopElapsed();
       setSliceProgress(p.percent);
-      setSliceMessage(`${p.message || "Découpe en cours…"} ${Math.round(p.percent)} %`, "busy");
+      setSliceMessage(`${p.message || tr("slice.slicing")} ${Math.round(p.percent)} %`, "busy");
     } else {
       tickElapsed(p.elapsed_s);
     }
@@ -568,23 +573,23 @@ listen("slice-progress", async (e) => {
     showSliceBusy(false);
     setSliceProgress(null);
     SL.job = null;
-    setSliceMessage("Découpe interrompue.", "");
+    setSliceMessage(tr("slice.stopped"), "");
   } else if (p.phase === "error") {
     stopElapsed();
     showSliceBusy(false);
     setSliceProgress(null);
     SL.job = null;
-    setSliceMessage(p.message || "Le moteur s'est arrêté sans message.", "err");
+    setSliceMessage(p.message || tr("slice.engine_silent"), "err");
   }
 });
 
-/* Le compteur tourne côté interface quand le moteur ne donne pas d'avancement. */
+/* The counter runs in the UI when the engine reports no progress. */
 let elapsedTimer = 0;
 function tickElapsed(from) {
   stopElapsed();
   const t0 = Date.now() - from * 1000;
   elapsedTimer = setInterval(() => {
-    setSliceMessage(`Découpe en cours… ${((Date.now() - t0) / 1000).toFixed(0)} s`, "busy");
+    setSliceMessage(`${tr("slice.slicing")} ${Math.round((Date.now() - t0) / 1000)} s`, "busy");
   }, 500);
 }
 function stopElapsed() {
@@ -592,7 +597,7 @@ function stopElapsed() {
   elapsedTimer = 0;
 }
 
-/* ------------------------------------------------------------ aperçu */
+/* ------------------------------------------------------------ preview */
 
 function showPreview(job, p) {
   const req = SL.request || { filaments: [], colors: [] };
@@ -601,7 +606,7 @@ function showPreview(job, p) {
   const toolNames = req.filaments.map((name) => name.replace(/\s*@.*$/, ""));
   openPreview({
     path: p.gcode,
-    name: SL.source.name + " — aperçu",
+    name: SL.source.name + " — " + tr("ia.preview").toLowerCase(),
     stats: p.stats || {},
     toolColors,
     toolNames,
@@ -612,7 +617,7 @@ function showPreview(job, p) {
       switchView("prepare");
       openSlice();
     },
-    // Fermer l'aperçu le supprime : ce qui a été enregistré reste.
+    // Closing the preview deletes it: what was saved stays.
     onClose: () => {
       if (SL.preview) invoke("slice_discard", { id: SL.preview.job }).catch(() => {});
       SL.preview = null;
@@ -626,21 +631,21 @@ async function savePreview() {
   try {
     const path = await invoke("slice_save", { id: pv.job, dir: null });
     pv.saved = path;
-    toast("G-code enregistré : " + path.split("/").pop());
+    toast(tr("slice.gcode_saved", { name: path.split("/").pop() }));
     await refresh();
   } catch (e) {
     toast(String(e), true);
   }
 }
 
-/* ------------------------------------------------------------ envoi */
+/* ------------------------------------------------------------ sending */
 
 async function openSend() {
   const pv = SL.preview;
   if (!pv) return;
   if (!SL.printers.length) SL.printers = await invoke("printers_list").catch(() => []);
   if (!SL.printers.length) {
-    toast("Ajoutez d'abord une imprimante", true);
+    toast(tr("send.no_printer"), true);
     return;
   }
   $("snd-file").textContent = pv.source.name + (pv.stats.print_time_s ? " · " + fmtDuration(pv.stats.print_time_s) : "");
@@ -648,7 +653,7 @@ async function openSend() {
     .map((p) => `<option value="${esc(p.id)}">${esc(p.name || p.host)}</option>`)
     .join("");
   $("snd-printer").value = SL.printers.some((p) => p.id === pv.printer) ? pv.printer : SL.printers[0].id;
-  // Options toujours décochées à l'ouverture, comme demandé.
+  // Options always unticked on opening, as requested.
   ["snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).checked = false));
   setSendBusy(false);
   setSendMessage("");
@@ -659,15 +664,14 @@ async function openSend() {
 
 const sendPrinter = () => SL.printers.find((p) => p.id === $("snd-printer").value);
 
-/* Imprimante libre : lancer, ou mettre en file. Occupée ou injoignable :
-   seulement la file d'attente. */
+/* Printer free: start, or queue. Busy or unreachable: only the queue. */
 function setSendMode(mode) {
   SL.sendMode = mode;
-  $("snd-go").textContent = mode === "queue" ? "Ajouter à la file d'attente" : "Lancer l'impression";
+  $("snd-go").textContent = tr(mode === "queue" ? "send.add_queue" : "send.go");
   $("snd-queue").classList.toggle("hidden", mode !== "launch");
 }
 
-/* État de l'imprimante visée : on ne lance que sur une machine au repos. */
+/* State of the target printer: only start on an idle machine. */
 async function checkSendPrinter() {
   const p = sendPrinter();
   const el = $("snd-state");
@@ -676,31 +680,31 @@ async function checkSendPrinter() {
   $("snd-queue").classList.add("hidden");
   if (!p) return;
   el.className = "pf-test busy";
-  el.textContent = "Interrogation de l'imprimante…";
+  el.textContent = tr("send.querying");
   const st = await invoke("printer_status", { host: p.host, port: p.port }).catch(() => null);
   if (sendPrinter() !== p) return;
   if (!st || !st.online) {
     el.className = "pf-test err";
-    el.textContent = `${p.name} ne répond pas : l'impression peut attendre dans la file.`;
+    el.textContent = tr("send.no_answer", { name: p.name });
     setSendMode("queue");
     $("snd-go").disabled = false;
     return;
   }
   if (["printing", "paused"].includes(st.state)) {
-    const end = st.remaining_s ? ` — fin prévue vers ${fmtClock(Date.now() + st.remaining_s * 1000)}` : "";
+    const end = st.remaining_s ? " — " + tr("send.ends_at", { time: fmtClock(Date.now() + st.remaining_s * 1000) }) : "";
     el.className = "pf-test warn";
-    el.textContent = `${p.name} imprime « ${(st.job || "").replace(/\.gcode$/, "")} »${end}.`;
+    el.textContent = tr("send.busy", { name: p.name, job: (st.job || "").replace(/\.gcode$/, ""), end });
     setSendMode("queue");
     $("snd-go").disabled = false;
     return;
   }
-  // Têtes du G-code sans bobine sur cette machine : à signaler avant l'envoi.
+  // G-code heads with no spool on this machine: to flag before sending.
   const tools = SL.preview?.stats?.tools || [];
   const missing = tools.filter((t) => (st.filaments || []).some((f) => f.index === t && !f.present));
   el.className = "pf-test" + (missing.length ? " err" : " ok");
   el.textContent = missing.length
-    ? `Tête ${missing.map((t) => "T" + t).join(", ")} sans bobine sur ${p.name}.`
-    : `${p.name} est prête.`;
+    ? tr("send.missing", { heads: missing.map((t) => "T" + t).join(", "), name: p.name })
+    : tr("send.ready", { name: p.name });
   $("snd-go").disabled = missing.length > 0;
   setSendMode("launch");
 }
@@ -717,7 +721,7 @@ function setSendProgress(pct) {
 function setSendBusy(busy) {
   SL.sending = busy;
   $("snd-go").classList.toggle("hidden", busy);
-  // Après un échec, les choix d'avant reviennent (dont « Mettre en file »).
+  // After a failure, the earlier choices come back (including "Add to Queue").
   if (busy) $("snd-queue").classList.add("hidden");
   else if (SL.sendMode) setSendMode(SL.sendMode);
   $("snd-cancel").classList.toggle("hidden", busy);
@@ -729,7 +733,7 @@ async function sendPrint(queue = SL.sendMode === "queue") {
   if (!pv || !p || (!queue && $("snd-go").disabled)) return;
   setSendBusy(true);
   setSendProgress(queue ? null : 0);
-  setSendMessage(queue ? "Ajout à la file d'attente…" : "Préparation de l'imprimante…", "busy");
+  setSendMessage(tr(queue ? "send.queueing" : "send.preparing"), "busy");
   const r = SL.request || {};
   try {
     const id = await invoke("print_send", {
@@ -754,8 +758,8 @@ async function sendPrint(queue = SL.sendMode === "queue") {
       },
     });
     if (!queue) {
-      // L'instantané des imprimantes peut encore dire « libre » : la fiche
-      // se désigne par le travail, pas par l'imprimante.
+      // The printers snapshot may still say "free": the record is designated by
+      // the job, not by the printer.
       await pjLoad();
       pjShow(id ? "job:" + id : null);
     } else {
@@ -764,7 +768,7 @@ async function sendPrint(queue = SL.sendMode === "queue") {
       closeViewer();
       await pjLoad();
       const pos = pjQueue().findIndex((j) => j.id === id) + 1;
-      toast(`Ajoutée à la file d'attente de ${p.name}${pos ? ` (${pos}${pos === 1 ? "re" : "e"} position)` : ""}`);
+      toast(tr("send.queued", { name: p.name }) + (pos ? ` (${tr("prints.position", { n: pos })})` : ""));
       pjShow("job:" + id);
     }
   } catch (e) {
@@ -777,27 +781,45 @@ async function sendPrint(queue = SL.sendMode === "queue") {
 listen("print-send", (e) => {
   if (!SL.sending) return;
   const s = e.payload;
-  if (s.phase === "check") setSendMessage("Vérification de l'imprimante…", "busy");
-  else if (s.phase === "prepare") setSendMessage("Préparation de l'imprimante…", "busy");
+  if (s.phase === "check") setSendMessage(tr("send.checking"), "busy");
+  else if (s.phase === "prepare") setSendMessage(tr("send.preparing"), "busy");
   else if (s.phase === "upload") {
     setSendProgress(s.percent);
-    setSendMessage(`Envoi du fichier… ${Math.round(s.percent || 0)} %`, "busy");
+    setSendMessage(tr("send.uploading", { p: Math.round(s.percent || 0) }), "busy");
   } else if (s.phase === "done") {
     const p = sendPrinter();
     setSendBusy(false);
     closeSheet($("sendmodal"));
-    toast(`Impression lancée sur ${p?.name || "l'imprimante"}`);
+    toast(tr("send.started", { name: p?.name || tr("slice.printer") }));
     if (s.message) toast(s.message, true);
     closeViewer();
   }
 });
 
-/* ------------------------------------------------------------ évènements */
+/* ------------------------------------------------------------ events */
+
+window.addEventListener("langchange", () => {
+  if ($("smodal").classList.contains("hidden") || !SL.source) return;
+  slFileLine();
+  if (SL.lists) {
+    renderHeads(null, false);
+    renderModelMap(false);
+    // Plate names come from Rust, in the language it now speaks.
+    invoke("slice_lists", { machine: $("s-machine").value })
+      .then((l) => {
+        SL.lists.bed_types = l.bed_types;
+        fillBeds($("s-bed").value);
+        pdBedLine();
+      })
+      .catch(() => {});
+  }
+  slSummary();
+});
 
 $("s-printer").addEventListener("change", onPrinterChange);
 $("s-machine").addEventListener("change", () => onMachineChange(null));
-// Changer de profil (hauteur, style) applique ses valeurs, sauf pour les
-// ajustements que l'utilisateur a déjà touchés dans cette fenêtre.
+// Changing profile (height, style) applies its values, except for the
+// adjustments the user already touched in this sheet.
 $("s-process").addEventListener("change", () => {
   const cur = currentSimple();
   loadDefaults(Object.fromEntries([...(SL.touched || [])].map((k) => [k, cur[k]])));
@@ -809,7 +831,7 @@ $("s-stop").addEventListener("click", () => {
 });
 document.addEventListener("keydown", (e) => {
   if ($("smodal").classList.contains("hidden")) return;
-  // Le détail d'un profil, ouvert par-dessus, garde ses touches.
+  // A profile's details, open on top, keep their keys.
   if (!$("pdmodal").classList.contains("hidden")) return;
   if (e.key === "Escape" && !SL.job) closeSheet($("smodal"));
   if (e.key === "Enter" && !SL.job && e.target.tagName !== "SELECT") startSlice();

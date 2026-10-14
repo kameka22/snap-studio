@@ -1,12 +1,12 @@
-# Fichiers du paquet officiel Snapmaker Orca gardés dans le moteur allégé.
+# Files of the official Snapmaker Orca package kept in the slimmed engine.
 #
-# Liste AUTORISÉE : tout ce qui n'y figure pas est retiré. Un fichier ajouté
-# par Snapmaker dans une version future n'est donc jamais embarqué par
-# accident ; s'il devient nécessaire, le test de découpe de la CI le signale.
+# ALLOW list: anything not listed is removed. A file added by Snapmaker in a
+# future version is therefore never shipped by accident; if it becomes
+# needed, the CI's test slice flags it.
 #
-# Chemins relatifs à la racine extraite du paquet officiel, motifs glob
-# (`**` : tous les sous-dossiers). La structure est conservée telle quelle :
-# le moteur cherche `resources` par rapport à son exécutable.
+# Paths relative to the official package's extracted root, glob patterns
+# (`**`: all subfolders). The structure is kept as is: the engine looks for
+# `resources` relative to its executable.
 
 [macos]
 Snapmaker Orca.app/Contents/Info.plist

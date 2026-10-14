@@ -1,37 +1,36 @@
-//! Reprise des données de l'ancienne « 3MF Studio » (nom technique `trimf`).
+//! Carries over the data of the former "3MF Studio" (technical name `trimf`).
 //!
-//! Lancée une fois au démarrage, avant la création de toute vue web : le
-//! stockage WebKit (réglages, onglets, sessions des sites) doit être en place
-//! quand la première page s'ouvre.
+//! Run once at startup, before any web view is created: the WebKit storage
+//! (settings, tabs, site sessions) must be in place when the first page opens.
 //!
-//! Règle unique : on n'écrase jamais. Une destination déjà présente signifie
-//! que la reprise a eu lieu, ou que Snap Studio a déjà ses propres données.
-//! Les données personnelles sont copiées, l'ancien emplacement reste intact ;
-//! seul le cache, volumineux et régénérable, est déplacé.
+//! Single rule: never overwrite. A destination already there means the
+//! carry-over happened, or that Snap Studio already has its own data. Personal
+//! data is copied, the old location stays intact; only the cache, bulky and
+//! regenerable, is moved.
 
 use std::path::{Path, PathBuf};
 
 const OLD_ID: &str = "fr.carlini.trimf";
 const NEW_ID: &str = "fr.carlini.snapstudio";
-/// Nom du binaire : en développement, WebKit range ses données sous ce nom.
+/// Binary name: in development, WebKit stores its data under this name.
 #[cfg(target_os = "macos")]
 const OLD_BIN: &str = "trimf";
 #[cfg(target_os = "macos")]
 const NEW_BIN: &str = "snap-studio";
-/// Dossier court, sans espace, sous `~/.config` (monté dans le conteneur IA).
+/// Short folder, without spaces, under `~/.config` (mounted in the AI container).
 const OLD_XDG: &str = "trimf";
 const NEW_XDG: &str = "snap-studio";
 
 pub fn run() {
-    // Réglages, favoris, imprimantes ; données des vues web hors macOS.
+    // Settings, favorites, printers; web view data outside macOS.
     for base in [dirs::config_dir(), dirs::data_dir(), dirs::data_local_dir()].into_iter().flatten() {
         copy_once(&base.join(OLD_ID), &base.join(NEW_ID));
     }
-    // Cache des vignettes et images des favoris.
+    // Thumbnail cache and favorite images.
     if let Some(base) = dirs::cache_dir() {
         move_once(&base.join(OLD_ID), &base.join(NEW_ID));
     }
-    // Conversations IA, puis l'historique que Claude Code range d'après leur chemin.
+    // AI conversations, then the history Claude Code stores by their path.
     let xdg = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|h| h.join(".config")));
@@ -40,7 +39,7 @@ pub fn run() {
         copy_once(&old_root, &new_root);
         claude_projects(&old_root.join("ia"), &new_root.join("ia"));
     }
-    // Stockage WebKit de macOS : localStorage, cookies des sites.
+    // macOS WebKit storage: localStorage, site cookies.
     #[cfg(target_os = "macos")]
     if let Some(lib) = dirs::home_dir().map(|h| h.join("Library")) {
         for (old, new) in [(OLD_ID, NEW_ID), (OLD_BIN, NEW_BIN)] {
@@ -54,8 +53,8 @@ pub fn run() {
     }
 }
 
-/// Claude Code nomme le dossier d'une session d'après le chemin de travail,
-/// chaque caractère non alphanumérique devenant un tiret (voir `ia::session_file`).
+/// Claude Code names a session's folder after the working path, each
+/// non-alphanumeric character becoming a dash (see `ia::session_file`).
 fn slug(p: &Path) -> String {
     p.to_string_lossy()
         .chars()
@@ -63,8 +62,8 @@ fn slug(p: &Path) -> String {
         .collect()
 }
 
-/// Recopie l'historique des conversations sous le nom dérivé du nouveau chemin,
-/// pour que leur reprise fonctionne encore.
+/// Copies the conversation history under the name derived from the new path,
+/// so that resuming them still works.
 fn claude_projects(old_ia: &Path, new_ia: &Path) {
     let Some(projects) = dirs::home_dir().map(|h| h.join(".claude").join("projects")) else {
         return;
@@ -86,7 +85,7 @@ fn copy_once(from: &Path, to: &Path) {
         return;
     }
     if let Err(e) = copy_tree(from, to) {
-        eprintln!("[migration] copie de {} impossible : {e}", from.display());
+        eprintln!("[migration] could not copy {}: {e}", from.display());
     }
 }
 
@@ -94,7 +93,7 @@ fn move_once(from: &Path, to: &Path) {
     if to.symlink_metadata().is_ok() || from.symlink_metadata().is_err() {
         return;
     }
-    // Un renommage échoue d'un volume à l'autre : on se rabat sur la copie.
+    // A rename fails across volumes: fall back on copying.
     if std::fs::rename(from, to).is_err() {
         copy_once(from, to);
     }
@@ -134,10 +133,10 @@ mod tests {
         std::fs::write(old.join("ia/abc/meta.json"), "{}").unwrap();
         copy_once(&old, &new);
         assert_eq!(std::fs::read_to_string(new.join("ia/abc/meta.json")).unwrap(), "{}");
-        assert!(old.join("ia/abc/meta.json").exists(), "l'ancien reste en place");
+        assert!(old.join("ia/abc/meta.json").exists(), "the old one stays in place");
 
-        // Une destination existante n'est jamais touchée.
-        std::fs::write(old.join("ia/abc/meta.json"), "modifié").unwrap();
+        // An existing destination is never touched.
+        std::fs::write(old.join("ia/abc/meta.json"), "modified").unwrap();
         copy_once(&old, &new);
         assert_eq!(std::fs::read_to_string(new.join("ia/abc/meta.json")).unwrap(), "{}");
         let _ = std::fs::remove_dir_all(&tmp);

@@ -1,26 +1,26 @@
-//! Lecture et écriture STL.
+//! STL reading and writing.
 //!
-//! C'est le format d'échange de l'onglet IA : les outils Python le manipulent
-//! sans effort, et l'application le convertit en 3MF aux deux bouts.
+//! It is the AI tab's exchange format: the Python tools handle it effortlessly,
+//! and the app converts it to 3MF at both ends.
 //!
-//! Un STL ne porte ni couleur, ni nom d'objet, ni unité — seulement des
-//! triangles en millimètres. On accepte les deux dialectes, binaire et texte,
-//! et on n'écrit que le binaire, quatre fois plus compact.
+//! An STL carries neither color, nor object name, nor unit — only triangles in
+//! millimeters. Both dialects are accepted, binary and text, and only binary
+//! is written, four times more compact.
 
 use crate::mesh::{MeshData, Tri};
 use anyhow::{anyhow, Result};
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
-/// En-tête (80 o) + nombre de triangles (4 o).
+/// Header (80 B) + triangle count (4 B).
 const HEADER: usize = 84;
-/// Normale + 3 sommets + attribut : 12 flottants et 2 octets.
+/// Normal + 3 vertices + attribute: 12 floats and 2 bytes.
 const RECORD: usize = 50;
 
-/// Vrai si la taille du fichier correspond exactement au décompte annoncé.
+/// True if the file size matches the announced count exactly.
 ///
-/// On ne se fie pas au mot « solid » en tête : beaucoup d'exportateurs le
-/// placent aussi dans l'en-tête d'un fichier binaire.
+/// The word "solid" at the start is not trusted: many exporters put it in the
+/// header of a binary file too.
 fn looks_binary(data: &[u8]) -> bool {
     if data.len() < HEADER {
         return false;
@@ -39,7 +39,7 @@ fn read_binary(data: &[u8]) -> Vec<[[f32; 3]; 3]> {
     let n = u32::from_le_bytes([data[80], data[81], data[82], data[83]]) as usize;
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
-        // On saute la normale : elle est souvent fausse, et on la recalcule.
+        // Skip the normal: it is often wrong, and it is recomputed.
         let base = HEADER + i * RECORD + 12;
         let mut v = [[0f32; 3]; 3];
         for (k, vertex) in v.iter_mut().enumerate() {
@@ -65,7 +65,7 @@ fn read_ascii(text: &str) -> Vec<[[f32; 3]; 3]> {
         for c in p.iter_mut() {
             match it.next().and_then(|t| t.parse::<f32>().ok()) {
                 Some(x) => *c = x,
-                None => return out, // ligne tronquée : on garde ce qu'on a
+                None => return out, // truncated line: keep what we have
             }
         }
         cur[k] = p;
@@ -78,12 +78,12 @@ fn read_ascii(text: &str) -> Vec<[[f32; 3]; 3]> {
     out
 }
 
-/// Charge un STL, binaire ou texte.
+/// Loads an STL, binary or text.
 pub fn read(path: &Path) -> Result<MeshData> {
     crate::access::ensure_file(path);
     let data = std::fs::read(path)?;
     if data.len() < 15 {
-        return Err(anyhow!("fichier STL vide"));
+        return Err(anyhow!(crate::t!("err.stl_empty")));
     }
     let faces = if looks_binary(&data) {
         read_binary(&data)
@@ -91,7 +91,7 @@ pub fn read(path: &Path) -> Result<MeshData> {
         read_ascii(&String::from_utf8_lossy(&data))
     };
     if faces.is_empty() {
-        return Err(anyhow!("aucun triangle dans le STL"));
+        return Err(anyhow!(crate::t!("err.stl_no_triangle")));
     }
 
     let mut min = [f32::MAX; 3];
@@ -118,11 +118,10 @@ pub fn read(path: &Path) -> Result<MeshData> {
     })
 }
 
-/// Nombre de triangles d'un STL binaire, lu dans l'en-tête seul.
+/// Triangle count of a binary STL, read from the header alone.
 ///
-/// Compter sans analyser : sur un maillage de plusieurs millions de faces, la
-/// lecture complète coûterait des secondes pour une information de quatre
-/// octets.
+/// Counting without parsing: on a mesh of several million faces, a full read
+/// would cost seconds for a four-byte piece of information.
 pub fn count(path: &Path) -> Option<usize> {
     use std::io::Read;
     crate::access::ensure_file(path);
@@ -134,7 +133,7 @@ pub fn count(path: &Path) -> Option<usize> {
     (HEADER + n * RECORD == len).then_some(n)
 }
 
-/// Normale unitaire d'un triangle ; nulle si le triangle est dégénéré.
+/// Unit normal of a triangle; zero if the triangle is degenerate.
 fn normal(v: &[[f32; 3]; 3]) -> [f32; 3] {
     let u = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
     let w = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
@@ -151,10 +150,10 @@ fn normal(v: &[[f32; 3]; 3]) -> [f32; 3] {
     }
 }
 
-/// Écrit un STL binaire. Les couleurs sont perdues : le format n'en a pas.
+/// Writes a binary STL. Colors are lost: the format has none.
 pub fn write(path: &Path, tris: &[Tri]) -> Result<()> {
     if tris.is_empty() {
-        return Err(anyhow!("aucun triangle à écrire"));
+        return Err(anyhow!(crate::t!("err.no_triangle")));
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -182,10 +181,10 @@ pub fn write(path: &Path, tris: &[Tri]) -> Result<()> {
     Ok(())
 }
 
-/// Cube de 10 mm en 12 triangles, pour les essais des autres modules.
+/// 10 mm cube in 12 triangles, for the other modules' tests.
 #[cfg(test)]
 pub fn tests_cube() -> Vec<Tri> {
-    // Un cube de 10 mm posé à l'origine, en 12 triangles.
+    // A 10 mm cube resting at the origin, in 12 triangles.
     let p = [
         [0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.],
         [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.],
@@ -219,11 +218,11 @@ mod tests {
         write(&path, &src).unwrap();
 
         let back = read(&path).unwrap();
-        assert_eq!(back.tris.len(), src.len(), "même nombre de triangles");
+        assert_eq!(back.tris.len(), src.len(), "same number of triangles");
         assert_eq!(back.min, [0., 0., 0.]);
         assert_eq!(back.max, [10., 10., 10.]);
         for (a, b) in src.iter().zip(back.tris.iter()) {
-            assert_eq!(a.v, b.v, "sommets conservés à l'octet près");
+            assert_eq!(a.v, b.v, "vertices kept byte for byte");
         }
         let _ = std::fs::remove_file(&path);
     }
@@ -257,8 +256,8 @@ endsolid essai
         let _ = std::fs::remove_file(&path);
     }
 
-    /// Un binaire dont l'en-tête commence par « solid » ne doit pas être pris
-    /// pour du texte : c'est le piège classique du format.
+    /// A binary whose header starts with "solid" must not be taken for text:
+    /// the format's classic trap.
     #[test]
     fn binary_header_saying_solid() {
         let dir = std::env::temp_dir().join("snapstudio-stl-test");

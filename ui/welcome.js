@@ -1,10 +1,10 @@
 "use strict";
-/* Assistant de bienvenue.
+/* Welcome assistant.
 
-   Quatre étapes : bienvenue, dossier de modèles, imprimante (recherche réseau
-   ou saisie), récapitulatif et « Commencer ». Il s'ouvre au premier lancement —
-   aucun dossier ni imprimante connus — puis à la demande (Réglages, menu
-   Aide). Fin ou « Ignorer » : il ne revient plus de lui-même. */
+   Steps: welcome (with the language), models folder, printer (network search
+   or manual entry), slicing engine, summary and "Get Started". It opens on
+   first launch — no folder nor printer known — then on demand (Settings, Help
+   menu). Finished or "Skip": it never comes back on its own. */
 
 const W = {
   open: false,
@@ -14,7 +14,7 @@ const W = {
   confetti: 0,
 };
 const W_STEPS = 5;
-/* Étapes : 0 bienvenue, 1 modèles, 2 imprimante, 3 moteur, 4 prêt. */
+/* Steps: 0 welcome, 1 models, 2 printer, 3 engine, 4 ready. */
 const W_KEY = "snapstudio.welcome";
 const W_ORCA = "https://github.com/Snapmaker/OrcaSlicer/releases/latest";
 
@@ -41,7 +41,7 @@ function welcomeOpen() {
 function wGo(n) {
   const from = W.step;
   W.step = Math.max(0, Math.min(W_STEPS - 1, n));
-  // La recherche réseau ne tourne que sur l'étape Imprimante.
+  // The network search only runs on the Printer step.
   if (from === 2 && W.step !== 2) discoverStop();
   if (W.step === 2 && (from !== 2 || !DISC.view)) discoveryList($("w-disc"), wPick);
   if (W.step === 3) wEngine();
@@ -55,7 +55,7 @@ function wGo(n) {
   wNav();
 }
 
-/* Boutons du bas : « Passer » tant que l'étape n'est pas remplie. */
+/* Bottom buttons: "Skip" until the step is filled in. */
 function wNav() {
   const last = W.step === W_STEPS - 1;
   $("w-back").classList.toggle("invisible", W.step === 0);
@@ -66,12 +66,14 @@ function wNav() {
     : W.step === 2 ? W.added.length > 0
     : W.step === 3 ? !engNeeded()
     : true;
-  $("w-next").textContent = done ? "Continuer" : "Passer";
+  $("w-next").textContent = tr(done ? "common.continue" : "common.skip");
   $("w-next").classList.toggle("primary", done);
 }
 
 function welcomeClose() {
   localStorage.setItem(W_KEY, JSON.stringify({ done: true, at: Date.now() }));
+  // The language shown so far may only be the system's: make it a choice.
+  setLanguage(LANG);
   discoverStop();
   cancelAnimationFrame(W.confetti);
   W.open = false;
@@ -80,7 +82,7 @@ function welcomeClose() {
   setTimeout(() => el.classList.add("hidden"), 260);
 }
 
-/* « Commencer » : l'application s'ouvre sur ce qui vient d'être configuré. */
+/* "Get Started": the app opens on what was just set up. */
 async function welcomeStart() {
   const dir = W.dir, printers = W.added.length;
   welcomeClose();
@@ -92,7 +94,7 @@ async function welcomeStart() {
   }
 }
 
-/* ------------------------------------------------------------ dossier */
+/* ------------------------------------------------------------ folder */
 
 async function wRenderPlaces() {
   const box = $("w-places");
@@ -120,10 +122,10 @@ async function wSetDir(dir) {
   if (W.dir !== dir || !files) return;
   const n = files.length;
   box.querySelector("small").textContent =
-    `${dir} · ${n ? `${n.toLocaleString("fr-FR")} modèle${n > 1 ? "s" : ""}` : "aucun modèle pour l'instant"}`;
+    `${dir} · ${n ? tr("welcome.models.count", { n }) : tr("welcome.models.none")}`;
 }
 
-/* ------------------------------------------------------------ imprimante */
+/* ------------------------------------------------------------ printer */
 
 function wPick(f) {
   $("w-form").classList.remove("hidden");
@@ -139,11 +141,11 @@ async function wProbe() {
   const box = $("w-ptest");
   if (!host) {
     box.className = "pf-test err";
-    box.textContent = "Indiquez l'adresse IP ou le nom d'hôte de l'imprimante.";
+    box.textContent = tr("printers.form.host_missing");
     return null;
   }
   box.className = "pf-test";
-  box.textContent = "Test en cours…";
+  box.textContent = tr("printers.form.testing");
   const r = await invoke("printer_probe", { host, port: +$("w-pport").value || 7125 });
   box.className = "pf-test " + (r.ok ? "ok" : "err");
   box.textContent = r.detail;
@@ -175,21 +177,21 @@ async function wAdd() {
     $("w-ptest").textContent = "";
     const box = $("w-added");
     box.classList.remove("hidden");
-    box.innerHTML = `${W_CHECK}<span><b>${W.added.map(esc).join(", ")}</b><small>${
-      W.added.length > 1 ? "ajoutées" : "ajoutée"
-    } à vos imprimantes</small></span>`;
+    box.innerHTML = `${W_CHECK}<span><b>${W.added.map(esc).join(", ")}</b><small>${esc(
+      tr("welcome.printer.added", { n: W.added.length })
+    )}</small></span>`;
     DISC.picked = null;
     discRender();
     wNav();
   } catch (e) {
     $("w-ptest").className = "pf-test err";
-    $("w-ptest").textContent = "Enregistrement impossible : " + e;
+    $("w-ptest").textContent = tr("printers.form.save_failed", { err: e });
   }
 }
 
-/* ------------------------------------------------------------ fin */
+/* ------------------------------------------------------------ end */
 
-/* Étape « Moteur » : le bloc commun, et la suite dès qu'il est installé. */
+/* "Engine" step: the shared block, and onwards as soon as it is installed. */
 async function wEngine() {
   await engStatus();
   engMount($("w-engine"), { onDone: wNav });
@@ -202,24 +204,26 @@ async function wSummary() {
     `<li class="${ok === true ? "ok" : ok === false ? "warn" : "skip"}">${ok === true ? W_CHECK : ok === false ? W_WARN : W_SKIP}
       <span><b>${title}</b><small>${sub}</small>${extra}</span></li>`;
   const folder = W.dir
-    ? row(true, "Dossier de modèles", esc(W.dir))
-    : row(null, "Dossier de modèles", "À choisir plus tard dans Fichiers");
+    ? row(true, esc(tr("welcome.sum.folder")), esc(W.dir))
+    : row(null, esc(tr("welcome.sum.folder")), esc(tr("welcome.sum.folder.later")));
   const printers = W.added.length
-    ? row(true, W.added.length > 1 ? "Imprimantes" : "Imprimante", W.added.map(esc).join(", "))
-    : row(null, "Imprimante", "À ajouter plus tard depuis la barre latérale");
-  ul.innerHTML = folder + printers + row(true, "Moteur de découpe", "Vérification…");
+    ? row(true, esc(tr("welcome.sum.printers", { n: W.added.length })), W.added.map(esc).join(", "))
+    : row(null, esc(tr("welcome.sum.printers", { n: 1 })), esc(tr("welcome.sum.printers.later")));
+  const engine = esc(tr("engine.title"));
+  ul.innerHTML = folder + printers + row(true, engine, esc(tr("welcome.sum.checking")));
   const s = await engStatus();
   let html;
   if (s?.referenced) {
     html = s.installed
-      ? row(true, "Moteur de découpe", `Snapmaker Orca ${esc(s.version)} installé : la découpe est disponible`)
-      : row(null, "Moteur de découpe", "Il se téléchargera à la première découpe");
+      ? row(true, engine, esc(tr("welcome.sum.engine.ok", { version: s.version })))
+      : row(null, engine, esc(tr("welcome.sum.engine.later")));
   } else {
-    // Version de développement : Snapmaker Orca installé sert de moteur.
+    // Development build: an installed Snapmaker Orca serves as the engine.
     const slicers = await invoke("slicers_list").catch(() => []);
     html = slicers.some((x) => x.name === "Snapmaker Orca")
-      ? row(true, "Snapmaker Orca", "Détecté : la découpe est disponible")
-      : row(false, "Snapmaker Orca non trouvé", "Il est nécessaire pour découper", ' <button class="w-link" id="w-orca">Télécharger</button>');
+      ? row(true, "Snapmaker Orca", esc(tr("welcome.sum.orca.ok")))
+      : row(false, esc(tr("welcome.sum.orca.missing")), esc(tr("welcome.sum.orca.needed")),
+          ` <button class="w-link" id="w-orca">${esc(tr("common.download"))}</button>`);
   }
   ul.lastElementChild.outerHTML = html;
   $("w-orca")?.addEventListener("click", () =>
@@ -228,7 +232,7 @@ async function wSummary() {
   wConfetti();
 }
 
-/* Éclat de confettis aux couleurs des quatre têtes de la U1, une fois. */
+/* A burst of confetti in the colors of the U1's four heads, once. */
 function wConfetti() {
   cancelAnimationFrame(W.confetti);
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -274,7 +278,7 @@ function wConfetti() {
   W.confetti = requestAnimationFrame(frame);
 }
 
-/* ------------------------------------------------------------ événements */
+/* ------------------------------------------------------------ events */
 
 $("w-next").addEventListener("click", () => wGo(W.step + 1));
 $("w-back").addEventListener("click", () => wGo(W.step - 1));
@@ -298,6 +302,14 @@ $("w-manual").addEventListener("click", () => {
 $("w-ptry").addEventListener("click", wProbe);
 $("w-padd").addEventListener("click", wAdd);
 $("w-again").addEventListener("click", welcomeOpen);
+
+/* The language can change on the first step: re-render what code wrote. */
+window.addEventListener("langchange", () => {
+  if (!W.open) return;
+  wNav();
+  wRenderPlaces().then(() => W.dir && wSetDir(W.dir));
+  if (W.step === 4) wSummary();
+});
 onMenu("welcome", welcomeOpen);
 
 document.addEventListener("keydown", (e) => {
@@ -313,12 +325,12 @@ document.addEventListener("keydown", (e) => {
   } else if (!typing && e.key === "ArrowRight") {
     wGo(W.step + 1);
   }
-  // Les raccourcis de l'application ne traversent pas l'assistant.
+  // The app's shortcuts do not go through the assistant.
   e.stopPropagation();
 }, true);
 
-/* Premier lancement : rien n'est encore configuré. Un utilisateur existant
-   (ou repris de 3MF Studio) a déjà un dossier ou une imprimante. */
+/* First launch: nothing is set up yet. An existing user (or one carried
+   over from 3MF Studio) already has a folder or a printer. */
 (async () => {
   if (localStorage.getItem(W_KEY)) return;
   const printers = await invoke("printers_list").catch(() => []);

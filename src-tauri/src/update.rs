@@ -1,16 +1,16 @@
-//! Mises à jour de l'application.
+//! Application updates.
 //!
-//! Le plugin officiel lit `latest.json` sur la dernière release GitHub,
-//! télécharge le paquet de la plateforme et vérifie sa signature avec la clé
-//! publique de `tauri.conf.json` avant de l'installer : un fichier altéré ou
-//! signé par un autre est refusé.
+//! The official plugin reads `latest.json` on the latest GitHub release,
+//! downloads the platform's package and checks its signature with the public
+//! key of `tauri.conf.json` before installing it: a tampered file, or one
+//! signed by someone else, is refused.
 
 use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-/// Mise à jour trouvée par la dernière vérification, en attente d'installation.
+/// Update found by the last check, awaiting installation.
 #[derive(Default)]
 pub struct Pending(Mutex<Option<Update>>);
 
@@ -19,8 +19,8 @@ pub struct Available {
     pub version: String,
     pub current: String,
     pub notes: Option<String>,
-    /// Faux pour un paquet que l'application ne sait pas remplacer elle-même
-    /// (Linux hors AppImage) : l'interface renvoie alors vers GitHub.
+    /// False for a package the app cannot replace itself (Linux outside
+    /// AppImage): the UI then points to GitHub.
     pub installable: bool,
 }
 
@@ -30,19 +30,19 @@ struct Progress {
     total: Option<u64>,
 }
 
-/// Version installée.
+/// Installed version.
 #[tauri::command]
 pub fn app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
-/// Interroge GitHub ; `None` si l'application est à jour.
+/// Queries GitHub; `None` when the app is up to date.
 #[tauri::command]
 pub async fn update_check(app: AppHandle, pending: State<'_, Pending>) -> Result<Option<Available>, String> {
-    // `cargo tauri dev` : la version locale est toujours « en retard » sur
-    // les releases, et il n'y a pas de paquet installé à remplacer.
+    // `cargo tauri dev`: the local version is always "behind" the releases,
+    // and there is no installed package to replace.
     if cfg!(debug_assertions) {
-        return Err("mises à jour désactivées en développement".into());
+        return Err(crate::t!("err.update_dev"));
     }
     let update = app
         .updater()
@@ -60,8 +60,8 @@ pub async fn update_check(app: AppHandle, pending: State<'_, Pending>) -> Result
     Ok(out)
 }
 
-/// Télécharge, vérifie et installe la mise à jour trouvée, puis relance
-/// l'application. L'avancement part vers l'interface (`update-progress`).
+/// Downloads, checks and installs the update found, then restarts the app.
+/// Progress goes to the UI (`update-progress`).
 #[tauri::command]
 pub async fn update_install(app: AppHandle, pending: State<'_, Pending>) -> Result<(), String> {
     let update = pending
@@ -69,7 +69,7 @@ pub async fn update_install(app: AppHandle, pending: State<'_, Pending>) -> Resu
         .lock()
         .unwrap()
         .take()
-        .ok_or("aucune mise à jour en attente")?;
+        .ok_or_else(|| crate::t!("err.update_none"))?;
     let emitter = app.clone();
     let mut done = 0u64;
     update
@@ -85,8 +85,8 @@ pub async fn update_install(app: AppHandle, pending: State<'_, Pending>) -> Resu
     app.restart()
 }
 
-/// Sous Linux, seule une AppImage peut se remplacer elle-même ; son chemin
-/// est fourni par le lanceur dans `APPIMAGE`.
+/// On Linux only an AppImage can replace itself; its path is given by the
+/// launcher in `APPIMAGE`.
 fn installable() -> bool {
     if cfg!(target_os = "linux") {
         std::env::var_os("APPIMAGE").is_some()

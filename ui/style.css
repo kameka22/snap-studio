@@ -1,4 +1,4 @@
-/* ---------- jetons (skill macos-appkit-look, valeurs AppKit) ---------- */
+/* ---------- tokens (macos-appkit-look skill, AppKit values) ---------- */
 :root {
   color-scheme: light dark;
 
@@ -49,7 +49,7 @@
   --sidebar-width: 220px;
   --titlebar-height: 52px;
 
-  /* Propres à l'application, dérivés des jetons ci-dessus. */
+  /* App-specific, derived from the tokens above. */
   --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
   --thumb-bg: linear-gradient(160deg, #f7f7f9 0%, #e9e9ed 100%);
   --tile: 220px;
@@ -113,7 +113,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .hidden { display: none !important; }
 svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
 
-/* ---------- contrôles partagés ---------- */
+/* ---------- shared controls ---------- */
 .btn {
   appearance: none;
   display: inline-flex;
@@ -167,7 +167,7 @@ svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
 .field::placeholder, .form input::placeholder, #ia-prompt::placeholder { color: var(--text-tertiary); }
 textarea.field { resize: vertical; min-height: 80px; font-family: var(--font-mono); font-size: 12px; }
 
-/* Le select garde l'apparence native du webview : un bouton local AppKit. */
+/* The select keeps the webview's native look: an AppKit pop-up button. */
 select { font-size: 13px; min-height: 24px; }
 select:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-control); }
 input[type=range] { width: 90px; accent-color: var(--accent); }
@@ -178,7 +178,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: block; }
 .hint  { font-size: 11px; color: var(--text-secondary); }
 
-/* Scrollbars façon overlay macOS */
+/* macOS overlay-style scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb {
   background: rgba(127, 127, 127, 0.35);
@@ -189,7 +189,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(127, 127, 127, 0.55); background-clip: padding-box; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* ---------- barre d'outils (52 px, déplace la fenêtre) ---------- */
+/* ---------- toolbar (52 px, drags the window) ---------- */
 .toolbar {
   height: var(--titlebar-height);
   flex: none;
@@ -222,7 +222,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .tb-lead { gap: 0; margin-left: -6px; }
 .tb-lead:has(> .hidden:only-child) { display: none; }
 
-/* Bouton de barre d'outils : 28 × 28, même bordure et fond que la recherche. */
+/* Toolbar button: 28 × 28, same border and background as the search. */
 .tb-btn {
   appearance: none;
   flex: none;
@@ -247,7 +247,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .toolbar input[type=range] { width: 80px; }
 .toolbar .seg { height: 28px; align-items: center; }
 
-/* Adresse de la page dans la Bibliothèque : lecture seule, sert aussi d'état. */
+/* Page address in the Library: read-only, doubles as status. */
 .tb-url {
   width: 340px;
   min-width: 120px;
@@ -278,7 +278,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   text-align: left;
 }
 
-/* Champ de recherche de barre d'outils : 200 px, 240 px au focus. */
+/* Toolbar search field: 200 px, 240 px when focused. */
 .search {
   position: relative;
   display: flex;
@@ -311,7 +311,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .search input::placeholder { color: var(--text-tertiary); }
 .search input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
 
-/* Contrôle segmenté AppKit : piste grise, segment choisi en relief. */
+/* AppKit segmented control: grey track, chosen segment raised. */
 .seg {
   display: flex;
   gap: 1px;
@@ -338,13 +338,13 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   .seg-btn.on { background: rgba(255, 255, 255, 0.16); }
 }
 
-/* ---------- corps ---------- */
+/* ---------- body ---------- */
 .files-body { flex: 1; display: flex; min-height: 0; }
 #stage { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; position: relative; padding: 6px 22px 28px; }
 .splitter { width: 5px; cursor: col-resize; background: transparent; flex: none; }
 .splitter:hover, .splitter.drag { background: var(--accent-soft); }
 
-/* ---------- vignettes ---------- */
+/* ---------- thumbnails ---------- */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--tile), 1fr));
@@ -428,7 +428,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   padding: 10px;
 }
 
-/* ---------- liste ---------- */
+/* ---------- list ---------- */
 .listhead, .row-item {
   display: grid;
   grid-template-columns: 46px minmax(140px, 1fr) 90px 100px 90px 130px;
@@ -475,7 +475,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .row-item .rsub { color: var(--text-secondary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-item .cell { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
 
-/* ---------- panneau de détail ---------- */
+/* ---------- details panel ---------- */
 .details {
   width: 340px;
   flex: none;
@@ -552,7 +552,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   overflow: auto;
 }
 
-/* ---------- états ---------- */
+/* ---------- states ---------- */
 .empty {
   position: absolute;
   inset: 0;
@@ -600,7 +600,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner.small { width: 11px; height: 11px; border-width: 1.5px; display: inline-block; vertical-align: -1px; margin-right: 6px; }
 
-/* Liste « Sur le réseau » : imprimantes trouvées par la recherche mDNS. */
+/* "On the network" list: printers found by the mDNS search. */
 .disc { display: flex; flex-direction: column; gap: 6px; }
 .disc-head { display: flex; align-items: center; gap: 8px; min-height: 22px; }
 .disc-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
@@ -634,7 +634,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .disc-tag { font-size: 11px; color: var(--text-secondary); }
 .disc-empty { padding: 4px 2px; font-size: 12px; color: var(--text-secondary); }
 body.dragover #stage::after {
-  content: "Déposer pour ouvrir ce dossier";
+  content: attr(data-drop);
   position: absolute;
   inset: 8px;
   border: 2px dashed var(--accent);
@@ -649,7 +649,7 @@ body.dragover #stage::after {
 }
 
 
-/* ---------- feuilles modales, toasts ---------- */
+/* ---------- modal sheets, toasts ---------- */
 
 .modal {
   position: fixed;
@@ -659,8 +659,8 @@ body.dragover #stage::after {
   align-items: flex-start;
   justify-content: center;
   padding-top: 10px;
-  /* L'application passe au second plan : assombrie et floutée, comme
-     derrière l'assistant de bienvenue. */
+  /* The app goes to the background: dimmed and blurred, as behind the
+     welcome assistant. */
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(8px) saturate(1.2);
   -webkit-backdrop-filter: blur(8px) saturate(1.2);
@@ -689,7 +689,7 @@ body.dragover #stage::after {
   animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .modal.closing .modal-box { animation: sheet-out 150ms ease forwards; }
-/* La sheet défile ; ses blocs gardent leur hauteur au lieu de s'écraser. */
+/* The sheet scrolls; its blocks keep their height instead of squashing. */
 .modal-box > * { flex-shrink: 0; }
 .modal-box h3 { margin: 0 0 2px; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
 .modal-box h3 + .det-sub { margin-top: -12px; }
@@ -729,7 +729,7 @@ body.dragover #stage::after {
 
 #sentinel { height: 1px; }
 
-/* ---------- sélection multiple ---------- */
+/* ---------- multiple selection ---------- */
 .pick {
   position: absolute;
   top: 7px;
@@ -800,7 +800,7 @@ body.dragover #stage::after {
 .selbar .btn.danger { color: #ff6961; }
 .selbar span { font-weight: 600; margin-right: 4px; font-variant-numeric: tabular-nums; }
 
-/* ---------- fenêtre : barre latérale vibrante + contenu opaque ---------- */
+/* ---------- window: vibrant sidebar + opaque content ---------- */
 .window { display: flex; flex: 1; min-height: 0; height: 100%; }
 .content {
   flex: 1;
@@ -859,7 +859,7 @@ body.dragover #stage::after {
 .side-item .count:empty { display: none; }
 .side-item .led { margin-right: 2px; }
 .side-item:hover { background: var(--sidebar-item-hover); }
-/* Sélection AppKit : instantanée, aucune transition sur le fond. */
+/* AppKit selection: instant, no transition on the background. */
 .side-item.on { background: var(--sidebar-item-selected); color: var(--accent-text); }
 .side-item.on .glyph { color: var(--accent-text) !important; }
 .side-item.on .count { color: var(--accent-text); opacity: 0.8; }
@@ -870,8 +870,8 @@ body.dragover #stage::after {
 .side-add:hover { color: var(--text); background: transparent; }
 .side-footer { padding: 8px 10px 12px; border-top: 1px solid var(--separator); }
 
-/* Hors macOS : pas de vibrancy ni de barre de titre en surimpression. La
-   barre latérale devient opaque et rend la place réservée aux feux. */
+/* Outside macOS: no vibrancy nor overlaid title bar. The sidebar turns
+   opaque and gives back the room kept for the traffic lights. */
 :root:not(.mac) .sidebar { background: #ececee; }
 :root:not(.mac) .sidebar .titlebar { height: 10px; }
 :root:not(.mac) .v-bar { padding-left: 16px; }
@@ -879,7 +879,7 @@ body.dragover #stage::after {
   :root:not(.mac) .sidebar { background: #262628; }
 }
 
-/* ---------- vue Imprimantes ---------- */
+/* ---------- Printers view ---------- */
 .prn { flex: 1; display: flex; min-height: 0; }
 .led { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); flex: none; }
 .led.ok { background: var(--success); }
@@ -904,7 +904,7 @@ body.dragover #stage::after {
 .prn-msg { padding: 10px 12px; border-radius: 10px; background: var(--danger-soft); color: var(--danger); font-size: 13px; margin-bottom: 14px; white-space: pre-wrap; }
 .prn-updated { color: var(--text-tertiary); font-size: 11px; margin-top: 12px; }
 
-/* ---------- formulaire imprimante ---------- */
+/* ---------- printer form ---------- */
 .form { display: flex; flex-direction: column; gap: 12px; }
 .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 .form label > input, .form label > select, .form label > textarea { color: var(--text); }
@@ -915,7 +915,7 @@ body.dragover #stage::after {
 .pf-test.warn { color: var(--warning); }
 .modal-actions .btn.left { margin-right: auto; }
 
-/* ---------- détail imprimante : maquette façon macOS ---------- */
+/* ---------- printer detail: macOS-style mockup ---------- */
 .hero { display: grid; grid-template-columns: minmax(200px, 34%) 1fr; gap: 14px; margin-bottom: 16px; }
 @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
 
@@ -932,7 +932,7 @@ body.dragover #stage::after {
 .pv { width: 100%; max-width: 250px; height: auto; transition: opacity 220ms ease, filter 220ms ease; }
 .pv.off { opacity: .5; filter: grayscale(.4); }
 
-/* --- illustration : Snapmaker U1 en perspective --- */
+/* --- illustration: Snapmaker U1 in perspective --- */
 .pv-front-a { stop-color: #eef0f5; }
 .pv-front-b { stop-color: #cfd3de; }
 .pv-left-a { stop-color: #d8dbe4; }
@@ -1001,7 +1001,7 @@ body.dragover #stage::after {
 }
 .pv.printing #pv-heads { animation: pvSweep 3.6s ease-in-out infinite; }
 
-/* --- anneau de progression --- */
+/* --- progress ring --- */
 .hero-stats {
   display: flex;
   align-items: center;
@@ -1052,7 +1052,7 @@ body.dragover #stage::after {
 }
 .chip b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* --- listes groupées --- */
+/* --- grouped lists --- */
 .group {
   border: 1px solid var(--card-border);
   border-radius: 10px;
@@ -1085,7 +1085,7 @@ body.dragover #stage::after {
 .grow-row .v span { display: block; color: var(--text-secondary); font-size: 11px; }
 .grow-row .val { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
 
-/* --- filaments chargés (lignes) --- */
+/* --- loaded filaments (rows) --- */
 .frow { display: flex; align-items: center; gap: 12px; padding: 11px 14px; font-size: 13px; }
 .frow + .frow { border-top: 1px solid var(--card-border); }
 .frow.on { background: var(--accent-soft); }
@@ -1118,7 +1118,7 @@ body.dragover #stage::after {
 }
 .ghead .note { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--text-tertiary); }
 
-/* ---------- visualiseur 3D ---------- */
+/* ---------- 3D viewer ---------- */
 .viewer {
   position: fixed;
   inset: 0;
@@ -1175,8 +1175,8 @@ body.dragover #stage::after {
   font-size: 12px;
   pointer-events: none;
 }
-/* État vide de Préparer : sur le plateau dessiné, un panneau translucide en
-   haut de la vue plutôt qu'un texte posé sur le logo. */
+/* Prepare's empty state: over the drawn bed, a translucent panel at the top
+   of the view rather than text laid on the logo. */
 #p-empty {
   inset: 16px auto auto 50%;
   transform: translateX(-50%);
@@ -1206,7 +1206,7 @@ body.dragover #stage::after {
 .btn.view3d svg { width: 13px; height: 13px; }
 .det-preview:hover .btn.view3d { opacity: 1; }
 
-/* ---------- page Réglages ---------- */
+/* ---------- Settings page ---------- */
 #view-settings { overflow-y: auto; align-items: center; }
 .settings-page { width: 100%; max-width: 640px; padding: 20px 22px 28px; }
 .set-section {
@@ -1224,7 +1224,7 @@ body.dragover #stage::after {
 .settings-page select { margin-left: auto; flex: none; }
 .settings-page .val { font-variant-numeric: tabular-nums; }
 
-/* interrupteur */
+/* switch */
 input.sw {
   appearance: none;
   flex: none;
@@ -1255,7 +1255,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .range-wrap input[type=range] { width: 120px; }
 .range-wrap b { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; white-space: nowrap; }
 
-/* ---------- aperçu des trajectoires ---------- */
+/* ---------- toolpath preview ---------- */
 .v-layers {
   position: absolute;
   right: 16px;
@@ -1300,7 +1300,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .v-legend .leg-sep { height: 1px; margin: 3px 0; background: var(--separator); }
 .badge.gcode { background: color-mix(in srgb, var(--accent) 85%, transparent); }
 
-/* ---------- fenêtre de découpe ---------- */
+/* ---------- slice sheet ---------- */
 .modal-box.wide { width: 460px; }
 .modal-box .set-section { margin: 4px 2px -4px; }
 .modal-box .group { margin-bottom: 0; }
@@ -1311,7 +1311,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .modal-box .grow-row .k { flex: 1; min-width: 0; }
 #s-file { margin: 0; }
 
-/* ---------- bibliothèque ---------- */
+/* ---------- library ---------- */
 #view-library { min-width: 0; }
 .lib-tabs {
   display: flex;
@@ -1374,7 +1374,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .lib-home h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
 .lib-home p { margin: 0; color: var(--text-secondary); }
 
-/* ---------- favoris ---------- */
+/* ---------- favorites ---------- */
 .lib-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -1435,7 +1435,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   font-weight: 700;
 }
 
-/* ---------- onglet IA ---------- */
+/* ---------- AI tab ---------- */
 #view-ia { display: flex; flex-direction: column; overflow: hidden; }
 .ia-tag {
   font-size: 12px;
@@ -1555,7 +1555,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .ia-hints { margin: 0; font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
 #ia-prompt { resize: vertical; }
 
-/* ---------- conversation : barre, terminal ---------- */
+/* ---------- conversation: bar, terminal ---------- */
 .ia-detail { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .ia-term { flex: 1; min-height: 0; padding: 8px 10px; background: var(--content-bg); }
 .ia-term-host { width: 100%; height: 100%; }
@@ -1577,7 +1577,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   line-height: 1.5;
 }
 
-/* ---------- conversation : les deux volets ---------- */
+/* ---------- conversation: the two panes ---------- */
 .ia-split { flex: 1; display: flex; min-height: 0; }
 .ia-left { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .ia-right {
@@ -1600,7 +1600,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   color: var(--text-secondary);
 }
 .ia-vlabel { color: var(--accent); font-variant-numeric: tabular-nums; }
-/* Le visualiseur vient se loger ici : même code, même contexte graphique. */
+/* The viewer docks here: same code, same graphics context. */
 .ia-stage { position: relative; height: 240px; flex: none; margin: 0 14px; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); background: var(--card-bg); }
 .viewer.docked { position: absolute; inset: 0; z-index: 1; }
 .viewer.docked .v-bar,
@@ -1635,7 +1635,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .ia-rActions .btn { justify-content: center; }
 .ia-rbar-end { display: flex; align-items: center; gap: 10px; }
 
-/* ---------- découpe : têtes, couleurs du modèle, avancement ---------- */
+/* ---------- slicing: heads, model colors, progress ---------- */
 .set-note { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-tertiary); }
 .modal-box .grow-row select { margin-left: auto; flex: 0 1 230px; min-width: 0; max-width: 230px; }
 .modal-box .grow-row .k { min-width: 0; }
@@ -1643,7 +1643,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .swatch.none { background: transparent; box-shadow: inset 0 0 0 1px var(--separator); }
 .swatch.sq { border-radius: 3px; }
 .warn { color: var(--danger); }
-/* Notes de version dans la fenêtre de mise à jour. */
+/* Release notes in the update sheet. */
 .u-notes {
   max-height: 220px;
   overflow: auto;
@@ -1671,7 +1671,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   transition: width 250ms linear;
 }
 
-/* ---------- aperçu de découpe dans le visualiseur ---------- */
+/* ---------- slice preview in the viewer ---------- */
 .v-panel {
   position: absolute;
   top: calc(var(--titlebar-height) + 12px);
@@ -1719,10 +1719,10 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .vp-seg .seg-btn { font-size: 12px; }
 .vp-actions { margin-top: auto; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .vp-actions .btn { justify-content: center; }
-/* Le curseur de couches se décale pour laisser la place au panneau. */
+/* The layer slider shifts to make room for the panel. */
 .viewer.previewing .v-layers { right: 324px; }
 
-/* ---------- caméra de l'imprimante ---------- */
+/* ---------- printer camera ---------- */
 .group.cam .ghead .btn { margin-left: 10px; }
 .cam-box {
   position: relative;
@@ -1734,7 +1734,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .cam-box.big { max-width: none; }
 .cam-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
 
-/* ---------- vue Préparer ---------- */
+/* ---------- Prepare view ---------- */
 .prep { flex: 1; display: flex; min-height: 0; }
 .prep-stage { flex: 1; min-width: 0; position: relative; }
 .prep-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -1756,7 +1756,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .p-obj .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-obj .tag { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
 .p-obj .tag.bad { color: var(--danger); }
-/* Sélection dans la liste : même rendu que la barre latérale. */
+/* Selection in the list: same look as the sidebar. */
 .p-obj.on { background: var(--accent); color: var(--accent-text); }
 .p-obj.on .tag { color: var(--accent-text); opacity: 0.8; }
 .field.num { width: 76px; min-height: 24px; padding: 2px 6px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -1764,7 +1764,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .p-obj .tag.warn { color: var(--warning); }
 .p-obj.on .tag.warn { color: var(--accent-text); }
 
-/* Préparer : outils */
+/* Prepare: tools */
 .tb-btn.on { background: var(--accent); border-color: transparent; color: var(--accent-text); }
 .p-angle {
   position: absolute;
@@ -1792,16 +1792,16 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .prep-inspector .group.locked .p-axis { display: none; }
 .prep-inspector .group:not(.locked) .p-uni { display: none; }
 
-/* Dossiers récents : rattachés à « Fichiers », en retrait. */
+/* Recent folders: attached to "Files", indented. */
 .side-sub .side-item { padding-left: 22px; font-size: 12px; }
 .side-sub .side-item .glyph svg { width: 14px; height: 14px; }
-/* Une entrée principale et ses sous-éléments forment un bloc ; les blocs
-   sont espacés pour aérer la barre. */
+/* A main entry and its sub-items form a block; blocks are spaced to let
+   the bar breathe. */
 .side-block { display: flex; flex-direction: column; gap: 2px; }
 .side-block + .side-block { margin-top: 12px; }
 .side-block .side-section { margin-top: 0; }
 
-/* ------------------------------------------------------------ assistant de bienvenue */
+/* ------------------------------------------------------------ welcome assistant */
 
 .invisible { visibility: hidden; }
 
@@ -1935,6 +1935,16 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 .w-final { position: relative; width: 100%; height: 150px; display: grid; place-items: center; }
 .w-final canvas { position: absolute; inset: -30px -48px; width: calc(100% + 96px); height: calc(100% + 60px); pointer-events: none; }
+.w-lang {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.w-lang svg { width: 16px; height: 16px; fill: currentColor; }
+.w-lang select { color: var(--text); }
 .w-icon.big { width: 128px; height: 128px; }
 .w-summary { list-style: none; margin: 0; padding: 0; width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
 .w-summary li { display: flex; align-items: flex-start; gap: 10px; color: var(--text); }
@@ -1978,7 +1988,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .w-card, .w-step.on .w-icon { animation: none; }
 }
 
-/* ------------------------------------------------------------ détail des profils */
+/* ------------------------------------------------------------ profile details */
 
 .sel-row { display: flex; align-items: center; gap: 6px; }
 .sel-row select { flex: 1; min-width: 0; }
@@ -2054,7 +2064,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .pd-badge.perso { background: color-mix(in srgb, #af52de 20%, transparent); color: #af52de; }
 .pd-empty { padding: 30px; text-align: center; color: var(--text-secondary); }
 
-/* ------------------------------------------------------------ impressions */
+/* ------------------------------------------------------------ prints */
 
 .pj { height: 100%; overflow-y: auto; }
 .pj-overview, .pj-detail { max-width: 980px; margin: 0 auto; padding: 18px 24px 32px; }
@@ -2161,7 +2171,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .q-info small { font-size: 12px; color: var(--text-secondary); }
 .q-check { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--control-bg); border: 1px solid var(--separator); }
 
-/* ------------------------------------------------------------ fenêtre de découpe */
+/* ------------------------------------------------------------ slice sheet */
 
 .modal-box.sl-box { width: 940px; padding: 0; gap: 0; overflow: hidden; display: flex; flex-direction: column; }
 .sl-box > * { flex-shrink: 0; }
@@ -2181,11 +2191,11 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sl-col > .set-section { margin: 12px 2px 0; }
 .sl-card { border-radius: var(--radius-card); border: 1px solid var(--card-border); background: var(--card-bg); }
 
-/* Imprimante */
+/* Printer */
 .sl-line { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-secondary); }
 .sl-line .sel-row { flex: 1; min-width: 0; }
 
-/* Plateau */
+/* Plate */
 .sl-beds { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
 .sl-bed {
   display: flex;
@@ -2212,7 +2222,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     linear-gradient(135deg, #3b3f52, #2f4a4a);
 }
 
-/* Qualité */
+/* Quality */
 .sl-process { width: 100%; }
 .sl-process select { flex: 1; min-width: 0; }
 .sl-layer { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
@@ -2234,7 +2244,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sl-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .sl-scale { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-tertiary); padding: 0 4px; }
 
-/* Têtes */
+/* Heads */
 .sl-heads { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
 .sl-headcard {
   display: flex;
@@ -2260,7 +2270,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sl-headcard .info-btn { width: 20px; height: 20px; }
 .sl-hc-temp { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; min-height: 14px; }
 
-/* Couleurs du modèle */
+/* Model colors */
 .sl-map { display: flex; flex-direction: column; gap: 6px; }
 .sl-map:empty { display: none; }
 .sl-maprow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--radius-control); background: var(--control-bg); border: 1px solid var(--separator); }
@@ -2269,7 +2279,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sl-map-label small { font-size: 11px; color: var(--text-secondary); }
 .sl-arrow { color: var(--text-tertiary); }
 
-/* Ajustements */
+/* Adjustments */
 .sl-adjust { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .sl-tile { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 .sl-tile small { font-size: 11px; color: var(--text-secondary); }
@@ -2300,7 +2310,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sl-toggle input:focus-visible + span { box-shadow: 0 0 0 3px var(--focus-ring); }
 .sl-toggle input:disabled + span { opacity: 0.5; }
 
-/* Pied */
+/* Footer */
 .sl-foot { display: flex; flex-direction: column; gap: 8px; padding: 12px 22px 14px; border-top: 1px solid var(--separator); background: color-mix(in srgb, var(--sheet-bg) 92%, var(--text) 3%); }
 .sl-foot-row { display: flex; align-items: center; gap: 8px; }
 .sl-summary { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; }
@@ -2313,7 +2323,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .sl-col + .sl-col { border-left: 0; border-top: 1px solid var(--separator); }
 }
 
-/* Imprimantes en pastilles */
+/* Printers as chips */
 .sl-printers { display: grid; grid-template-columns: repeat(auto-fit, minmax(122px, 1fr)); gap: 8px; }
 .sl-pchip {
   display: flex;
@@ -2348,7 +2358,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sl-line .w-link { font-size: 12px; white-space: nowrap; margin-left: auto; }
 .sl-line .sl-note.grow + .w-link { margin-left: 0; }
 
-/* Profil filament sur la carte */
+/* Filament profile on the card */
 .sl-headcard { cursor: default; }
 .sl-headcard:hover:not(.is-empty) { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border)); }
 .sl-headcard.drop { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
@@ -2371,7 +2381,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sl-hc-preset em { font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 .sl-hc-preset i { font-style: normal; color: var(--text-tertiary); font-size: 10px; }
 
-/* Jetons de tête */
+/* Head chips */
 .sl-maprow { cursor: grab; }
 .sl-tokens { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .sl-token {
@@ -2394,7 +2404,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sl-token em { font-style: normal; color: var(--warning); }
 body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
 
-/* Sélecteur à recherche */
+/* Search picker */
 .picker {
   position: fixed;
   z-index: 95;
@@ -2439,7 +2449,7 @@ body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
 .picker-foot { border: 0; border-top: 1px solid var(--separator); background: none; padding: 9px; color: var(--accent); font: inherit; font-size: 12px; }
 .picker-foot:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 
-/* ------------------------------------------------------------ moteur de découpe */
+/* ------------------------------------------------------------ slicing engine */
 
 .eng { display: flex; flex-direction: column; gap: 10px; }
 .eng-text { display: flex; flex-direction: column; gap: 3px; }
@@ -2461,7 +2471,7 @@ body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
   text-align: left;
 }
 .w-engine .eng-actions { justify-content: flex-end; }
-/* Fenêtre de découpe sans moteur : sa carte remplace le contenu. */
+/* Slice sheet without an engine: its card replaces the content. */
 .sl-engine {
   margin: 28px auto;
   width: min(480px, calc(100% - 44px));

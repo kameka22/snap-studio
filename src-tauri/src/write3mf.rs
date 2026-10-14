@@ -1,21 +1,19 @@
-//! Écriture de fichiers 3MF.
+//! Writing 3MF files.
 //!
-//! Deux usages, volontairement distincts :
+//! Two uses, deliberately distinct:
 //!
-//! * [`strip_project`] recopie un 3MF existant en laissant de côté ses réglages
-//!   de projet. Les octets de la géométrie ne sont pas touchés : rien à
-//!   ré-encoder, aucune précision perdue. C'est ce qui permet d'ajouter une
-//!   pièce au plateau d'un trancheur sans écraser sa session, et c'est aussi le
-//!   contournement du plantage de la ligne de commande de Snapmaker Orca sur
-//!   les fichiers de projet.
-//! * [`write_scene`] compose un 3MF neuf à partir de maillages et de leurs
-//!   placements, pour un plateau que l'on arrange soi-même.
+//! * [`strip_project`] copies an existing 3MF while leaving out its project
+//!   settings. The geometry bytes are not touched: nothing to re-encode, no
+//!   precision lost. It is what lets a part be added to a slicer's plate
+//!   without overwriting its session, and it is also the workaround for
+//!   Snapmaker Orca's command line crashing on project files.
+//! * [`write_scene`] composes a new 3MF from meshes and their placements, for
+//!   a plate one arranges oneself.
 //!
-//! Attention en aval : la ligne de commande d'Orca réarrange le plateau d'office.
-//! Pour que le placement écrit ici soit celui qui s'imprime, il faut l'appeler
-//! avec `--arrange 0`. Vérifié : sans ce drapeau les pièces sont déplacées,
-//! avec lui elles restent à 0,3 mm près — l'écart étant la demi-largeur du
-//! cordon d'extrusion.
+//! Beware downstream: Orca's command line rearranges the plate on its own. For
+//! the placement written here to be the one printed, it must be called with
+//! `--arrange 0`. Verified: without the flag parts are moved, with it they
+//! stay within 0.3 mm — the gap being half the extrusion bead's width.
 
 use crate::mesh::{Mat, Tri};
 use anyhow::{anyhow, Result};
@@ -24,8 +22,8 @@ use std::fs::File;
 use std::io::{BufWriter, Read, Write};
 use std::path::Path;
 
-/// Entrées de projet qu'un trancheur relit comme « c'est un projet, pas un
-/// modèle » : les laisser de côté transforme le fichier en simple géométrie.
+/// Project entries a slicer reads as "this is a project, not a model":
+/// leaving them out turns the file into plain geometry.
 const PROJECT_ENTRIES: &[&str] = &[
     "metadata/project_settings.config",
     "metadata/slice_info.config",
@@ -40,9 +38,9 @@ fn is_project_entry(name: &str) -> bool {
         || l.starts_with("metadata/pick_")
 }
 
-/// Recopie `src` vers `dst` sans ses réglages de projet.
+/// Copies `src` to `dst` without its project settings.
 ///
-/// Renvoie le nombre d'entrées écartées.
+/// Returns the number of entries left out.
 pub fn strip_project(src: &Path, dst: &Path) -> Result<usize> {
     let mut zin = crate::model3mf::open(src)?;
     let out = File::create(dst)?;
@@ -73,14 +71,14 @@ pub fn strip_project(src: &Path, dst: &Path) -> Result<usize> {
     Ok(dropped)
 }
 
-/// Un objet à poser sur le plateau.
+/// An object to put on the plate.
 pub struct SceneObject {
     pub name: String,
-    /// Triangles dans le repère de l'objet.
+    /// Triangles in the object's frame.
     pub tris: Vec<Tri>,
-    /// Placement sur le plateau.
+    /// Placement on the plate.
     pub transform: Mat,
-    /// Tête affectée, de 1 à 4 ; `None` laisse le trancheur décider.
+    /// Assigned head, 1 to 4; `None` lets the slicer decide.
     pub extruder: Option<u8>,
 }
 
@@ -92,8 +90,8 @@ fn xml_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// Regroupe les sommets identiques : un maillage à sommets partagés se découpe
-/// bien mieux qu'une soupe de triangles.
+/// Merges identical vertices: a mesh with shared vertices slices much better
+/// than a triangle soup.
 #[allow(dead_code)]
 fn weld(tris: &[Tri]) -> (Vec<[f32; 3]>, Vec<[u32; 3]>) {
     let mut verts: Vec<[f32; 3]> = Vec::with_capacity(tris.len());
@@ -109,7 +107,7 @@ fn weld(tris: &[Tri]) -> (Vec<[f32; 3]>, Vec<[u32; 3]>) {
             });
             f[k] = id;
         }
-        // Un triangle dégénéré fait échouer la réparation du trancheur.
+        // A degenerate triangle makes the slicer's repair fail.
         if f[0] != f[1] && f[1] != f[2] && f[0] != f[2] {
             faces.push(f);
         }
@@ -124,10 +122,10 @@ fn mat_str(m: &Mat) -> String {
         .join(" ")
 }
 
-/// Identifiant du groupe de matériaux (palette des couleurs).
+/// Id of the material group (color palette).
 const MAT_ID: u32 = 1;
 
-/// Écrit un maillage comme `<object>` du modèle, couleurs comprises.
+/// Writes a mesh as an `<object>` of the model, colors included.
 fn write_mesh_object<W: Write>(
     w: &mut W,
     id: u32,
@@ -137,7 +135,7 @@ fn write_mesh_object<W: Write>(
 ) -> Result<()> {
     let (verts, faces) = weld(tris);
     if faces.is_empty() {
-        return Err(anyhow!("objet « {} » sans triangle exploitable", name));
+        return Err(anyhow!(crate::t!("err.object_empty", name = name)));
     }
     let single = tris.first().map(|t| t.c).filter(|c| tris.iter().all(|t| t.c == *c));
     match single {
@@ -166,7 +164,7 @@ fn write_mesh_object<W: Write>(
     writeln!(w, "    <triangles>")?;
     let mut fi = 0usize;
     for t in tris {
-        // `weld` a pu écarter des triangles dégénérés : on suit le même ordre.
+        // `weld` may have left out degenerate triangles: follow the same order.
         let (a, b, c) = (t.v[0], t.v[1], t.v[2]);
         let deg = a == b || b == c || a == c;
         if deg {
@@ -196,7 +194,7 @@ fn write_mesh_object<W: Write>(
 
 type Archive = zip::ZipWriter<BufWriter<File>>;
 
-/// Ouvre l'archive et écrit les parties fixes, jusqu'au début du modèle.
+/// Opens the archive and writes the fixed parts, up to the start of the model.
 fn begin_archive(dst: &Path) -> Result<(Archive, zip::write::SimpleFileOptions)> {
     let out = File::create(dst)?;
     let mut z = zip::ZipWriter::new(BufWriter::new(out));
@@ -236,7 +234,7 @@ fn begin_model<W: Write>(w: &mut W) -> Result<()> {
     Ok(())
 }
 
-/// Une palette globale : chaque couleur rencontrée devient un matériau.
+/// A global palette: each color met becomes a material.
 fn write_palette<W: Write>(w: &mut W, groups: &[&[Tri]]) -> Result<HashMap<[u8; 3], usize>> {
     let mut palette: Vec<[u8; 3]> = Vec::new();
     let mut color_id: HashMap<[u8; 3], usize> = HashMap::new();
@@ -265,24 +263,24 @@ fn write_palette<W: Write>(w: &mut W, groups: &[&[Tri]]) -> Result<HashMap<[u8; 
     Ok(color_id)
 }
 
-/// Une pièce d'un objet composé, imprimée par une tête donnée (1 à 16).
+/// A part of a composite object, printed by a given head (1 to 16).
 pub struct Part {
     pub name: String,
     pub tris: Vec<Tri>,
     pub extruder: u8,
 }
 
-/// Écrit un seul objet fait de plusieurs pièces, chacune avec sa tête.
+/// Writes a single object made of several parts, each with its head.
 ///
-/// C'est la forme qu'attend le trancheur pour un modèle multicolore : un objet
-/// unique reste d'un bloc (une pièce posée en hauteur ne retombe pas sur le
-/// plateau), et `model_settings.config` affecte une tête à chaque pièce.
+/// It is the form the slicer expects for a multicolor model: a single object
+/// stays in one piece (a part placed up high does not fall back onto the
+/// plate), and `model_settings.config` assigns a head to each part.
 pub fn write_multipart(dst: &Path, name: &str, parts: &[Part], transform: &Mat) -> Result<()> {
     write_composites(dst, &[(name, parts, *transform)])
 }
 
-/// Écrit plusieurs objets composés de pièces, placements déjà appliqués aux
-/// triangles (scène du plateau).
+/// Writes several objects made of parts, placements already applied to the
+/// triangles (plate scene).
 pub fn write_objects(dst: &Path, objects: &[(String, Vec<Part>)]) -> Result<()> {
     let list: Vec<(&str, &[Part], Mat)> = objects
         .iter()
@@ -291,11 +289,11 @@ pub fn write_objects(dst: &Path, objects: &[(String, Vec<Part>)]) -> Result<()> 
     write_composites(dst, &list)
 }
 
-/// Objets composés : chaque pièce est un maillage, chaque objet un assemblage
-/// de ses pièces, placé dans le `<build>`.
+/// Composite objects: each part is a mesh, each object an assembly of its
+/// parts, placed in the `<build>`.
 fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> {
     if objects.is_empty() || objects.iter().any(|(_, p, _)| p.is_empty()) {
-        return Err(anyhow!("aucune pièce à écrire"));
+        return Err(anyhow!(crate::t!("err.no_part")));
     }
     let (mut z, opts) = begin_archive(dst)?;
     let mut w = std::io::BufWriter::with_capacity(1 << 20, &mut z);
@@ -303,7 +301,7 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
     let all: Vec<&[Tri]> = objects.iter().flat_map(|(_, parts, _)| parts.iter().map(|p| p.tris.as_slice())).collect();
     let color_id = write_palette(&mut w, &all)?;
 
-    // Identifiants : pièces d'abord (à partir de 2), puis les objets composés.
+    // Ids: parts first (from 2), then the composite objects.
     let mut next = 2u32;
     let mut part_ids: Vec<Vec<u32>> = Vec::new();
     for (_, parts, _) in objects {
@@ -363,10 +361,10 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
     Ok(())
 }
 
-/// Écrit un 3MF de géométrie contenant les objets et leurs placements.
+/// Writes a geometry 3MF holding the objects and their placements.
 pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
     if objects.is_empty() {
-        return Err(anyhow!("aucun objet à écrire"));
+        return Err(anyhow!(crate::t!("err.no_object_to_write")));
     }
     let (mut z, opts) = begin_archive(dst)?;
     let mut w = std::io::BufWriter::with_capacity(1 << 20, &mut z);
@@ -375,7 +373,7 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
     let color_id = write_palette(&mut w, &all)?;
 
     for (i, o) in objects.iter().enumerate() {
-        // L'identifiant 1 est pris par les matériaux.
+        // Id 1 is taken by the materials.
         write_mesh_object(&mut w, i as u32 + 2, &o.name, &o.tris, &color_id)?;
     }
 
@@ -394,7 +392,7 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
     w.flush()?;
     drop(w);
 
-    // Réglages par objet lus par Orca et Bambu Studio : nom et tête affectée.
+    // Per-object settings read by Orca and Bambu Studio: name and assigned head.
     z.start_file("Metadata/model_settings.config", opts)?;
     let mut s = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<config>\n");
     for (i, o) in objects.iter().enumerate() {
@@ -446,7 +444,7 @@ mod tests {
             .collect()
     }
 
-    /// Ce que l'on écrit doit être relu à l'identique par notre propre lecteur.
+    /// What is written must be read back identically by our own reader.
     #[test]
     fn round_trip() {
         let dir = std::env::temp_dir().join("snapstudio_w3mf");
@@ -454,17 +452,17 @@ mod tests {
         let path = dir.join("scene.3mf");
 
         let mut place = Mat::IDENTITY;
-        place.0[9] = 100.0; // translation en X du second cube
+        place.0[9] = 100.0; // X translation of the second cube
         place.0[10] = 50.0;
         let objects = vec![
             SceneObject {
-                name: "cube rouge".into(),
+                name: "red cube".into(),
                 tris: cube(10.0, [200, 40, 40]),
                 transform: Mat::IDENTITY,
                 extruder: Some(1),
             },
             SceneObject {
-                name: "cube bleu".into(),
+                name: "blue cube".into(),
                 tris: cube(20.0, [40, 60, 200]),
                 transform: place,
                 extruder: Some(3),
@@ -474,18 +472,18 @@ mod tests {
 
         let mut zip = crate::model3mf::open(&path).unwrap();
         let m = mesh::load_mesh(&mut zip, 100_000).unwrap();
-        assert_eq!(m.tris.len(), 24, "deux cubes de douze triangles");
+        assert_eq!(m.tris.len(), 24, "two cubes of twelve triangles");
 
-        // Le second cube est bien déplacé : l'emprise va de 0 à 120 en X.
+        // The second cube is indeed moved: the extent goes from 0 to 120 in X.
         assert!((m.min[0] - 0.0).abs() < 1e-4, "min x = {}", m.min[0]);
         assert!((m.max[0] - 120.0).abs() < 1e-4, "max x = {}", m.max[0]);
         assert!((m.max[1] - 70.0).abs() < 1e-4, "max y = {}", m.max[1]);
 
-        // Les couleurs des matériaux survivent à l'aller-retour.
+        // Material colors survive the round trip.
         assert!(m.tris.iter().any(|t| t.c == [200, 40, 40]));
         assert!(m.tris.iter().any(|t| t.c == [40, 60, 200]));
 
-        // Les sommets sont partagés : huit par cube, pas trois par triangle.
+        // Vertices are shared: eight per cube, not three per triangle.
         let data = std::fs::read(&path).unwrap();
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(data)).unwrap();
         let mut xml = String::new();
@@ -493,17 +491,17 @@ mod tests {
             .unwrap()
             .read_to_string(&mut xml)
             .unwrap();
-        assert_eq!(xml.matches("<vertex ").count(), 16, "8 sommets par cube");
-        assert!(xml.contains(r#"name="cube rouge""#));
+        assert_eq!(xml.matches("<vertex ").count(), 16, "8 vertices per cube");
+        assert!(xml.contains(r#"name="red cube""#));
         let mut cfg = String::new();
         z.by_name("Metadata/model_settings.config")
             .unwrap()
             .read_to_string(&mut cfg)
             .unwrap();
-        assert!(cfg.contains(r#"key="extruder" value="3""#), "tête affectée");
+        assert!(cfg.contains(r#"key="extruder" value="3""#), "head assigned");
     }
 
-    /// Compose un plateau de deux exemplaires, pour l'essai de découpe réelle.
+    /// Composes a plate of two copies, for the real slicing test.
     #[test]
     fn dump_scene() {
         let (Ok(src), Ok(dst)) = (std::env::var("SCENE_SRC"), std::env::var("SCENE_OUT")) else {
@@ -512,7 +510,7 @@ mod tests {
         let mut zip = crate::model3mf::open(Path::new(&src)).unwrap();
         let m = mesh::load_mesh(&mut zip, 2_000_000).unwrap();
         let size = m.size();
-        // On repose la pièce à l'origine, puis on en pose deux côte à côte.
+        // Put the part back at the origin, then lay two side by side.
         let recenter = |dx: f32, dy: f32| {
             let mut t = Mat::IDENTITY;
             t.0[9] = -m.min[0] + dx;
@@ -536,14 +534,14 @@ mod tests {
         ];
         write_scene(Path::new(&dst), &objects).unwrap();
         println!(
-            "écrit : {dst} ({} triangles par pièce, encombrement {:.1} x {:.1} mm)",
+            "written: {dst} ({} triangles per part, footprint {:.1} x {:.1} mm)",
             m.tris.len(),
             size[0],
             size[1]
         );
     }
 
-    /// Le fichier allégé doit garder sa géométrie et perdre ses réglages.
+    /// The slimmed file must keep its geometry and lose its settings.
     #[test]
     fn strip_keeps_geometry() {
         let Ok(src) = std::env::var("STRIP_SRC") else {
@@ -551,13 +549,13 @@ mod tests {
         };
         let dst = std::env::temp_dir().join("snapstudio_stripped.3mf");
         let dropped = strip_project(Path::new(&src), &dst).unwrap();
-        println!("entrées écartées : {dropped}");
+        println!("entries left out: {dropped}");
 
         let mut a = crate::model3mf::open(Path::new(&src)).unwrap();
         let ma = mesh::load_mesh(&mut a, 2_000_000).unwrap();
         let mut b = crate::model3mf::open(&dst).unwrap();
         let mb = mesh::load_mesh(&mut b, 2_000_000).unwrap();
-        assert_eq!(ma.tris.len(), mb.tris.len(), "même nombre de triangles");
+        assert_eq!(ma.tris.len(), mb.tris.len(), "same number of triangles");
         for k in 0..3 {
             assert!((ma.min[k] - mb.min[k]).abs() < 1e-4);
             assert!((ma.max[k] - mb.max[k]).abs() < 1e-4);
@@ -565,8 +563,8 @@ mod tests {
         let names = crate::model3mf::entry_names(&b);
         assert!(
             !names.iter().any(|n| n.to_ascii_lowercase().contains("project_settings")),
-            "les réglages de projet sont partis"
+            "the project settings are gone"
         );
-        println!("{} entrées conservées", names.len());
+        println!("{} entries kept", names.len());
     }
 }

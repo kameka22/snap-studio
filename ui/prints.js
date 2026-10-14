@@ -1,38 +1,31 @@
 "use strict";
-/* Vue « Impressions » : en cours, file d'attente, terminées.
+/* "Prints" view: running, queued, finished.
 
-   Le Rust tient le magasin des travaux (`jobs_list`) et interroge les
-   imprimantes en fond (`prints-status`). Une impression en cours est désignée
-   par son imprimante (`live:<id>`) : elle peut venir d'un autre outil ; un
-   travail du magasin par son identifiant (`job:<id>`).
+   Rust keeps the job store (`jobs_list`) and polls the printers in the
+   background (`prints-status`). A running print is designated by its printer
+   (`live:<id>`): it may come from another tool; a stored job by its id
+   (`job:<id>`).
 
-   Fin d'impression avec une file non vide : le Rust émet `queue-next`, une
-   fenêtre propose la suivante. Rien ne part sans un clic, plateau libéré. */
+   End of a print with a non-empty queue: Rust emits `queue-next`, a sheet
+   offers the next one. Nothing starts without a click, bed cleared. */
 
 const PJ = {
   jobs: [],
   live: [],
   sel: null,
   cam: { id: null, on: false, n: 0, timer: 0, keep: 0 },
-  /* Fenêtre « Lancer la suivante ? » : travail proposé, lancement en cours. */
+  /* "Start the next one?" sheet: job offered, launch in progress. */
   next: null,
   launching: false,
-  /* Propositions arrivées pendant qu'une autre est affichée. */
+  /* Offers that arrived while another one was shown. */
   pending: [],
 };
 
 const PJ_BUSY = ["printing", "paused"];
-const PJ_STATE = {
-  printing: "En impression",
-  paused: "En pause",
-  queued: "En attente",
-  complete: "Terminée",
-  finished: "Terminée",
-  cancelled: "Annulée",
-  error: "Erreur",
-};
+const PJ_STATES = ["printing", "paused", "queued", "complete", "finished", "cancelled", "error"];
+const pjState = (s) => (PJ_STATES.includes(s) ? tr("prints.state." + s) : s);
 
-/* ------------------------------------------------------------ données */
+/* ------------------------------------------------------------ data */
 
 async function pjLoad() {
   PJ.jobs = (await invoke("jobs_list").catch(() => null)) || [];
@@ -45,9 +38,9 @@ const pjDone = () =>
   PJ.jobs.filter((j) => !["queued", "printing"].includes(j.state)).sort((a, b) => (b.finished || 0) - (a.finished || 0));
 const pjActive = () => PJ.live.filter((l) => l.status.online && PJ_BUSY.includes(l.status.state));
 const pjLiveOf = (printerId) => PJ.live.find((l) => l.printer_id === printerId);
-const pjPrinterName = (id) => pjLiveOf(id)?.printer_name || P.list.find((p) => p.id === id)?.name || "Imprimante";
+const pjPrinterName = (id) => pjLiveOf(id)?.printer_name || P.list.find((p) => p.id === id)?.name || tr("slice.printer");
 
-/* Travail Snap Studio derrière une impression en cours, s'il y en a un. */
+/* Snap Studio job behind a running print, if there is one. */
 function pjJobOfLive(live) {
   const mine = PJ.jobs.filter((j) => j.printer_id === live.printer_id && j.state === "printing");
   return mine.find((j) => j.remote === live.status.job) || mine[mine.length - 1] || null;
@@ -56,9 +49,9 @@ function pjJobOfLive(live) {
 const pjThumb = (job, px = 320) =>
   job?.file ? `thumb://localhost/t?p=${encodeURIComponent(job.file)}&s=${px}&k=0&v=${job.created}` : "";
 
-const pjName = (live) => (live.status.job || "Impression").replace(/\.gcode$/i, "");
+const pjName = (live) => (live.status.job || tr("prints.print")).replace(/\.gcode$/i, "");
 
-/* Heure de début estimée d'un travail en file, d'après ce qui le précède. */
+/* Estimated start time of a queued job, from what comes before it. */
 function pjStartEstimate(job) {
   const live = pjLiveOf(job.printer_id);
   let t = Date.now();
@@ -70,7 +63,7 @@ function pjStartEstimate(job) {
   return t;
 }
 
-/* ------------------------------------------------------------ barre latérale */
+/* ------------------------------------------------------------ sidebar */
 
 function pjRing(p) {
   const r = 6, c = 2 * Math.PI * r, k = Math.max(0, Math.min(1, p || 0));
@@ -86,10 +79,10 @@ function pjRenderSide() {
     items.push(`<button class="side-item" data-pj="live:${esc(l.printer_id)}" title="${esc(l.printer_name)}">
       <span class="glyph">${pjRing(l.status.progress)}</span>
       <span class="lbl">${esc(pjName(l))}</span>
-      <span class="count">${paused ? "pause" : Math.round((l.status.progress || 0) * 100) + " %"}</span></button>`);
+      <span class="count">${paused ? esc(tr("prints.pause_short")) : Math.round((l.status.progress || 0) * 100) + " %"}</span></button>`);
   }
   pjQueue().forEach((j, i) => {
-    items.push(`<button class="side-item" data-pj="job:${esc(j.id)}" title="En attente · ${esc(pjPrinterName(j.printer_id))}">
+    items.push(`<button class="side-item" data-pj="job:${esc(j.id)}" title="${esc(pjState("queued"))} · ${esc(pjPrinterName(j.printer_id))}">
       <span class="glyph pj-num">${i + 1}</span><span class="lbl">${esc(j.name)}</span></button>`);
   });
   box.innerHTML = items.join("");
@@ -103,7 +96,7 @@ $("side-prints").addEventListener("click", (e) => {
   if (b) pjShow(b.dataset.pj);
 });
 
-/* ------------------------------------------------------------ vue */
+/* ------------------------------------------------------------ view */
 
 function pjShow(key) {
   PJ.sel = key || null;
@@ -123,7 +116,7 @@ function pjRender() {
     PJ.sel = null;
     pjCamStop();
     pjRenderOverview();
-    tbSet("prints", "Impressions", pjSubtitle());
+    tbSet("prints", tr("nav.prints"), pjSubtitle());
     return;
   }
   pjRenderDetail(detail);
@@ -131,15 +124,15 @@ function pjRender() {
 
 function pjSubtitle() {
   const a = pjActive().length, q = pjQueue().length;
-  return [a && `${a} en cours`, q && `${q} en attente`].filter(Boolean).join(" · ");
+  return [a && tr("prints.n_running", { n: a }), q && tr("prints.n_queued", { n: q })].filter(Boolean).join(" · ");
 }
 
-/* Ce que désigne une clé : impression en cours, ou travail du magasin. */
+/* What a key designates: a running print, or a stored job. */
 function pjResolve(key) {
   if (key.startsWith("live:")) {
     const live = pjLiveOf(key.slice(5));
     if (!live || !PJ_BUSY.includes(live.status.state)) {
-      // Impression finie depuis : on bascule sur sa fiche d'historique.
+      // The print has finished since: switch to its history record.
       const done = pjDone().find((j) => j.printer_id === key.slice(5));
       return done ? { job: done, live: pjLiveOf(done.printer_id) } : null;
     }
@@ -163,43 +156,43 @@ function pjCard(key, thumb, title, sub, badge, extra = "") {
 
 const PJ_PLACEHOLDER =
   '<svg class="pj-ph" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg>';
-const pjBadge = (state) => `<span class="pj-badge ${esc(state)}">${esc(PJ_STATE[state] || state)}</span>`;
+const pjBadge = (state) => `<span class="pj-badge ${esc(state)}">${esc(pjState(state))}</span>`;
 
 function pjRenderOverview() {
   const box = $("pj-overview");
   const active = pjActive(), queue = pjQueue(), done = pjDone();
   const html = [];
   if (active.length) {
-    html.push('<div class="vp-section">En cours</div><div class="pj-cards">');
+    html.push(`<div class="vp-section">${esc(tr("prints.running"))}</div><div class="pj-cards">`);
     for (const l of active) {
       const job = pjJobOfLive(l);
       const st = l.status;
       const bar = `<span class="pj-mini-bar"><i style="width:${Math.round((st.progress || 0) * 100)}%"></i></span>`;
       html.push(
         pjCard(`live:${l.printer_id}`, pjThumb(job), job?.name || pjName(l),
-          `${esc(l.printer_name)} · ${Math.round((st.progress || 0) * 100)} %${st.remaining_s ? ` · fin vers ${fmtClock(Date.now() + st.remaining_s * 1000)}` : ""}`,
+          `${esc(l.printer_name)} · ${Math.round((st.progress || 0) * 100)} %${st.remaining_s ? ` · ${esc(tr("prints.ends_at", { time: fmtClock(Date.now() + st.remaining_s * 1000) }))}` : ""}`,
           pjBadge(st.state), bar)
       );
     }
     html.push("</div>");
   }
   if (queue.length) {
-    html.push('<div class="vp-section">En attente</div><div class="pj-cards">');
+    html.push(`<div class="vp-section">${esc(pjState("queued"))}</div><div class="pj-cards">`);
     queue.forEach((j, i) => {
       html.push(
         pjCard(`job:${j.id}`, pjThumb(j), `${i + 1}. ${j.name}`,
-          `${esc(pjPrinterName(j.printer_id))}${j.stats?.print_time_s ? ` · ${fmtDuration(j.stats.print_time_s)}` : ""} · début ~${fmtClock(pjStartEstimate(j))}`,
+          `${esc(pjPrinterName(j.printer_id))}${j.stats?.print_time_s ? ` · ${fmtDuration(j.stats.print_time_s)}` : ""} · ${esc(tr("prints.starts_at", { time: fmtClock(pjStartEstimate(j)) }))}`,
           pjBadge("queued"))
       );
     });
     html.push("</div>");
   }
   if (done.length) {
-    html.push('<div class="vp-section">Terminées</div><div class="pj-cards">');
+    html.push(`<div class="vp-section">${esc(tr("prints.finished"))}</div><div class="pj-cards">`);
     for (const j of done) {
       html.push(
         pjCard(`job:${j.id}`, pjThumb(j), j.name,
-          `${esc(pjPrinterName(j.printer_id))}${j.finished ? ` · ${dtf.format(new Date(j.finished * 1000))}` : ""}`,
+          `${esc(pjPrinterName(j.printer_id))}${j.finished ? ` · ${fmtDate(j.finished)}` : ""}`,
           pjBadge(j.state))
       );
     }
@@ -207,8 +200,8 @@ function pjRenderOverview() {
   }
   box.innerHTML = html.length
     ? html.join("")
-    : `<div class="empty"><div class="empty-art">${PJ_PLACEHOLDER}</div><h1>Aucune impression</h1>
-       <p>Découpez un modèle puis envoyez-le à une imprimante, ou mettez-le en file d'attente.</p></div>`;
+    : `<div class="empty"><div class="empty-art">${PJ_PLACEHOLDER}</div><h1>${esc(tr("prints.empty.title"))}</h1>
+       <p>${esc(tr("prints.empty.text"))}</p></div>`;
 }
 
 $("pj-overview").addEventListener("click", (e) => {
@@ -216,7 +209,7 @@ $("pj-overview").addEventListener("click", (e) => {
   if (c) pjShow(c.dataset.key);
 });
 
-/* ------------------------------------------------------------ fiche */
+/* ------------------------------------------------------------ record */
 
 function pjRow(k, v) {
   return v == null || v === "" ? "" : `<div class="grow-row"><span class="k">${esc(k)}</span><span class="pj-v">${v}</span></div>`;
@@ -231,44 +224,44 @@ function pjFilamentRows(job) {
     const g = s.per_tool_g?.[t];
     const c = colors[t];
     return `<div class="pj-fil">${c ? `<i style="background:${esc(c)}"></i>` : "<i></i>"}<b>T${t}</b>
-      <span>${esc(names[t] || names[0] || "")}</span><em>${g != null ? `${g.toFixed(1).replace(".", ",")} g` : ""}</em></div>`;
+      <span>${esc(names[t] || names[0] || "")}</span><em>${g != null ? `${fmtDec(g, 1)} g` : ""}</em></div>`;
   });
-  return rows.length ? `<div class="grow-row pj-fils"><span class="k">Filament</span><div>${rows.join("")}</div></div>` : "";
+  return rows.length ? `<div class="grow-row pj-fils"><span class="k">${esc(tr("files.col.weight"))}</span><div>${rows.join("")}</div></div>` : "";
 }
 
 function pjSummary(job) {
   if (!job) {
-    return `<div class="group"><div class="grow-row"><span class="k pj-muted">Impression lancée depuis un autre outil : Snap Studio n'en connaît que ce que l'imprimante rapporte.</span></div></div>`;
+    return `<div class="group"><div class="grow-row"><span class="k pj-muted">${esc(tr("prints.foreign"))}</span></div></div>`;
   }
   const s = job.stats || {};
   const o = job.options || {};
-  const opts = [o.bed_leveling && "nivellement", o.flow_calibration && "calibration du débit", o.timelapse && "timelapse"].filter(Boolean);
-  const when = (t) => (t ? esc(dtf.format(new Date(t * 1000))) : null);
+  const opts = [o.bed_leveling && tr("prints.opt.leveling"), o.flow_calibration && tr("prints.opt.flow"), o.timelapse && tr("prints.opt.timelapse")].filter(Boolean);
+  const when = (t) => (t ? esc(fmtDate(t)) : null);
   return `<div class="group">
-    ${pjRow("Durée estimée", s.print_time_s ? esc(fmtDuration(s.print_time_s)) : null)}
-    ${pjRow("Couches", s.layers ? String(s.layers) : null)}
+    ${pjRow(tr("viewer.est_time"), s.print_time_s ? esc(fmtDuration(s.print_time_s)) : null)}
+    ${pjRow(tr("prints.layers"), s.layers ? String(s.layers) : null)}
     ${pjFilamentRows(job)}
-    ${pjRow("Total", s.filament_g ? `${s.filament_g.toFixed(1).replace(".", ",")} g${s.cost ? ` · ${s.cost.toFixed(2).replace(".", ",")} €` : ""}` : null)}
-    ${pjRow("Plateau", job.profile?.bed ? esc(job.profile.bed_label || job.profile.bed) : null)}
-    ${pjRow("Profil d'impression", esc(job.profile?.process || ""))}
-    ${pjRow("Machine", esc(job.profile?.machine || ""))}
-    ${pjRow("Options", opts.length ? esc(opts.join(", ")) : "aucune")}
-    ${pjRow("Modèle", job.source ? esc(job.source.split(/[\\/]/).pop()) : null)}
-    ${pjRow(job.state === "queued" ? "Ajoutée" : "Découpée", when(job.created))}
-    ${pjRow("Lancée", when(job.started))}
-    ${pjRow("Fin", when(job.finished))}
+    ${pjRow(tr("prints.total"), s.filament_g ? `${fmtDec(s.filament_g, 1)} g${s.cost ? ` · ${fmtDec(s.cost, 2)} €` : ""}` : null)}
+    ${pjRow(tr("slice.plate"), job.profile?.bed ? esc(job.profile.bed_label || job.profile.bed) : null)}
+    ${pjRow(tr("prints.process"), esc(job.profile?.process || ""))}
+    ${pjRow(tr("prints.machine"), esc(job.profile?.machine || ""))}
+    ${pjRow(tr("prints.options"), esc(opts.length ? opts.join(", ") : tr("prints.options.none")))}
+    ${pjRow(tr("printers.form.model"), job.source ? esc(job.source.split(/[\\/]/).pop()) : null)}
+    ${pjRow(tr(job.state === "queued" ? "prints.added_at" : "prints.sliced_at"), when(job.created))}
+    ${pjRow(tr("prints.started_at"), when(job.started))}
+    ${pjRow(tr("prints.finished_at"), when(job.finished))}
   </div>`;
 }
 
 function pjTemps(st) {
   const rows = [];
   for (const n of st.nozzles || []) {
-    rows.push(pjRow(`Buse T${n.index}${n.active ? " · active" : ""}`, `${Math.round(n.current)} / ${Math.round(n.target)} °C`));
+    rows.push(pjRow(tr("printers.nozzle", { i: n.index }) + (n.active ? " · " + tr("prints.active") : ""), `${Math.round(n.current)} / ${Math.round(n.target)} °C`));
   }
-  if (st.bed) rows.push(pjRow("Plateau", `${Math.round(st.bed.current)} / ${Math.round(st.bed.target)} °C`));
-  if (st.chamber) rows.push(pjRow("Caisson", `${Math.round(st.chamber.current)} °C`));
-  if (st.fan != null) rows.push(pjRow("Ventilateur", `${Math.round(st.fan * 100)} %`));
-  if (st.speed_factor != null) rows.push(pjRow("Vitesse", `${Math.round(st.speed_factor * 100)} %`));
+  if (st.bed) rows.push(pjRow(tr("slice.plate"), `${Math.round(st.bed.current)} / ${Math.round(st.bed.target)} °C`));
+  if (st.chamber) rows.push(pjRow(tr("printers.chamber"), `${Math.round(st.chamber.current)} °C`));
+  if (st.fan != null) rows.push(pjRow(tr("printers.fan"), `${Math.round(st.fan * 100)} %`));
+  if (st.speed_factor != null) rows.push(pjRow(tr("printers.speed"), `${Math.round(st.speed_factor * 100)} %`));
   return rows.join("");
 }
 
@@ -276,53 +269,53 @@ function pjRenderDetail({ job, live, active }) {
   const box = $("pj-detail");
   const st = live?.status;
   const printerName = live?.printer_name || pjPrinterName(job?.printer_id);
-  const name = job?.name || (live ? pjName(live) : "Impression");
+  const name = job?.name || (live ? pjName(live) : tr("prints.print"));
   const state = active ? st.state : job.state;
   const queue = pjQueue();
   const qi = job ? queue.findIndex((j) => j.id === job.id) : -1;
   const printerFree = live?.status.online && !PJ_BUSY.includes(live.status.state);
-  tbSet("prints", name, PJ_STATE[state] || "");
+  tbSet("prints", name, PJ_STATES.includes(state) ? pjState(state) : "");
 
   let kicker = "", progress = "", actions = "";
   if (active) {
     const pct = Math.round((st.progress || 0) * 100);
     kicker = `${esc(printerName)}`;
     progress = `<div class="pj-progress"><div class="progress"><i style="width:${pct}%"></i></div><b>${pct} %</b></div>
-      <div class="pj-times">${st.elapsed_s ? `${esc(fmtDuration(st.elapsed_s))} écoulé` : ""}${
-        st.remaining_s ? ` · reste ${esc(fmtDuration(st.remaining_s))} · fin vers ${fmtClock(Date.now() + st.remaining_s * 1000)}` : ""
-      }${st.layer ? ` · couche ${st.layer[0]} / ${st.layer[1]}` : ""}</div>`;
+      <div class="pj-times">${st.elapsed_s ? esc(tr("prints.elapsed", { t: fmtDuration(st.elapsed_s) })) : ""}${
+        st.remaining_s ? ` · ${esc(tr("prints.left", { t: fmtDuration(st.remaining_s) }))} · ${esc(tr("prints.ends_at", { time: fmtClock(Date.now() + st.remaining_s * 1000) }))}` : ""
+      }${st.layer ? ` · ${esc(tr("prints.layer_of", { a: st.layer[0], b: st.layer[1] }))}` : ""}</div>`;
     actions =
       (st.state === "paused"
-        ? `<button class="btn" data-act="resume">Reprendre</button>`
-        : `<button class="btn" data-act="pause">Pause</button>`) +
-      `<button class="btn danger" data-act="cancel">Annuler l'impression</button>`;
+        ? `<button class="btn" data-act="resume">${esc(tr("prints.resume"))}</button>`
+        : `<button class="btn" data-act="pause">${esc(tr("prints.pause"))}</button>`) +
+      `<button class="btn danger" data-act="cancel">${esc(tr("prints.cancel"))}</button>`;
   } else if (state === "queued") {
-    kicker = `${qi + 1}${qi === 0 ? "re" : "e"} position · début ~${fmtClock(pjStartEstimate(job))}`;
-    progress = `<label class="pj-for">Pour <select id="pj-printer">${P.list
+    kicker = esc(`${tr("prints.position", { n: qi + 1 })} · ${tr("prints.starts_at", { time: fmtClock(pjStartEstimate(job)) })}`);
+    progress = `<label class="pj-for">${esc(tr("prints.for"))} <select id="pj-printer">${P.list
       .map((p) => `<option value="${esc(p.id)}"${p.id === job.printer_id ? " selected" : ""}>${esc(p.name || p.host)}</option>`)
       .join("")}</select></label>
       <div class="pj-opts">
-        <label><input type="checkbox" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> Nivellement</label>
-        <label><input type="checkbox" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> Calibration du débit</label>
-        <label><input type="checkbox" data-opt="timelapse"${job.options.timelapse ? " checked" : ""}/> Timelapse</label>
+        <label><input type="checkbox" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> ${esc(tr("prints.opt.leveling_cap"))}</label>
+        <label><input type="checkbox" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> ${esc(tr("prints.opt.flow_cap"))}</label>
+        <label><input type="checkbox" data-opt="timelapse"${job.options.timelapse ? " checked" : ""}/> ${esc(tr("prints.opt.timelapse_cap"))}</label>
       </div>`;
     actions = `<button class="btn primary" data-act="launch"${printerFree ? "" : " disabled"} title="${
-      printerFree ? "" : esc(`${printerName} n'est pas libre`)
-    }">Lancer maintenant</button>
-      <button class="btn" data-act="up"${qi <= 0 ? " disabled" : ""} title="Monter dans la file">↑</button>
-      <button class="btn" data-act="down"${qi >= queue.length - 1 ? " disabled" : ""} title="Descendre dans la file">↓</button>
-      <button class="btn danger" data-act="remove">Retirer</button>`;
+      printerFree ? "" : esc(tr("prints.not_free", { name: printerName }))
+    }">${esc(tr("prints.launch_now"))}</button>
+      <button class="btn" data-act="up"${qi <= 0 ? " disabled" : ""} title="${esc(tr("prints.move_up"))}">↑</button>
+      <button class="btn" data-act="down"${qi >= queue.length - 1 ? " disabled" : ""} title="${esc(tr("prints.move_down"))}">↓</button>
+      <button class="btn danger" data-act="remove">${esc(tr("prints.remove"))}</button>`;
   } else if (state === "printing") {
-    // Lancé, mais le suivi de fond n'a pas encore vu l'imprimante démarrer
-    // (ou elle ne répond plus).
-    kicker = `${esc(printerName)} · ${live?.status.online === false ? "imprimante injoignable" : "démarrage…"}`;
-    actions = live?.status.online === false ? `<button class="btn" data-act="remove">Retirer de la liste</button>` : "";
+    // Launched, but the background tracking has not yet seen the printer
+    // start (or it no longer answers).
+    kicker = `${esc(printerName)} · ${esc(tr(live?.status.online === false ? "prints.unreachable" : "printers.cam.starting"))}`;
+    actions = live?.status.online === false ? `<button class="btn" data-act="remove">${esc(tr("prints.remove_list"))}</button>` : "";
   } else {
-    kicker = `${esc(printerName)}${job.finished ? ` · ${dtf.format(new Date(job.finished * 1000))}` : ""}`;
-    actions = `<button class="btn primary" data-act="requeue">Remettre en file</button>
-      <button class="btn" data-act="remove">Retirer de l'historique</button>`;
+    kicker = `${esc(printerName)}${job.finished ? ` · ${fmtDate(job.finished)}` : ""}`;
+    actions = `<button class="btn primary" data-act="requeue">${esc(tr("prints.requeue"))}</button>
+      <button class="btn" data-act="remove">${esc(tr("prints.remove_history"))}</button>`;
   }
-  if (job?.file) actions += `<button class="btn" data-act="paths">Voir les trajectoires</button>`;
+  if (job?.file) actions += `<button class="btn" data-act="paths">${esc(tr("files.view_paths"))}</button>`;
 
   const thumb = pjThumb(job, 640);
   box.innerHTML = `
@@ -337,34 +330,34 @@ function pjRenderDetail({ job, live, active }) {
     </div>
     <div class="pj-cols">
       <div>
-        <div class="vp-section">Bilan de la découpe</div>
+        <div class="vp-section">${esc(tr("prints.summary"))}</div>
         ${pjSummary(job)}
       </div>
       <div>
         ${
           active
             ? `<div class="vp-section">${esc(printerName)}</div><div class="group">${pjTemps(st)}</div>
-               <div class="vp-section">Caméra <button id="pj-cam-toggle" class="btn small">${PJ.cam.on ? "Masquer" : "Afficher"}</button></div>
+               <div class="vp-section">${esc(tr("printers.camera"))} <button id="pj-cam-toggle" class="btn small">${esc(tr(PJ.cam.on ? "common.hide" : "common.show"))}</button></div>
                <div id="pj-cam" class="pj-cam${PJ.cam.on ? "" : " hidden"}"><img id="pj-cam-img" alt="" /><span id="pj-cam-note"></span></div>`
             : live
-              ? `<div class="vp-section">${esc(printerName)}</div><div class="group">${pjRow("État", esc(live.status.online ? PJ_STATE[live.status.state] || "Prête" : "Hors ligne"))}${live.status.online ? pjTemps(live.status) : ""}</div>`
+              ? `<div class="vp-section">${esc(printerName)}</div><div class="group">${pjRow(tr("prints.status"), esc(live.status.online ? (PJ_STATES.includes(live.status.state) ? pjState(live.status.state) : tr("printers.state.ready")) : tr("printers.state.offline")))}${live.status.online ? pjTemps(live.status) : ""}</div>`
               : ""
         }
-        ${live ? `<button class="btn pj-goto" data-act="printer">Voir l'imprimante</button>` : ""}
+        ${live ? `<button class="btn pj-goto" data-act="printer">${esc(tr("prints.goto_printer"))}</button>` : ""}
       </div>
     </div>`;
   box.dataset.printer = live?.printer_id || job?.printer_id || "";
   box.dataset.job = job?.id || "";
   if (active && PJ.cam.on && PJ.cam.id === live.printer_id) {
-    // Fiche redessinée : la dernière image, en cache, revient tout de suite ;
-    // la suivante est demandée à son chargement.
+    // Record redrawn: the last image, cached, comes back at once; the next
+    // one is requested when it loads.
     pjCamNext(PJ.cam.last);
   }
   else if (!active || PJ.cam.id !== live.printer_id) pjCamStop();
 }
 
-/* Le suivi de fond rafraîchit la fiche ; la sélection d'un menu déroulant
-   ouvert ne doit pas sauter : on attend qu'il se referme. */
+/* Background tracking refreshes the record; an open drop-down's selection
+   must not jump: wait until it closes. */
 function pjRefreshDetail() {
   if (window.currentView !== "prints") return;
   const a = document.activeElement;
@@ -400,17 +393,17 @@ async function pjAct(act) {
   try {
     if (act === "pause" || act === "resume") {
       await invoke("print_action", { printerId: printer, action: act });
-      toast(act === "pause" ? "Mise en pause demandée" : "Reprise demandée");
+      toast(tr(act === "pause" ? "prints.pause_requested" : "prints.resume_requested"));
     } else if (act === "cancel") {
-      const ok = await window.__TAURI__.dialog.ask("L'impression en cours sera arrêtée définitivement.", {
-        title: "Annuler l'impression ?",
+      const ok = await window.__TAURI__.dialog.ask(tr("prints.cancel.text"), {
+        title: tr("prints.cancel.title"),
         kind: "warning",
-        okLabel: "Annuler l'impression",
-        cancelLabel: "Continuer",
+        okLabel: tr("prints.cancel"),
+        cancelLabel: tr("common.continue"),
       });
       if (ok) {
         await invoke("print_action", { printerId: printer, action: "cancel" });
-        toast("Annulation demandée");
+        toast(tr("prints.cancel_requested"));
       }
     } else if (act === "launch" && job) {
       pjOfferNext({ printer_id: job.printer_id, printer_name: pjPrinterName(job.printer_id), finished: null, next: job }, true);
@@ -418,8 +411,9 @@ async function pjAct(act) {
       await invoke("job_move", { id, delta: act === "up" ? -1 : 1 });
     } else if (act === "remove" && job) {
       const ok = await confirmDelete(
-        job.state === "queued" ? "Retirer de la file ?" : "Retirer de l'historique ?",
-        `« ${job.name} » et son G-code seront supprimés de Snap Studio.`
+        tr(job.state === "queued" ? "prints.remove.queue" : "prints.remove.history"),
+        tr("prints.remove.text", { name: job.name }),
+        tr("prints.remove")
       );
       if (ok) {
         await invoke("job_remove", { id });
@@ -429,7 +423,7 @@ async function pjAct(act) {
       const j = await invoke("job_requeue", { id });
       await pjLoad();
       pjShow("job:" + j.id);
-      toast("Remise en file d'attente");
+      toast(tr("prints.requeued"));
     } else if (act === "paths" && job) {
       openViewer(job.file, job.name, "gcode");
     } else if (act === "printer") {
@@ -442,7 +436,7 @@ async function pjAct(act) {
   }
 }
 
-/* ------------------------------------------------------------ caméra */
+/* ------------------------------------------------------------ camera */
 
 async function pjCamStart() {
   const id = $("pj-detail").dataset.printer;
@@ -470,7 +464,7 @@ function pjCamNext(again) {
     PJ.cam.timer = setTimeout(pjCamNext, 250);
   };
   img.onerror = () => {
-    $("pj-cam-note").textContent = "image indisponible, nouvel essai…";
+    $("pj-cam-note").textContent = tr("printers.cam.retry");
     PJ.cam.timer = setTimeout(pjCamNext, 1000);
   };
   img.src = again || `cam://localhost/f?id=${encodeURIComponent(PJ.cam.id)}&n=${++PJ.cam.n}`;
@@ -484,12 +478,12 @@ function pjCamStop(rerender) {
   if (rerender) pjRender();
 }
 
-/* ------------------------------------------------------------ suivante */
+/* ------------------------------------------------------------ next */
 
-/* `manual` : « Lancer maintenant » depuis la fiche, pas une fin d'impression. */
+/* `manual`: "Start Now" from the record, not the end of a print. */
 function pjOfferNext(ev, manual = false) {
-  // Une proposition déjà affichée (ou un lancement en cours) : la suivante
-  // attend son tour, une par imprimante.
+  // An offer already shown (or a launch in progress): the next one waits
+  // its turn, one per printer.
   if (PJ.launching || (!$("qmodal").classList.contains("hidden") && PJ.next)) {
     if (!manual) {
       PJ.pending = PJ.pending.filter((p) => p.printer_id !== ev.printer_id);
@@ -503,12 +497,12 @@ function pjOfferNext(ev, manual = false) {
   const done = $("q-done");
   done.classList.toggle("hidden", !f);
   if (f) {
-    const verb = { cancelled: "a été annulée", error: "s'est arrêtée sur une erreur" }[f.state] || "est terminée";
-    done.innerHTML = `<b>✓ « ${esc(f.name)} » ${esc(verb)}</b><small>sur ${esc(ev.printer_name)}${
+    const key = { cancelled: "queue.done.cancelled", error: "queue.done.error" }[f.state] || "queue.done.ok";
+    done.innerHTML = `<b>✓ ${esc(tr(key, { name: f.name }))}</b><small>${esc(tr("queue.on", { name: ev.printer_name }))}${
       f.started && f.finished ? ` (${esc(fmtDuration(f.finished - f.started))})` : ""
     }</small>`;
   }
-  $("q-title").textContent = manual ? `Lancer sur ${ev.printer_name} ?` : "Lancer la prochaine impression ?";
+  $("q-title").textContent = manual ? tr("queue.title_on", { name: ev.printer_name }) : tr("queue.title");
   const thumb = pjThumb(j, 240);
   $("q-thumb").classList.toggle("hidden", !thumb);
   if (thumb) $("q-thumb").src = thumb;
@@ -517,7 +511,7 @@ function pjOfferNext(ev, manual = false) {
   $("q-sub").textContent = [s.print_time_s && fmtDuration(s.print_time_s), s.filament_g && `${s.filament_g.toFixed(0)} g`]
     .filter(Boolean)
     .join(" · ");
-  $("q-sub2").textContent = [j.profile?.bed && (j.profile.bed_label || j.profile.bed), `sur ${ev.printer_name}`]
+  $("q-sub2").textContent = [j.profile?.bed && (j.profile.bed_label || j.profile.bed), tr("queue.on", { name: ev.printer_name })]
     .filter(Boolean)
     .join(" · ");
   $("q-free").checked = false;
@@ -529,11 +523,11 @@ function pjOfferNext(ev, manual = false) {
 }
 
 $("q-free").addEventListener("change", () => ($("q-go").disabled = !$("q-free").checked || PJ.launching));
-/* Fenêtre refermée : la proposition suivante, s'il y en a une. */
+/* Sheet closed: the next offer, if any. */
 function pjQueueClosed() {
   PJ.next = null;
   const ev = PJ.pending.shift();
-  // Après la fermeture animée de la feuille.
+  // After the sheet's closing animation.
   if (ev) setTimeout(() => pjOfferNext(ev), 250);
 }
 
@@ -550,12 +544,12 @@ $("q-go").addEventListener("click", async () => {
   $("q-go").disabled = true;
   $("q-later").disabled = true;
   $("q-msg").className = "pf-test busy";
-  $("q-msg").textContent = "Préparation de l'imprimante…";
+  $("q-msg").textContent = tr("send.preparing");
   try {
     await invoke("job_launch", { id: ev.next.id });
     PJ.launching = false;
     closeSheet($("qmodal"));
-    toast(`« ${ev.next.name} » lancée sur ${ev.printer_name}`);
+    toast(tr("queue.launched", { name: ev.next.name, printer: ev.printer_name }));
     await pjLoad();
     pjShow("job:" + ev.next.id);
     pjQueueClosed();
@@ -571,15 +565,15 @@ $("q-go").addEventListener("click", async () => {
 listen("print-send", (e) => {
   if (!PJ.launching) return;
   const s = e.payload;
-  if (s.phase === "check") $("q-msg").textContent = "Vérification de l'imprimante…";
+  if (s.phase === "check") $("q-msg").textContent = tr("send.checking");
   else if (s.phase === "upload") {
     $("q-progress").classList.remove("hidden");
     $("q-progress").firstElementChild.style.width = Math.max(2, s.percent || 0) + "%";
-    $("q-msg").textContent = `Envoi du fichier… ${Math.round(s.percent || 0)} %`;
+    $("q-msg").textContent = tr("send.uploading", { p: Math.round(s.percent || 0) });
   } else if (s.phase === "done" && s.message) toast(s.message, true);
 });
 
-/* ------------------------------------------------------------ évènements */
+/* ------------------------------------------------------------ events */
 
 listen("prints-status", (e) => {
   PJ.live = e.payload || [];
@@ -589,12 +583,17 @@ listen("prints-status", (e) => {
 listen("jobs-changed", pjLoad);
 listen("queue-next", (e) => pjOfferNext(e.payload));
 
-tbSet("prints", "Impressions");
+tbSet("prints", tr("nav.prints"));
+window.addEventListener("langchange", () => {
+  pjRenderSide();
+  if (window.currentView === "prints") pjRender();
+  else tbSet("prints", tr("nav.prints"), pjSubtitle());
+});
 
 (async () => {
   PJ.live = (await invoke("prints_status").catch(() => null)) || [];
   await pjLoad();
-  // Écouteurs en place : la question en attente (file non vide sur une
-  // imprimante libre au lancement) peut être posée.
+  // Listeners in place: the pending question (non-empty queue on a printer
+  // free at launch) can be asked.
   invoke("queue_check").catch(() => {});
 })();

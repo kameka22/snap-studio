@@ -1,11 +1,11 @@
 "use strict";
-/* Fenêtre de découpe : sélecteurs visuels.
+/* Slice sheet: visual pickers.
 
-   Les <select> cachés restent la source de vérité — mémorisation, lecture des
-   bobines, découpe les lisent comme avant. Chaque contrôle visuel règle le sien
-   puis signale le changement, et se redessine d'après lui. */
+   The hidden <select>s stay the source of truth — memory, spool reading and
+   slicing read them as before. Each visual control sets its own, signals
+   the change, and redraws from it. */
 
-/* Règle un <select> caché et prévient ses écouteurs. */
+/* Sets a hidden <select> and notifies its listeners. */
 function setSelect(el, value) {
   if (typeof el === "string") el = $(el);
   if (!el || el.value === value) return;
@@ -13,10 +13,10 @@ function setSelect(el, value) {
   el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-/* ------------------------------------------------------------ sélecteur à recherche */
+/* ------------------------------------------------------------ search picker */
 
-/* Panneau ancré à un élément : recherche, sections, une coche sur le choix
-   courant. Sert aux filaments et aux « Autre profil… ». */
+/* Panel anchored to an element: search, sections, a check mark on the
+   current choice. Serves the filaments and the "Other profile…" buttons. */
 const PK = { sections: [], value: null, onPick: null, foot: null, anchor: null };
 
 function openPicker(anchor, { sections, value, onPick, foot = null, placeholder = "Rechercher" }) {
@@ -28,7 +28,7 @@ function openPicker(anchor, { sections, value, onPick, foot = null, placeholder 
   if (foot) $("picker-foot").textContent = foot.label;
   el.classList.remove("hidden");
   pkRender();
-  // Sous l'élément, ou au-dessus s'il n'y a pas la place.
+  // Below the element, or above it when there is no room.
   const r = anchor.getBoundingClientRect();
   const w = el.offsetWidth, h = el.offsetHeight;
   el.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
@@ -57,7 +57,7 @@ function pkRender() {
       </button>`);
     }
   }
-  $("picker-list").innerHTML = html.join("") || '<div class="picker-empty">Aucun résultat</div>';
+  $("picker-list").innerHTML = html.join("") || `<div class="picker-empty">${esc(tr("picker.none"))}</div>`;
 }
 
 $("picker-search").addEventListener("input", pkRender);
@@ -75,7 +75,7 @@ $("picker-list").addEventListener("click", (e) => {
   pick?.(b.dataset.v);
 });
 $("picker-foot").addEventListener("click", () => PK.foot?.onClick());
-// Ancré à un élément qui défile : il se referme plutôt que de flotter ailleurs.
+// Anchored to a scrolling element: it closes rather than float elsewhere.
 document.querySelector("#smodal .sl-cols").addEventListener("scroll", () => {
   if (!$("picker").classList.contains("hidden")) closePicker();
 });
@@ -83,7 +83,7 @@ document.addEventListener("mousedown", (e) => {
   if ($("picker").classList.contains("hidden")) return;
   if (!e.target.closest("#picker") && !(PK.anchor && PK.anchor.contains(e.target))) closePicker();
 });
-// Échap ferme le panneau, pas la fenêtre de découpe.
+// Esc closes the panel, not the slice sheet.
 document.addEventListener(
   "keydown",
   (e) => {
@@ -94,21 +94,22 @@ document.addEventListener(
   true
 );
 
-/* Préréglages en sections : système, puis ceux de l'utilisateur. */
+/* Presets in sections: system, then the user's. */
 function pkPresets(list, sub) {
   return [
-    { label: "Profils système", items: list.filter((p) => !p.user).map((p) => ({ value: p.name, label: p.name, sub: sub?.(p) })) },
-    { label: "Vos profils", items: list.filter((p) => p.user).map((p) => ({ value: p.name, label: p.name, sub: sub?.(p), badge: "perso" })) },
+    { label: tr("picker.system"), items: list.filter((p) => !p.user).map((p) => ({ value: p.name, label: p.name, sub: sub?.(p) })) },
+    { label: tr("picker.yours"), items: list.filter((p) => p.user).map((p) => ({ value: p.name, label: p.name, sub: sub?.(p), badge: tr("picker.custom") })) },
   ];
 }
 
-/* ------------------------------------------------------------ imprimantes */
+/* ------------------------------------------------------------ printers */
 
 const PRINTER_ICON = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/></svg>';
 const NONE_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2c1.85 0 3.55.63 4.9 1.69L5.69 16.9A8 8 0 0 1 12 4m0 16c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1A8 8 0 0 1 12 20"/></svg>';
-const PSTATE = { checking: "…", printing: "en impression", paused: "en pause", offline: "injoignable", error: "erreur" };
+const PSTATES = ["printing", "paused", "offline", "error"];
+const pstateLabel = (st) => (st === "checking" ? "…" : tr(PSTATES.includes(st) ? "slice.pstate." + st : "slice.pstate.ready"));
 
-/* État d'une imprimante : celui lu à l'instant, sinon celui du suivi de fond. */
+/* A printer's state: the one just read, otherwise the background tracking's. */
 function slPrinterStatus(id) {
   if (!id) return null;
   if (SL.pstate?.[id]) return SL.pstate[id];
@@ -116,7 +117,7 @@ function slPrinterStatus(id) {
   return live ? (live.status.online ? live.status.state : "offline") : null;
 }
 
-/* Appelé par la lecture des bobines ; `id` : l'imprimante interrogée. */
+/* Called by the spool reading; `id`: the printer queried. */
 function slPrinterState(state, id = $("s-printer").value) {
   SL.pstate = { ...(SL.pstate || {}), [id]: state };
   slRenderPrinters();
@@ -124,15 +125,15 @@ function slPrinterState(state, id = $("s-printer").value) {
 
 function slRenderPrinters() {
   const cur = $("s-printer").value;
-  // Les imprimantes d'abord, « Sans imprimante » en dernier.
+  // Printers first, "No printer" last.
   $("s-printers").innerHTML = [...$("s-printer").options]
     .sort((a, b) => !a.value - !b.value)
     .map((o) => {
       const st = slPrinterStatus(o.value);
       return `<button class="sl-pchip${o.value === cur ? " on" : ""}" data-printer="${esc(o.value)}">
         <span class="sl-pchip-icon${o.value ? "" : " none"}">${o.value ? PRINTER_ICON : NONE_ICON}</span>
-        <span class="sl-pchip-text"><b>${esc(o.value ? o.textContent : "Aucune")}</b>${
-          o.value ? `<small class="st ${esc(st || "")}">${esc(st ? PSTATE[st] || "prête" : "—")}</small>` : "<small>préréglages seuls</small>"
+        <span class="sl-pchip-text"><b>${esc(o.value ? o.textContent : tr("slice.none"))}</b>${
+          o.value ? `<small class="st ${esc(st || "")}">${esc(st ? pstateLabel(st) : "—")}</small>` : `<small>${esc(tr("slice.presets_only"))}</small>`
         }</span></button>`;
     })
     .join("");
@@ -144,9 +145,9 @@ $("s-printers").addEventListener("click", (e) => {
   setSelect("s-printer", b.dataset.printer);
 });
 
-/* ------------------------------------------------------------ buse */
+/* ------------------------------------------------------------ nozzle */
 
-/* « Snapmaker U1 (0.4 nozzle) » : la machine et le diamètre de buse. */
+/* "Snapmaker U1 (0.4 nozzle)": the machine and the nozzle diameter. */
 function nozzleOf(name) {
   const m = (name || "").match(/^(.*?)\s*\((\d+(?:\.\d+)?)\s*nozzle\)\s*$/i);
   return m ? { family: m[1], d: +m[2] } : null;
@@ -162,7 +163,7 @@ function slRenderMachine() {
         .sort((a, b) => nozzleOf(a.name).d - nozzleOf(b.name).d)
     : [];
   $("s-nozzles").innerHTML = sisters
-    .map((m) => `<button class="sl-chip${m.name === cur ? " on" : ""}" data-machine="${esc(m.name)}">${String(nozzleOf(m.name).d).replace(".", ",")}</button>`)
+    .map((m) => `<button class="sl-chip${m.name === cur ? " on" : ""}" data-machine="${esc(m.name)}">${fmtNum(nozzleOf(m.name).d)}</button>`)
     .join("") || '<span class="sl-note">—</span>';
   $("s-machine-name").textContent = cur;
 }
@@ -175,29 +176,20 @@ $("s-machine-other").addEventListener("click", (e) => {
   openPicker(e.currentTarget, {
     sections: pkPresets(SL.lists?.machines || []),
     value: $("s-machine").value,
-    placeholder: "Rechercher une machine",
+    placeholder: tr("picker.search_machine"),
     onPick: (v) => setSelect("s-machine", v),
   });
 });
 
-/* ------------------------------------------------------------ qualité */
+/* ------------------------------------------------------------ quality */
 
-/* Les profils d'Orca se nomment « hauteur + style » : 0.20mm Standard @… */
-const STYLE_FR = {
-  Standard: "Standard",
-  "High Quality": "Haute qualité",
-  Quality: "Qualité",
-  Optimal: "Optimal",
-  Fine: "Fin",
-  "Extra Fine": "Extra fin",
-  Detail: "Détail",
-  Strength: "Résistance",
-  Strong: "Solide",
-  Draft: "Brouillon",
-  Speed: "Rapide",
-  Balanced: "Équilibré",
-  "Color Mixing": "Mélange de couleurs",
-};
+/* Orca's profiles are named "height + style": 0.20mm Standard @… */
+/* Style names come in English from Orca; the catalog may translate them. */
+function styleLabel(style) {
+  const key = "style." + style.toLowerCase().replace(/\s+/g, "_");
+  const t = tr(key);
+  return t === key ? style : t;
+}
 
 function parseProcess(name) {
   const m = (name || "").match(/^(\d+(?:\.\d+)?)\s*mm\s+(.+?)\s*@/i);
@@ -207,7 +199,7 @@ function parseProcess(name) {
 const STYLE_ORDER = ["Standard", "High Quality", "Quality", "Optimal", "Fine", "Extra Fine", "Detail", "Strength", "Strong", "Speed", "Draft", "Color Mixing"];
 const styleRank = (s) => (STYLE_ORDER.includes(s) ? STYLE_ORDER.indexOf(s) : 99);
 
-/* Profils système décomposés en hauteur × style. */
+/* System profiles split into height × style. */
 function slProcesses() {
   return (SL.lists?.processes || [])
     .filter((p) => !p.user)
@@ -221,20 +213,20 @@ function slQuality() {
   const sys = procs.find((p) => p.name === cur);
   const heights = [...new Set(procs.map((p) => p.h))].sort((a, b) => a - b);
   $("s-layer-chips").innerHTML = heights
-    .map((h) => `<button class="sl-chip${sys && sys.h === h ? " on" : ""}" data-h="${h}">${h.toFixed(2).replace(".", ",")}</button>`)
+    .map((h) => `<button class="sl-chip${sys && sys.h === h ? " on" : ""}" data-h="${h}">${fmtDec(h, 2)}</button>`)
     .join("");
   const styles = sys
     ? procs.filter((p) => p.h === sys.h).sort((a, b) => styleRank(a.style) - styleRank(b.style))
     : [];
   $("s-styles").innerHTML = sys
     ? styles
-        .map((p) => `<button class="sl-chip wide${p.style === sys.style ? " on" : ""}" data-style="${esc(p.style)}">${esc(STYLE_FR[p.style] || p.style)}</button>`)
+        .map((p) => `<button class="sl-chip wide${p.style === sys.style ? " on" : ""}" data-style="${esc(p.style)}">${esc(styleLabel(p.style))}</button>`)
         .join("")
-    : `<span class="sl-note">Profil personnalisé — choisi par « Autre profil… »</span>`;
+    : `<span class="sl-note">${esc(tr("slice.custom_profile"))}</span>`;
   $("s-process-name").textContent = cur;
 }
 
-/* Profil d'une hauteur donnée : même style si possible, sinon Standard. */
+/* Profile of a given height: same style if possible, otherwise Standard. */
 function slProcessFor(h, style) {
   const at = slProcesses().filter((p) => p.h === h);
   return (at.find((p) => p.style === style) || at.find((p) => p.style === "Standard") || at.sort((a, b) => styleRank(a.style) - styleRank(b.style))[0])?.name;
@@ -257,14 +249,14 @@ $("s-process-other").addEventListener("click", (e) => {
   openPicker(e.currentTarget, {
     sections: pkPresets(SL.lists?.processes || []),
     value: $("s-process").value,
-    placeholder: "Rechercher un profil d'impression",
+    placeholder: tr("picker.search_process"),
     onPick: (v) => setSelect("s-process", v),
   });
 });
 
 /* ------------------------------------------------------------ filaments */
 
-/* Libellé de la carte : profil choisi, « auto » s'il vient de la bobine lue. */
+/* Card label: the chosen profile, "auto" when it comes from the spool read. */
 function slHeadLabel(i) {
   const sel = document.querySelector(`#s-heads select[data-head="${i}"]`);
   const btn = document.querySelector(`#s-heads [data-pick-head="${i}"]`);
@@ -286,7 +278,7 @@ function slPickFilament(i, anchor, all = false) {
     value: p.name,
     label: p.name,
     sub: [p.ftype, p.vendor].filter(Boolean).join(" · "),
-    badge: badge || (p.user ? "perso" : p.name === auto ? "auto" : ""),
+    badge: badge || (p.user ? tr("picker.custom") : p.name === auto ? "auto" : ""),
   });
   let sections;
   if (kind && !all) {
@@ -295,20 +287,21 @@ function slPickFilament(i, anchor, all = false) {
     const recNames = new Set(rec.map((p) => p.name));
     rec.sort((a, b) => (b.name === auto) - (a.name === auto));
     sections = [
-      { label: "Recommandé pour cette bobine", items: rec.map((p) => item(p)) },
-      { label: "Vos profils", items: same.filter((p) => p.user).map((p) => item(p)) },
-      { label: `Autres ${kind}`, items: same.filter((p) => !p.user && !recNames.has(p.name)).map((p) => item(p)) },
+      { label: tr("picker.recommended"), items: rec.map((p) => item(p)) },
+      { label: tr("picker.yours"), items: same.filter((p) => p.user).map((p) => item(p)) },
+      { label: tr("picker.others", { kind }), items: same.filter((p) => !p.user && !recNames.has(p.name)).map((p) => item(p)) },
     ];
   } else {
-    // Toutes les matières, regroupées.
-    const kinds = [...new Set(list.map((p) => p.ftype || "Autre"))].sort();
-    sections = kinds.map((k) => ({ label: k, items: list.filter((p) => (p.ftype || "Autre") === k).map((p) => item(p)) }));
+    // All materials, grouped.
+    const other = tr("feature.other");
+    const kinds = [...new Set(list.map((p) => p.ftype || other))].sort();
+    sections = kinds.map((k) => ({ label: k, items: list.filter((p) => (p.ftype || other) === k).map((p) => item(p)) }));
   }
   openPicker(anchor, {
     sections,
     value: sel.value,
-    placeholder: "Rechercher un filament",
-    foot: kind && !all ? { label: "Afficher toutes les matières", onClick: () => slPickFilament(i, anchor, true) } : null,
+    placeholder: tr("picker.search_filament"),
+    foot: kind && !all ? { label: tr("picker.all_materials"), onClick: () => slPickFilament(i, anchor, true) } : null,
     onPick: (v) => {
       setSelect(sel, v);
       slHeadLabel(i);
@@ -322,10 +315,10 @@ $("s-heads").addEventListener("click", (e) => {
   if (card) slPickFilament(+card.dataset.card, card.querySelector("[data-pick-head]") || card);
 });
 
-/* ------------------------------------------------------------ couleurs → têtes */
+/* ------------------------------------------------------------ colors → heads */
 
-/* Un jeton par tête, à la couleur de sa bobine ; la tête choisie est cerclée,
-   une tête vide grisée, une matière qui ne correspond pas signalée. */
+/* One chip per head, in its spool's color; the chosen head is ringed, an
+   empty head greyed, a mismatched material flagged. */
 function slTokens() {
   const n = headCount();
   document.querySelectorAll("#s-map select").forEach((sel) => {
@@ -338,7 +331,7 @@ function slTokens() {
       const empty = slot && !slot.present;
       const clash = slot?.present && fil?.kind && slot.kind && fil.kind.toUpperCase() !== slot.kind.toUpperCase();
       const color = slot?.present && slot.color ? slot.color : "";
-      const title = `T${h}${slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · vide") : ""}${clash ? " · matière différente" : ""}`;
+      const title = `T${h}${slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : ""}${clash ? " · " + tr("slice.material_clash") : ""}`;
       return `<button class="sl-token${+sel.value === h ? " on" : ""}${empty ? " is-empty" : ""}" data-token="${sel.dataset.key}" data-h="${h}"
         title="${esc(title)}"${empty ? " disabled" : ""}><i style="${color ? `background:${esc(color)}` : ""}"></i>T${h}${clash ? "<em>⚠</em>" : ""}</button>`;
     }).join("");
@@ -356,8 +349,8 @@ $("s-map").addEventListener("click", (e) => {
   if (b && !b.disabled) slAssign(b.dataset.token, +b.dataset.h);
 });
 
-/* Glisser une couleur du modèle sur une carte bobine. Type propre : un texte
-   glissé d'ailleurs n'est pas accepté. */
+/* Drag a model color onto a spool card. Custom type: text dragged from
+   elsewhere is not accepted. */
 const SL_DRAG = "application/x-snapstudio-color";
 $("s-map").addEventListener("dragstart", (e) => {
   const row = e.target.closest("[data-drag]");
@@ -389,10 +382,17 @@ $("s-heads").addEventListener("drop", (e) => {
   if (/^\d+:\d+$/.test(key)) slAssign(key, +card.dataset.card);
 });
 
-/* ------------------------------------------------------------ rafraîchissements */
+/* ------------------------------------------------------------ refreshes */
 
-/* Les <select> cachés changent (par le code ou par un contrôle) : leurs
-   représentations suivent. */
+/* The hidden <select>s change (by code or by a control): their
+   representations follow. */
+window.addEventListener("langchange", () => {
+  if ($("smodal").classList.contains("hidden") || !SL.lists) return;
+  slRenderPrinters();
+  slRenderMachine();
+  slQuality();
+});
+
 $("smodal").addEventListener("change", (e) => {
   if (e.target.id === "s-printer") slRenderPrinters();
   if (e.target.id === "s-machine") slRenderMachine();

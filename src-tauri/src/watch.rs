@@ -1,9 +1,9 @@
-//! Suivi temps réel des imprimantes via le WebSocket JSON-RPC de Moonraker.
+//! Live tracking of printers through Moonraker's JSON-RPC WebSocket.
 //!
-//! Une tâche par imprimante : elle s'abonne aux objets Klipper disponibles, puis
-//! l'imprimante pousse ses changements (`notify_status_update`). Chaque mise à
-//! jour est fusionnée dans un instantané local et renvoyée à l'interface par un
-//! évènement Tauri. Reconnexion automatique avec temporisation croissante.
+//! One task per printer: it subscribes to the available Klipper objects, then
+//! the printer pushes its changes (`notify_status_update`). Each update is
+//! merged into a local snapshot and sent to the UI as a Tauri event.
+//! Automatic reconnection with increasing backoff.
 
 use crate::printers::{self, Printer, Status};
 use anyhow::{anyhow, Result};
@@ -15,9 +15,9 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio_tungstenite::tungstenite::Message;
 
-/// Objets Klipper souhaités ; ceux que l'imprimante ne connaît pas sont ignorés.
+/// Klipper objects wanted; those the printer does not know are ignored.
 const WANTED: &[&str] = &[
-    // Objet propre à la U1 : bobines chargées. Absent sur une Klipper ordinaire.
+    // U1-specific object: loaded spools. Absent on an ordinary Klipper.
     "print_task_config",
     "print_stats",
     "display_status",
@@ -36,7 +36,7 @@ const WANTED: &[&str] = &[
 #[derive(Serialize, Clone)]
 struct Payload {
     id: String,
-    /// Vrai tant que le flux temps réel est établi.
+    /// True while the live feed is established.
     live: bool,
     status: Status,
 }
@@ -48,7 +48,7 @@ fn tasks() -> &'static Tasks {
     T.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-/// Ouvre un flux vers chaque imprimante enregistrée.
+/// Opens a feed to each saved printer.
 pub fn start(app: AppHandle) {
     stop();
     let mut guard = tasks().lock().unwrap();
@@ -58,7 +58,7 @@ pub fn start(app: AppHandle) {
     }
 }
 
-/// Ferme tous les flux (quand l'onglet Imprimantes n'est plus affiché).
+/// Closes all feeds (when the Printers tab is no longer shown).
 pub fn stop() {
     let mut guard = tasks().lock().unwrap();
     for t in guard.drain(..) {
@@ -83,7 +83,7 @@ async fn run(app: AppHandle, p: Printer) {
         let err = match session(&app, &p).await {
             Ok(()) => {
                 backoff = 2;
-                "Connexion fermée par l'imprimante".to_string()
+                crate::t!("err.closed_by_printer")
             }
             Err(e) => e.to_string(),
         };
@@ -112,7 +112,7 @@ fn ws_url(p: &Printer) -> String {
     format!("ws://{}:{}/websocket", h, p.port)
 }
 
-/// Fusionne une mise à jour partielle dans l'instantané courant.
+/// Merges a partial update into the current snapshot.
 fn merge(base: &mut Map<String, Value>, upd: &Value) {
     let Some(obj) = upd.as_object() else { return };
     for (k, v) in obj {
@@ -145,21 +145,21 @@ async fn session(app: &AppHandle, p: &Printer) -> Result<()> {
     session_with(p, &move |live, st| emit(&app2, &id, live, st)).await
 }
 
-/// Coeur de la session, indépendant de Tauri (testable).
+/// Core of the session, independent of Tauri (testable).
 pub async fn session_with(
     p: &Printer,
     out: &(dyn Fn(bool, Status) + Send + Sync),
 ) -> Result<()> {
-    // Sans borne, une adresse injoignable bloquerait la tâche très longtemps.
+    // Without a bound, an unreachable address would block the task for very long.
     let (stream, _) = tokio::time::timeout(
         Duration::from_secs(6),
         tokio_tungstenite::connect_async(ws_url(p)),
     )
     .await
-    .map_err(|_| anyhow!("délai de connexion dépassé"))??;
+    .map_err(|_| anyhow!(crate::t!("err.connect_timeout")))??;
     let (mut tx, mut rx) = stream.split();
 
-    // 1. Identification (recommandée par Moonraker) puis inventaire des objets.
+    // 1. Identification (recommended by Moonraker) then object inventory.
     send(
         &mut tx,
         json!({"jsonrpc":"2.0","id":1,"method":"server.connection.identify",
@@ -178,9 +178,9 @@ pub async fn session_with(
     };
 
     loop {
-        // Le silence prolongé signale un lien mort : on relance la connexion.
+        // Prolonged silence signals a dead link: reconnect.
         let msg = match tokio::time::timeout(Duration::from_secs(60), rx.next()).await {
-            Err(_) => return Err(anyhow!("aucune donnée depuis 60 s")),
+            Err(_) => return Err(anyhow!(crate::t!("err.no_data_60"))),
             Ok(None) => return Ok(()),
             Ok(Some(m)) => m?,
         };
@@ -202,7 +202,7 @@ pub async fn session_with(
         let method = v.get("method").and_then(|x| x.as_str()).unwrap_or("");
 
         match (id, method) {
-            // Inventaire : on ne s'abonne qu'aux objets réellement présents.
+            // Inventory: only subscribe to the objects actually present.
             (Some(2), _) => {
                 let available: Vec<String> = v
                     .get("result")
@@ -217,7 +217,7 @@ pub async fn session_with(
                     }
                 }
                 if objects.is_empty() {
-                    return Err(anyhow!("aucun objet Klipper exposé"));
+                    return Err(anyhow!(crate::t!("err.no_klipper_objects")));
                 }
                 send(
                     &mut tx,
@@ -226,7 +226,7 @@ pub async fn session_with(
                 )
                 .await?;
             }
-            // Instantané complet renvoyé par l'abonnement.
+            // Full snapshot returned by the subscription.
             (Some(3), _) => {
                 if let Some(s) = v.get("result").and_then(|r| r.get("status")) {
                     merge(&mut snapshot, s);
@@ -238,7 +238,7 @@ pub async fn session_with(
                     out(true, st.clone());
                 }
             }
-            // Informations générales de l'imprimante.
+            // General printer information.
             (Some(4), _) => {
                 if let Some(r) = v.get("result") {
                     st.hostname = r.get("hostname").and_then(|x| x.as_str()).map(String::from);
@@ -246,7 +246,7 @@ pub async fn session_with(
                     out(true, st.clone());
                 }
             }
-            // Mise à jour poussée par l'imprimante.
+            // Update pushed by the printer.
             (_, "notify_status_update") => {
                 if let Some(upd) = v.get("params").and_then(|p| p.get(0)) {
                     merge(&mut snapshot, upd);
@@ -266,7 +266,7 @@ pub async fn session_with(
             (_, "notify_klippy_disconnected") | (_, "notify_klippy_shutdown") => {
                 st.klipper = Some("shutdown".into());
                 st.state = "error".into();
-                st.message = Some("Klipper est arrêté ou déconnecté.".into());
+                st.message = Some(crate::t!("err.klipper_down"));
                 out(true, st.clone());
             }
             _ => {}
@@ -278,7 +278,7 @@ pub async fn session_with(
 mod tests {
     use super::*;
 
-    /// Moonraker n'envoie que les champs modifiés : l'instantané doit conserver le reste.
+    /// Moonraker only sends the changed fields: the snapshot must keep the rest.
     #[test]
     fn partial_updates_are_merged() {
         let mut snap = Map::new();
@@ -288,7 +288,7 @@ mod tests {
                     "print_stats":{"state":"printing","filename":"piece.gcode","print_duration":100.0},
                     "display_status":{"progress":0.10}}),
         );
-        // Une notification ne portant que la température.
+        // A notification carrying only the temperature.
         merge(&mut snap, &json!({"extruder":{"temperature":221.4}}));
 
         let mut st = Status {
@@ -298,11 +298,11 @@ mod tests {
         printers::apply_status(&Value::Object(snap.clone()), &mut st);
         assert_eq!(st.nozzles.len(), 1);
         assert!((st.nozzles[0].current - 221.4).abs() < 0.01);
-        // La consigne, absente de la mise à jour, est préservée.
+        // The target, absent from the update, is preserved.
         assert!((st.nozzles[0].target - 220.0).abs() < 0.01);
         assert_eq!(st.job.as_deref(), Some("piece.gcode"));
 
-        // Changement d'état seul.
+        // State change alone.
         merge(&mut snap, &json!({"print_stats":{"state":"paused"}}));
         let mut st2 = Status {
             online: true,
@@ -313,13 +313,13 @@ mod tests {
         assert_eq!(st2.job.as_deref(), Some("piece.gcode"));
     }
 
-    /// Chaîne complète contre un faux Moonraker : poignée de main WebSocket,
-    /// inventaire, abonnement, instantané puis mises à jour partielles.
+    /// Full chain against a fake Moonraker: WebSocket handshake, inventory,
+    /// subscription, snapshot then partial updates.
     #[test]
     fn live_session_against_fake_moonraker() {
         let script = match std::env::var("FAKE_WS") {
             Ok(v) => v,
-            Err(_) => return, // test ignoré hors environnement de développement
+            Err(_) => return, // test skipped outside a development environment
         };
         let port = 7803;
         let mut srv = std::process::Command::new("python3")
@@ -327,7 +327,7 @@ mod tests {
             .arg(port.to_string())
             .stdout(std::process::Stdio::piped())
             .spawn()
-            .expect("faux serveur");
+            .expect("fake server");
         std::thread::sleep(Duration::from_millis(600));
 
         let p = Printer {
@@ -354,27 +354,27 @@ mod tests {
         let _ = srv.wait();
 
         let got = seen.lock().unwrap();
-        assert!(got.len() >= 4, "seulement {} statuts reçus", got.len());
+        assert!(got.len() >= 4, "only {} statuses received", got.len());
 
-        // Instantané initial.
-        let first = got.iter().find(|s| s.job.is_some()).expect("aucun travail reçu");
+        // Initial snapshot.
+        let first = got.iter().find(|s| s.job.is_some()).expect("no job received");
         assert_eq!(first.job.as_deref(), Some("piece_U1.gcode"));
         assert_eq!(first.nozzles.len(), 4);
-        assert!(first.nozzles[1].active, "la tête active doit être T1");
+        assert!(first.nozzles[1].active, "the active head must be T1");
         assert_eq!(first.layer, Some((12, 80)));
 
-        // Mises à jour poussées : la température monte, la consigne est conservée.
+        // Pushed updates: the temperature rises, the target is kept.
         let last_printing = got.iter().rev().find(|s| s.state == "printing").unwrap();
         assert!(
             (last_printing.nozzles[0].current - 219.9).abs() < 0.01,
-            "température finale = {}",
+            "final temperature = {}",
             last_printing.nozzles[0].current
         );
         assert!((last_printing.nozzles[0].target - 220.0).abs() < 0.01);
         assert!((last_printing.progress.unwrap() - 0.35).abs() < 1e-4);
         assert!(last_printing.remaining_s.is_some());
 
-        // Le dernier évènement ne portait que l'état : le reste doit survivre.
+        // The last event only carried the state: the rest must survive.
         let last = got.last().unwrap();
         assert_eq!(last.state, "paused");
         assert_eq!(last.job.as_deref(), Some("piece_U1.gcode"));
@@ -400,7 +400,7 @@ mod camera_probe {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
 
-    /// Réveille la caméra et regarde si l'instantané se rafraîchit.
+    /// Wakes the camera and checks that the snapshot refreshes.
     ///
     /// `CAM_HOST=192.168.0.144 cargo test camera_probe -- --nocapture`
     #[test]
@@ -428,7 +428,7 @@ mod camera_probe {
                 };
                 if let Message::Text(t) = msg {
                     if t.contains("\"id\": 1") || t.contains("\"id\":1") {
-                        println!("réponse : {}", &t[..t.len().min(300)]);
+                        println!("response: {}", &t[..t.len().min(300)]);
                         break;
                     }
                 }

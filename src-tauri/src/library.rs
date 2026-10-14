@@ -1,20 +1,19 @@
-//! Bibliothèque : navigation dans les sites de modèles.
+//! Library: browsing model sites.
 //!
-//! Chaque onglet est une **vue web native** ajoutée à notre fenêtre. Ces vues se
-//! dessinent au-dessus de l'interface HTML : c'est l'interface qui leur dicte
-//! leur rectangle, et qui doit les masquer dès qu'un dialogue ou le visualiseur
-//! 3D passe devant.
+//! Each tab is a **native web view** added to our window. These views draw on
+//! top of the HTML interface: the interface dictates their rectangle, and must
+//! hide them as soon as a dialog or the 3D viewer comes in front.
 //!
-//! Les cookies sont ceux du magasin partagé et persistant : on se connecte une
-//! fois à MakerWorld ou Printables, et la session survit au redémarrage.
+//! Cookies are those of the shared, persistent store: one logs in to
+//! MakerWorld or Printables once, and the session survives a restart.
 
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl};
 
-/// Identité de navigateur courante : certains sites servent une page dégradée
-/// à un agent inconnu.
+/// Current browser identity: some sites serve a degraded page to an unknown
+/// agent.
 const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 \
                   (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
 
@@ -40,7 +39,7 @@ fn label(id: &str) -> String {
     format!("lib-{id}")
 }
 
-/// Rectangle de la zone de navigation, en points d'interface.
+/// Rectangle of the browsing area, in interface points.
 #[derive(serde::Deserialize, Clone, Copy, Debug)]
 pub struct Rect {
     pub x: f64,
@@ -49,19 +48,19 @@ pub struct Rect {
     pub h: f64,
 }
 
-/// Dernier rectangle connu : une vue créée plus tard s'y place directement.
+/// Last known rectangle: a view created later goes straight there.
 fn last_rect() -> &'static Mutex<Rect> {
     static R: OnceLock<Mutex<Rect>> = OnceLock::new();
     R.get_or_init(|| Mutex::new(Rect { x: 0.0, y: 0.0, w: 800.0, h: 600.0 }))
 }
 
-/// Onglets ouverts, dans l'ordre d'ouverture.
+/// Open tabs, in opening order.
 fn tabs() -> &'static Mutex<Vec<String>> {
     static T: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
     T.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-/// Ouvre un onglet, ou le rappelle au premier plan s'il existe déjà.
+/// Opens a tab, or brings it back to the front if it already exists.
 pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     let lbl = label(id);
     if app.get_webview(&lbl).is_some() {
@@ -70,7 +69,7 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     }
     let window = app
         .get_window("main")
-        .ok_or_else(|| anyhow!("fenêtre principale introuvable"))?;
+        .ok_or_else(|| anyhow!("main window not found"))?;
     let target = url::Url::parse(url)?;
 
     let handle = app.clone();
@@ -92,9 +91,9 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
             true
         })
         .on_download(move |_webview, event| download_hook(&dl_app, &dl_id, event))
-        // Les sites ouvrent volontiers une fenêtre annexe — connexion par un
-        // tiers, ou lancement d'un téléchargement. On la ramène dans l'onglet
-        // courant plutôt que de laisser surgir une fenêtre nue.
+        // Sites happily open a side window — third-party login, or starting a
+        // download. It is brought back into the current tab rather than letting a
+        // bare window pop up.
         .on_new_window(move |url, _features| {
             let _ = nw_app.emit(
                 "lib-url",
@@ -118,7 +117,7 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     Ok(())
 }
 
-/// Destination imposée des téléchargements et signalement à l'interface.
+/// Forced download destination and notice to the UI.
 fn download_hook(app: &AppHandle, id: &str, event: tauri::webview::DownloadEvent<'_>) -> bool {
     match event {
         tauri::webview::DownloadEvent::Requested { url, destination } => {
@@ -155,7 +154,7 @@ fn download_hook(app: &AppHandle, id: &str, event: tauri::webview::DownloadEvent
     }
 }
 
-/// Ajoute un suffixe numéroté plutôt que d'écraser un fichier existant.
+/// Adds a numbered suffix rather than overwriting an existing file.
 fn unique_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
     let p = dir.join(name);
     if !p.exists() {
@@ -172,16 +171,16 @@ fn unique_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
     p
 }
 
-/// Hauteur de la barre de titre, en points.
+/// Title bar height, in points.
 ///
-/// wry place une vue fille par rapport à la **fenêtre entière**, alors que nos
-/// coordonnées CSS partent du haut de la page, sous la barre de titre. Sans
-/// correction la page remonte et recouvre notre barre d'adresse.
+/// wry places a child view relative to the **whole window**, whereas our CSS
+/// coordinates start at the top of the page, under the title bar. Without a
+/// correction the page moves up and covers our address bar.
 ///
-/// `outer_size` et `inner_size` renvoient ici la même valeur — la fenêtre a une
-/// vue de contenu pleine hauteur — donc la barre de titre se déduit de l'écart
-/// entre la hauteur déclarée par la fenêtre et celle de notre page, que
-/// l'interface nous transmet. Mesuré, jamais codé en dur.
+/// `outer_size` and `inner_size` return the same value here — the window has a
+/// full-height content view — so the title bar is deduced from the gap between
+/// the height the window declares and our page's, which the UI sends us.
+/// Measured, never hard-coded.
 fn title_offset(window: &tauri::Window) -> f64 {
     let viewport = *viewport_h().lock().unwrap();
     if viewport <= 0.0 {
@@ -194,21 +193,21 @@ fn title_offset(window: &tauri::Window) -> f64 {
     }
 }
 
-/// Hauteur de la page telle que l'interface la mesure.
+/// Page height as the UI measures it.
 fn viewport_h() -> &'static Mutex<f64> {
     static V: OnceLock<Mutex<f64>> = OnceLock::new();
     V.get_or_init(|| Mutex::new(0.0))
 }
 
-/// Place une vue dans le rectangle demandé, corrigé de la barre de titre.
+/// Places a view in the requested rectangle, corrected for the title bar.
 fn place(wv: &tauri::Webview, rect: Rect) {
     let w = wv.window();
     let dy = title_offset(&w);
     if std::env::var("SNAPSTUDIO_LIBDEBUG").is_ok() {
         let scale = w.scale_factor().unwrap_or(1.0);
         eprintln!(
-            "[lib] demandé y={:.1} h={:.1} | décalage titre {:.1} | échelle {:.2} | \
-             intérieur {:?} | extérieur {:?} | position vue avant {:?}",
+            "[lib] asked y={:.1} h={:.1} | title offset {:.1} | scale {:.2} | \
+             inner {:?} | outer {:?} | view position before {:?}",
             rect.y, rect.h, dy, scale,
             w.inner_size().map(|s| s.to_logical::<f64>(scale).height).ok(),
             w.outer_size().map(|s| s.to_logical::<f64>(scale).height).ok(),
@@ -220,13 +219,13 @@ fn place(wv: &tauri::Webview, rect: Rect) {
     if std::env::var("SNAPSTUDIO_LIBDEBUG").is_ok() {
         let scale = w.scale_factor().unwrap_or(1.0);
         eprintln!(
-            "[lib] position vue après {:?}",
+            "[lib] view position after {:?}",
             wv.position().map(|p| p.to_logical::<f64>(scale).y).ok()
         );
     }
 }
 
-/// Affiche un onglet et masque les autres ; `None` les masque tous.
+/// Shows a tab and hides the others; `None` hides them all.
 pub fn show_only(app: &AppHandle, id: Option<&str>) {
     let wanted = id.map(label);
     for (lbl, wv) in app.webviews() {
@@ -242,7 +241,7 @@ pub fn show_only(app: &AppHandle, id: Option<&str>) {
     }
 }
 
-/// Mémorise la zone de navigation et y replace la vue visible.
+/// Remembers the browsing area and puts the visible view back in it.
 pub fn set_rect(app: &AppHandle, rect: Rect, viewport: f64, visible: Option<&str>) {
     *last_rect().lock().unwrap() = rect;
     if viewport > 0.0 {
@@ -265,28 +264,28 @@ pub fn close_tab(app: &AppHandle, id: &str) {
 pub fn navigate(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     let wv = app
         .get_webview(&label(id))
-        .ok_or_else(|| anyhow!("onglet inconnu"))?;
+        .ok_or_else(|| anyhow!("unknown tab"))?;
     wv.navigate(url::Url::parse(url)?)?;
     Ok(())
 }
 
-/// Historique et rechargement : la vue distante n'a pas notre pont, on passe
-/// par son propre contexte JavaScript.
+/// History and reload: the remote view does not have our bridge, so we go
+/// through its own JavaScript context.
 pub fn command(app: &AppHandle, id: &str, what: &str) -> Result<()> {
     let wv = app
         .get_webview(&label(id))
-        .ok_or_else(|| anyhow!("onglet inconnu"))?;
+        .ok_or_else(|| anyhow!("unknown tab"))?;
     let js = match what {
         "back" => "history.back()",
         "forward" => "history.forward()",
         "reload" => "location.reload()",
-        _ => return Err(anyhow!("commande inconnue : {what}")),
+        _ => return Err(anyhow!("unknown command: {what}")),
     };
     wv.eval(js)?;
     Ok(())
 }
 
-/// Domaine enregistrable : « www.printables.com » donne « printables.com ».
+/// Registrable domain: "www.printables.com" gives "printables.com".
 fn registrable(host: &str) -> String {
     let parts: Vec<&str> = host.split('.').collect();
     if parts.len() >= 2 {
@@ -296,18 +295,18 @@ fn registrable(host: &str) -> String {
     }
 }
 
-/// Déconnecte un site en supprimant ses seuls témoins de connexion.
+/// Logs a site out by deleting only its login cookies.
 ///
-/// Le magasin de cookies est partagé par toutes les vues : l'effacer en bloc
-/// déconnecterait aussi les autres sites. On filtre donc sur le domaine.
+/// The cookie store is shared by all views: clearing it wholesale would log
+/// the other sites out too. So it is filtered by domain.
 pub fn logout(app: &AppHandle, id: &str) -> Result<usize> {
     let site = SITES
         .iter()
         .find(|s| s.id == id)
-        .ok_or_else(|| anyhow!("site inconnu"))?;
+        .ok_or_else(|| anyhow!("unknown site"))?;
     let wv = app
         .get_webview(&label(id))
-        .ok_or_else(|| anyhow!("onglet fermé"))?;
+        .ok_or_else(|| anyhow!(crate::t!("err.tab_closed")))?;
     let host = url::Url::parse(site.url)?
         .host_str()
         .unwrap_or_default()

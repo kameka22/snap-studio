@@ -1,4 +1,4 @@
-//! Generation et cache disque des vignettes.
+//! Thumbnail generation and disk cache.
 
 use crate::model3mf::{self, ThumbPref, ThumbSource};
 use crate::util::fnv1a;
@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const CACHE_VERSION: u8 = 3;
 const MAGIC: &[u8; 4] = b"3MFT";
-/// Budget de triangles pour le rendu de secours.
+/// Triangle budget for the fallback render.
 const TRI_BUDGET: usize = 1_800_000;
 
 pub struct Thumb {
@@ -87,7 +87,7 @@ fn write_cache(file: &Path, thumb: &Thumb) {
     }
 }
 
-/// Limite le nombre de rendus geometriques simultanes (gros pics memoire).
+/// Limits the number of simultaneous geometry renders (big memory peaks).
 fn render_slot() -> &'static (Mutex<usize>, Condvar) {
     static SLOT: OnceLock<(Mutex<usize>, Condvar)> = OnceLock::new();
     SLOT.get_or_init(|| {
@@ -118,7 +118,7 @@ impl Drop for RenderGuard {
     }
 }
 
-/// Retire les marges entierement transparentes (les apercus de slicer en ont beaucoup).
+/// Trims fully transparent margins (slicer previews have plenty).
 fn trim_alpha(img: image::DynamicImage) -> image::DynamicImage {
     if img.color().has_alpha() {
         let rgba = img.to_rgba8();
@@ -150,8 +150,8 @@ fn to_png(img: &image::DynamicImage) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-/// Aperçu d'un G-code : vignette intégrée par le trancheur si elle existe,
-/// sinon rendu des trajectoires.
+/// Preview of a G-code: the thumbnail embedded by the slicer if there is one,
+/// otherwise a render of the toolpaths.
 fn generate_gcode(path: &Path, size: u32) -> Result<Thumb> {
     if let Ok(f) = std::fs::File::open(path) {
         if let Some(bytes) = crate::gcode::embedded_thumbnail(f) {
@@ -212,13 +212,13 @@ fn generate(path: &Path, size: u32, pref: ThumbPref) -> Result<Thumb> {
     })
 }
 
-/// Vignette d'un fichier : cache disque, sinon generation.
+/// A file's thumbnail: disk cache, otherwise generated.
 pub fn get(path: &Path, size: u32, pref: ThumbPref) -> Result<Thumb> {
     crate::access::ensure_file(path);
     let key = cache_key(path, size, pref);
     if let Some(t) = read_cache(&key) {
         if t.source == ThumbSource::None {
-            return Err(anyhow!("aucun apercu disponible"));
+            return Err(anyhow!("no preview available"));
         }
         return Ok(t);
     }
@@ -228,7 +228,7 @@ pub fn get(path: &Path, size: u32, pref: ThumbPref) -> Result<Thumb> {
             Ok(t)
         }
         Err(e) => {
-            // Echec memorise : evite de re-analyser un gros fichier a chaque affichage.
+            // Failure remembered: avoids re-parsing a big file at every display.
             write_cache(
                 &key,
                 &Thumb {
@@ -264,7 +264,7 @@ pub fn size_on_disk() -> u64 {
         .unwrap_or(0)
 }
 
-/// Menage : supprime les vignettes inutilisees depuis 60 jours.
+/// Cleanup: removes thumbnails unused for 60 days.
 pub fn prune_old() {
     let cutoff = SystemTime::now() - Duration::from_secs(60 * 24 * 3600);
     if let Ok(rd) = std::fs::read_dir(cache_dir()) {
@@ -286,7 +286,7 @@ mod tests {
     use super::*;
     use std::time::Instant;
 
-    /// Genere des vignettes sur des fichiers reels et mesure le temps.
+    /// Generates thumbnails for real files and measures the time.
     #[test]
     fn probe() {
         let dir = std::env::var("PROBE_DIR").unwrap_or_else(|_| {

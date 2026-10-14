@@ -1,70 +1,69 @@
 # Plans
 
-Un plan par chantier en cours. Un plan terminé quitte ce dossier : il reste
-consultable dans l'historique git (liens plus bas), et ce qui en reste à faire
-rejoint les listes ci-dessous.
+One plan per project in progress. A finished plan leaves this folder: it stays
+available in the git history (links below), and what is left to do joins the
+lists below.
 
-## En cours
+## In progress
 
-| Plan | Sujet | État |
+No plan in progress.
+
+## To validate on the real machine
+
+Features implemented and tested without the hardware (headless browser, Rust
+tests), whose real behavior remains to be checked.
+
+- **Languages**: native menu bar in English and in French, rebuilt when the
+  language changes in Settings; system language preselected on a fresh
+  account; macOS permission prompts in French on a French system
+  (`InfoPlist.strings`); the AI terminal answers in the chosen language.
+- **Automatic updates**: release N installed, release N+1 published → the
+  sheet opens, installation succeeds, the app restarts (macOS, Windows, Linux
+  AppImage); tampered file refused.
+- **macOS permissions**: with the ad hoc signature, a single access prompt per
+  folder, and no longer at every launch (`tccutil reset All
+  fr.carlini.snapstudio` to start from scratch).
+- **Bed temperature**: slicing a PLA on textured PEI really gives 65 °C (and
+  not 35 °C).
+- **Prints**: end of print detected, notification, next one offered ("bed
+  clear" box); pause, resume, cancel from the record; camera in the record.
+- **Network search**: the U1 shows in "On the network" (otherwise: the
+  `[discover]` log in the `cargo tauri dev` terminal).
+- **Welcome assistant**: first launch on a fresh account.
+
+## Later
+
+Ideas dropped or postponed during the work, in no order of priority.
+
+- **Prepare**: several plates; brush painting; cutting objects; modifiers and
+  per-object settings; Move and Scale handle tools (of little use while the
+  object is dragged and the inspector sets the scale).
+- **Multicolor**: read the per-triangle painting of 3MF files (today these
+  models stay single-color when sliced).
+- **Printers**: subnet sweep (port 7125) when a printer does not show in mDNS.
+- **Profiles**: Snap Studio's own custom profiles (today: Snapmaker Orca's if
+  installed, read-only); standalone "Profiles" page; profile editing.
+- **G-code preview**: Files view thumbnails in the filament colors (they keep
+  the per-path-type colors).
+- **Signing**: Apple Developer ID (no more Gatekeeper alert, permissions kept
+  from one update to the next) or a stable self-signed certificate.
+- **Engine**: switch to a real headless binary if Snapmaker publishes one
+  (Snapmaker PR #1006, upstream PR #14161).
+- **AI**: Blender / MCP bridge, plate editable from the conversation, keeping
+  colors and multiple objects.
+- **Languages**: more languages (Orca's tabs already exist in 19); internal
+  identifiers still named `ia` (commands, storage folder) could become `ai`
+  with a data migration.
+
+## Finished plans
+
+| Plan | Subject | In the history |
 |---|---|---|
-| [moteur.md](moteur.md) | Moteur de découpe embarqué (Snapmaker Orca allégé, téléchargé par Snap Studio) | Étapes 1 à 4 écrites ; reste la validation une fois `engine-orca-2.4.0` publiée |
-
-## À valider sur la vraie machine
-
-Fonctionnalités implémentées et testées hors matériel (navigateur sans
-affichage, tests Rust), dont le comportement réel reste à vérifier.
-
-- **Moteur embarqué** : première release `engine-orca-2.4.0` (découpe de test
-  verte sur les quatre plateformes), puis téléchargement et découpe dans
-  l'application sur une machine sans Snapmaker Orca.
-- **Mises à jour automatiques** : release N installée, release N+1 publiée →
-  la fenêtre s'ouvre, l'installation aboutit, l'application redémarre
-  (macOS, Windows, Linux AppImage) ; fichier altéré refusé.
-- **Autorisations macOS** : avec la signature ad hoc, une seule demande d'accès
-  par dossier, et plus à chaque lancement (`tccutil reset All
-  fr.carlini.snapstudio` pour repartir de zéro).
-- **Température du plateau** : la découpe d'un PLA sur PEI texturé donne bien
-  65 °C (et non 35 °C).
-- **Impressions** : fin d'impression détectée, notification, proposition de la
-  suivante (case « plateau libre ») ; pause, reprise, annulation depuis la
-  fiche ; caméra dans la fiche.
-- **Recherche réseau** : la U1 apparaît dans « Sur le réseau » (sinon :
-  journal `[discover]` dans le terminal de `cargo tauri dev`).
-- **Assistant de bienvenue** : premier lancement sur un compte neuf.
-
-## Plus tard
-
-Idées écartées ou reportées pendant les chantiers, sans ordre de priorité.
-
-- **Préparer** : plusieurs plateaux ; coloration au pinceau ; découpe
-  d'objets ; modificateurs et réglages par objet ; outils à poignées
-  Déplacement et Échelle (peu utiles tant qu'on glisse l'objet et que
-  l'inspecteur règle l'échelle).
-- **Multicolore** : lire la peinture par triangle des 3MF (aujourd'hui ces
-  modèles restent monocolores à la découpe).
-- **Imprimantes** : balayage du sous-réseau (port 7125) si une imprimante
-  n'apparaît pas en mDNS.
-- **Profils** : profils personnels propres à Snap Studio (aujourd'hui : ceux
-  de Snapmaker Orca s'il est installé, en lecture seule) ; page « Profils »
-  autonome ; modification des profils.
-- **Aperçu G-code** : vignettes de la vue Fichiers aux couleurs du filament
-  (elles gardent les couleurs par trajectoire).
-- **Signature** : Apple Developer ID (plus d'alerte Gatekeeper, autorisations
-  conservées d'une mise à jour à l'autre) ou certificat auto-signé stable.
-- **Moteur** : basculer sur un vrai binaire sans interface si Snapmaker en
-  publie un (PR Snapmaker #1006, PR upstream #14161).
-- **IA** : pont Blender / MCP, plateau éditable depuis la conversation,
-  préservation des couleurs et des objets multiples.
-
-## Plans terminés
-
-| Plan | Sujet | Dans l'historique |
-|---|---|---|
-| IA | Onglet IA : conversation Claude Code, terminal, aperçu vivant | `git show 4e65ac3:PLAN-IA.md` |
-| Découpe | Découpe intégrée, aperçu, têtes et filaments, envoi | `git show e3be17e:PLAN-DECOUPE.md` |
-| Préparer | Plateau, sélection, rotation, orientation automatique, disposition | `git show e3be17e:PLAN-PREPARER.md` |
-| Mises à jour | Builds multiplateformes, signature, mises à jour automatiques | `git show e3be17e:PLAN-MAJ.md` |
-| Accueil | Assistant de bienvenue, recherche mDNS des imprimantes | `git show a073e0d:PLAN-ACCUEIL.md` |
-| Impressions | Impressions en cours, file d'attente, historique | `git show 0c8eb89:PLAN-IMPRESSIONS.md` |
-| Profils | Détail des profils, onglets d'Orca en français | `git show 0c8eb89:PLAN-PROFILS.md` |
+| AI | AI tab: Claude Code conversation, terminal, live preview | `git show 4e65ac3:PLAN-IA.md` |
+| Slicing | Built-in slicing, preview, heads and filaments, sending | `git show e3be17e:PLAN-DECOUPE.md` |
+| Prepare | Plate, selection, rotation, auto-orientation, arrangement | `git show e3be17e:PLAN-PREPARER.md` |
+| Updates | Cross-platform builds, signing, automatic updates | `git show e3be17e:PLAN-MAJ.md` |
+| Welcome | Welcome assistant, mDNS printer discovery | `git show a073e0d:PLAN-ACCUEIL.md` |
+| Prints | Running prints, queue, history | `git show 0c8eb89:PLAN-IMPRESSIONS.md` |
+| Profiles | Profile details, Orca's tabs in French | `git show 0c8eb89:PLAN-PROFILS.md` |
+| Engine | Bundled slicing engine: Snapmaker Orca slimmed down by the CI, downloaded and updated by Snap Studio — validated (release `engine-orca-2.4.0`, slicing in the app) | `git show fda95e9:docs/plans/moteur.md` |

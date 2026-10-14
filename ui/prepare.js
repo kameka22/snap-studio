@@ -1,14 +1,14 @@
 "use strict";
-/* Vue « Préparer » : le plateau avant la découpe.
+/* "Prepare" view: the plate before slicing.
 
-   Chaque objet est une occurrence du <build> d'un fichier, servie centrée sur
-   elle-même par `mesh://…&i=`. Son placement : échelle, rotations (X, puis Y,
-   puis Z, en degrés), puis position (X, Y) de son centre ; l'objet est posé sur
-   le plateau. Le Rust applique la même règle pour la découpe (`plate.rs`).
+   Each object is an item of a file's <build>, served centered on itself by
+   `mesh://…&i=`. Its placement: scale, rotations (X, then Y, then Z, in
+   degrees), then position (X, Y) of its center; the object rests on the bed.
+   Rust applies the same rule when slicing (`plate.rs`).
 
-   Un 3MF à plusieurs plateaux garde la disposition d'Orca : son premier
-   plateau tombe sur le nôtre, les autres se posent à côté, et ce qui est hors
-   du plateau n'est pas découpé. */
+   A 3MF with several plates keeps Orca's layout: its first plate lands on
+   ours, the others are set beside it, and what is off the plate is not
+   sliced. */
 
 const PR = {
   objects: [],
@@ -19,9 +19,9 @@ const PR = {
   prog: null,
   line: null,
   grid: null,
-  /* Plaque et logo du plateau (buildBed), null pour un modèle inconnu. */
+  /* Bed plate and logo (buildBed), null for an unknown model. */
   plate: null,
-  /* Maillages chargés, par fichier et rang : { vao, count, pos, hull, n } */
+  /* Loaded meshes, by file and rank: { vao, count, pos, hull, n } */
   meshes: new Map(),
   cam: { yaw: -0.62, pitch: 0.7, dist: 460, target: [135, 135, 0] },
   drag: null,
@@ -35,7 +35,7 @@ const PREP_FS = MESH_FS.replace("out vec4 frag;", "uniform vec4 uTint;\nuniform 
 );
 const FOV = 0.72;
 
-/* Tracé plein d'une couleur (anneaux de rotation, facette survolée). */
+/* Solid-color drawing (rotation rings, hovered facet). */
 const SOLID_VS = `#version 300 es
 in vec3 aPos;
 uniform mat4 uMVP;
@@ -46,7 +46,7 @@ uniform vec4 uColor;
 out vec4 frag;
 void main() { frag = uColor; }`;
 
-/* ------------------------------------------------------------ état */
+/* ------------------------------------------------------------ state */
 
 function prSave() {
   const objects = PR.objects.map(({ id, name, path, item, pos, rot, scale, size, plate, extruders, free }) => ({
@@ -66,14 +66,14 @@ function prLoadState() {
   } catch {}
 }
 
-/* ------------------------------------------------------------ historique */
+/* ------------------------------------------------------------ history */
 
-/* Annuler / rétablir : états successifs du plateau (placements et liste des
-   objets, jamais les maillages), 100 niveaux. */
+/* Undo / redo: successive plate states (placements and object list, never
+   the meshes), 100 levels. */
 const HIST = { undo: [], redo: [] };
 const prSnap = () => JSON.stringify(PR.objects);
 
-/* À appeler juste avant une modification. */
+/* Call right before a change. */
 function prRemember(snapshot = prSnap()) {
   if (HIST.undo[HIST.undo.length - 1] === snapshot) return;
   HIST.undo.push(snapshot);
@@ -98,7 +98,7 @@ const meshKey = (o) => `${o.path}#${o.item}`;
 const deg = (r) => (r * 180) / Math.PI;
 const rad = (d) => (d * Math.PI) / 180;
 
-/* Rz · Ry · Rx, comme `plate::rotation` côté Rust. */
+/* Rz · Ry · Rx, like `plate::rotation` in Rust. */
 function rotation(rot) {
   const [a, b, c] = rot.map(rad);
   const [sa, ca, sb, cb, sc, cc] = [Math.sin(a), Math.cos(a), Math.sin(b), Math.cos(b), Math.sin(c), Math.cos(c)];
@@ -118,7 +118,7 @@ const applyRS = (r, s, v) => {
   ];
 };
 
-/* Coins de la boîte de l'objet (repère propre, centré). */
+/* Corners of the object's box (own frame, centered). */
 function corners(o) {
   const [x, y, z] = o.size.map((v) => v / 2);
   const out = [];
@@ -126,10 +126,10 @@ function corners(o) {
   return out;
 }
 
-/* Enveloppe de l'objet tournée et mise à l'échelle : point le plus bas, plus
-   haut, et empreinte vue de dessus (relative au centre). Exacte quel que soit
-   le basculement ; à défaut d'enveloppe, les coins de la boîte. Mise en cache
-   par orientation, l'enveloppe ne compte que quelques centaines de sommets. */
+/* Object hull rotated and scaled: lowest and highest point, and footprint
+   seen from above (relative to the center). Exact whatever the tilt;
+   without a hull, the box corners. Cached per orientation, the hull only
+   has a few hundred vertices. */
 const SHAPES = new Map();
 function shape(o) {
   const mesh = PR.meshes.get(meshKey(o));
@@ -152,13 +152,13 @@ function shape(o) {
   return sh;
 }
 
-/* Placement complet : rotation-échelle, et translation qui pose l'objet. */
+/* Full placement: rotation-scale, and the translation that rests the object. */
 function placement(o) {
   const { r, zmin } = shape(o);
   return { r, t: [o.pos[0], o.pos[1], -zmin] };
 }
 
-/* Matrice de modèle (colonnes, comme m4). */
+/* Model matrix (columns, like m4). */
 function modelMatrix(o) {
   const { r, t } = placement(o);
   const s = o.scale;
@@ -171,18 +171,18 @@ function modelMatrix(o) {
   return m;
 }
 
-/* Empreinte vue de dessus, sur le plateau. */
+/* Footprint seen from above, on the bed. */
 function footprint(o) {
   return shape(o).foot.map((p) => [p[0] + o.pos[0], p[1] + o.pos[1]]);
 }
 
-/* Hauteur de l'objet posé, et centre de sa boîte dans la scène. */
+/* Height of the rested object, and center of its box in the scene. */
 function worldCenter(o) {
   const sh = shape(o);
   return [o.pos[0], o.pos[1], (sh.zmax - sh.zmin) / 2];
 }
 
-/* Sur le plateau : « in », « partial » (dépasse) ou « out » (à côté). */
+/* On the bed: "in", "partial" (sticks out) or "out" (beside it). */
 function bedState(o) {
   const pts = footprint(o);
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
@@ -193,7 +193,7 @@ function bedState(o) {
   return "in";
 }
 
-/* Empreinte convexe ordonnée (pour les tests de recouvrement). */
+/* Ordered convex footprint (for overlap tests). */
 const footprintPoly = (o) => convexHull(footprint(o));
 
 function convexHull(points) {
@@ -213,7 +213,7 @@ function convexHull(points) {
   return lower.slice(0, -1).concat(upper.slice(0, -1));
 }
 
-/* Deux polygones convexes se recouvrent-ils ? (axes séparateurs) */
+/* Do two convex polygons overlap? (separating axes) */
 function polysOverlap(a, b) {
   for (const poly of [a, b]) {
     for (let i = 0; i < poly.length; i++) {
@@ -221,7 +221,7 @@ function polysOverlap(a, b) {
       const n = [q[1] - p[1], p[0] - q[0]];
       const proj = (P) => P.map((v) => v[0] * n[0] + v[1] * n[1]);
       const pa = proj(a), pb = proj(b);
-      // Un contact franc (moins de 0,2 mm de recouvrement) ne compte pas.
+      // A clean contact (less than 0.2 mm overlap) does not count.
       const len = Math.hypot(n[0], n[1]) || 1;
       if (Math.max(...pa) <= Math.min(...pb) + 0.2 * len || Math.max(...pb) <= Math.min(...pa) + 0.2 * len) return false;
     }
@@ -229,7 +229,7 @@ function polysOverlap(a, b) {
   return true;
 }
 
-/* Objets qui en chevauchent un autre sur le plateau, comme Orca le signale. */
+/* Objects overlapping another on the plate, as Orca flags them. */
 function prOverlaps() {
   const on = PR.objects.filter((o) => bedState(o) !== "out").map((o) => ({ o, poly: footprintPoly(o) }));
   const hit = new Set();
@@ -245,13 +245,13 @@ function prOverlaps() {
 }
 
 
-/* ------------------------------------------------------------ rendu */
+/* ------------------------------------------------------------ render */
 
 function prEnsureGL() {
   if (PR.gl) return true;
   const gl = $("p-canvas").getContext("webgl2", { antialias: true, depth: true });
   if (!gl) {
-    $("p-msg").textContent = "WebGL2 indisponible sur ce système.";
+    $("p-msg").textContent = tr("viewer.no_webgl");
     $("p-msg").classList.remove("hidden");
     return false;
   }
@@ -286,7 +286,7 @@ async function prLoadMesh(o) {
   }
   if (!buf) {
     PR.meshes.set(key, { failed: String(err?.message || err) });
-    toast(`${o.name} : maillage illisible`, true);
+    toast(tr("prepare.bad_mesh", { name: o.name }), true);
     return null;
   }
   const data = decodeMesh(buf);
@@ -308,7 +308,7 @@ async function prLoadMesh(o) {
   gl.bindVertexArray(null);
   Object.assign(entry, { loading: false, vao, count: data.n * 3, n: data.n, pos: data.pos });
   PR.meshes.set(key, entry);
-  // Enveloppe convexe : pose exacte, empreinte, « poser sur une face ».
+  // Convex hull: exact resting, footprint, "lay on face".
   invoke("plate_hull", { path: o.path, item: o.item })
     .then((h) => {
       entry.hullPts = h.points;
@@ -350,12 +350,12 @@ function prDraw() {
   const vp = m4.mul(proj, view);
 
   drawBed(gl, PR.plate, PR.grid, vp, view, light);
-  // Objets hors plateau et boîte de sélection : translucides.
+  // Off-plate objects and selection box: translucent.
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-  // Objets : rouge s'ils dépassent, atténués s'ils sont à côté du plateau,
-  // teintés de la couleur d'accent quand ils sont sélectionnés.
+  // Objects: red when sticking out, dimmed when beside the plate, tinted
+  // with the accent color when selected.
   const accent = accentRgb();
   gl.useProgram(PR.prog);
   const uMVP = gl.getUniformLocation(PR.prog, "uMVP"), uMV = gl.getUniformLocation(PR.prog, "uMV");
@@ -382,13 +382,13 @@ function prDraw() {
     if (selected) boxes.push(o);
   }
 
-  // Boîte de sélection
+  // Selection box
   if (boxes.length) {
     const pts = [];
     for (const o of boxes) {
       const { r, t } = placement(o);
-      // Boîte légèrement plus grande que l'objet : ses arêtes ne doivent pas
-      // se confondre avec la surface, que le test de profondeur ferait gagner.
+      // Box slightly bigger than the object: its edges must not merge with the
+      // surface, which the depth test would favor.
       const grow = (p, k) => p + Math.sign(p) * Math.max(0.6, Math.abs(o.size[k]) * 0.02) / Math.abs(o.scale[k] || 1);
       const c = corners(o).map((p) => add3(applyRS(r, o.scale, p.map(grow)), t));
       for (const [a, b] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) {
@@ -411,8 +411,8 @@ function prDraw() {
     gl.deleteVertexArray(vao);
     gl.deleteBuffer(buf);
   }
-  // Outil Rotation : trois anneaux (rubans) autour de la sélection, toujours
-  // visibles ; l'anneau survolé ou saisi s'épaissit et s'éclaircit.
+  // Rotate tool: three rings (ribbons) around the selection, always visible;
+  // the hovered or grabbed ring thickens and lightens.
   const f = PR.tool === "rotate" ? ringFrame() : null;
   if (f) {
     gl.disable(gl.DEPTH_TEST);
@@ -434,7 +434,7 @@ function prDraw() {
     gl.enable(gl.DEPTH_TEST);
   }
 
-  // Poser sur une face : facette survolée en surbrillance.
+  // Lay on face: hovered facet highlighted.
   if (PR.tool === "face" && PR.hoverFace) {
     const { o, faces } = PR.hoverFace;
     const mesh = PR.meshes.get(meshKey(o));
@@ -450,7 +450,7 @@ function prDraw() {
   gl.bindVertexArray(null);
 }
 
-/* Tracé ponctuel d'une forme d'une seule couleur (avec transparence). */
+/* One-off drawing of a single-color shape (with transparency). */
 function drawSolid(gl, vp, pts, rgba, mode) {
   const buf = gl.createBuffer();
   const vao = gl.createVertexArray();
@@ -480,7 +480,7 @@ const prSchedule = () => {
 window.addEventListener("themechange", prSchedule);
 addEventListener("resize", () => window.currentView === "prepare" && prSchedule());
 
-/* Couleur d'accent résolue (AccentColor compris), en composantes 0–1. */
+/* Resolved accent color (AccentColor included), as 0–1 components. */
 function accentRgb() {
   const probe = document.createElement("i");
   probe.style.color = "var(--accent)";
@@ -496,9 +496,9 @@ function prFrame() {
   prSchedule();
 }
 
-/* ------------------------------------------------------------ sélection */
+/* ------------------------------------------------------------ selection */
 
-/* Rayon partant de l'œil vers le pixel visé. */
+/* Ray from the eye towards the pixel aimed at. */
 function prRay(e) {
   const canvas = $("p-canvas");
   const rect = canvas.getBoundingClientRect();
@@ -518,7 +518,7 @@ function prRay(e) {
   return { o: eye, d: dir };
 }
 
-/* Point du plan Z = 0 sous le curseur. */
+/* Point of the Z = 0 plane under the cursor. */
 function prBedPoint(e) {
   const { o, d } = prRay(e);
   if (Math.abs(d[2]) < 1e-6) return null;
@@ -526,14 +526,14 @@ function prBedPoint(e) {
   return t > 0 ? [o[0] + d[0] * t, o[1] + d[1] * t] : null;
 }
 
-/* Objet touché par le rayon : boîte, puis triangles quand le maillage est
-   raisonnable. Renvoie l'objet le plus proche de l'œil. */
+/* Object hit by the ray: box, then triangles when the mesh is reasonable.
+   Returns the object closest to the eye. */
 function prPick(e) {
   const ray = prRay(e);
   let best = null, bestT = Infinity;
   for (const o of PR.objects) {
     const { r, t } = placement(o);
-    // Rayon ramené dans le repère propre : Rᵀ, puis division par l'échelle.
+    // Ray brought into the own frame: Rᵀ, then divided by the scale.
     const toLocal = (v, isPoint) => {
       const p = isPoint ? sub3(v, t) : v;
       const q = [
@@ -562,7 +562,7 @@ function prPick(e) {
       hit = rayTriangles(lo, ld, mesh.pos);
       if (hit == null) continue;
     }
-    // Distance comparable entre objets : point touché, ramené dans la scène.
+    // Distance comparable between objects: hit point, brought back to the scene.
     const lp = [lo[0] + ld[0] * hit, lo[1] + ld[1] * hit, lo[2] + ld[2] * hit];
     const wp = add3(applyRS(r, o.scale, lp), t);
     const dist = Math.hypot(...sub3(wp, ray.o));
@@ -574,7 +574,7 @@ function prPick(e) {
   return best;
 }
 
-/* Möller–Trumbore sur tous les triangles ; le plus proche, ou null. */
+/* Möller–Trumbore over all triangles; the closest, or null. */
 function rayTriangles(o, d, pos) {
   let best = null;
   for (let i = 0; i < pos.length; i += 9) {
@@ -606,7 +606,7 @@ function prSelect(ids, toggle) {
   prSchedule();
 }
 
-/* ------------------------------------------------------------ souris */
+/* ------------------------------------------------------------ mouse */
 
 function prBindInteractions(canvas) {
   canvas.addEventListener("contextmenu", (e) => {
@@ -616,25 +616,25 @@ function prBindInteractions(canvas) {
     if (!PR.sel.has(hit.id)) prSelect([hit.id], false);
     const many = PR.sel.size > 1;
     nativeMenu([
-      { id: "prep:dup", label: many ? `Dupliquer ${PR.sel.size} objets` : "Dupliquer" },
-      { id: "prep:center", label: "Centrer sur le plateau" },
-      { id: "prep:resetrot", label: "Réinitialiser la rotation" },
-      { id: "prep:orient", label: "Orienter automatiquement" },
-      { id: "prep:facetool", label: "Poser sur une face…" },
+      { id: "prep:dup", label: many ? tr("prepare.menu.dup_many", { n: PR.sel.size }) : tr("prepare.menu.dup") },
+      { id: "prep:center", label: tr("prepare.menu.center") },
+      { id: "prep:resetrot", label: tr("prepare.menu.reset_rot") },
+      { id: "prep:orient", label: tr("prepare.menu.orient") },
+      { id: "prep:facetool", label: tr("prepare.menu.face") },
       {},
-      { id: "prep:arrange", label: "Disposer le plateau" },
+      { id: "prep:arrange", label: tr("prepare.menu.arrange") },
       {},
-      { id: "prep:del", label: many ? `Retirer ${PR.sel.size} objets du plateau` : "Retirer du plateau" },
+      { id: "prep:del", label: many ? tr("prepare.menu.del_many", { n: PR.sel.size }) : tr("prepare.menu.del") },
     ], e.clientX, e.clientY);
   });
   canvas.addEventListener("mousedown", (e) => {
     e.preventDefault();
-    // Le clic dans la scène rend le clavier à la vue (flèches, A, ⌘Z…) :
-    // `preventDefault` empêche sinon un champ de l'inspecteur de le perdre.
+    // A click in the scene gives the keyboard back to the view (arrows, A,
+    // ⌘Z…): `preventDefault` would otherwise keep it in an inspector field.
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     const pan = e.shiftKey || e.button === 1 || e.button === 2;
     const base = { x: e.clientX, y: e.clientY, moved: false };
-    // Clic droit sur un objet : menu contextuel (évènement « contextmenu »).
+    // Right click on an object: context menu ("contextmenu" event).
     if (e.button === 2 && prPick(e)) return;
     if (!pan && PR.tool === "rotate") {
       const rh = ringHit(e);
@@ -679,8 +679,8 @@ function prBindInteractions(canvas) {
     PR.drag = {
       ...base,
       mode: e.altKey ? "rotate" : "move",
-      // Un simple clic (sans glisser) sur un objet d'une sélection multiple
-      // ne garde que lui, comme dans le Finder ; glisser déplace le groupe.
+      // A plain click (no drag) on an object of a multiple selection keeps
+      // only it, as in the Finder; dragging moves the group.
       only: e.metaKey || e.ctrlKey ? null : hit.id,
       start,
       center: [...hit.pos],
@@ -719,7 +719,7 @@ function prBindInteractions(canvas) {
       const R = axisAngle(a, rad(ang));
       for (const { o, R: r0, pos } of d.orig) {
         o.rot = eulerOf(mat3mul(R, r0));
-        // Un groupe tourne autour de son centre commun.
+        // A group rotates around its common center.
         const rel = [pos[0] - d.c[0], pos[1] - d.c[1], 0];
         const w = [0, 1].map((i) => R[i][0] * rel[0] + R[i][1] * rel[1] + R[i][2] * rel[2]);
         o.pos = [d.c[0] + w[0], d.c[1] + w[1]];
@@ -745,7 +745,7 @@ function prBindInteractions(canvas) {
       const a0 = Math.atan2(d.start[1] - d.center[1], d.start[0] - d.center[0]);
       const a1 = Math.atan2(p[1] - d.center[1], p[0] - d.center[0]);
       let delta = deg(a1 - a0);
-      // ⇧ : pas de 15°, comme dans Orca.
+      // ⇧: 15° steps, as in Orca.
       if (e.shiftKey) delta = Math.round(delta / 15) * 15;
       for (const { o, rz } of d.orig) o.rot = [o.rot[0], o.rot[1], normDeg(rz + delta)];
     }
@@ -785,7 +785,7 @@ function prBindInteractions(canvas) {
     },
     { passive: false }
   );
-  // Survol : anneau ou facette mis en évidence.
+  // Hover: ring or facet highlighted.
   canvas.addEventListener("mousemove", (e) => {
     if (PR.drag) return;
     if (PR.tool === "rotate") {
@@ -822,13 +822,13 @@ function prPan(dx, dy) {
   ]);
 }
 
-/* ------------------------------------------------------------ inspecteur */
+/* ------------------------------------------------------------ inspector */
 
 function prStatus() {
   const n = PR.objects.length;
   const out = PR.objects.filter((o) => bedState(o) !== "in").length;
   sideCount("prepare", n);
-  tbSet("prepare", "Plateau", n ? `${n} objet${n > 1 ? "s" : ""}${out ? ` · ${out} hors plateau` : ""}` : "");
+  tbSet("prepare", tr("slice.plate"), n ? tr("prepare.count", { n }) + (out ? " · " + tr("prepare.off_count", { n: out }) : "") : "");
   $("p-empty").classList.toggle("hidden", n > 0);
   $("p-del").disabled = PR.sel.size === 0;
   $("p-dup").disabled = PR.sel.size === 0;
@@ -843,9 +843,9 @@ function prRenderInspector() {
     .map((o) => {
       const st = bedState(o);
       const tag =
-        st === "partial" ? '<span class="tag bad">dépasse</span>'
-        : st === "out" ? `<span class="tag">${o.plate > 1 ? "plateau " + o.plate : "hors plateau"}</span>`
-        : overlap.has(o.id) ? '<span class="tag warn">chevauche</span>'
+        st === "partial" ? `<span class="tag bad">${esc(tr("prepare.tag.over"))}</span>`
+        : st === "out" ? `<span class="tag">${esc(o.plate > 1 ? tr("prepare.tag.plate", { n: o.plate }) : tr("prepare.tag.off"))}</span>`
+        : overlap.has(o.id) ? `<span class="tag warn">${esc(tr("prepare.tag.overlap"))}</span>`
         : "";
       return `<button class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}">
         <span class="k">${esc(o.name)}</span>${tag}</button>`;
@@ -859,7 +859,7 @@ function prRenderProps() {
   const sel = PR.objects.filter((o) => PR.sel.has(o.id));
   $("p-props").classList.toggle("hidden", sel.length !== 1);
   $("p-multi").classList.toggle("hidden", sel.length < 2);
-  $("p-multi").textContent = `${sel.length} objets sélectionnés`;
+  $("p-multi").textContent = tr("prepare.selected", { n: sel.length });
   if (sel.length !== 1) return;
   const o = sel[0];
   const set = (id, v) => {
@@ -874,21 +874,19 @@ function prRenderProps() {
   set("p-sx", Math.round(o.scale[0] * 1000) / 10);
   set("p-sy", Math.round(o.scale[1] * 1000) / 10);
   set("p-sz", Math.round(o.scale[2] * 1000) / 10);
-  // Proportions : verrou sur l'objet, ouvert dès que l'échelle n'est plus uniforme.
+  // Proportions: lock on the object, open as soon as the scale is not uniform.
   const uniform = o.scale[0] === o.scale[1] && o.scale[1] === o.scale[2];
   if (!uniform) o.free = true;
   $("p-lock").checked = !o.free;
   $("p-lock").closest(".group").classList.toggle("locked", !o.free);
-  // Dimensions du volume posé (boîte alignée sur les axes du plateau).
+  // Dimensions of the rested volume (box aligned on the bed axes).
   const sh = shape(o);
   const xs = sh.foot.map((p) => p[0]), ys = sh.foot.map((p) => p[1]);
-  const dims = [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), sh.zmax - sh.zmin].map((v) =>
-    v.toFixed(1).replace(".", ",")
-  );
-  $("p-dims").textContent = `${dims.join(" × ")} mm${o.plate > 1 ? ` · plateau ${o.plate} du fichier` : ""}`;
+  const dims = [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), sh.zmax - sh.zmin].map((v) => fmtDec(v, 1));
+  $("p-dims").textContent = `${dims.join(" × ")} mm${o.plate > 1 ? " · " + tr("prepare.file_plate", { n: o.plate }) : ""}`;
 }
 
-/* Champs de l'inspecteur : appliqués en direct, enregistrés à la validation. */
+/* Inspector fields: applied live, saved on commit. */
 function prBindField(id, apply) {
   const el = $(id);
   const run = (commit) => {
@@ -926,7 +924,7 @@ $("p-lock").addEventListener("change", () => {
   if (!o) return;
   prRemember();
   o.free = !$("p-lock").checked;
-  // Reverrouiller ramène à une échelle uniforme (celle de X).
+  // Locking again brings back a uniform scale (X's).
   if (!o.free) o.scale = [o.scale[0], o.scale[0], o.scale[0]];
   prSave();
   prRenderInspector();
@@ -942,9 +940,9 @@ $("p-list").addEventListener("click", (e) => {
   if (row) prSelect([+row.dataset.id], e.metaKey || e.ctrlKey);
 });
 
-/* ------------------------------------------------------------ ajout */
+/* ------------------------------------------------------------ adding */
 
-/* Boîte vue de dessus d'un ensemble d'objets, par leurs boîtes. */
+/* Top-view box of a set of objects, from their boxes. */
 function groupBox(list) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const o of list) {
@@ -956,10 +954,9 @@ function groupBox(list) {
   return { x0, y0, x1, y1 };
 }
 
-/* Ajoute les objets d'un fichier. Le premier plateau du fichier garde sa
-   disposition ; il est posé tel quel si le plateau est vide et qu'il y tient,
-   sinon déplacé d'un bloc vers une place libre. Les autres plateaux suivent,
-   à côté. */
+/* Adds a file's objects. The file's first plate keeps its layout; it is
+   placed as is when the plate is empty and it fits, otherwise moved as a
+   block to a free spot. The other plates follow, beside it. */
 async function prepareAddFile(path) {
   let items;
   try {
@@ -1002,13 +999,10 @@ async function prepareAddFile(path) {
   if (PR.gl) await Promise.all(added.map(prLoadMesh));
   prSchedule();
   const others = added.length - main.length;
-  toast(
-    `${main.length} objet${main.length > 1 ? "s" : ""} ajouté${main.length > 1 ? "s" : ""} au plateau` +
-      (others ? ` · ${others} d'autres plateaux posé${others > 1 ? "s" : ""} à côté` : "")
-  );
+  toast(tr("prepare.added", { n: main.length }) + (others ? " · " + tr("prepare.added_others", { n: others }) : ""));
 }
 
-/* Coin d'une zone libre de `bw` × `bd` mm (marge de 5 mm), centre d'abord. */
+/* Corner of a free area of `bw` × `bd` mm (5 mm margin), center first. */
 function freeSpot(bw, bd, except) {
   const { w, d } = PR.bed, m = 5;
   const taken = PR.objects.filter((o) => o.id !== except && bedState(o) !== "out").map((o) => groupBox([o]));
@@ -1041,12 +1035,12 @@ function prRemoveSelection() {
   prSchedule();
 }
 
-/* ------------------------------------------------------------ outils */
+/* ------------------------------------------------------------ tools */
 
-/* Produit de matrices 3 × 3 (lignes). */
+/* Product of 3 × 3 matrices (rows). */
 const mat3mul = (a, b) => a.map((row) => [0, 1, 2].map((j) => row[0] * b[0][j] + row[1] * b[1][j] + row[2] * b[2][j]));
 
-/* Angles X, Y, Z (degrés) d'une matrice Rz · Ry · Rx : l'inverse de `rotation`. */
+/* X, Y, Z angles (degrees) of an Rz · Ry · Rx matrix: the inverse of `rotation`. */
 function eulerOf(m) {
   const ry = Math.asin(clamp(-m[2][0], -1, 1));
   let rx, rz;
@@ -1070,7 +1064,7 @@ function axisAngle(k, a) {
   ];
 }
 
-/* Rotation la plus courte qui amène `from` sur `to`. */
+/* Shortest rotation bringing `from` onto `to`. */
 function rotationBetween(from, to) {
   const a = norm3(from), b = norm3(to);
   const c = dot3(a, b), v = cross3(a, b), s = Math.hypot(...v);
@@ -1088,22 +1082,19 @@ PR.tool = null;
 PR.hoverRing = null;
 PR.hoverFace = null;
 
-const TOOL_HINTS = {
-  rotate: "Glissez un anneau pour tourner · ⇧ : pas de 15° · R ou Échap pour quitter",
-  face: "Cliquez une face pour la poser sur le plateau · F ou Échap pour quitter",
-};
+const TOOL_HINTS = { rotate: "prepare.hint.rotate", face: "prepare.hint.face" };
 
 function prSetTool(t) {
   PR.tool = PR.tool === t ? null : t;
   PR.hoverRing = PR.hoverFace = null;
   $("p-rotate").classList.toggle("on", PR.tool === "rotate");
   $("p-face").classList.toggle("on", PR.tool === "face");
-  $("p-toolhint").textContent = TOOL_HINTS[PR.tool] || "";
+  $("p-toolhint").textContent = PR.tool ? tr(TOOL_HINTS[PR.tool]) : "";
   $("p-toolhint").classList.toggle("hidden", !PR.tool);
   prSchedule();
 }
 
-/* Centre et rayon des anneaux, autour de la sélection. */
+/* Center and radius of the rings, around the selection. */
 function ringFrame() {
   const sel = PR.objects.filter((o) => PR.sel.has(o.id));
   if (!sel.length) return null;
@@ -1114,7 +1105,7 @@ function ringFrame() {
   return { c, r, sel };
 }
 
-/* Point d'un rayon dans le plan perpendiculaire à `a` passant par `c`. */
+/* Point of a ray in the plane perpendicular to `a` through `c`. */
 function rayPlane(ray, a, c) {
   const dn = dot3(ray.d, a);
   if (Math.abs(dn) < 1e-6) return null;
@@ -1122,14 +1113,14 @@ function rayPlane(ray, a, c) {
   return t > 0 ? add3(ray.o, ray.d.map((v) => v * t)) : null;
 }
 
-/* Anneau sous le curseur, s'il y en a un. */
+/* Ring under the cursor, if any. */
 function ringHit(e) {
   const f = ringFrame();
   if (!f) return null;
   const ray = prRay(e);
   let best = null;
   AXES.forEach((a, k) => {
-    // Anneau vu par la tranche : impossible à saisir proprement.
+    // Ring seen edge-on: impossible to grab cleanly.
     if (Math.abs(dot3(ray.d, a)) < 0.08) return;
     const p = rayPlane(ray, a, f.c);
     if (!p) return;
@@ -1139,8 +1130,8 @@ function ringHit(e) {
   return best;
 }
 
-/* Face de l'enveloppe convexe sous le curseur (poser sur une face) : la face
-   touchée et les faces coplanaires qui forment avec elle une facette. */
+/* Convex hull face under the cursor (lay on face): the face hit and the
+   coplanar faces forming a facet with it. */
 function faceHit(e) {
   const ray = prRay(e);
   let best = null;
@@ -1154,7 +1145,7 @@ function faceHit(e) {
       return [q[0] / o.scale[0], q[1] / o.scale[1], q[2] / o.scale[2]];
     };
     const lo = toLocal(ray.o, true), ld = toLocal(ray.d, false);
-    // Boîte de l'objet d'abord : les faces ne sont testées que si elle est touchée.
+    // The object's box first: faces are only tested when it is hit.
     const half = o.size.map((v) => v / 2 + 0.01);
     let t0 = -Infinity, t1 = Infinity;
     for (let k = 0; k < 3; k++) {
@@ -1188,12 +1179,12 @@ function faceHit(e) {
   return { o: best.o, n, faces };
 }
 
-/* Pose la facette visée sur le plateau. */
+/* Lays the targeted facet on the bed. */
 function prLayOnFace(hit) {
   const o = hit.o;
   prRemember();
   const r = rotation(o.rot);
-  // Normale dans la scène : R · S⁻¹ · n (l'échelle déforme les normales).
+  // Normal in the scene: R · S⁻¹ · n (scaling distorts normals).
   const ns = [hit.n[0] / o.scale[0], hit.n[1] / o.scale[1], hit.n[2] / o.scale[2]];
   const nw = norm3([0, 1, 2].map((i) => r[i][0] * ns[0] + r[i][1] * ns[1] + r[i][2] * ns[2]));
   o.rot = eulerOf(mat3mul(rotationBetween(nw, [0, 0, -1]), r));
@@ -1203,15 +1194,15 @@ function prLayOnFace(hit) {
   prSchedule();
 }
 
-/* Orientation automatique, règles d'Orca (calcul en Rust). `all` : tout le
-   plateau ; sinon la sélection, ou tout le plateau si rien n'est sélectionné. */
+/* Auto-orientation, Orca's rules (computed in Rust). `all`: the whole
+   plate; otherwise the selection, or the whole plate if nothing is selected. */
 async function prOrient(all) {
   const onBed = PR.objects.filter((o) => bedState(o) !== "out");
   const targets = all || !PR.sel.size ? onBed : PR.objects.filter((o) => PR.sel.has(o.id));
   if (!targets.length || PR.orienting) return;
   PR.orienting = true;
   $("p-orient").disabled = true;
-  $("p-toolhint").textContent = `Orientation de ${targets.length} objet${targets.length > 1 ? "s" : ""}…`;
+  $("p-toolhint").textContent = tr("prepare.orienting", { n: targets.length });
   $("p-toolhint").classList.remove("hidden");
   const before = prSnap();
   try {
@@ -1221,28 +1212,28 @@ async function prOrient(all) {
       process,
     });
     prRemember(before);
-    // La bascule vient du calcul ; la rotation autour de Z choisie est gardée.
+    // The tilt comes from the computation; the chosen Z rotation is kept.
     targets.forEach((o, i) => (o.rot = eulerOf(mat3mul(rotation([0, 0, o.rot[2]]), mats[i]))));
     prSave();
     prRenderInspector();
     prSchedule();
-    toast(`${targets.length} objet${targets.length > 1 ? "s orientés" : " orienté"}`);
+    toast(tr("prepare.oriented", { n: targets.length }));
   } catch (e) {
-    toast("Orientation impossible : " + e, true);
+    toast(tr("prepare.orient_failed", { err: e }), true);
   } finally {
     PR.orienting = false;
     $("p-orient").disabled = false;
-    $("p-toolhint").textContent = TOOL_HINTS[PR.tool] || "";
+    $("p-toolhint").textContent = PR.tool ? tr(TOOL_HINTS[PR.tool]) : "";
     $("p-toolhint").classList.toggle("hidden", !PR.tool);
   }
 }
 
-/* Enregistre tout le plateau en 3MF (pièces et extrudeurs du modèle gardés). */
+/* Saves the whole plate as 3MF (the model's parts and extruders kept). */
 async function prSavePlate() {
   if (!PR.objects.length) return;
   const dir = state.dir || PR.objects[0].path.replace(/\/[^/]*$/, "");
   const dest = await window.__TAURI__.dialog
-    .save({ defaultPath: dir + "/plateau.3mf", filters: [{ name: "3MF", extensions: ["3mf"] }] })
+    .save({ defaultPath: dir + "/" + tr("prepare.default_name"), filters: [{ name: "3MF", extensions: ["3mf"] }] })
     .catch(() => null);
   if (!dest) return;
   const identity = Array.from({ length: 16 }, (_, i) => i);
@@ -1251,23 +1242,23 @@ async function prSavePlate() {
       scene: PR.objects.map((o) => ({ path: o.path, item: o.item, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, extruder_map: identity })),
       path: dest,
     });
-    toast("Plateau enregistré : " + dest.split("/").pop());
+    toast(tr("prepare.saved", { name: dest.split("/").pop() }));
     if (state.dir && dest.startsWith(state.dir)) refresh();
   } catch (e) {
-    toast("Enregistrement impossible : " + e, true);
+    toast(tr("printers.form.save_failed", { err: e }), true);
   }
 }
 
-/* ------------------------------------------------------------ disposition */
+/* ------------------------------------------------------------ arrangement */
 
-/* Cellules (1 mm) couvertes par l'empreinte d'un objet tourné de `rz`,
-   élargie de `margin` : relatives à son centre. */
+/* Cells (1 mm) covered by the footprint of an object rotated by `rz`,
+   grown by `margin`: relative to its center. */
 function cellMask(o, rz, margin) {
   const poly = convexHull(footprint({ ...o, pos: [0, 0], rot: [o.rot[0], o.rot[1], rz] }));
   const xs = poly.map((p) => p[0]), ys = poly.map((p) => p[1]);
   const x0 = Math.floor(Math.min(...xs) - margin), x1 = Math.ceil(Math.max(...xs) + margin);
   const y0 = Math.floor(Math.min(...ys) - margin), y1 = Math.ceil(Math.max(...ys) + margin);
-  // Distance d'un point au polygone convexe (0 à l'intérieur).
+  // Distance from a point to the convex polygon (0 inside).
   const dist = (x, y) => {
     let inside = true, best = Infinity;
     for (let i = 0; i < poly.length; i++) {
@@ -1284,10 +1275,10 @@ function cellMask(o, rz, margin) {
   return { cells, x0, x1, y0, y1, area: (x1 - x0) * (y1 - y0) };
 }
 
-/* Disposition automatique : grille au millimètre, objets du plus grand au plus
-   petit, chacun au premier emplacement libre (bas, puis gauche), avec un essai
-   à 90° ; 6 mm entre deux objets. Le groupe est ensuite recentré. Ce qui ne
-   tient pas est posé à côté du plateau. */
+/* Auto-arrange: millimeter grid, objects from largest to smallest, each in
+   the first free spot (bottom, then left), with a 90° attempt; 6 mm
+   between two objects. The group is then recentered. What does not fit is
+   set beside the plate. */
 function prArrange() {
   const list = PR.objects.filter((o) => bedState(o) !== "out");
   if (!list.length) return;
@@ -1297,7 +1288,7 @@ function prArrange() {
   const margin = 3;
   const plans = list
     .map((o) => {
-      // Une rotation propre (X/Y) se garde telle quelle ; seul Z varie.
+      // An own rotation (X/Y) is kept as is; only Z varies.
       const tries = [o.rot[2], normDeg(o.rot[2] + 90)].map((rz) => ({ rz, mask: cellMask(o, rz, margin) }));
       return { o, tries, area: Math.min(...tries.map((t) => t.mask.area)) };
     })
@@ -1333,7 +1324,7 @@ function prArrange() {
     for (let i = 0; i < c.length; i += 2) grid[(best.cy + c[i + 1]) * W + best.cx + c[i]] = 1;
     placed.push({ o: plan.o, cx: best.cx, cy: best.cy, rz: best.t.rz, m: best.t.mask });
   }
-  // Recentrage du groupe sur le plateau.
+  // Group recentered on the plate.
   if (placed.length) {
     const x0 = Math.min(...placed.map((p) => p.cx + p.m.x0)), x1 = Math.max(...placed.map((p) => p.cx + p.m.x1));
     const y0 = Math.min(...placed.map((p) => p.cy + p.m.y0)), y1 = Math.max(...placed.map((p) => p.cy + p.m.y1));
@@ -1343,7 +1334,7 @@ function prArrange() {
       p.o.pos = [p.cx + dx, p.cy + dy];
     }
   }
-  // Ce qui ne tient pas attend à droite du plateau.
+  // What does not fit waits on the right of the plate.
   let y = 0;
   for (const o of left) {
     const b = groupBox([{ ...o, pos: [0, 0] }]);
@@ -1353,10 +1344,10 @@ function prArrange() {
   prSave();
   prRenderInspector();
   prSchedule();
-  if (left.length) toast(`${left.length} objet${left.length > 1 ? "s ne tiennent" : " ne tient"} pas sur le plateau`, true);
+  if (left.length) toast(tr("prepare.no_fit", { n: left.length }), true);
 }
 
-/* Duplique la sélection ; les copies vont à la place libre la plus proche. */
+/* Duplicates the selection; copies go to the nearest free spot. */
 function prDuplicate() {
   const sel = PR.objects.filter((o) => PR.sel.has(o.id));
   if (!sel.length) return;
@@ -1376,7 +1367,7 @@ function prDuplicate() {
   prSchedule();
 }
 
-/* Déplace la sélection, d'un bloc. */
+/* Moves the selection, as a block. */
 function prMoveSelection(dx, dy, remember = true) {
   if (!PR.sel.size) return;
   if (remember) prRemember();
@@ -1402,9 +1393,9 @@ function prResetRotation() {
   prSchedule();
 }
 
-/* ------------------------------------------------------------ vue */
+/* ------------------------------------------------------------ view */
 
-/* Appelé à l'affichage de la vue : contexte graphique, plateau, maillages. */
+/* Called when the view shows: graphics context, bed, meshes. */
 async function prepareShow() {
   prStatus();
   if (!prEnsureGL()) return;
@@ -1427,20 +1418,20 @@ async function prepareShow() {
   prSchedule();
 }
 
-/* Scène transmise à la découpe : objets sur le plateau seulement. */
+/* Scene handed to slicing: objects on the plate only. */
 function prepareScene() {
   const on = PR.objects.filter((o) => bedState(o) === "in");
   const partial = PR.objects.filter((o) => bedState(o) === "partial");
   if (partial.length) {
-    toast(`${partial.map((o) => o.name).join(", ")} dépasse du plateau`, true);
+    toast(tr("prepare.sticks_out", { names: partial.map((o) => o.name).join(", "), n: partial.length }), true);
     return null;
   }
   if (!on.length) {
-    toast("Aucun objet sur le plateau", true);
+    toast(tr("prepare.nothing"), true);
     return null;
   }
   const files = [...new Set(on.map((o) => o.path))];
-  const name = files.length === 1 ? files[0].split("/").pop().replace(/\.(3mf|stl)$/i, "") : "plateau";
+  const name = files.length === 1 ? files[0].split("/").pop().replace(/\.(3mf|stl)$/i, "") : tr("slice.plate").toLowerCase();
   return {
     name,
     files,
@@ -1449,14 +1440,14 @@ function prepareScene() {
   };
 }
 
-/* ------------------------------------------------------------ évènements */
+/* ------------------------------------------------------------ events */
 
 $("p-add").addEventListener("click", (e) =>
   menuUnder(e.currentTarget, [
-    { id: "prep:add", label: "Ajouter des fichiers…" },
-    { id: "prep:save", label: "Enregistrer le plateau…", enabled: PR.objects.length > 0 },
+    { id: "prep:add", label: tr("prepare.menu.add") },
+    { id: "prep:save", label: tr("prepare.menu.save"), enabled: PR.objects.length > 0 },
     {},
-    { id: "prep:clear", label: "Vider le plateau", enabled: PR.objects.length > 0 },
+    { id: "prep:clear", label: tr("prepare.menu.clear"), enabled: PR.objects.length > 0 },
   ])
 );
 onMenu("prep", async (what) => {
@@ -1470,12 +1461,12 @@ onMenu("prep", async (what) => {
   if (what === "save") prSavePlate();
   if (what === "add") {
     const picked = await window.__TAURI__.dialog
-      .open({ multiple: true, filters: [{ name: "Modèles 3D", extensions: ["3mf", "stl"] }] })
+      .open({ multiple: true, filters: [{ name: tr("prepare.filter"), extensions: ["3mf", "stl"] }] })
       .catch(() => null);
     for (const p of [].concat(picked || [])) await prepareAddFile(typeof p === "string" ? p : p.path);
   }
   if (what === "clear") {
-    const ok = await confirmDelete("Vider le plateau ?", "Les objets sont retirés du plateau ; les fichiers ne sont pas touchés.");
+    const ok = await confirmDelete(tr("prepare.clear.title"), tr("prepare.clear.text"), tr("prepare.clear.ok"));
     if (!ok) return;
     prRemember();
     PR.objects = [];
@@ -1493,22 +1484,22 @@ $("p-orient").addEventListener("click", (e) => prOrient(e.shiftKey));
 $("p-arrange").addEventListener("click", prArrange);
 $("p-slice").addEventListener("click", () => openSlice());
 
-/* Fichiers : « Préparer » ajoute le modèle sélectionné au plateau. */
+/* Files: "Prepare" adds the selected model to the plate. */
 $("act-slice").addEventListener("click", async () => {
   const path = [...state.sel][0];
   const f = state.files.find((x) => x.path === path);
   if (!f) return;
   if (f.kind === "gcode") {
-    toast("Ce fichier est déjà découpé", true);
+    toast(tr("prepare.already_sliced"), true);
     return;
   }
   switchView("prepare");
   await prepareAddFile(f.path);
 });
 
-/* Clavier de la vue : la barre de menus n'a pas ces commandes, et ⌘Z/⇧⌘Z
-   sont interceptés ici avant le menu Édition (qui garde la main dans les
-   champs de saisie). */
+/* View keyboard: the menu bar does not have these commands, and ⌘Z/⇧⌘Z
+   are intercepted here before the Edit menu (which keeps them in text
+   fields). */
 let nudgeAt = 0;
 document.addEventListener("keydown", (e) => {
   if (window.currentView !== "prepare") return;
@@ -1543,11 +1534,16 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     const step = e.shiftKey ? 10 : 1;
     const v = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key];
-    // Une rafale de flèches ne fait qu'une étape d'annulation.
+    // A burst of arrows only makes one undo step.
     const now = Date.now();
     prMoveSelection(v[0], v[1], now - nudgeAt > 700);
     nudgeAt = now;
   }
+});
+
+window.addEventListener("langchange", () => {
+  prRenderInspector();
+  if (PR.tool) $("p-toolhint").textContent = tr(TOOL_HINTS[PR.tool]);
 });
 
 prLoadState();

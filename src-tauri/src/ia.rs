@@ -1,22 +1,22 @@
-//! Les conversations de l'onglet IA.
+//! The AI tab's conversations.
 //!
-//! Chaque conversation possède son dossier, et ce dossier est son identité :
-//! le nom du dossier sert aussi de `--session-id` à Claude Code. La reprise
-//! devient alors déterministe — on n'a jamais à fouiller l'historique de Claude
-//! ni à deviner quelle session appartient à quel objet.
+//! Each conversation owns its folder, and that folder is its identity: the
+//! folder name is also Claude Code's `--session-id`. Resuming then becomes
+//! deterministic — there is never any need to dig into Claude's history or to
+//! guess which session belongs to which object.
 //!
 //! ```text
 //! ~/.config/snap-studio/ia/<uuid>/
 //!   meta.json
-//!   workspace/          ← monté dans le conteneur
-//!     CLAUDE.md  source.stl  outils/  out/current.stl  versions/v1.stl
+//!   workspace/          ← mounted in the container
+//!     CLAUDE.md  source.stl  tools/  out/current.stl  versions/v1.stl
 //! ```
 //!
-//! Une conversation peut aussi partir de rien, pour concevoir un objet : pas de
-//! `source.stl` alors, et `out/current.stl` n'existe qu'au premier export.
+//! A conversation may also start from nothing, to design an object: then there
+//! is no `source.stl`, and `out/current.stl` only exists after the first export.
 //!
-//! Le dossier de travail appartient à Claude ; l'application n'y écrit qu'à la
-//! création, puis se contente de regarder ce qui en sort.
+//! The working folder belongs to Claude; the app only writes there at creation,
+//! then just watches what comes out.
 
 use crate::mesh::{Mat, MeshData};
 use crate::write3mf::SceneObject;
@@ -29,36 +29,36 @@ use tauri::Emitter;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Conversation {
-    /// UUID v4 : nom du dossier et identifiant de session Claude.
+    /// UUID v4: folder name and Claude session id.
     pub id: String,
     pub title: String,
-    /// Chemin du 3MF d'origine, tel qu'il était au moment de la création.
+    /// Path of the original 3MF, as it was at creation.
     pub source: String,
     pub source_name: String,
-    /// Demande initiale, envoyée au premier passage dans le terminal.
+    /// Initial request, sent on the first pass in the terminal.
     #[serde(default)]
     pub prompt: String,
-    /// « container » ou « local ».
+    /// "container" or "local".
     pub engine: String,
     pub created_at: u64,
     pub updated_at: u64,
-    /// Numéro de la version affichée.
+    /// Number of the version shown.
     #[serde(default = "one")]
     pub version: u32,
-    /// Chemin du 3MF exporté vers vos fichiers, une fois le travail terminé.
+    /// Path of the 3MF exported into your files, once the work is done.
     #[serde(default)]
     pub saved: Option<String>,
-    /// Vrai dès que la session Claude a été créée : on la reprend ensuite.
+    /// True as soon as the Claude session was created: it is resumed afterwards.
     #[serde(default)]
     pub started: bool,
-    /// « create » pour un objet conçu de zéro, vide pour une modification.
+    /// "create" for an object designed from scratch, empty for a modification.
     #[serde(default)]
     pub kind: String,
-    /// Dossier où verser l'objet créé ; une modification retourne, elle,
-    /// auprès de son original.
+    /// Folder where the created object goes; a modification goes back next to
+    /// its original.
     #[serde(default)]
     pub dest_dir: Option<String>,
-    /// Encombrement maximal demandé pour un objet créé, en millimètres.
+    /// Maximum size asked for a created object, in millimeters.
     #[serde(default)]
     pub bounds: Option<[f32; 3]>,
 }
@@ -80,12 +80,12 @@ fn now() -> u64 {
         .unwrap_or(0)
 }
 
-// ------------------------------------------------------------ emplacements
+// ------------------------------------------------------------ locations
 
-/// `~/.config/snap-studio/ia`, et non le dossier de préférences du système.
+/// `~/.config/snap-studio/ia`, and not the system's preferences folder.
 ///
-/// Ce chemin est monté tel quel dans le conteneur : il doit rester court et
-/// sans espace, ce que « Application Support » ne permet pas.
+/// This path is mounted as is in the container: it must stay short and
+/// without spaces, which "Application Support" does not allow.
 pub fn root() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
@@ -104,7 +104,7 @@ pub fn workspace(id: &str) -> PathBuf {
     dir(id).join("workspace")
 }
 
-/// Le maillage que l'application affiche : ce que Claude a produit en dernier.
+/// The mesh the app shows: what Claude produced last.
 pub fn current(id: &str) -> PathBuf {
     workspace(id).join("out").join("current.stl")
 }
@@ -113,7 +113,7 @@ fn meta_path(id: &str) -> PathBuf {
     dir(id).join("meta.json")
 }
 
-// ------------------------------------------------------------ magasin
+// ------------------------------------------------------------ store
 
 pub fn get(id: &str) -> Result<Conversation> {
     let raw = std::fs::read(meta_path(id))?;
@@ -131,7 +131,7 @@ pub fn save(c: &Conversation) -> Result<()> {
     Ok(())
 }
 
-/// Les conversations, de la plus récemment active à la plus ancienne.
+/// The conversations, from the most recently active to the oldest.
 pub fn list() -> Vec<Conversation> {
     let mut out = Vec::new();
     let Ok(entries) = std::fs::read_dir(root()) else {
@@ -150,24 +150,24 @@ pub fn list() -> Vec<Conversation> {
     out
 }
 
-/// Un identifiant valable est l'UUID que nous avons engendré, rien d'autre.
+/// A valid id is the UUID we generated, nothing else.
 ///
-/// Comparer des chemins ne suffit pas : `..` reste sous la racine au sens
-/// lexical, et c'est le noyau qui le résout ensuite — un effacement partirait
-/// alors bien plus loin que prévu.
+/// Comparing paths is not enough: `..` stays under the root lexically, and it
+/// is the kernel that resolves it afterwards — a deletion would then reach
+/// much further than intended.
 fn valid_id(id: &str) -> bool {
     id.len() == 36 && id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')
 }
 
 pub fn remove(id: &str) -> Result<()> {
     if !valid_id(id) {
-        return Err(anyhow!("conversation inconnue"));
+        return Err(anyhow!("unknown conversation"));
     }
     std::fs::remove_dir_all(dir(id))?;
     Ok(())
 }
 
-/// Note qu'une session Claude existe désormais pour cette conversation.
+/// Notes that a Claude session now exists for this conversation.
 pub fn mark_started(id: &str) {
     if let Ok(mut c) = get(id) {
         c.started = true;
@@ -177,11 +177,11 @@ pub fn mark_started(id: &str) {
 }
 
 
-/// Emplacement où Claude Code range la session d'un dossier de travail.
+/// Where Claude Code stores the session of a working folder.
 ///
-/// Il nomme le dossier d'après le chemin, chaque caractère qui n'est ni lettre
-/// ni chiffre devenant un tiret : `/Users/moi/.config/snap-studio/ia/<id>/workspace`
-/// donne `-Users-moi--config-snap-studio-ia-<id>-workspace`.
+/// It names the folder after the path, each character that is neither a letter
+/// nor a digit becoming a dash: `/Users/me/.config/snap-studio/ia/<id>/workspace`
+/// gives `-Users-me--config-snap-studio-ia-<id>-workspace`.
 pub fn session_file(id: &str) -> PathBuf {
     let slug: String = workspace(id)
         .to_string_lossy()
@@ -196,40 +196,40 @@ pub fn session_file(id: &str) -> PathBuf {
         .join(format!("{id}.jsonl"))
 }
 
-/// Vrai si Claude a vraiment une session à reprendre.
+/// True if Claude really has a session to resume.
 ///
-/// Vaut aussi en conteneur, ce qui a été vérifié sur machine : yolobox monte le
-/// dossier de travail à son chemin réel, et `--claude-config` partage
-/// `~/.claude/projects`. Une conversation menée dans le bac à sable dépose donc
-/// sa session à cet emplacement exact, côté hôte.
+/// Also holds in the container, which was checked on a machine: yolobox mounts
+/// the working folder at its real path, and `--claude-config` shares
+/// `~/.claude/projects`. A conversation held in the sandbox therefore leaves
+/// its session at this exact place, on the host.
 ///
-/// On ne se fie pas à notre propre drapeau : ouvrir le terminal ne crée pas de
-/// session, seul un premier échange le fait. Quelqu'un qui ouvre une
-/// conversation puis la referme sans rien dire n'en laisse aucune trace, et une
-/// reprise échouerait alors sur « No conversation found with session ID ».
+/// Our own flag is not trusted: opening the terminal does not create a
+/// session, only a first exchange does. Someone who opens a conversation then
+/// closes it without a word leaves no trace, and a resume would then fail on
+/// "No conversation found with session ID".
 pub fn has_session(id: &str) -> bool {
     session_file(id).is_file()
 }
 
 // ------------------------------------------------------------ conversions
 
-/// Géométrie complète d'un 3MF, sans échantillonnage.
+/// Full geometry of a 3MF, without sampling.
 ///
-/// Le visualiseur, lui, se contente d'un budget de triangles : l'aperçu reste
-/// fidèle. Pour une conversion, en revanche, il faut tout garder.
+/// The viewer makes do with a triangle budget: the preview stays faithful. For
+/// a conversion, however, everything must be kept.
 pub fn mesh_of_3mf(path: &Path) -> Result<MeshData> {
     let mut zip = crate::model3mf::open(path)?;
     crate::mesh::load_mesh(&mut zip, usize::MAX)
 }
 
-/// Convertit le 3MF d'origine en STL dans le dossier de travail.
+/// Converts the original 3MF to STL in the working folder.
 pub fn source_to_stl(src: &Path, dst: &Path) -> Result<usize> {
     let m = mesh_of_3mf(src)?;
     crate::stl::write(dst, &m.tris)?;
     Ok(m.tris.len())
 }
 
-/// Reconvertit un STL en 3MF, prêt à découper.
+/// Converts an STL back to 3MF, ready to slice.
 pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
     let m = crate::stl::read(src)?;
     let n = m.tris.len();
@@ -245,9 +245,9 @@ pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
     Ok(n)
 }
 
-// ------------------------------------------------------------ création
+// ------------------------------------------------------------ creation
 
-/// Titre lisible déduit de la demande, sinon du nom de fichier.
+/// Readable title from the request, otherwise from the file name.
 fn title_for(prompt: &str, source: &Path) -> String {
     let p = prompt.trim();
     if !p.is_empty() {
@@ -260,21 +260,20 @@ fn title_for(prompt: &str, source: &Path) -> String {
     source
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "Sans titre".into())
+        .unwrap_or_else(|| crate::t!("ia.untitled"))
 }
 
-/// Prépare une conversation : dossier, consignes, outils, objet converti.
+/// Prepares a conversation: folder, instructions, tools, converted object.
 pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation> {
     if !source.is_file() {
-        return Err(anyhow!("fichier introuvable"));
+        return Err(anyhow!(crate::t!("err.file_not_found")));
     }
     let id = uuid::Uuid::new_v4().to_string();
     let ws = workspace(&id);
-    std::fs::create_dir_all(ws.join("outils"))?;
     std::fs::create_dir_all(ws.join("out"))?;
     std::fs::create_dir_all(ws.join("versions"))?;
 
-    // La conversion d'abord : si l'objet est illisible, rien ne doit rester.
+    // Conversion first: if the object is unreadable, nothing must remain.
     let src_stl = ws.join("source.stl");
     let tris = match source_to_stl(source, &src_stl) {
         Ok(n) => n,
@@ -287,9 +286,8 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
     std::fs::copy(&src_stl, ws.join("versions").join("v1.stl"))?;
 
     let name = source.file_name().unwrap_or_default().to_string_lossy().to_string();
-    std::fs::write(ws.join("CLAUDE.md"), consignes(&name, tris))?;
-    std::fs::write(ws.join("outils").join("mesure.py"), MESURE_PY)?;
-    std::fs::write(ws.join("outils").join("exporter.py"), EXPORTER_PY)?;
+    std::fs::write(ws.join("CLAUDE.md"), instructions(&name, tris))?;
+    write_tools(&ws)?;
 
     let _ = write_previews(&id);
 
@@ -313,10 +311,10 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
     Ok(c)
 }
 
-/// Prépare une conversation sans objet de départ : Claude conçoit la pièce.
+/// Prepares a conversation without a starting object: Claude designs the part.
 ///
-/// Le dossier de sortie existe d'emblée — la surveillance s'y accroche — mais
-/// il reste vide : le premier maillage exporté deviendra la v1.
+/// The output folder exists from the start — the watch hooks onto it — but
+/// stays empty: the first exported mesh becomes v1.
 pub fn create_blank(
     prompt: &str,
     engine: &str,
@@ -325,23 +323,21 @@ pub fn create_blank(
 ) -> Result<Conversation> {
     let prompt = prompt.trim();
     if prompt.is_empty() {
-        return Err(anyhow!("décrivez l'objet à créer"));
+        return Err(anyhow!(crate::t!("ia.new.need_prompt")));
     }
     if !dest_dir.is_dir() {
-        return Err(anyhow!("dossier de destination introuvable"));
+        return Err(anyhow!(crate::t!("err.no_dest")));
     }
     let id = uuid::Uuid::new_v4().to_string();
     let ws = workspace(&id);
-    std::fs::create_dir_all(ws.join("outils"))?;
     std::fs::create_dir_all(ws.join("out"))?;
     std::fs::create_dir_all(ws.join("versions"))?;
-    std::fs::write(ws.join("CLAUDE.md"), consignes_creation(bounds))?;
-    std::fs::write(ws.join("outils").join("mesure.py"), MESURE_PY)?;
-    std::fs::write(ws.join("outils").join("exporter.py"), EXPORTER_PY)?;
+    std::fs::write(ws.join("CLAUDE.md"), instructions_creation(bounds))?;
+    write_tools(&ws)?;
 
     let c = Conversation {
         id,
-        title: title_for(prompt, Path::new("Nouvel objet")),
+        title: title_for(prompt, Path::new(&crate::t!("ia.new_object"))),
         source: String::new(),
         source_name: String::new(),
         prompt: prompt.to_string(),
@@ -359,195 +355,223 @@ pub fn create_blank(
     Ok(c)
 }
 
-/// Le mode d'emploi laissé à Claude dans le dossier de travail.
-fn consignes(source_name: &str, tris: usize) -> String {
+// ------------------------------------------------------------ workspace layout
+
+/// Folder of the tools the app leaves to Claude.
+const TOOLS: &str = "tools";
+/// Measurement tool, and the one that installs a mesh as the current state.
+const MEASURE: &str = "measure.py";
+const EXPORT: &str = "export.py";
+
+/// Writes (or refreshes) the tools of a working folder.
+fn write_tools(ws: &Path) -> Result<()> {
+    std::fs::create_dir_all(ws.join(TOOLS))?;
+    std::fs::write(ws.join(TOOLS).join(MEASURE), MEASURE_PY)?;
+    std::fs::write(ws.join(TOOLS).join(EXPORT), EXPORT_PY)?;
+    Ok(())
+}
+
+/// The language Claude must answer in: the app's, named in English.
+fn reply_language() -> &'static str {
+    match crate::i18n::lang().as_str() {
+        "fr" => "French",
+        _ => "English",
+    }
+}
+
+/// The instructions left to Claude in the working folder.
+fn instructions(source_name: &str, tris: usize) -> String {
+    let lang = reply_language();
     format!(
-        "# Modification d'une pièce à imprimer
+        "# Modifying a part to print
 
-Tu travailles sur **{source_name}**, converti en STL pour cette session. Ce que
-tu écris s'affiche en direct dans l'application, à côté de cette conversation.
+You work on **{source_name}**, converted to STL for this session. What you
+write shows live in the app, next to this conversation.
 
-## Regarde avant d'agir
+**Always answer the user in {lang}.**
 
-Le dossier `apercu/` contient trois rendus de l'état courant — `face.png`,
-`trois-quarts.png`, `dessus.png` — que l'application régénère après **chaque**
-modification que tu enregistres.
+## Look before acting
 
-Ouvre-les. C'est ta seule façon de voir la pièce : un trou décentré, une paroi
-qui traverse, une pièce posée de travers ne se lisent pas dans les coordonnées.
-Regarde avant de modifier, et regarde encore après.
+The `preview/` folder holds three renders of the current state — `front.png`,
+`three-quarter.png`, `top.png` — that the app renders again after **every**
+change you save.
 
-## Les fichiers
+Open them. They are your only way to see the part: an off-center hole, a wall
+that goes through, a part resting askew do not show in the coordinates. Look
+before changing, and look again afterwards.
 
-- `source.stl` — l'objet d'origine. **Ne le modifie jamais.**
-- `out/current.stl` — l'état courant, celui qui s'affiche à l'écran.
-- `apercu/` — les trois rendus. En lecture seule, l'application les écrit.
-- `versions/` — l'historique, géré par l'application. N'y touche pas.
-- `outils/mesure.py` — dimensions, volume, étanchéité.
-- `outils/exporter.py` — vérifie un maillage et l'installe comme état courant.
+## The files
 
-## La marche à suivre
+- `source.stl` — the original object. **Never modify it.**
+- `out/current.stl` — the current state, the one shown on screen.
+- `preview/` — the three renders. Read-only, the app writes them.
+- `versions/` — the history, managed by the app. Do not touch it.
+- `tools/measure.py` — dimensions, volume, watertightness.
+- `tools/export.py` — checks a mesh and installs it as the current state.
 
-1. `python3 outils/mesure.py` puis regarde `apercu/trois-quarts.png`.
-2. Écris un script Python de transformation, avec `trimesh`.
-3. Installe le résultat : `python3 outils/exporter.py resultat.stl`
-4. Regarde de nouveau les aperçus, et recommence si ce n'est pas ça.
+## How to proceed
 
-## Ce qui compte
+1. `python3 tools/measure.py` then look at `preview/three-quarter.png`.
+2. Write a Python transformation script, with `trimesh`.
+3. Install the result: `python3 tools/export.py result.stl`
+4. Look at the previews again, and start over if it is not right.
 
-- Les unités sont des **millimètres**, l'axe Z est la hauteur, et la pièce est
-  posée sur `z = 0`. Après une rotation, repose-la au sol.
-- Le maillage doit rester **étanche** : sans quoi la découpe échouera.
-- Pars toujours de `out/current.stl`, jamais de `source.stl`, pour enchaîner
-  plusieurs modifications.
-- Avance par petites étapes vérifiables plutôt qu'en un seul grand script.
-- Si une demande est ambiguë — quel côté, quelle face, quelle dimension —
-  demande plutôt que de deviner.
+## What matters
 
-L'objet d'origine compte {tris} triangles.
+- Units are **millimeters**, the Z axis is the height, and the part rests on
+  `z = 0`. After a rotation, put it back on the ground.
+- The mesh must stay **watertight**: otherwise slicing will fail.
+- Always start from `out/current.stl`, never from `source.stl`, to chain
+  several changes.
+- Move in small checkable steps rather than one big script.
+- If a request is ambiguous — which side, which face, which dimension — ask
+  rather than guess.
 
-## Outils disponibles
+The original object has {tris} triangles.
 
-`trimesh`, `manifold3d` (booléens), `numpy`. Pas de Blender.
+## Available tools
+
+`trimesh`, `manifold3d` (booleans), `numpy`. No Blender.
 "
     )
 }
 
-/// Le mode d'emploi d'une conversation qui part de rien.
-fn consignes_creation(bounds: Option<[f32; 3]>) -> String {
+/// The instructions of a conversation that starts from nothing.
+fn instructions_creation(bounds: Option<[f32; 3]>) -> String {
+    let lang = reply_language();
     let fmt = |v: f32| format!("{v:.0}");
-    let gabarit = match bounds {
+    let envelope = match bounds {
         Some([x, y, z]) => format!(
-            "La pièce doit tenir dans **{} × {} × {} mm** (X × Y × Z) : c'est le
-volume imprimable demandé. Vérifie-le avec `outils/mesure.py` à chaque export.",
+            "The part must fit in **{} × {} × {} mm** (X × Y × Z): it is the
+  printable volume asked for. Check it with `tools/measure.py` at each export.",
             fmt(x),
             fmt(y),
             fmt(z)
         ),
-        None => "Aucun encombrement n'est imposé ; reste raisonnable et demande si la
-taille n'est pas claire."
+        None => "No size limit is imposed; stay reasonable and ask if the size
+  is not clear."
             .into(),
     };
     format!(
-        "# Création d'une pièce à imprimer
+        "# Creating a part to print
 
-Tu conçois une pièce **à partir de rien**, d'après la description de
-l'utilisateur. Ce que tu exportes s'affiche en direct dans l'application, à côté
-de cette conversation.
+You design a part **from scratch**, from the user's description. What you
+export shows live in the app, next to this conversation.
 
-## Avant de modéliser
+**Always answer the user in {lang}.**
 
-Si une cote, un usage ou une contrainte manque — diamètre de vis, épaisseur,
-côté d'appui — **pose la question** plutôt que de deviner. Annonce ensuite en
-quelques lignes ce que tu vas construire : formes de base, cotes principales,
-orientation d'impression.
+## Before modeling
 
-## Les fichiers
+If a dimension, a use or a constraint is missing — screw diameter, thickness,
+bearing side — **ask** rather than guess. Then announce in a few lines what you
+are going to build: base shapes, main dimensions, print orientation.
 
-- `out/current.stl` — l'état courant, celui qui s'affiche à l'écran. Il
-  n'existe pas encore : c'est ton premier export qui le crée.
-- `apercu/` — trois rendus de l'état courant (`face.png`, `trois-quarts.png`,
-  `dessus.png`), régénérés par l'application après **chaque** export. En
-  lecture seule.
-- `versions/` — l'historique, géré par l'application. N'y touche pas.
-- `outils/mesure.py` — dimensions, volume, étanchéité.
-- `outils/exporter.py` — vérifie un maillage et l'installe comme état courant.
+## The files
 
-## La marche à suivre
+- `out/current.stl` — the current state, the one shown on screen. It does not
+  exist yet: your first export creates it.
+- `preview/` — three renders of the current state (`front.png`,
+  `three-quarter.png`, `top.png`), rendered again by the app after **every**
+  export. Read-only.
+- `versions/` — the history, managed by the app. Do not touch it.
+- `tools/measure.py` — dimensions, volume, watertightness.
+- `tools/export.py` — checks a mesh and installs it as the current state.
 
-1. Écris un script Python, `modele.py`, qui construit la pièce avec `trimesh`
-   (primitives : boîtes, cylindres, extrusions de profils) et `manifold3d` pour
-   les booléens. Garde les cotes en variables nommées en tête du script : on
-   y reviendra.
-2. Installe le résultat : `python3 outils/exporter.py resultat.stl`
-3. Ouvre `apercu/trois-quarts.png` et lance `python3 outils/mesure.py`.
-4. Corrige et recommence ; chaque export devient une nouvelle version.
+## How to proceed
 
-Les aperçus sont ta seule façon de voir la pièce : un trou décentré, une paroi
-qui traverse ne se lisent pas dans les coordonnées. Regarde après chaque export.
+1. Write a Python script, `model.py`, that builds the part with `trimesh`
+   (primitives: boxes, cylinders, profile extrusions) and `manifold3d` for
+   booleans. Keep the dimensions as named variables at the top of the script:
+   they will be revisited.
+2. Install the result: `python3 tools/export.py result.stl`
+3. Open `preview/three-quarter.png` and run `python3 tools/measure.py`.
+4. Fix and start again; each export becomes a new version.
 
-## Ce qui compte
+The previews are your only way to see the part: an off-center hole, a wall that
+goes through do not show in the coordinates. Look after each export.
 
-- Les unités sont des **millimètres**, l'axe Z est la hauteur, et la pièce est
-  posée sur `z = 0`, centrée en X et Y.
-- {gabarit}
-- Le maillage doit être **étanche** : sans quoi la découpe échouera.
-- Pense à l'impression FDM : une grande face plane au sol, des surplombs de
-  moins de 45°, des parois d'au moins 1,2 mm, 0,2 à 0,3 mm de jeu entre deux
-  pièces qui s'emboîtent.
-- Avance par petites étapes vérifiables plutôt qu'en un seul grand script.
+## What matters
 
-## Outils disponibles
+- Units are **millimeters**, the Z axis is the height, and the part rests on
+  `z = 0`, centered in X and Y.
+- {envelope}
+- The mesh must be **watertight**: otherwise slicing will fail.
+- Think FDM printing: a large flat face on the ground, overhangs under 45°,
+  walls of at least 1.2 mm, 0.2 to 0.3 mm of clearance between two parts that
+  fit together.
+- Move in small checkable steps rather than one big script.
 
-`trimesh`, `manifold3d` (booléens), `numpy`. Pas de Blender, pas d'OpenSCAD.
+## Available tools
+
+`trimesh`, `manifold3d` (booleans), `numpy`. No Blender, no OpenSCAD.
 "
     )
 }
 
-const MESURE_PY: &str = r#"#!/usr/bin/env python3
-"""Dimensions, volume et santé d'un maillage."""
+const MEASURE_PY: &str = r#"#!/usr/bin/env python3
+"""Dimensions, volume and health of a mesh."""
 import sys
 import trimesh
 
 path = sys.argv[1] if len(sys.argv) > 1 else "out/current.stl"
 m = trimesh.load(path, force="mesh")
 x, y, z = m.extents
-print(f"fichier    : {path}")
+print(f"file       : {path}")
 print(f"dimensions : {x:.2f} x {y:.2f} x {z:.2f} mm")
 print(f"minimum    : {m.bounds[0].round(2).tolist()}")
 print(f"maximum    : {m.bounds[1].round(2).tolist()}")
 print(f"volume     : {m.volume / 1000:.2f} cm3")
 print(f"faces      : {len(m.faces)}")
-print(f"etanche    : {'oui' if m.is_watertight else 'NON'}")
+print(f"watertight : {'yes' if m.is_watertight else 'NO'}")
 if not m.is_watertight:
-    print("attention  : un maillage non etanche ne se decoupe pas")
+    print("warning    : a mesh that is not watertight will not slice")
 "#;
 
-const EXPORTER_PY: &str = r#"#!/usr/bin/env python3
-"""Verifie un maillage puis l'installe comme etat courant.
+const EXPORT_PY: &str = r#"#!/usr/bin/env python3
+"""Checks a mesh then installs it as the current state.
 
-    python3 outils/exporter.py resultat.stl
+    python3 tools/export.py result.stl
 """
 import shutil
 import sys
 import trimesh
 
 if len(sys.argv) < 2:
-    sys.exit("usage : exporter.py <fichier.stl>")
+    sys.exit("usage: export.py <file.stl>")
 
 src = sys.argv[1]
 m = trimesh.load(src, force="mesh")
 if len(m.faces) == 0:
-    sys.exit("refus : maillage vide")
+    sys.exit("refused: empty mesh")
 if not m.is_watertight:
-    print("attention : maillage non etanche, la decoupe echouera peut-etre")
+    print("warning: mesh not watertight, slicing may fail")
 
 shutil.copyfile(src, "out/current.stl")
 x, y, z = m.extents
-print(f"installe : {x:.2f} x {y:.2f} x {z:.2f} mm, {len(m.faces)} faces")
-print("les apercus sont regeneres : regarde apercu/trois-quarts.png")
+print(f"installed: {x:.2f} x {y:.2f} x {z:.2f} mm, {len(m.faces)} faces")
+print("the previews are rendered again: look at preview/three-quarter.png")
 "#;
 
-// ------------------------------------------------------------ outillage
+// ------------------------------------------------------------ tooling
 
 #[derive(Serialize)]
 pub struct Engine {
-    /// Le binaire `docker` est installé.
+    /// The `docker` binary is installed.
     pub docker: bool,
-    /// Le démon répond — installé ne veut pas dire démarré.
+    /// The daemon answers — installed does not mean started.
     pub daemon: bool,
     pub yolobox: bool,
     pub claude: bool,
 }
 
-/// Le démon Docker répond-il ?
+/// Does the Docker daemon answer?
 ///
-/// Un client installé sans démon actif est le cas le plus courant sur macOS,
-/// où l'un s'installe avec `brew` et l'autre se lance à la main. Sans cette
-/// vérification, l'application proposerait un bac à sable qui échouerait.
+/// A client installed without an active daemon is the most common case on
+/// macOS, where one is installed with `brew` and the other started by hand.
+/// Without this check, the app would offer a sandbox that would fail.
 ///
-/// L'attente est bornée : une socket absente répond tout de suite, mais un
-/// démon en train de démarrer peut faire patienter indéfiniment.
+/// The wait is bounded: a missing socket answers at once, but a daemon
+/// starting up can keep one waiting forever.
 fn docker_ready(bin: &Path) -> bool {
     let bin = bin.to_path_buf();
     let (tx, rx) = std::sync::mpsc::channel();
@@ -565,7 +589,7 @@ fn docker_ready(bin: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Ce qui est installé — et utilisable — sur la machine.
+/// What is installed — and usable — on the machine.
 pub fn engine() -> Engine {
     let docker = crate::util::which("docker");
     Engine {
@@ -601,19 +625,19 @@ mod tests {
         let src = tmp.join("cube.3mf");
         cube_3mf(&src);
 
-        let c = create(&src, "Incline le plateau de 15°", "local").unwrap();
+        let c = create(&src, "Tilt the top by 15°", "local").unwrap();
         let ws = workspace(&c.id);
         for f in [
             "CLAUDE.md",
             "source.stl",
-            "outils/mesure.py",
-            "outils/exporter.py",
+            "tools/measure.py",
+            "tools/export.py",
             "out/current.stl",
             "versions/v1.stl",
         ] {
-            assert!(ws.join(f).exists(), "{f} devrait exister");
+            assert!(ws.join(f).exists(), "{f} should exist");
         }
-        assert_eq!(c.title, "Incline le plateau de 15°");
+        assert_eq!(c.title, "Tilt the top by 15°");
         assert_eq!(c.version, 1);
         assert!(list().iter().any(|x| x.id == c.id));
         assert!(get(&c.id).is_ok());
@@ -642,8 +666,8 @@ mod tests {
         let b = mesh_of_3mf(&back).unwrap();
         assert_eq!(a.tris.len(), b.tris.len());
         for k in 0..3 {
-            assert!((a.min[k] - b.min[k]).abs() < 1e-4, "boite conservee");
-            assert!((a.max[k] - b.max[k]).abs() < 1e-4, "boite conservee");
+            assert!((a.min[k] - b.min[k]).abs() < 1e-4, "box kept");
+            assert!((a.max[k] - b.max[k]).abs() < 1e-4, "box kept");
         }
         for f in [src, stl, back] {
             let _ = std::fs::remove_file(f);
@@ -659,9 +683,9 @@ mod tests {
         cube_3mf(&src);
         let c = create(&src, "", "local").unwrap();
 
-        assert_eq!(versions(&c.id).len(), 1, "l'original est la version 1");
+        assert_eq!(versions(&c.id).len(), 1, "the original is version 1");
 
-        // Claude écrit un objet différent : une seule face en moins.
+        // Claude writes a different object: one face less.
         let mut tris = crate::stl::tests_cube();
         tris.truncate(10);
         crate::stl::write(&current(&c.id), &tris).unwrap();
@@ -670,19 +694,19 @@ mod tests {
         assert_eq!(get(&c.id).unwrap().version, 2);
         assert_eq!(crate::stl::read(&current(&c.id)).unwrap().tris.len(), 10);
 
-        // Retour en arrière : l'état courant redevient celui d'origine.
+        // Going back: the current state becomes the original again.
         revert(&c.id, 1).unwrap();
         assert_eq!(crate::stl::read(&current(&c.id)).unwrap().tris.len(), 12);
         assert_eq!(get(&c.id).unwrap().version, 1);
-        assert_eq!(versions(&c.id).len(), 2, "un retour n'archive rien");
-        assert!(revert(&c.id, 9).is_err(), "version inexistante");
+        assert_eq!(versions(&c.id).len(), 2, "going back archives nothing");
+        assert!(revert(&c.id, 9).is_err(), "version that does not exist");
 
         remove(&c.id).unwrap();
         let _ = std::fs::remove_file(&src);
     }
 
-    /// Le cœur de la surveillance, sans fenêtre ni fil d'exécution : ce qui
-    /// mérite d'être archivé, et ce qui ne le mérite pas.
+    /// The core of the watch, without window nor thread: what deserves to be
+    /// archived, and what does not.
     #[test]
     fn only_real_changes_are_archived() {
         let tmp = std::env::temp_dir().join("snapstudio-ia-test");
@@ -692,31 +716,31 @@ mod tests {
         let c = create(&src, "", "local").unwrap();
         let last = Mutex::new(hash_file(&current(&c.id)).unwrap());
 
-        // Rien n'a bougé.
+        // Nothing moved.
         assert!(matches!(consider(&c.id, &last), Change::Nothing));
 
-        // Claude écrit un objet différent.
+        // Claude writes a different object.
         let mut tris = crate::stl::tests_cube();
         tris.truncate(10);
         crate::stl::write(&current(&c.id), &tris).unwrap();
         let Change::Archived(v, stats) = consider(&c.id, &last) else {
-            panic!("le changement aurait dû être archivé");
+            panic!("the change should have been archived");
         };
         assert_eq!(v, 2);
         assert_eq!(stats.triangles, 10);
         assert_eq!(stats.watertight, Some(false));
 
-        // Réécrire le même contenu ne doit pas créer une version de plus.
+        // Writing the same content again must not create one more version.
         crate::stl::write(&current(&c.id), &tris).unwrap();
         assert!(matches!(consider(&c.id, &last), Change::Nothing));
         assert_eq!(versions(&c.id).len(), 2);
 
-        // Un fichier tronqué en pleine écriture : on repassera.
-        std::fs::write(current(&c.id), b"un fichier a moitie ecrit").unwrap();
+        // A file truncated mid-write: come back later.
+        std::fs::write(current(&c.id), b"a half-written file").unwrap();
         assert!(matches!(consider(&c.id, &last), Change::TryAgain));
-        assert_eq!(versions(&c.id).len(), 2, "rien n'a été archivé entre-temps");
+        assert_eq!(versions(&c.id).len(), 2, "nothing was archived meanwhile");
 
-        // Et un retour en arrière ne relance pas l'archivage.
+        // And going back does not trigger archiving again.
         revert(&c.id, 1).unwrap();
         *last.lock().unwrap() = hash_file(&current(&c.id)).unwrap();
         assert!(matches!(consider(&c.id, &last), Change::Nothing));
@@ -740,63 +764,63 @@ mod tests {
         let _ = std::fs::remove_file(&src);
     }
 
-    /// Un identifiant fabriqué ne doit pas pouvoir remonter hors du magasin :
-    /// « .. » reste sous la racine au sens lexical, mais pas pour le noyau.
+    /// A forged id must not be able to climb out of the store: ".." stays
+    /// under the root lexically, but not for the kernel.
     #[test]
     fn refuses_a_path_outside_the_store() {
         for bad in ["..", ".", "", "../evasion", "a/b", "../../Documents", "\u{e9}"] {
-            assert!(remove(bad).is_err(), "« {bad} » aurait dû être refusé");
+            assert!(remove(bad).is_err(), "“{bad}” should have been refused");
         }
-        assert!(root().is_dir(), "le magasin est toujours là");
+        assert!(root().is_dir(), "the store is still there");
         assert!(valid_id("b703e739-e760-4642-89a6-881a754d420c"));
-        assert!(!valid_id("b703e739-e760-4642-89a6-881a754d420"), "trop court");
+        assert!(!valid_id("b703e739-e760-4642-89a6-881a754d420"), "too short");
     }
 
     #[test]
     fn a_blank_conversation_starts_without_an_object() {
         let dest = std::env::temp_dir().join("snapstudio-ia-blank");
         std::fs::create_dir_all(&dest).unwrap();
-        assert!(create_blank("  ", "local", &dest, None).is_err(), "description obligatoire");
+        assert!(create_blank("  ", "local", &dest, None).is_err(), "description required");
 
-        let c = create_blank("Crochet mural pour casque", "local", &dest, Some([270.0, 270.0, 270.0]))
+        let c = create_blank("Wall hook for headphones", "local", &dest, Some([270.0, 270.0, 270.0]))
             .unwrap();
         let ws = workspace(&c.id);
         assert!(c.is_creation());
         assert_eq!(c.version, 0);
-        assert!(ws.join("out").is_dir(), "la surveillance a besoin du dossier");
+        assert!(ws.join("out").is_dir(), "the watch needs the folder");
         assert!(!current(&c.id).exists());
         assert!(!ws.join("source.stl").exists());
         let md = std::fs::read_to_string(ws.join("CLAUDE.md")).unwrap();
         assert!(md.contains("270 × 270 × 270 mm"));
-        assert!(save_to_files(&c.id).is_err(), "rien à enregistrer avant le premier export");
+        assert!(save_to_files(&c.id).is_err(), "nothing to save before the first export");
 
-        // Premier export : la v1 apparaît, et l'objet part vers le dossier choisi.
+        // First export: v1 appears, and the object goes to the chosen folder.
         let tris = crate::stl::tests_cube();
         crate::stl::write(&current(&c.id), &tris).unwrap();
         let last = Mutex::new(0);
         assert!(matches!(consider(&c.id, &last), Change::Archived(1, _)));
-        assert!(previews_dir(&c.id).join("trois-quarts.png").is_file());
+        assert!(previews_dir(&c.id).join("three-quarter.png").is_file());
         let out = save_to_files(&c.id).unwrap();
         assert_eq!(Path::new(&out).parent(), Some(dest.as_path()));
-        assert!(out.ends_with("crochet-mural-pour-casque-ia.3mf"), "{out}");
+        assert!(out.ends_with("wall-hook-for-headphones-ai.3mf"), "{out}");
         std::fs::remove_file(&out).unwrap();
         remove(&c.id).unwrap();
     }
 
     #[test]
     fn slugs_make_tidy_file_names() {
-        assert_eq!(slug("Crochet mural, 60 mm"), "crochet-mural-60-mm");
+        assert_eq!(slug("Wall hook, 60 mm"), "wall-hook-60-mm");
         assert_eq!(slug("Boîte à vis…"), "boîte-à-vis");
-        assert_eq!(slug("  !!  "), "objet");
+        assert_eq!(slug("  !!  "), "object");
     }
 
     #[test]
     fn title_falls_back_on_the_file_name() {
         let p = PathBuf::from("/tmp/support-v2.3mf");
         assert_eq!(title_for("", &p), "support-v2");
-        assert_eq!(title_for("  Perce un trou  ", &p), "Perce un trou");
+        assert_eq!(title_for("  Drill a hole  ", &p), "Drill a hole");
         let long = "a".repeat(80);
-        assert_eq!(title_for(&long, &p).chars().count(), 61, "tronqué avec points de suspension");
+        assert_eq!(title_for(&long, &p).chars().count(), 61, "truncated with an ellipsis");
     }
 }
 
@@ -804,9 +828,9 @@ mod tests {
 mod essai_reel {
     use super::*;
 
-    /// Prépare une vraie conversation à partir d'un 3MF du disque.
+    /// Prepares a real conversation from a 3MF on disk.
     ///
-    /// `IA_3MF=/chemin/objet.3mf cargo test essai_reel -- --nocapture`
+    /// `IA_3MF=/path/object.3mf cargo test essai_reel -- --nocapture`
     #[test]
     fn prepares_a_real_file() {
         let Ok(src) = std::env::var("IA_3MF") else {
@@ -823,40 +847,40 @@ mod essai_reel {
             stl.tris.len(),
             stl.size()
         );
-        assert_eq!(stl.tris.len(), orig.tris.len(), "aucun triangle perdu");
+        assert_eq!(stl.tris.len(), orig.tris.len(), "no triangle lost");
         for k in 0..3 {
             assert!((stl.min[k] - orig.min[k]).abs() < 1e-3);
             assert!((stl.max[k] - orig.max[k]).abs() < 1e-3);
         }
 
-        // Et le retour en 3MF doit rester fidèle.
+        // And the way back to 3MF must stay faithful.
         let back = ws.join("retour.3mf");
-        stl_to_3mf(&ws.join("out/current.stl"), &back, "objet").unwrap();
+        stl_to_3mf(&ws.join("out/current.stl"), &back, "object").unwrap();
         let round = mesh_of_3mf(&back).unwrap();
         assert_eq!(round.tris.len(), orig.tris.len());
-        println!("aller-retour vérifié, dossier : {}", ws.display());
+        println!("round trip checked, folder: {}", ws.display());
 
-        // Les aperçus : ce que Claude ouvrira pour regarder son travail.
+        // The previews: what Claude will open to look at its work.
         write_previews(&c.id).unwrap();
         if let Ok(dest) = std::env::var("IA_PNG") {
             std::fs::create_dir_all(&dest).unwrap();
             for (name, _) in VIEWS {
                 let from = previews_dir(&c.id).join(format!("{name}.png"));
                 let bytes = std::fs::metadata(&from).unwrap().len();
-                assert!(bytes > 2000, "{name}.png fait {bytes} octets");
+                assert!(bytes > 2000, "{name}.png is {bytes} bytes");
                 std::fs::copy(&from, std::path::Path::new(&dest).join(format!("{name}.png")))
                     .unwrap();
-                println!("aperçu {name} : {bytes} octets");
+                println!("preview {name}: {bytes} bytes");
             }
         }
 
-        // Et le retour dans les fichiers de l'utilisateur.
+        // And the way back into the user's files.
         let saved = save_to_files(&c.id).unwrap();
-        println!("enregistré : {saved}");
+        println!("saved: {saved}");
         assert!(std::path::Path::new(&saved).is_file());
         assert_eq!(get(&c.id).unwrap().saved.as_deref(), Some(saved.as_str()));
         let back = mesh_of_3mf(std::path::Path::new(&saved)).unwrap();
-        assert_eq!(back.tris.len(), orig.tris.len(), "le 3MF rendu est complet");
+        assert_eq!(back.tris.len(), orig.tris.len(), "the 3MF returned is complete");
         std::fs::remove_file(&saved).unwrap();
 
         remove(&c.id).unwrap();
@@ -864,29 +888,29 @@ mod essai_reel {
 }
 
 
-// ------------------------------------------------------------ bac à sable
+// ------------------------------------------------------------ sandbox
 
-/// Fragment de Dockerfile ajouté à l'image du bac à sable.
+/// Dockerfile fragment added to the sandbox image.
 ///
-/// Volontairement léger : trimesh couvre les booléens, les mesures et les
-/// réparations, ce qui suffit à retoucher une pièce. Blender viendrait ici le
-/// jour où une demande l'exigera vraiment.
+/// Deliberately light: trimesh covers booleans, measurements and repairs,
+/// which is enough to touch up a part. Blender would come here the day a
+/// request really needs it.
 const DOCKERFILE: &str = "\
-# Outillage de modelage des conversations IA de Snap Studio.
+# Modeling tools for Snap Studio's AI conversations.
 #
-# Installé en tant qu'administrateur, donc à l'échelle du système : le dossier
-# personnel du conteneur est recouvert par un volume à l'exécution, et tout ce
-# qui y serait posé à la construction disparaîtrait.
+# Installed as administrator, so system-wide: the container's home folder is
+# covered by a volume at run time, and anything put there at build time would
+# disappear.
 USER root
 RUN pip3 install --no-cache-dir --break-system-packages \\
       trimesh manifold3d numpy
 USER yolo
 ";
 
-/// Le fragment sur le disque, écrit s'il manque.
+/// The fragment on disk, written if missing.
 ///
-/// Il est partagé par toutes les conversations : le bac à sable ne se construit
-/// qu'une fois, et les suivantes démarrent aussitôt.
+/// It is shared by all conversations: the sandbox is only built once, and the
+/// following ones start at once.
 pub fn dockerfile() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
@@ -901,27 +925,29 @@ pub fn dockerfile() -> PathBuf {
     p
 }
 
-// ------------------------------------------------------------ aperçus
+// ------------------------------------------------------------ previews
 
-/// Les trois vues que Claude peut ouvrir pour regarder son travail.
-/// La vue de dessus est volontairement inclinée d'une vingtaine de degrés :
-/// à l'aplomb exact, toutes les faces du dessus se valent et le relief
-/// disparaît — une gravure de 0,5 mm rendait un disque uniforme.
+/// The three views Claude can open to look at its work. The top view is
+/// deliberately tilted by about twenty degrees: straight from above, all top
+/// faces look the same and relief vanishes — a 0.5 mm engraving rendered a
+/// uniform disc.
 const VIEWS: [(&str, [f32; 3]); 3] = [
-    ("face", [0.0, -1.0, 0.12]),
-    ("trois-quarts", [0.62, -1.0, 0.68]),
-    ("dessus", [0.0, -0.36, 1.0]),
+    ("front", [0.0, -1.0, 0.12]),
+    (THREE_QUARTER, [0.62, -1.0, 0.68]),
+    ("top", [0.0, -0.36, 1.0]),
 ];
+/// The view that also serves as the thumbnail of a created object.
+const THREE_QUARTER: &str = "three-quarter";
 
-/// Budget de triangles pour un aperçu : la silhouette n'y gagne rien au-delà,
-/// et un maillage dense coûterait plusieurs secondes par vue.
+/// Triangle budget for a preview: the silhouette gains nothing beyond it, and
+/// a dense mesh would cost several seconds per view.
 const PREVIEW_BUDGET: usize = 250_000;
 
-/// Pose le rendu sur un fond sombre.
+/// Puts the render on a dark background.
 ///
-/// Les pièces sont claires et le rendu les éclaire jusqu'au blanc : sur un fond
-/// blanc, la silhouette s'évanouit et il devient impossible de juger d'un
-/// contour. Un fond ardoise rend la forme lisible quoi qu'il arrive.
+/// Parts are light and the render lights them up to white: on a white
+/// background the silhouette fades and judging an outline becomes
+/// impossible. A slate background keeps the shape readable whatever happens.
 fn flatten(img: image::RgbaImage) -> image::RgbaImage {
     const BG: [u8; 3] = [38, 42, 52];
     let mut out = img;
@@ -936,17 +962,17 @@ fn flatten(img: image::RgbaImage) -> image::RgbaImage {
 }
 
 pub fn previews_dir(id: &str) -> PathBuf {
-    workspace(id).join("apercu")
+    workspace(id).join("preview")
 }
 
-/// Rend trois vues de l'état courant dans `apercu/`.
+/// Renders three views of the current state into `preview/`.
 ///
-/// C'est la pièce qui change tout : sans image, Claude modifie un maillage à
-/// l'aveugle et ne peut pas constater qu'un trou est décentré. Il lui suffit
-/// d'ouvrir ces fichiers avec son outil de lecture.
+/// It is the piece that changes everything: without an image, Claude edits a
+/// mesh blindly and cannot notice that a hole is off-center. It only has to
+/// open these files with its reading tool.
 ///
-/// Elles sont écrites hors du dossier surveillé, pour ne pas réveiller la
-/// surveillance à chaque rendu.
+/// They are written outside the watched folder, so as not to wake the watch
+/// at each render.
 pub fn write_previews(id: &str) -> Result<()> {
     let mut mesh = crate::stl::read(&current(id))?;
     crate::mesh::downsample(&mut mesh, PREVIEW_BUDGET);
@@ -962,21 +988,24 @@ pub fn write_previews(id: &str) -> Result<()> {
     Ok(())
 }
 
-/// La vue de trois quarts, pour la vignette d'un objet créé : il n'a pas
-/// d'original dont tirer une miniature.
+/// The three-quarter view, for the thumbnail of a created object: it has no
+/// original to take a thumbnail from.
 pub fn preview_png(id: &str) -> Result<Vec<u8>> {
     if !valid_id(id) {
-        return Err(anyhow!("conversation inconnue"));
+        return Err(anyhow!("unknown conversation"));
     }
-    Ok(std::fs::read(previews_dir(id).join("trois-quarts.png"))?)
+    let png = previews_dir(id).join(format!("{THREE_QUARTER}.png"));
+    // Conversations from before the English layout, until their next opening.
+    let legacy = workspace(id).join("apercu").join("trois-quarts.png");
+    Ok(std::fs::read(&png).or_else(|_| std::fs::read(legacy))?)
 }
 
-/// Remet à jour ce qui appartient à l'application dans un dossier de travail.
+/// Brings what belongs to the app in a working folder up to date.
 ///
-/// Les consignes et les outils s'améliorent au fil des versions : une
-/// conversation ouverte il y a deux semaines doit en profiter, sans quoi Claude
-/// y travaillerait avec un mode d'emploi périmé — et sans aperçus, ceux-ci
-/// n'ayant pas toujours existé.
+/// Instructions and tools improve from version to version: a conversation
+/// opened two weeks ago must benefit, otherwise Claude would work with stale
+/// instructions — and without previews, which did not always exist. The
+/// language Claude answers in follows the app's at each opening.
 pub fn refresh_workspace(id: &str) {
     let ws = workspace(id);
     if !ws.is_dir() {
@@ -984,38 +1013,36 @@ pub fn refresh_workspace(id: &str) {
     }
     let Ok(c) = get(id) else { return };
     let text = if c.is_creation() {
-        consignes_creation(c.bounds)
+        instructions_creation(c.bounds)
     } else {
         let tris = crate::stl::count(&ws.join("source.stl")).unwrap_or(0);
-        consignes(&c.source_name, tris)
+        instructions(&c.source_name, tris)
     };
-    let _ = std::fs::create_dir_all(ws.join("outils"));
     let _ = std::fs::write(ws.join("CLAUDE.md"), text);
-    let _ = std::fs::write(ws.join("outils").join("mesure.py"), MESURE_PY);
-    let _ = std::fs::write(ws.join("outils").join("exporter.py"), EXPORTER_PY);
-    if current(id).is_file() && !previews_dir(id).join("trois-quarts.png").is_file() {
+    let _ = write_tools(&ws);
+    if current(id).is_file() && !previews_dir(id).join(format!("{THREE_QUARTER}.png")).is_file() {
         let _ = write_previews(id);
     }
 }
 
-// ------------------------------------------------------------ enregistrement
+// ------------------------------------------------------------ saving
 
-/// Nom libre dans un dossier : `support-ia.3mf`, puis `support-ia-2.3mf`.
+/// Free name in a folder: `support-ai.3mf`, then `support-ai-2.3mf`.
 fn free_name(dir: &Path, stem: &str) -> PathBuf {
-    let first = dir.join(format!("{stem}-ia.3mf"));
+    let first = dir.join(format!("{stem}-ai.3mf"));
     if !first.exists() {
         return first;
     }
     for n in 2..999 {
-        let p = dir.join(format!("{stem}-ia-{n}.3mf"));
+        let p = dir.join(format!("{stem}-ai-{n}.3mf"));
         if !p.exists() {
             return p;
         }
     }
-    dir.join(format!("{stem}-ia-{}.3mf", now()))
+    dir.join(format!("{stem}-ai-{}.3mf", now()))
 }
 
-/// Nom de fichier tiré d'un titre : « Crochet mural, 60 mm » → `crochet-mural-60-mm`.
+/// File name from a title: "Wall hook, 60 mm" → `wall-hook-60-mm`.
 fn slug(title: &str) -> String {
     let mut out = String::new();
     for ch in title.trim_end_matches('…').chars().flat_map(char::to_lowercase) {
@@ -1028,21 +1055,21 @@ fn slug(title: &str) -> String {
     let out: String = out.trim_end_matches('-').chars().take(40).collect();
     let out = out.trim_end_matches('-').to_string();
     if out.is_empty() {
-        "objet".into()
+        "object".into()
     } else {
         out
     }
 }
 
-/// Verse l'état courant dans vos fichiers, en 3MF.
+/// Saves the current state into your files, as 3MF.
 ///
-/// Un objet modifié retourne auprès de celui dont il est issu, un objet créé
-/// dans le dossier choisi à la création ; si ce dossier a disparu, il atterrit
-/// dans les téléchargements plutôt que de se perdre.
+/// A modified object goes back next to the one it came from, a created object
+/// into the folder chosen at creation; if that folder has gone, it lands in
+/// Downloads rather than get lost.
 pub fn save_to_files(id: &str) -> Result<String> {
     let c = get(id)?;
     if !current(id).is_file() {
-        return Err(anyhow!("aucun objet à enregistrer pour l'instant"));
+        return Err(anyhow!(crate::t!("err.nothing_to_save")));
     }
     let (home, stem) = if c.is_creation() {
         (c.dest_dir.clone().map(PathBuf::from), slug(&c.title))
@@ -1051,13 +1078,13 @@ pub fn save_to_files(id: &str) -> Result<String> {
         let stem = src
             .file_stem()
             .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "objet".into());
+            .unwrap_or_else(|| "object".into());
         (src.parent().map(PathBuf::from), stem)
     };
     let dir = home
         .filter(|d| d.is_dir())
         .or_else(dirs::download_dir)
-        .ok_or_else(|| anyhow!("aucun dossier où écrire"))?;
+        .ok_or_else(|| anyhow!(crate::t!("err.nowhere_to_write")))?;
     let dst = free_name(&dir, &stem);
     stl_to_3mf(&current(id), &dst, &stem)?;
 
@@ -1081,7 +1108,7 @@ fn versions_dir(id: &str) -> PathBuf {
     workspace(id).join("versions")
 }
 
-/// Les versions enregistrées, de la première à la dernière.
+/// The saved versions, from the first to the last.
 pub fn versions(id: &str) -> Vec<Version> {
     let mut out = Vec::new();
     let Ok(entries) = std::fs::read_dir(versions_dir(id)) else {
@@ -1112,14 +1139,14 @@ pub fn versions(id: &str) -> Vec<Version> {
     out
 }
 
-/// Empreinte du contenu d'un fichier, pour ne pas archiver deux fois la même
-/// chose — un enregistrement sans modification arrive plus souvent qu'on croit.
+/// Fingerprint of a file's content, so as not to archive the same thing twice
+/// — a save without changes happens more often than one thinks.
 fn hash_file(p: &Path) -> Option<u64> {
     let data = std::fs::read(p).ok()?;
     Some(crate::util::fnv1a(&[&data]))
 }
 
-/// Archive l'état courant sous le numéro suivant.
+/// Archives the current state under the next number.
 fn capture(id: &str) -> Result<u32> {
     let cur = current(id);
     let n = versions(id).last().map(|v| v.n).unwrap_or(0) + 1;
@@ -1132,14 +1159,14 @@ fn capture(id: &str) -> Result<u32> {
     Ok(n)
 }
 
-/// Remet une version antérieure en état courant.
+/// Makes an earlier version the current state.
 ///
-/// La surveillance en est informée : ce retour en arrière ne doit pas créer
-/// une version de plus, sinon l'historique gonflerait à chaque aller-retour.
+/// The watch is told: this going back must not create one more version,
+/// otherwise the history would swell at every round trip.
 pub fn revert(id: &str, n: u32) -> Result<()> {
     let src = versions_dir(id).join(format!("v{n}.stl"));
     if !src.is_file() {
-        return Err(anyhow!("version {n} introuvable"));
+        return Err(anyhow!(crate::t!("err.no_version", n = n)));
     }
     std::fs::copy(&src, current(id))?;
     if let Some(h) = hash_file(&current(id)) {
@@ -1155,17 +1182,17 @@ pub fn revert(id: &str, n: u32) -> Result<()> {
     Ok(())
 }
 
-// ------------------------------------------------------------ surveillance
+// ------------------------------------------------------------ watching
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 struct Watcher {
     stop: Arc<AtomicBool>,
-    /// Empreinte du dernier maillage pris en compte.
+    /// Fingerprint of the last mesh taken into account.
     last: Arc<Mutex<u64>>,
-    /// Numéro d'ordre : un veilleur ne retire que sa propre inscription, sans
-    /// quoi il effacerait celle de son successeur en s'arrêtant.
+    /// Sequence number: a watcher only removes its own registration, otherwise
+    /// it would erase its successor's when stopping.
     token: u64,
 }
 
@@ -1188,12 +1215,12 @@ struct MeshEvent {
     stats: crate::mesh::Stats,
 }
 
-/// Chemin du maillage courant et empreinte de sa dernière écriture.
+/// Path of the current mesh and stamp of its last write.
 ///
-/// Cette empreinte sert de brise-cache à l'affichage : l'adresse du maillage ne
-/// change jamais, et sans elle le visualiseur resservirait l'objet précédent.
-/// On la tire du fichier lui-même, et non du numéro de version, qui n'avance
-/// que lorsqu'un veilleur tourne.
+/// The stamp busts the display cache: the mesh address never changes, and
+/// without it the viewer would serve the previous object again. It is taken
+/// from the file itself, not from the version number, which only advances
+/// while a watcher runs.
 #[derive(Serialize)]
 pub struct CurrentDto {
     pub path: String,
@@ -1215,23 +1242,22 @@ pub fn current_dto(id: &str) -> Result<CurrentDto> {
     })
 }
 
-/// Lit l'état courant et en tire ses mesures.
+/// Reads the current state and takes its measurements.
 pub fn current_stats(id: &str) -> Result<crate::mesh::Stats> {
     Ok(crate::mesh::stats(&crate::stl::read(&current(id))?))
 }
 
-/// Surveille le dossier de sortie d'une conversation.
+/// Watches a conversation's output folder.
 ///
-/// Un script écrit rarement son fichier d'un coup : on attend donc que le
-/// dossier se taise avant de lire, sans quoi on tomberait sur un maillage
-/// tronqué au milieu de son écriture.
+/// A script rarely writes its file in one go: so wait until the folder goes
+/// quiet before reading, otherwise we would hit a mesh truncated mid-write.
 pub fn watch_start(app: tauri::AppHandle, id: &str) -> Result<()> {
     if watchers().lock().unwrap().contains_key(id) {
         return Ok(());
     }
     let out = workspace(id).join("out");
     if !out.is_dir() {
-        return Err(anyhow!("dossier de sortie introuvable"));
+        return Err(anyhow!("output folder not found"));
     }
     let stop = Arc::new(AtomicBool::new(false));
     let last = Arc::new(Mutex::new(hash_file(&current(id)).unwrap_or(0)));
@@ -1248,7 +1274,7 @@ pub fn watch_start(app: tauri::AppHandle, id: &str) -> Result<()> {
     let id = id.to_string();
     std::thread::spawn(move || {
         watch_loop(&app, &id, &out, &stop, &last);
-        // Le successeur éventuel porte un autre jeton : on ne touche qu'au sien.
+        // The possible successor carries another token: only touch our own.
         let mut m = watchers().lock().unwrap();
         if m.get(&id).map(|w| w.token) == Some(token) {
             m.remove(&id);
@@ -1257,17 +1283,17 @@ pub fn watch_start(app: tauri::AppHandle, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Ce qu'il advient d'un remous dans le dossier de sortie.
+/// What becomes of a stir in the output folder.
 enum Change {
-    /// Nouvel état archivé : numéro de version et mesures.
+    /// New state archived: version number and measurements.
     Archived(u32, crate::mesh::Stats),
-    /// Rien de neuf — souvent une écriture qui n'a rien changé.
+    /// Nothing new — often a write that changed nothing.
     Nothing,
-    /// Fichier illisible : probablement une écriture en cours.
+    /// Unreadable file: probably a write in progress.
     TryAgain,
 }
 
-/// Décide du sort d'un changement, sans rien émettre.
+/// Decides the fate of a change, without emitting anything.
 fn consider(id: &str, last: &Mutex<u64>) -> Change {
     let Some(h) = hash_file(&current(id)) else {
         return Change::Nothing;
@@ -1281,8 +1307,8 @@ fn consider(id: &str, last: &Mutex<u64>) -> Change {
     *last.lock().unwrap() = h;
     match capture(id) {
         Ok(v) => {
-            // Rendus après l'archivage : Claude les trouvera à jour dès qu'il
-            // voudra regarder ce qu'il vient de faire.
+            // Renders after archiving: Claude will find them up to date as soon as it
+            // wants to look at what it just did.
             let _ = write_previews(id);
             Change::Archived(v, stats)
         }
@@ -1329,8 +1355,8 @@ fn watch_loop(
             let (version, stats) = match consider(id, last) {
                 Change::Archived(v, s) => (v, s),
                 Change::Nothing => continue,
-                // Un maillage illisible signifie souvent une écriture en cours :
-                // on laisse passer, le prochain remous le rattrapera.
+                // An unreadable mesh often means a write in progress: let it go, the next
+                // stir will catch it.
                 Change::TryAgain => {
                     pending = Some(std::time::Instant::now());
                     continue;
@@ -1359,11 +1385,11 @@ mod watch_tests {
     use notify::{RecursiveMode, Watcher as _};
     use std::time::{Duration, Instant};
 
-    /// Mesure le délai réel entre une écriture et son signalement.
+    /// Measures the real delay between a write and its notification.
     ///
-    /// Sur macOS la surveillance passe par FSEvents, qui regroupe les
-    /// évènements : si ce délai dépassait la seconde, « l'objet change sous vos
-    /// yeux » deviendrait « l'objet change, un jour ».
+    /// On macOS the watch goes through FSEvents, which batches events: if this
+    /// delay went beyond a second, "the object changes before your eyes" would
+    /// become "the object changes, some day".
     #[test]
     fn the_file_system_reports_quickly() {
         let dir = std::env::temp_dir().join("snapstudio-watch-test");
@@ -1382,8 +1408,8 @@ mod watch_tests {
         std::fs::write(dir.join("current.stl"), b"peu importe").unwrap();
         let got = rx.recv_timeout(Duration::from_secs(5));
         let delay = t0.elapsed();
-        assert!(got.is_ok(), "aucun évènement reçu en 5 s");
-        println!("évènement reçu en {} ms", delay.as_millis());
+        assert!(got.is_ok(), "no event received within 5 s");
+        println!("event received in {} ms", delay.as_millis());
         assert!(
             delay < Duration::from_secs(2),
             "trop lent : {} ms",
@@ -1402,15 +1428,15 @@ mod session_tests {
         let id = "b703e739-e760-4642-89a6-881a754d420c";
         let p = session_file(id);
         let dir = p.parent().unwrap().file_name().unwrap().to_string_lossy();
-        assert!(dir.starts_with('-'), "le chemin absolu commence par un tiret");
+        assert!(dir.starts_with('-'), "the absolute path starts with a dash");
         assert!(dir.contains("-config-snap-studio-ia-"), "obtenu : {dir}");
         assert!(dir.ends_with("-workspace"), "obtenu : {dir}");
-        assert!(dir.contains(id), "l'identifiant apparaît tel quel");
+        assert!(dir.contains(id), "the id shows as is");
         assert_eq!(p.file_name().unwrap().to_string_lossy(), format!("{id}.jsonl"));
     }
 
-    /// Une conversation ouverte puis refermée sans un mot ne laisse aucune
-    /// session : c'est exactement le cas qui faisait échouer la reprise.
+    /// A conversation opened then closed without a word leaves no session: that
+    /// is exactly the case that made resuming fail.
     #[test]
     fn no_exchange_means_nothing_to_resume() {
         assert!(!has_session("00000000-0000-4000-8000-000000000000"));
@@ -1446,16 +1472,16 @@ mod sortie_tests {
         let first = save_to_files(&c.id).unwrap();
         assert_eq!(
             Path::new(&first).file_name().unwrap(),
-            "support-ia.3mf",
-            "l'objet retourne auprès du sien"
+            "support-ai.3mf",
+            "the object goes back next to its own"
         );
         assert_eq!(get(&c.id).unwrap().saved.as_deref(), Some(first.as_str()));
         assert_eq!(mesh_of_3mf(Path::new(&first)).unwrap().tris.len(), 12);
 
-        // Un second enregistrement ne doit pas écraser le premier.
+        // A second save must not overwrite the first.
         let second = save_to_files(&c.id).unwrap();
-        assert_eq!(Path::new(&second).file_name().unwrap(), "support-ia-2.3mf");
-        assert!(Path::new(&first).is_file(), "le premier est toujours là");
+        assert_eq!(Path::new(&second).file_name().unwrap(), "support-ai-2.3mf");
+        assert!(Path::new(&first).is_file(), "the first is still there");
 
         remove(&c.id).unwrap();
         let _ = std::fs::remove_dir_all(&tmp);
@@ -1463,7 +1489,7 @@ mod sortie_tests {
 
     #[test]
     fn previews_are_written_and_refreshed() {
-        let tmp = std::env::temp_dir().join("snapstudio-ia-apercu");
+        let tmp = std::env::temp_dir().join("snapstudio-ia-preview");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("cube.3mf");
@@ -1472,18 +1498,18 @@ mod sortie_tests {
 
         for (name, _) in VIEWS {
             let p = previews_dir(&c.id).join(format!("{name}.png"));
-            assert!(p.is_file(), "{name}.png manquant");
+            assert!(p.is_file(), "{name}.png missing");
             assert!(std::fs::metadata(&p).unwrap().len() > 500);
         }
 
-        // Une conversation d'avant les aperçus les retrouve à l'ouverture.
+        // A conversation from before the previews finds them when opened.
         std::fs::remove_dir_all(previews_dir(&c.id)).unwrap();
-        std::fs::write(workspace(&c.id).join("CLAUDE.md"), "vieilles consignes").unwrap();
+        std::fs::write(workspace(&c.id).join("CLAUDE.md"), "old instructions").unwrap();
         refresh_workspace(&c.id);
-        assert!(previews_dir(&c.id).join("dessus.png").is_file());
+        assert!(previews_dir(&c.id).join("top.png").is_file());
         let md = std::fs::read_to_string(workspace(&c.id).join("CLAUDE.md")).unwrap();
-        assert!(md.contains("apercu/"), "les consignes ont été remises à jour");
-        assert!(md.contains("12 triangles"), "compte lu dans l'en-tête du STL");
+        assert!(md.contains("preview/"), "the instructions were brought up to date");
+        assert!(md.contains("12 triangles"), "count read from the STL header");
 
         remove(&c.id).unwrap();
         let _ = std::fs::remove_dir_all(&tmp);

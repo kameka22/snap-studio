@@ -1,12 +1,12 @@
-//! Moteur de découpe embarqué : Snapmaker Orca allégé, téléchargé au premier
-//! besoin.
+//! Bundled slicing engine: a slimmed-down Snapmaker Orca, downloaded when
+//! first needed.
 //!
-//! `engine.json` (embarqué à la compilation, mis à jour par
-//! `scripts/engine.sh`) donne, pour chaque plateforme, l'adresse de l'archive
-//! préparée par la CI « Moteur », sa taille et son empreinte SHA-256. Le
-//! moteur est installé dans `<données>/engine/orca-<version>/` : téléchargement
-//! en flux, empreinte vérifiée, décompression dans un dossier temporaire puis
-//! renommage — un moteur à moitié installé n'est jamais utilisé.
+//! `engine.json` (embedded at build time, updated by `scripts/engine.sh`)
+//! gives, for each platform, the URL of the archive prepared by the "Engine"
+//! CI, its size and its SHA-256 checksum. The engine is installed in
+//! `<data>/engine/orca-<version>/`: streamed download, checksum verified,
+//! extraction into a temporary folder then rename — a half-installed engine
+//! is never used.
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -18,9 +18,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 
-/// Message reconnu par l'interface : il propose alors le téléchargement.
-pub const MISSING: &str = "moteur de découpe non installé";
-/// Fichier témoin d'une installation complète.
+/// Error given when slicing is asked for before the engine is installed.
+pub fn missing() -> String {
+    crate::t!("err.engine_missing")
+}
+/// Marker file of a complete installation.
 const COMPLETE: &str = ".complete";
 
 #[derive(Deserialize, Clone, Debug)]
@@ -28,9 +30,9 @@ pub struct Asset {
     pub url: String,
     pub size: u64,
     pub sha256: String,
-    /// Place occupée une fois décompressé.
+    /// Space used once extracted.
     pub unpacked: u64,
-    /// Point d'entrée : `.app`, exécutable ou `AppRun`.
+    /// Entry point: `.app`, executable or `AppRun`.
     pub entry: String,
 }
 
@@ -38,7 +40,7 @@ pub struct Asset {
 struct Manifest {
     #[serde(default)]
     version: String,
-    /// Code source exact du moteur (licence AGPL).
+    /// Exact source code of the engine (AGPL license).
     #[serde(default)]
     source: String,
     #[serde(default)]
@@ -56,7 +58,7 @@ fn manifest() -> &'static Manifest {
     })
 }
 
-/// Clé de la plateforme courante dans le manifeste.
+/// Key of the current platform in the manifest.
 fn platform_key() -> String {
     let os = match std::env::consts::OS {
         "macos" => "macos",
@@ -70,8 +72,8 @@ fn asset() -> Option<&'static Asset> {
     manifest().platforms.get(&platform_key())
 }
 
-/// Vrai quand un moteur est référencé : sans lui (version de
-/// développement), la découpe reste sur Snapmaker Orca installé.
+/// True when an engine is referenced: without one (development build),
+/// slicing stays on the installed Snapmaker Orca.
 pub fn referenced() -> bool {
     !manifest().version.is_empty() && !manifest().platforms.is_empty()
 }
@@ -87,7 +89,7 @@ fn install_dir() -> PathBuf {
     root().join(format!("orca-{}", manifest().version))
 }
 
-/// Point d'entrée du moteur installé, s'il l'est entièrement.
+/// Entry point of the installed engine, if fully installed.
 pub fn installed() -> Option<PathBuf> {
     let a = asset()?;
     let dir = install_dir();
@@ -95,8 +97,8 @@ pub fn installed() -> Option<PathBuf> {
     (dir.join(COMPLETE).is_file() && entry.exists()).then_some(entry)
 }
 
-/// Version d'un moteur installé auparavant (avant une mise à jour de Snap
-/// Studio qui en référence un autre).
+/// Version of a previously installed engine (before a Snap Studio update
+/// that references another one).
 fn previous() -> Option<String> {
     let current = format!("orca-{}", manifest().version);
     std::fs::read_dir(root())
@@ -112,14 +114,13 @@ fn previous() -> Option<String> {
 #[derive(Serialize, Clone)]
 pub struct Status {
     pub version: String,
-    /// Un moteur est référencé (sinon : Snapmaker Orca installé sert de repli).
+    /// An engine is referenced (otherwise the installed Snapmaker Orca is the fallback).
     pub referenced: bool,
     pub source: String,
-    /// Un moteur existe pour cette plateforme.
+    /// An engine exists for this platform.
     pub available: bool,
     pub installed: bool,
-    /// Moteur d'une version précédente encore présent : le nouveau est une
-    /// mise à jour.
+    /// An engine of a previous version is still there: the new one is an update.
     pub previous: Option<String>,
     pub installing: bool,
     pub path: Option<String>,
@@ -163,11 +164,11 @@ pub fn cancel() {
     CANCEL.store(true, Ordering::Relaxed);
 }
 
-/// Télécharge, vérifie et installe le moteur de la plateforme.
+/// Downloads, checks and installs the platform's engine.
 pub async fn install(app: AppHandle) -> Result<Status> {
-    let a = asset().ok_or_else(|| anyhow!("aucun moteur de découpe pour cette plateforme ({})", platform_key()))?;
+    let a = asset().ok_or_else(|| anyhow!(crate::t!("err.engine_platform", platform = platform_key())))?;
     if BUSY.swap(true, Ordering::SeqCst) {
-        return Err(anyhow!("installation déjà en cours"));
+        return Err(anyhow!(crate::t!("err.engine_busy")));
     }
     CANCEL.store(false, Ordering::Relaxed);
     let res = install_inner(&app, a).await;
@@ -181,7 +182,7 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
     std::fs::create_dir_all(&root)?;
     let part = root.join(format!(".download-{}.part", manifest().version));
 
-    // Téléchargement en flux, empreinte calculée au passage.
+    // Streamed download, checksum computed on the way.
     let resp = reqwest::Client::builder()
         .user_agent("Snap-Studio")
         .build()?
@@ -189,7 +190,7 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
         .send()
         .await?;
     if !resp.status().is_success() {
-        return Err(anyhow!("téléchargement refusé : {}", resp.status()));
+        return Err(anyhow!(crate::t!("err.download_refused", status = resp.status())));
     }
     let total = resp.content_length().unwrap_or(a.size);
     let mut file = std::fs::File::create(&part)?;
@@ -202,13 +203,13 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
         if CANCEL.load(Ordering::Relaxed) {
             drop(file);
             let _ = std::fs::remove_file(&part);
-            return Err(anyhow!("téléchargement annulé"));
+            return Err(anyhow!(crate::t!("err.download_cancelled")));
         }
         let chunk = chunk?;
         file.write_all(&chunk)?;
         hash.update(&chunk);
         done += chunk.len() as u64;
-        // Une mise à jour par demi-mégaoctet suffit à la barre.
+        // One update per half megabyte is enough for the progress bar.
         if done - last > 512 * 1024 || done == total {
             emit(app, "download", done, total);
             last = done;
@@ -221,10 +222,10 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
     let got = hex(&hash.finalize());
     if !got.eq_ignore_ascii_case(&a.sha256) {
         let _ = std::fs::remove_file(&part);
-        return Err(anyhow!("empreinte invalide : fichier corrompu ou modifié"));
+        return Err(anyhow!(crate::t!("err.checksum")));
     }
 
-    // Décompression hors du fil asynchrone, dans un dossier temporaire.
+    // Extraction off the async thread, into a temporary folder.
     emit(app, "extract", 0, a.unpacked);
     let staging = root.join(format!(".staging-{}", manifest().version));
     let target = install_dir();
@@ -248,23 +249,23 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Archive tar.zst → dossier ; droits d'exécution et liens conservés.
+/// tar.zst archive → folder; execute permissions and links kept.
 fn extract(archive: &Path, dst: &Path) -> Result<()> {
     if dst.exists() {
         std::fs::remove_dir_all(dst)?;
     }
     std::fs::create_dir_all(dst)?;
     let f = std::io::BufReader::new(std::fs::File::open(archive)?);
-    let zst = ruzstd::decoding::StreamingDecoder::new(f).map_err(|e| anyhow!("archive illisible : {e}"))?;
+    let zst = ruzstd::decoding::StreamingDecoder::new(f).map_err(|e| anyhow!(crate::t!("err.archive", err = e)))?;
     let mut tar = tar::Archive::new(zst);
     tar.set_preserve_permissions(true);
     tar.set_overwrite(true);
-    tar.unpack(dst).map_err(|e| anyhow!("décompression impossible : {e}"))?;
+    tar.unpack(dst).map_err(|e| anyhow!(crate::t!("err.extract", err = e)))?;
     Ok(())
 }
 
-/// Les autres versions du moteur et les restes d'une installation
-/// interrompue disparaissent ; les données du moteur restent.
+/// Other engine versions and the leftovers of an interrupted install go
+/// away; the engine's data stays.
 fn prune_old(root: &Path, keep: &Path) {
     let Ok(rd) = std::fs::read_dir(root) else { return };
     for e in rd.flatten() {
@@ -281,10 +282,10 @@ fn prune_old(root: &Path, keep: &Path) {
     }
 }
 
-/// Supprime le moteur installé (les réglages et données de Snap Studio restent).
+/// Deletes the installed engine (Snap Studio's settings and data stay).
 pub fn remove() -> Result<Status> {
     if BUSY.load(Ordering::Relaxed) {
-        return Err(anyhow!("installation en cours"));
+        return Err(anyhow!(crate::t!("err.engine_busy")));
     }
     let dir = install_dir();
     if dir.exists() {
@@ -293,7 +294,7 @@ pub fn remove() -> Result<Status> {
     Ok(status())
 }
 
-/// Lecture d'une archive en mémoire : sert aux tests.
+/// Reads an archive from memory: used by the tests.
 #[cfg(test)]
 fn read_all(r: &mut impl std::io::Read) -> Vec<u8> {
     let mut v = Vec::new();
@@ -307,7 +308,7 @@ mod tests {
 
     #[test]
     fn placeholder_manifest_is_not_referenced() {
-        // Le dépôt part d'un manifeste vide : la découpe reste sur Orca installé.
+        // The repository starts from an empty manifest: slicing stays on the installed Orca.
         if manifest().version.is_empty() {
             assert!(!referenced());
             assert!(installed().is_none());
@@ -326,7 +327,7 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(tmp.join("src/bin/tool"), std::fs::Permissions::from_mode(0o755)).unwrap();
         }
-        // tar, puis zstd (compresseur de ruzstd).
+        // tar, then zstd (ruzstd's compressor).
         let mut tarball = Vec::new();
         {
             let mut b = tar::Builder::new(&mut tarball);
@@ -343,7 +344,7 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(tmp.join("out/bin/tool")).unwrap().permissions().mode();
-            assert!(mode & 0o111 != 0, "exécutable conservé");
+            assert!(mode & 0o111 != 0, "executable kept");
         }
         let _ = std::fs::remove_dir_all(&tmp);
     }

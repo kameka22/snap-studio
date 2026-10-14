@@ -1,11 +1,11 @@
 "use strict";
-/* Détail des profils de découpe.
+/* Slicing profile details.
 
-   Les valeurs viennent du Rust (`slice_details`) : héritage résolu, plus ce que
-   Snap Studio ajoute pour la découpe (réglages rapides, plateau, couleur de la
-   bobine) — exactement ce que reçoit le moteur. La présentation reprend les
-   onglets de Snapmaker Orca, en français : `assets/orca-settings.json`, généré
-   depuis ses sources par `scripts/gen-orca-settings.py`. */
+   The values come from Rust (`slice_details`): inheritance resolved, plus what
+   Snap Studio adds for slicing (quick settings, plate, spool color) — exactly
+   what the engine receives. The layout follows Snapmaker Orca's tabs, in the
+   interface language: `assets/orca-settings.<lang>.json`, generated from its
+   sources by `scripts/gen-orca-settings.py`. */
 
 const INFO_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg>';
 
@@ -14,11 +14,11 @@ const PD = {
   details: null,
   page: 0,
   bed: null,
-  /* Profils filament déjà lus, pour la ligne « Plateau à … ». */
+  /* Filament profiles already read, for the "Bed at …" line. */
   temps: new Map(),
 };
 
-/* Température du plateau selon son type (`curr_bed_type`). */
+/* Bed temperature by plate type (`curr_bed_type`). */
 const BED_TEMP_KEY = {
   "Cool Plate": "cool_plate_temp",
   "Engineering Plate": "eng_plate_temp",
@@ -30,11 +30,14 @@ const BED_TEMP_KEY = {
 };
 
 async function pdSchema() {
-  if (!PD.schema) PD.schema = await fetch("assets/orca-settings.json").then((r) => r.json());
+  if (PD.schema?.lang !== LANG) {
+    PD.schema = await fetch(`assets/orca-settings.${LANG}.json`).then((r) => r.json());
+    PD.schema.lang = LANG;
+  }
   return PD.schema;
 }
 
-/* Ce que Snap Studio applique en ce moment dans la fenêtre de découpe. */
+/* What Snap Studio currently applies in the slice sheet. */
 function pdContext(head) {
   const slot = head == null ? null : SL.slots.find((s) => s.index === head);
   return {
@@ -49,15 +52,15 @@ function pdFetch(name, head) {
   return invoke("slice_details", { name, ...pdContext(head) });
 }
 
-/* ------------------------------------------------------------ valeurs */
+/* ------------------------------------------------------------ values */
 
-/* Orca range les textes (G-code…) échappés à la C : « \n » pour une ligne. */
+/* Orca stores texts (G-code…) C-escaped: "\n" for a line break. */
 const unescapeC = (s) =>
   typeof s === "string" && s.includes("\\")
     ? s.replace(/\\(.)/g, (_, c) => ({ n: "\n", t: "\t", r: "" })[c] ?? c)
     : s;
 
-/* Unité affichable : « mm ou % » → « mm », « argent/kg » → « /kg ». */
+/* Displayable unit: "mm or %" → "mm", "money/kg" → "/kg". */
 const unitOf = (u) => (u ? u.split(/ ou | or /)[0].replace(/^(argent|money)\//i, "/") : "");
 
 const one = (v) => (Array.isArray(v) ? (v.length && v.every((x) => x === v[0]) ? v[0] : null) : v);
@@ -66,7 +69,7 @@ function pdFormat(key, v) {
   const meta = PD.schema.keys[key] || {};
   const fmt = (x) => {
     if (x == null || x === "") return "—";
-    if (meta.type === "bool") return x === "1" || x === true || x === "true" ? "Oui" : "Non";
+    if (meta.type === "bool") return tr(x === "1" || x === true || x === "true" ? "common.yes" : "common.no");
     if (meta.type === "enum") return meta.enum?.[x] || x;
     let s = String(x);
     const unit = unitOf(meta.unit);
@@ -76,16 +79,16 @@ function pdFormat(key, v) {
   if (Array.isArray(v)) {
     const same = one(v);
     if (same !== null || v.length <= 1) return fmt(same ?? v[0]);
-    // Une valeur par tête (machine) ou une liste (points, vitesses…).
+    // One value per head (machine) or a list (points, speeds…).
     return meta.type === "point" ? v.join(" · ") : v.map((x, i) => `T${i} ${fmt(x)}`).join(" · ");
   }
   return fmt(v);
 }
 
-/* Texte long ou sur plusieurs lignes : affiché en bloc sous le libellé. */
+/* Long or multi-line text: shown as a block under the label. */
 const isBlock = (v) => typeof v === "string" && (v.includes("\n") || v.length > 80);
 
-/* ------------------------------------------------------------ résumé */
+/* ------------------------------------------------------------ summary */
 
 function pdTile(label, value, sub = "", strong = false) {
   return `<div class="pd-tile${strong ? " strong" : ""}"><small>${esc(label)}</small><b>${value}</b>${sub ? `<span>${sub}</span>` : ""}</div>`;
@@ -103,21 +106,21 @@ function pdSummary(d) {
       .join(" · ");
     const color = one(v.filament_colour);
     return [
-      pdTile("Matière", `${color ? `<i class="pd-swatch" style="background:${esc(color)}"></i>` : ""}${esc(f("filament_type"))}`, esc(one(v.filament_vendor) || "")),
-      pdTile("Buse", `${esc(one(v.nozzle_temperature))} °C`, `1re couche ${esc(one(v.nozzle_temperature_initial_layer))} °C`),
-      pdTile("Plateau", `${esc(one(v[key]) ?? "—")} °C`, `${esc(bedLabel)} · 1re couche ${esc(one(v[key + "_initial_layer"]) ?? "—")} °C`, true),
-      pdTile("Ventilateur", `${esc(one(v.fan_min_speed))}–${esc(one(v.fan_max_speed))} %`),
-      pdTile("Débit max", `${esc(one(v.filament_max_volumetric_speed))} mm³/s`),
-    ].join("") + (others ? `<div class="pd-others">Autres plateaux : ${others}</div>` : "");
+      pdTile(tr("pd.material"), `${color ? `<i class="pd-swatch" style="background:${esc(color)}"></i>` : ""}${esc(f("filament_type"))}`, esc(one(v.filament_vendor) || "")),
+      pdTile(tr("slice.nozzle"), `${esc(one(v.nozzle_temperature))} °C`, esc(tr("pd.first_layer", { v: `${one(v.nozzle_temperature_initial_layer)} °C` }))),
+      pdTile(tr("slice.plate"), `${esc(one(v[key]) ?? "—")} °C`, `${esc(bedLabel)} · ${esc(tr("pd.first_layer", { v: `${one(v[key + "_initial_layer"]) ?? "—"} °C` }))}`, true),
+      pdTile(tr("printers.fan"), `${esc(one(v.fan_min_speed))}–${esc(one(v.fan_max_speed))} %`),
+      pdTile(tr("pd.max_flow"), `${esc(one(v.filament_max_volumetric_speed))} mm³/s`),
+    ].join("") + (others ? `<div class="pd-others">${esc(tr("pd.other_plates"))} ${others}</div>` : "");
   }
   if (d.kind === "process") {
     return [
-      pdTile("Couche", f("layer_height"), `1re couche ${esc(f("initial_layer_print_height"))}`),
-      pdTile("Parois", esc(f("wall_loops")), `dessus ${esc(f("top_shell_layers"))} · dessous ${esc(f("bottom_shell_layers"))}`),
-      pdTile("Remplissage", esc(f("sparse_infill_density")), esc(f("sparse_infill_pattern"))),
-      pdTile("Supports", esc(f("enable_support")), v.enable_support === "1" ? esc(f("support_type")) : ""),
-      pdTile("Plateau", esc(f("curr_bed_type")), "", true),
-      pdTile("Paroi extérieure", esc(f("outer_wall_speed"))),
+      pdTile(tr("printers.layer"), f("layer_height"), esc(tr("pd.first_layer", { v: f("initial_layer_print_height") }))),
+      pdTile(tr("slice.walls"), esc(f("wall_loops")), esc(tr("pd.shells", { top: f("top_shell_layers"), bottom: f("bottom_shell_layers") }))),
+      pdTile(tr("slice.infill"), esc(f("sparse_infill_density")), esc(f("sparse_infill_pattern"))),
+      pdTile(tr("slice.supports"), esc(f("enable_support")), v.enable_support === "1" ? esc(f("support_type")) : ""),
+      pdTile(tr("slice.plate"), esc(f("curr_bed_type")), "", true),
+      pdTile(tr("feature.outer_wall"), esc(f("outer_wall_speed"))),
     ].join("");
   }
   const area = (v.printable_area || []).map((p) => p.split("x").map(Number));
@@ -125,21 +128,21 @@ function pdSummary(d) {
     ? `${Math.round(Math.max(...area.map((p) => p[0])) - Math.min(...area.map((p) => p[0])))} × ${Math.round(Math.max(...area.map((p) => p[1])) - Math.min(...area.map((p) => p[1])))} mm`
     : "—";
   return [
-    pdTile("Plateau", size, `hauteur ${esc(f("printable_height"))}`),
-    pdTile("Buse", esc(f("nozzle_diameter")), `${(v.nozzle_diameter || []).length || 1} tête(s)`),
-    pdTile("Modèle", esc(v.printer_model || "—")),
+    pdTile(tr("slice.plate"), size, esc(tr("pd.height", { v: f("printable_height") }))),
+    pdTile(tr("slice.nozzle"), esc(f("nozzle_diameter")), esc(tr("pd.heads", { n: (v.nozzle_diameter || []).length || 1 }))),
+    pdTile(tr("printers.form.model"), esc(v.printer_model || "—")),
     pdTile("Firmware", esc(f("gcode_flavor"))),
   ].join("");
 }
 
-/* ------------------------------------------------------------ onglets */
+/* ------------------------------------------------------------ tabs */
 
 function pdPages(d) {
   const pages = PD.schema[d.kind] || [];
   if (!$("pd-all").checked) return pages;
   const used = new Set(pages.flatMap((p) => p.groups.flatMap((g) => g.keys)));
   const rest = Object.keys(d.values).filter((k) => !used.has(k)).sort();
-  return rest.length ? [...pages, { title: "Autres réglages", groups: [{ title: "Hors des onglets d'Orca", keys: rest }] }] : pages;
+  return rest.length ? [...pages, { title: tr("pd.other_settings"), groups: [{ title: tr("pd.outside_tabs"), keys: rest }] }] : pages;
 }
 
 function pdRow(d, key, line) {
@@ -148,7 +151,7 @@ function pdRow(d, key, line) {
   const label = line ? `${line} — ${meta.short || meta.label || key}` : meta.label || key;
   const badges =
     (d.snap.includes(key) ? '<span class="pd-badge snap">Snap Studio</span>' : "") +
-    (d.custom.includes(key) ? '<span class="pd-badge perso">perso</span>' : "");
+    (d.custom.includes(key) ? `<span class="pd-badge perso">${esc(tr("picker.custom"))}</span>` : "");
   const value = isBlock(v)
     ? `<pre class="pd-code${v.includes("\n") ? "" : " wrap"}">${esc(v)}</pre>`
     : `<span class="pd-val">${esc(pdFormat(key, v))}</span>`;
@@ -166,7 +169,7 @@ function pdRender() {
   $("pd-tabs").innerHTML = pages
     .map((p, i) => `<button class="seg-btn${i === PD.page ? " on" : ""}" data-page="${i}">${esc(p.title)}</button>`)
     .join("");
-  // Recherche : dans tous les onglets ; sinon l'onglet courant.
+  // Search: across all tabs; otherwise the current tab.
   const shown = q ? pages : [pages[PD.page]];
   const html = [];
   for (const p of shown) {
@@ -184,14 +187,14 @@ function pdRender() {
       }
     }
   }
-  $("pd-body").innerHTML = html.join("") || `<div class="pd-empty">${q ? "Aucun réglage ne correspond." : "Rien à afficher."}</div>`;
+  $("pd-body").innerHTML = html.join("") || `<div class="pd-empty">${esc(tr(q ? "pd.no_match" : "pd.nothing"))}</div>`;
 }
 
 async function pdOpen(name, head) {
   if (!name) return;
   PD.bed = $("s-bed").value;
   $("pd-name").textContent = name;
-  $("pd-sub").textContent = "Lecture du profil…";
+  $("pd-sub").textContent = tr("pd.reading");
   $("pd-summary").innerHTML = "";
   $("pd-body").innerHTML = "";
   $("pd-search").value = "";
@@ -201,22 +204,41 @@ async function pdOpen(name, head) {
     await pdSchema();
     const d = await pdFetch(name, head);
     PD.details = d;
-    const kind = { machine: "Machine", process: "Impression", filament: "Filament" }[d.kind];
-    const origin = d.user ? "Profil personnel" : "Profil système";
-    const chain = d.chain.slice(1);
-    $("pd-sub").textContent = `${kind}${head != null ? ` · tête T${head}` : ""} · ${origin}${chain.length ? ` · hérite de ${chain.join(" → ")}` : ""}`;
+    PD.head = head;
+    pdHeader();
     $("pd-summary").innerHTML = pdSummary(d);
     pdRender();
   } catch (e) {
-    $("pd-sub").textContent = `Profil illisible : ${e}`;
+    $("pd-sub").textContent = tr("pd.unreadable", { err: e });
   }
 }
 
-/* ------------------------------------------------------------ plateau */
+/* "Process · Head T1 · System profile · inherits from …" */
+function pdHeader() {
+  const d = PD.details, head = PD.head;
+  const chain = d.chain.slice(1);
+  $("pd-sub").textContent = [
+    tr("pd.kind." + d.kind),
+    head != null && tr("pd.head", { i: head }),
+    tr(d.user ? "pd.user" : "pd.system"),
+    chain.length && tr("pd.inherits", { chain: chain.join(" → ") }),
+  ].filter(Boolean).join(" · ");
+}
 
-/* Températures selon les filaments choisis : sur chaque tuile de plateau,
-   sur chaque carte bobine (buse) ; sous les tuiles, le détail par tête quand
-   les filaments employés ne s'accordent pas. */
+/* A new language: the Orca schema is reloaded in it, then everything redrawn. */
+window.addEventListener("langchange", async () => {
+  if ($("pdmodal").classList.contains("hidden") || !PD.details) return;
+  await pdSchema();
+  pdHeader();
+  $("pd-summary").innerHTML = pdSummary(PD.details);
+  pdRender();
+});
+
+/* ------------------------------------------------------------ bed */
+
+/* Temperatures for the chosen filaments: on each plate tile, on each
+   spool card (nozzle); under the tiles, the per-head detail when the
+   filaments used disagree. */
 async function pdBedLine() {
   const heads = [...document.querySelectorAll("#s-heads select")].map((s) => s.value);
   if (!heads.length) return;
@@ -232,14 +254,14 @@ async function pdBedLine() {
     }
   }
   if (PD.want !== want) return;
-  // Têtes employées par le modèle ; à défaut, toutes.
+  // Heads used by the model; failing that, all of them.
   const mapped = [...slUsedSet()].filter((i) => i < heads.length);
   const used = mapped.length ? mapped : heads.map((_, i) => i);
 
   heads.forEach((name, i) => {
     const el = document.querySelector(`#s-heads [data-temp="${i}"]`);
     const t = one(PD.temps.get(name)?.nozzle_temperature);
-    if (el) el.textContent = t ? `buse ${t} °C` : "";
+    if (el) el.textContent = t ? tr("pd.nozzle_temp", { t }) : "";
   });
 
   PD.bedTemps = {};
@@ -261,12 +283,12 @@ async function pdBedLine() {
   }
   box.innerHTML =
     key && groups.size > 1
-      ? `Températures différentes selon les filaments : ${[...groups].map(([t, h]) => `<b>${esc(t)}</b> (${h.join(", ")})`).join(" · ")}`
+      ? `${esc(tr("pd.temps_differ"))} ${[...groups].map(([t, h]) => `<b>${esc(t)}</b> (${h.join(", ")})`).join(" · ")}`
       : "";
   if (typeof slSummary === "function") slSummary();
 }
 
-/* ------------------------------------------------------------ événements */
+/* ------------------------------------------------------------ events */
 
 $("smodal").addEventListener("click", (e) => {
   const b = e.target.closest("[data-info]");
@@ -292,8 +314,8 @@ $("pd-tabs").addEventListener("click", (e) => {
 $("pd-search").addEventListener("input", pdRender);
 $("pd-all").addEventListener("change", pdRender);
 $("pd-close").addEventListener("click", () => closeSheet($("pdmodal")));
-// Au niveau du document : après un clic sur un onglet, le focus n'est plus
-// dans la feuille. Elle se ferme seule ; la fenêtre de découpe reste.
+// At document level: after a click on a tab, focus is no longer in the
+// sheet. It closes alone; the slice sheet stays.
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || $("pdmodal").classList.contains("hidden")) return;
   e.stopImmediatePropagation();

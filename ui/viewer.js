@@ -1,38 +1,37 @@
 "use strict";
-/* Visualiseur 3D.
-   Le maillage est servi en binaire par Rust (protocole mesh://), le rendu se
-   fait en WebGL2 sans bibliothèque : ombrage plat calculé par dérivées d'écran,
-   donc aucune normale à transporter. */
+/* 3D viewer.
+   The mesh is served as binary by Rust (mesh:// protocol); rendering is
+   done in WebGL2 with no library: flat shading computed from screen
+   derivatives, so no normals to carry. */
 
 const V = {
   gl: null,
-  /* Appelé à la fermeture quand quelqu'un a emprunté le visualiseur. */
+  /* Called on close when someone borrowed the viewer. */
   onClose: null,
   mesh: null,       // { prog, vao, count, min, max, truncated }
-  paths: null,      // trajectoires G-code
-  layer: 0,         // couche la plus haute affichée
+  paths: null,      // G-code toolpaths
+  layer: 0,         // highest layer shown
   showTravel: false,
   grid: null,       // { prog, vao, count }
-  bed: null,        // plaque et logo, voir buildBed
+  bed: null,        // plate and logo, see buildBed
   cam: { yaw: -0.62, pitch: 0.46, dist: 260, target: [0, 0, 0] },
   drag: null,
   path: null,
   showPlate: true,
   raf: 0,
-  /* Aperçu de découpe en cours : bilan, couleurs des têtes, actions. */
+  /* Slice preview in progress: summary, head colors, actions. */
   preview: null,
-  /* « feature » : couleur par trajectoire ; « tool » : par tête. */
-  /* « material » : couleur du filament nuancée par famille (défaut) ;
-     « feature » : couleur par trajectoire ; « tool » : couleur pure par tête. */
+  /* "material": filament color shaded by feature (default);
+     "feature": one color per path type; "tool": plain color per head. */
   colorMode: "material",
-  /* Couleurs des filaments écrites dans le G-code ([r,g,b] ou null par tête). */
+  /* Filament colors written in the G-code ([r,g,b] or null per head). */
   fileColors: [],
 };
 
-/* Couleurs de repli des têtes, quand la bobine n'est pas connue. */
+/* Fallback head colors, when the spool is not known. */
 const TOOL_COLORS = [[0, 122, 255], [255, 149, 0], [52, 199, 89], [175, 82, 222]];
 
-/* Plateau de la Snapmaker U1, en millimètres. */
+/* Snapmaker U1 bed, in millimeters. */
 const PLATE = { w: 270, d: 270, step: 10 };
 
 /* ---------------------------------------------------------------- matrices */
@@ -104,7 +103,7 @@ in vec3 vCol;
 in vec3 vPosV;
 out vec4 frag;
 void main() {
-  // Normale reconstruite depuis la surface : ombrage plat, sans normales transportées.
+  // Normal rebuilt from the surface: flat shading, no normals carried.
   vec3 n = normalize(cross(dFdx(vPosV), dFdy(vPosV)));
   if (n.z < 0.0) n = -n;
   vec3 key = normalize(vec3(-0.45, 0.72, 0.58));
@@ -136,10 +135,10 @@ uniform float uAlpha;
 out vec4 frag;
 void main() { frag = vec4(vCol, uAlpha); }`;
 
-/* Extrusions en rubans : chaque segment (une instance) devient un quadrilatère
-   tourné vers l'écran, de la largeur réelle d'extrusion, ombré comme un
-   cylindre — clair au centre, sombre sur les bords. Les tampons de positions
-   et de couleurs des lignes servent tels quels (pas de copie). */
+/* Extrusions as ribbons: each segment (one instance) becomes a quad facing
+   the screen, at the real extrusion width, shaded like a cylinder — light in
+   the middle, dark at the edges. The lines' position and color buffers are
+   used as is (no copy). */
 const RIB_VS = `#version 300 es
 in vec3 aA;
 in vec3 aB;
@@ -151,7 +150,7 @@ uniform float uPxPerMm;
 out vec3 vCol;
 out float vSide;
 void main() {
-  // Six sommets : deux triangles ; t le long du segment, s en travers.
+  // Six vertices: two triangles; t along the segment, s across.
   int id = gl_VertexID;
   float t = (id == 1 || id == 2 || id == 4) ? 1.0 : 0.0;
   float s = (id == 2 || id == 4 || id == 5) ? 1.0 : -1.0;
@@ -162,9 +161,9 @@ void main() {
   dir = length(dir) > 1e-4 ? normalize(dir) : vec2(1.0, 0.0);
   vec2 nrm = vec2(-dir.y, dir.x);
   vec4 p = mix(pa, pb, t);
-  // Demi-largeur en pixels à cette profondeur ; un pixel au minimum.
+  // Half-width in pixels at this depth; one pixel at least.
   float hw = max(0.5, 0.5 * aW * uPxPerMm / p.w);
-  // Les extrémités dépassent d'une demi-largeur : les jointures se recouvrent.
+  // Ends stick out by a half-width: joints overlap.
   vec2 off = nrm * s * hw + dir * (t * 2.0 - 1.0) * hw;
   p.xy += off / uViewport * p.w;
   gl_Position = p;
@@ -183,26 +182,27 @@ void main() {
   frag = vec4(col, 1.0);
 }`;
 
-/* Au-delà, on revient aux lignes simples : le rendu reste fluide. */
+/* Beyond this, back to plain lines: rendering stays smooth. */
 const RIBBON_MAX = 2_500_000;
-/* Largeur supposée quand le G-code ne l'indique pas (mm). */
+/* Width assumed when the G-code does not say (mm). */
 const DEFAULT_WIDTH = 0.42;
 
-/* Couleurs des familles, identiques à celles des vignettes calculées en Rust. */
+/* Feature keys and colors, the same as the thumbnails computed in Rust. */
 const FEATURES = [
-  ["Autre", [150, 158, 175]],
-  ["Paroi extérieure", [232, 108, 62]],
-  ["Paroi intérieure", [236, 168, 84]],
-  ["Surface supérieure", [226, 84, 106]],
-  ["Surface inférieure", [120, 170, 226]],
-  ["Remplissage", [150, 120, 214]],
-  ["Remplissage plein", [98, 186, 160]],
-  ["Pont", [70, 150, 235]],
-  ["Support", [120, 132, 154]],
-  ["Jupe et bordure", [214, 200, 96]],
-  ["Tour de purge", [180, 120, 190]],
-  ["Surplomb", [242, 96, 96]],
+  ["other", [150, 158, 175]],
+  ["outer_wall", [232, 108, 62]],
+  ["inner_wall", [236, 168, 84]],
+  ["top", [226, 84, 106]],
+  ["bottom", [120, 170, 226]],
+  ["infill", [150, 120, 214]],
+  ["solid_infill", [98, 186, 160]],
+  ["bridge", [70, 150, 235]],
+  ["support", [120, 132, 154]],
+  ["skirt", [214, 200, 96]],
+  ["prime_tower", [180, 120, 190]],
+  ["overhang", [242, 96, 96]],
 ];
+const featureName = (i) => tr("feature." + FEATURES[Math.min(i, FEATURES.length - 1)][0]);
 
 const LINE_VS = `#version 300 es
 in vec3 aPos;
@@ -226,7 +226,7 @@ function compile(gl, src, type) {
   gl.shaderSource(s, src);
   gl.compileShader(s);
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-    throw new Error("shader : " + gl.getShaderInfoLog(s));
+    throw new Error("shader: " + gl.getShaderInfoLog(s));
   }
   return s;
 }
@@ -237,25 +237,25 @@ function program(gl, vs, fs) {
   gl.attachShader(p, compile(gl, fs, gl.FRAGMENT_SHADER));
   gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-    throw new Error("liaison : " + gl.getProgramInfoLog(p));
+    throw new Error("link: " + gl.getProgramInfoLog(p));
   }
   return p;
 }
 
-/* ---------------------------------------------------------------- données */
+/* ---------------------------------------------------------------- data */
 
-/* Décode le tampon produit par `mesh::encode` côté Rust. */
+/* Decodes the buffer produced by `mesh::encode` in Rust. */
 function decodeMesh(buf) {
   const dv = new DataView(buf);
   const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
-  if (magic !== "3MFM") throw new Error("format de maillage inattendu");
+  if (magic !== "3MFM") throw new Error("unexpected mesh format");
   const truncated = (dv.getUint8(5) & 1) === 1;
   const n = dv.getUint32(8, true);
   const min = [dv.getFloat32(12, true), dv.getFloat32(16, true), dv.getFloat32(20, true)];
   const max = [dv.getFloat32(24, true), dv.getFloat32(28, true), dv.getFloat32(32, true)];
   const pos = new Float32Array(buf, 36, n * 9);
   const triCol = new Uint8Array(buf, 36 + n * 36, n * 3);
-  // Une couleur par triangle : on la recopie sur ses trois sommets.
+  // One color per triangle: copied onto its three vertices.
   const col = new Uint8Array(n * 9);
   for (let i = 0; i < n; i++) {
     const r = triCol[i * 3], g = triCol[i * 3 + 1], b = triCol[i * 3 + 2];
@@ -268,11 +268,11 @@ function decodeMesh(buf) {
   return { n, min, max, pos, col, truncated };
 }
 
-/* Décode le tampon produit par `gcode::encode` (en-tête de 40 octets). */
+/* Decodes the buffer produced by `gcode::encode` (40-byte header). */
 function decodeGcode(buf) {
   const dv = new DataView(buf);
   const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
-  if (magic !== "3MFG") throw new Error("format de trajectoires inattendu");
+  if (magic !== "3MFG") throw new Error("unexpected toolpath format");
   const truncated = (dv.getUint8(5) & 1) === 1;
   const n = dv.getUint32(8, true);
   const layers = dv.getUint32(12, true);
@@ -280,7 +280,7 @@ function decodeGcode(buf) {
   const max = [dv.getFloat32(28, true), dv.getFloat32(32, true), dv.getFloat32(36, true)];
   const pos = new Float32Array(buf, 40, n * 6);
   const attrs = new Uint8Array(buf, 40 + n * 24, n * 4);
-  // Version 2 : largeur par segment, puis couleurs des filaments.
+  // Version 2: width per segment, then filament colors.
   const version = dv.getUint8(4);
   const widths = version >= 2 ? new Uint8Array(buf, 40 + n * 28, n) : null;
   const fileColors = [];
@@ -292,7 +292,7 @@ function decodeGcode(buf) {
     }
   }
 
-  // Séparation extrusions / déplacements ; l'ordre par couche est conservé.
+  // Extrusions and travel split; the per-layer order is kept.
   const count = { e: 0, t: 0 };
   for (let i = 0; i < n; i++) (attrs[i * 4 + 3] & 1 ? count.t++ : count.e++);
   const out = {
@@ -333,7 +333,7 @@ function decodeGcode(buf) {
       if (!travel) layerZ[layer] = Math.max(layerZ[layer], pos[i * 6 + 5]);
     }
   }
-  // Bornes cumulées : une couche sans segment reprend la borne précédente.
+  // Cumulative bounds: a layer without segments takes the previous bound.
   for (const d of [out.e, out.t]) {
     let last = 0;
     for (let l = 0; l <= layers; l++) {
@@ -346,34 +346,34 @@ function decodeGcode(buf) {
   return { n, layers, min, max, truncated, out, layerZ, fileColors, feats: [...feats].sort((a, b) => a - b) };
 }
 
-/* Couleur d'une tête : bobine lue sur l'imprimante (aperçu de découpe), sinon
-   celle que le trancheur a écrite dans le G-code, sinon la palette. */
+/* Color of a head: spool read on the printer (slice preview), otherwise
+   the one the slicer wrote in the G-code, otherwise the palette. */
 function toolRgb(t) {
   return V.preview?.toolColors?.[t] || V.fileColors?.[t] || TOOL_COLORS[t % TOOL_COLORS.length];
 }
 
-/* Mode « Matière » : la couleur du filament, nuancée par famille pour garder
-   la lecture de la structure. `k` assombrit, `w` éclaircit vers le blanc,
-   `g` désature vers le gris. Indices de `FEATURES`. */
+/* "Material" mode: the filament color, shaded by feature to keep the
+   structure readable. `k` darkens, `w` lightens towards white, `g`
+   desaturates towards grey. Indices into `FEATURES`. */
 const MATERIAL_SHADE = [
-  { k: 0.85 }, // autre
-  { k: 1 }, // paroi extérieure
-  { k: 0.8 }, // paroi intérieure
-  { w: 0.18 }, // surface supérieure
-  { k: 0.9 }, // surface inférieure
-  { k: 0.62 }, // remplissage
-  { k: 0.74 }, // remplissage plein
-  { w: 0.12 }, // pont
+  { k: 0.85 }, // other
+  { k: 1 }, // outer wall
+  { k: 0.8 }, // inner wall
+  { w: 0.18 }, // top surface
+  { k: 0.9 }, // bottom surface
+  { k: 0.62 }, // infill
+  { k: 0.74 }, // solid infill
+  { w: 0.12 }, // bridge
   { g: 0.75, k: 0.78 }, // support
-  { k: 0.88 }, // jupe et bordure
-  { g: 0.6, k: 0.72 }, // tour de purge
-  { w: 0.06 }, // surplomb
+  { k: 0.88 }, // skirt and brim
+  { g: 0.6, k: 0.72 }, // prime tower
+  { w: 0.06 }, // overhang
 ];
 
 function shade(rgb, feat) {
   let [r, g, b] = rgb.map((x) => x / 255);
   const sh = MATERIAL_SHADE[feat] || {};
-  // Un filament très sombre s'éclaircit un peu : sinon ses nuances disparaissent.
+  // A very dark filament gets a little lighter: otherwise its shades vanish.
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   if (lum < 0.12) [r, g, b] = [r, g, b].map((x) => x + (0.12 - lum));
   if (sh.g) {
@@ -385,8 +385,8 @@ function shade(rgb, feat) {
   return [r, g, b].map((x) => Math.max(0, Math.min(1, x)) * 255);
 }
 
-/* Couleurs des extrusions selon le mode : matière (défaut), famille de
-   trajectoire, ou tête en couleur pure. */
+/* Extrusion colors by mode: material (default), path feature, or head in
+   plain color. */
 function extrusionColors(e, mode) {
   const col = new Float32Array(e.feat.length * 6);
   for (let k = 0; k < e.feat.length; k++) {
@@ -434,8 +434,8 @@ function buildPathBuffers(gl, prog, part) {
   return { vao, ends: part.ends, colBuf: cb, posBuf: pb };
 }
 
-/* Rubans : une instance par segment, lue dans les tampons des lignes
-   (positions a puis b, couleur du premier sommet), plus la largeur. */
+/* Ribbons: one instance per segment, read from the line buffers (positions
+   a then b, color of the first vertex), plus the width. */
 function buildRibbons(gl, prog, part, lines) {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -466,7 +466,7 @@ function buildRibbons(gl, prog, part, lines) {
 function buildPaths(gl, data) {
   const prog = program(gl, PATH_VS, PATH_FS);
   const extr = buildPathBuffers(gl, prog, data.out.e);
-  // Rubans ombrés, sauf pour un G-code démesuré : lignes simples.
+  // Shaded ribbons, except for a huge G-code: plain lines.
   let ribbons = null;
   if (data.out.e.feat.length <= RIBBON_MAX) {
     const rprog = program(gl, RIB_VS, RIB_FS);
@@ -511,7 +511,7 @@ function buildMesh(gl, data) {
   return { prog, vao, count: data.n * 3, min: data.min, max: data.max, truncated: data.truncated };
 }
 
-/* Quadrillage du plateau : lignes tous les 10 mm, bordure accentuée. */
+/* Bed grid: lines every 10 mm, emphasized border. */
 function buildGrid(gl, w = PLATE.w, d = PLATE.d) {
   const pos = [];
   const main = [];
@@ -525,7 +525,7 @@ function buildGrid(gl, w = PLATE.w, d = PLATE.d) {
   for (let y = 0; y <= d + 1e-6; y += PLATE.step) {
     line([0, y, 0], [w, y, 0], y % 50 === 0 ? 1 : 0);
   }
-  // Bordure : le plateau garde un contour net même hors du pas de 10 mm.
+  // Border: the bed keeps a sharp outline even off the 10 mm step.
   line([0, 0, 0], [w, 0, 0], 1);
   line([w, 0, 0], [w, d, 0], 1);
   line([w, d, 0], [0, d, 0], 1);
@@ -549,16 +549,16 @@ function buildGrid(gl, w = PLATE.w, d = PLATE.d) {
   return { prog, vao, count: pos.length / 3 };
 }
 
-/* ---------------------------------------------------------------- plateau physique */
+/* ---------------------------------------------------------------- physical bed */
 
-/* Plaques connues, d'après les profils de Snapmaker Orca (`bed_model`,
-   `bed_texture` du modèle d'imprimante) : maillage de la plaque, logo. */
+/* Known plates, from Snapmaker Orca's profiles (`bed_model`, `bed_texture`
+   of the printer model): plate mesh, logo. */
 const BED_ASSETS = {
   "Snapmaker U1": { model: "assets/bed/u1-bed.stl", texture: "assets/bed/u1-texture.svg" },
 };
-/* Couleurs d'Orca : plaque (Bed3D), zone imprimable (PartPlate), lignes. */
+/* Orca's colors: plate (Bed3D), printable area (PartPlate), lines. */
 const BED_COLORS = { plate: [0.3255, 0.337, 0.337], area: [0.267, 0.278, 0.278], grid: [0.62, 0.64, 0.64] };
-/* Orca descend la plaque sous le plateau pour qu'elle ne masque pas la grille. */
+/* Orca lowers the plate under the bed so it does not hide the grid. */
 const BED_MODEL_Z = -0.43;
 
 const TEX_VS = `#version 300 es
@@ -580,22 +580,22 @@ uniform bool uUseTex;
 out vec4 frag;
 void main() { frag = uUseTex ? texture(uTex, vUV) * uColor : uColor; }`;
 
-/* Fichiers de plaque, lus une fois pour tous les contextes graphiques. */
+/* Plate files, read once for all graphics contexts. */
 const BED_FILES = new Map();
 function bedFile(url, load) {
   if (!BED_FILES.has(url)) BED_FILES.set(url, load(url));
   return BED_FILES.get(url);
 }
 
-/* STL binaire : 80 octets d'en-tête, le nombre de facettes, puis 50 octets
-   par facette (normale, trois sommets, attribut). */
+/* Binary STL: 80-byte header, the facet count, then 50 bytes per facet
+   (normal, three vertices, attribute). */
 async function loadStl(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`erreur ${r.status}`);
   const buf = await r.arrayBuffer();
   const dv = new DataView(buf);
   const n = dv.getUint32(80, true);
-  if (84 + n * 50 > buf.byteLength) throw new Error("STL binaire attendu");
+  if (84 + n * 50 > buf.byteLength) throw new Error("binary STL expected");
   const pos = new Float32Array(n * 9);
   for (let i = 0; i < n; i++) {
     for (let k = 0; k < 9; k++) pos[i * 9 + k] = dv.getFloat32(84 + i * 50 + 12 + k * 4, true);
@@ -607,20 +607,20 @@ function loadImage(url) {
   return new Promise((ok, ko) => {
     const img = new Image();
     img.onload = () => ok(img);
-    img.onerror = () => ko(new Error(`image illisible : ${url}`));
+    img.onerror = () => ko(new Error(`unreadable image: ${url}`));
     img.src = url;
   });
 }
 
-/* Plateau d'un modèle d'imprimante connu, null sinon. Les fichiers arrivent
-   après coup : `onReady` redemande alors un rendu. */
+/* Bed of a known printer model, null otherwise. Files arrive later:
+   `onReady` then asks for a new render. */
 function buildBed(gl, w, d, model, onReady) {
   const a = BED_ASSETS[model];
   if (!a) return null;
   const bed = { w, d, model, plate: null, texture: null };
 
-  // Zone imprimable : support du fond et du logo. Le haut de l'image va au
-  // fond du plateau.
+  // Printable area: backing for the background and the logo. The top of
+  // the image goes to the back of the bed.
   bed.tex = program(gl, TEX_VS, TEX_FS);
   bed.quad = gl.createVertexArray();
   gl.bindVertexArray(bed.quad);
@@ -638,7 +638,7 @@ function buildBed(gl, w, d, model, onReady) {
   gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 20, 12);
   gl.bindVertexArray(null);
 
-  // Plaque : maillage du constructeur, centré sur la zone imprimable.
+  // Plate: the manufacturer's mesh, centered on the printable area.
   bedFile(a.model, loadStl)
     .then((src) => {
       const pos = new Float32Array(src.length);
@@ -662,7 +662,7 @@ function buildBed(gl, w, d, model, onReady) {
     })
     .catch((e) => console.warn("plaque :", e.message));
 
-  // Logo : le SVG est tramé à 2048 px au plus, comme dans Orca.
+  // Logo: the SVG is rasterized at 2048 px at most, as in Orca.
   bedFile(a.texture, loadImage)
     .then((img) => {
       const k = 2048 / Math.max(w, d);
@@ -679,14 +679,14 @@ function buildBed(gl, w, d, model, onReady) {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      // Vue rasante : le filtrage anisotrope garde le logo net.
+      // Grazing view: anisotropic filtering keeps the logo sharp.
       const aniso = gl.getExtension("EXT_texture_filter_anisotropic");
       if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
       gl.bindTexture(gl.TEXTURE_2D, null);
       bed.texture = tex;
       onReady?.();
     })
-    .catch((e) => console.warn("logo du plateau :", e.message));
+    .catch((e) => console.warn("bed logo:", e.message));
   return bed;
 }
 
@@ -701,9 +701,9 @@ function disposeBed(gl, bed) {
   if (bed.texture) gl.deleteTexture(bed.texture);
 }
 
-/* Plateau, de bas en haut comme dans Orca : plaque, zone imprimable, grille,
-   logo. Seule la plaque écrit la profondeur ; le reste se superpose, et les
-   objets, dessinés ensuite, passent devant. Sans plaque connue : la grille. */
+/* Bed, bottom to top as in Orca: plate, printable area, grid, logo. Only
+   the plate writes depth; the rest is layered, and the objects, drawn
+   afterwards, come in front. Without a known plate: the grid. */
 function drawBed(gl, bed, grid, vp, view, light) {
   if (bed?.plate) {
     const p = bed.plate;
@@ -736,7 +736,7 @@ function drawBed(gl, bed, grid, vp, view, light) {
     gl.drawArrays(gl.LINES, 0, grid.count);
   }
   if (bed?.texture) {
-    // Texture prémultipliée : bords du logo sans liseré sombre.
+    // Premultiplied texture: logo edges without a dark fringe.
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(bed.tex);
     gl.uniform1i(gl.getUniformLocation(bed.tex, "uUseTex"), 1);
@@ -753,7 +753,7 @@ function drawBed(gl, bed, grid, vp, view, light) {
   gl.bindVertexArray(null);
 }
 
-/* ---------------------------------------------------------------- rendu */
+/* ---------------------------------------------------------------- render */
 
 function frameCamera() {
   const m = V.paths || V.mesh;
@@ -783,7 +783,7 @@ function draw() {
   }
   gl.viewport(0, 0, w, h);
   const light = !isDark();
-  // --content-bg : #f3f3f5 en clair, #1e1e20 en sombre.
+  // --content-bg: #f3f3f5 in light mode, #1e1e20 in dark mode.
   gl.clearColor(...(light ? [0.953, 0.953, 0.961, 1] : [0.118, 0.118, 0.125, 1]));
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
@@ -819,7 +819,7 @@ function draw() {
       const r = p.ribbons;
       gl.useProgram(r.prog);
       gl.uniformMatrix4fv(gl.getUniformLocation(r.prog, "uMVP"), false, mvp);
-      // Pixels par unité d'écran normalisée, et par millimètre à la distance 1.
+      // Pixels per normalized screen unit, and per millimeter at distance 1.
       gl.uniform2f(gl.getUniformLocation(r.prog, "uViewport"), w / 2, h / 2);
       gl.uniform1f(gl.getUniformLocation(r.prog, "uPxPerMm"), proj[5] * h / 2);
       gl.bindVertexArray(r.vao);
@@ -850,8 +850,8 @@ const schedule = () => {
 };
 window.addEventListener("themechange", schedule);
 
-/* Selon la plateforme, Tauri sert les protocoles personnalisés sous l'une ou
-   l'autre forme : on tente les deux. */
+/* Depending on the platform, Tauri serves custom protocols in one form or
+   the other: try both. */
 async function fetchBinary(scheme, path, bust) {
   const q =
     `/b?p=${encodeURIComponent(path)}` + (bust ? `&v=${encodeURIComponent(bust)}` : "");
@@ -866,10 +866,10 @@ async function fetchBinary(scheme, path, bust) {
       last = e;
     }
   }
-  throw last || new Error("protocole indisponible");
+  throw last || new Error("protocol unavailable");
 }
 
-/* ---------------------------------------------------------------- ouverture */
+/* ---------------------------------------------------------------- opening */
 
 function disposeScene() {
   const gl = V.gl;
@@ -894,24 +894,39 @@ function disposeScene() {
   }
 }
 
+/* Mouse controls reminder, following the wheel setting. */
+function viewerHint() {
+  const acts = { zoom: "viewer.wheel.zoom", pan: "viewer.wheel.pan", orbit: "viewer.wheel.orbit" };
+  $("v-hint").textContent = tr("viewer.drag_hint") + " · " + tr(acts[state.wheelAction] || acts.zoom);
+}
+
+window.addEventListener("langchange", () => {
+  if ($("viewer").classList.contains("hidden")) return;
+  viewerHint();
+  if (V.statsText) $("v-stats").textContent = V.statsText();
+  if (V.paths) {
+    updateLayerLabel();
+    renderLegend(V.paths.feats);
+  }
+  if (V.preview) renderPreviewPanel();
+});
+
 async function openViewer(path, name, kind, bust) {
   const box = $("viewer");
   box.classList.remove("hidden");
   $("v-name").textContent = name || "";
   $("v-stats").textContent = "";
-  $("v-msg").textContent = "Lecture du maillage…";
+  $("v-msg").textContent = tr("viewer.loading_mesh");
   $("v-msg").classList.remove("hidden");
-  const acts = { zoom: "molette : zoomer", pan: "molette : déplacer", orbit: "molette : pivoter" };
-  $("v-hint").textContent =
-    "glisser : pivoter · ⇧ glisser ou clic droit : déplacer · " +
-    (acts[state.wheelAction] || acts.zoom);
+  viewerHint();
   V.path = path;
+  V.statsText = null;
 
   const canvas = $("v-canvas");
   if (!V.gl) {
     V.gl = canvas.getContext("webgl2", { antialias: true, depth: true });
     if (!V.gl) {
-      $("v-msg").textContent = "WebGL2 indisponible sur ce système.";
+      $("v-msg").textContent = tr("viewer.no_webgl");
       return;
     }
     V.grid = buildGrid(V.gl);
@@ -920,7 +935,7 @@ async function openViewer(path, name, kind, bust) {
   }
 
   const gcode = kind === "gcode";
-  // Un aperçu de découpe garde son panneau ; une ouverture ordinaire l'efface.
+  // A slice preview keeps its panel; an ordinary opening clears it.
   if (!V.preview || V.preview.path !== path) hidePreviewPanel();
   $("v-layers").classList.toggle("hidden", !gcode);
   $("v-legend").classList.toggle("hidden", !gcode);
@@ -933,14 +948,14 @@ async function openViewer(path, name, kind, bust) {
     disposeScene();
     const dim = (mn, mx) =>
       [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]]
-        .map((x) => x.toFixed(1).replace(".", ","))
+        .map((x) => fmtDec(x, 1))
         .join(" × ") + " mm";
 
     if (gcode) {
       const data = decodeGcode(buf);
-      // Couleurs écrites par le trancheur : base du mode « Matière ».
+      // Colors written by the slicer: base of the "Material" mode.
       V.fileColors = data.fileColors;
-      // Couleurs du G-code connues : le panneau de l'aperçu les reprend.
+      // G-code colors known: the preview panel picks them up.
       if (V.preview && V.preview.path === path) renderPreviewPanel();
       if (V.colorMode !== "feature") data.out.e.col = extrusionColors(data.out.e, V.colorMode);
       V.paths = buildPaths(V.gl, data);
@@ -948,20 +963,21 @@ async function openViewer(path, name, kind, bust) {
       V.layer = data.layers - 1;
       setupLayerSlider(data);
       renderLegend(data.feats);
-      $("v-stats").textContent =
-        `${dim(data.min, data.max)} · ${data.layers.toLocaleString("fr-FR")} couches · ` +
-        `${data.n.toLocaleString("fr-FR")} segments${data.truncated ? " (tronqué)" : ""}`;
+      V.statsText = () =>
+        `${dim(data.min, data.max)} · ${tr("viewer.layers", { n: data.layers })} · ` +
+        tr("viewer.segments", { n: data.n }) + (data.truncated ? " " + tr("viewer.truncated") : "");
     } else {
       const data = decodeMesh(buf);
       V.mesh = buildMesh(V.gl, data);
-      $("v-stats").textContent =
-        `${dim(data.min, data.max)} · ${data.n.toLocaleString("fr-FR")} triangles` +
-        (data.truncated ? " (échantillonné)" : "");
+      V.statsText = () =>
+        `${dim(data.min, data.max)} · ${tr("viewer.triangles", { n: data.n })}` +
+        (data.truncated ? " " + tr("files.info.sampled") : "");
     }
+    $("v-stats").textContent = V.statsText();
     $("v-msg").classList.add("hidden");
     frameCamera();
   } catch (e) {
-    $("v-msg").textContent = (gcode ? "Trajectoires illisibles : " : "Maillage illisible : ") + e.message;
+    $("v-msg").textContent = tr(gcode ? "viewer.bad_paths" : "viewer.bad_mesh", { err: e.message });
   }
 }
 
@@ -977,11 +993,11 @@ function updateLayerLabel() {
   const p = V.paths;
   if (!p) return;
   const n = V.layer + 1;
-  $("v-layer-n").textContent = `Couche ${n} / ${p.layers}`;
+  $("v-layer-n").textContent = tr("viewer.layer_of", { n, total: p.layers });
   const z = p.layerZ[Math.min(V.layer, p.layerZ.length - 1)];
   const t = V.preview?.stats?.layer_end_s?.[Math.min(V.layer, (V.preview.stats.layer_end_s.length || 1) - 1)];
   $("v-layer-z").textContent =
-    (z ? `Z ${z.toFixed(2).replace(".", ",")} mm` : "") + (t != null ? ` · ${fmtSpan(t)}` : "");
+    (z ? `Z ${fmtDec(z, 2)} mm` : "") + (t != null ? ` · ${fmtSpan(t)}` : "");
 }
 
 function renderLegend(feats) {
@@ -990,28 +1006,27 @@ function renderLegend(feats) {
   const sw = (c) => `<i style="background:rgb(${c.map(Math.round).join(",")})"></i>`;
   if (V.colorMode === "tool" || V.colorMode === "material") {
     const heads = tools.map((t) => `<span class="leg">${sw(toolRgb(t))}T${t}${name(t) ? " · " + esc(name(t)) : ""}</span>`);
-    // Matière : les nuances de la première tête, pour lire la structure.
+    // Material: the shades of the first head, to read the structure.
     const base = toolRgb(tools[0] ?? 0);
     const shades =
       V.colorMode === "material"
-        ? feats.map((f) => `<span class="leg sub">${sw(shade(base, f))}${FEATURES[f][0]}</span>`)
+        ? feats.map((f) => `<span class="leg sub">${sw(shade(base, f))}${esc(featureName(f))}</span>`)
         : [];
     $("v-legend").innerHTML = heads.join("") + (shades.length ? '<span class="leg-sep"></span>' + shades.join("") : "");
     return;
   }
   $("v-legend").innerHTML = feats
     .map((f) => {
-      const [label, c] = FEATURES[f];
-      return `<span class="leg">${sw(c)}${label}</span>`;
+      return `<span class="leg">${sw(FEATURES[f][1])}${esc(featureName(f))}</span>`;
     })
     .join("");
 }
 
 function closeViewer() {
-  // Ancré dans une conversation, le visualiseur fait partie de l'écran :
-  // Échap ne doit pas le faire disparaître.
+  // Docked in a conversation, the viewer is part of the screen: Esc must
+  // not make it disappear.
   if ($("viewer").classList.contains("docked")) return;
-  // Agrandi depuis une conversation, il doit y retourner plutôt que s'éteindre.
+  // Enlarged from a conversation, it must go back there rather than close.
   if (V.onClose) {
     const back = V.onClose;
     V.onClose = null;
@@ -1027,19 +1042,19 @@ function closeViewer() {
   }
 }
 
-/* ------------------------------------------------------------ aperçu de découpe */
+/* ------------------------------------------------------------ slice preview */
 
 const fmtSpan = (s) => {
   s = Math.max(0, Math.round(s || 0));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  if (h) return `${h} h ${String(m).padStart(2, "0")}`;
-  if (m) return `${m} min${m < 10 && sec ? " " + String(sec).padStart(2, "0") + " s" : ""}`;
+  if (h) return tr("units.hm", { h, m: String(m).padStart(2, "0") });
+  if (m) return tr("units.min", { m }) + (m < 10 && sec ? " " + String(sec).padStart(2, "0") + " s" : "");
   return `${sec} s`;
 };
-const fmtNum = (x, d = 1) => (x ?? 0).toFixed(d).replace(".", ",");
+const fmtG = (x, d = 1) => fmtDec(x ?? 0, d);
 
-/* Ouvre un G-code de découpe avec son bilan. `opts` : path, name, stats,
-   toolColors ([r,g,b] par tête), toolNames, onSend, onSave, onEdit, onClose. */
+/* Opens a sliced G-code with its summary. `opts`: path, name, stats,
+   toolColors ([r,g,b] per head), toolNames, onSend, onSave, onEdit, onClose. */
 function openPreview(opts) {
   V.preview = opts;
   V.colorMode = "material";
@@ -1052,7 +1067,7 @@ function openPreview(opts) {
 
 function hidePreviewPanel() {
   V.preview = null;
-  // Chaque ouverture repart en mode « Matière ».
+  // Each opening starts again in "Material" mode.
   V.colorMode = "material";
   $("v-panel").classList.add("hidden");
   $("viewer").classList.remove("previewing");
@@ -1062,30 +1077,30 @@ function renderPreviewPanel() {
   const st = V.preview.stats || {};
   $("vp-time").textContent = st.print_time_s ? fmtSpan(st.print_time_s) : "—";
   $("vp-first").textContent = [
-    st.first_layer_s ? `première couche ${fmtSpan(st.first_layer_s)}` : "",
-    st.layers ? `${st.layers.toLocaleString("fr-FR")} couches` : "",
+    st.first_layer_s ? tr("viewer.first_layer", { t: fmtSpan(st.first_layer_s) }) : "",
+    st.layers ? tr("viewer.layers", { n: st.layers }) : "",
   ].filter(Boolean).join(" · ");
 
-  // Une ligne par tête qui extrude, puis le total.
+  // One row per extruding head, then the total.
   const tools = st.tools?.length ? st.tools : [0];
   const rows = tools.map((t) => {
     const c = toolRgb(t);
     const g = st.per_tool_g?.[t], m = st.per_tool_m?.[t];
     return `<div class="grow-row"><span class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>
       <span class="k">T${t}${V.preview.toolNames?.[t] ? `<span class="sub">${esc(V.preview.toolNames[t])}</span>` : ""}</span>
-      <span class="val">${g != null ? fmtNum(g) + " g" : ""}${m != null ? `<span class="sub">${fmtNum(m, 2)} m</span>` : ""}</span></div>`;
+      <span class="val">${g != null ? fmtG(g) + " g" : ""}${m != null ? `<span class="sub">${fmtG(m, 2)} m</span>` : ""}</span></div>`;
   });
   if (tools.length > 1 || st.cost) {
-    rows.push(`<div class="grow-row total"><span class="k">Total</span><span class="val">${
-      st.filament_g != null ? fmtNum(st.filament_g) + " g" : "—"
-    }${st.cost ? `<span class="sub">${fmtNum(st.cost, 2)} €</span>` : ""}</span></div>`);
+    rows.push(`<div class="grow-row total"><span class="k">${esc(tr("prints.total"))}</span><span class="val">${
+      st.filament_g != null ? fmtG(st.filament_g) + " g" : "—"
+    }${st.cost ? `<span class="sub">${fmtG(st.cost, 2)} €</span>` : ""}</span></div>`);
   }
   $("vp-fil").innerHTML = rows.join("");
 
-  // Répartition : familles de trajectoires puis déplacements, en part du total.
+  // Breakdown: path features then travel, as a share of the total.
   const total = (st.features || []).reduce((a, f) => a + f.seconds, 0) + (st.travel_s || 0);
-  const feat = (st.features || []).map((f) => ({ name: FEATURES[Math.min(f.feature, FEATURES.length - 1)][0], c: FEATURES[Math.min(f.feature, FEATURES.length - 1)][1], s: f.seconds }));
-  if (st.travel_s > 0) feat.push({ name: "Déplacements", c: [96, 104, 126], s: st.travel_s });
+  const feat = (st.features || []).map((f) => ({ name: featureName(f.feature), c: FEATURES[Math.min(f.feature, FEATURES.length - 1)][1], s: f.seconds }));
+  if (st.travel_s > 0) feat.push({ name: tr("viewer.travel"), c: [96, 104, 126], s: st.travel_s });
   $("vp-feat").innerHTML = feat
     .map((f) => {
       const pct = total ? (f.s * 100) / total : 0;
@@ -1105,7 +1120,7 @@ $("vp-send").addEventListener("click", () => V.preview?.onSend?.());
 $("vp-save").addEventListener("click", () => V.preview?.onSave?.());
 $("vp-edit").addEventListener("click", () => V.preview?.onEdit?.());
 
-/* Déplace la cible de la caméra dans le plan de l'écran. */
+/* Moves the camera target in the screen plane. */
 function panBy(dx, dy) {
   const c = V.cam;
   const right = [Math.cos(c.yaw), Math.sin(c.yaw), 0];
@@ -1126,7 +1141,7 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 function bindInteractions(canvas) {
   canvas.addEventListener("mousedown", (e) => {
-    // Clic droit ou molette enfoncée : déplacement, comme dans les logiciels de CAO.
+    // Right click or pressed wheel: pan, as in CAD software.
     V.drag = { x: e.clientX, y: e.clientY, pan: e.shiftKey || e.button === 1 || e.button === 2 };
     e.preventDefault();
   });
@@ -1140,8 +1155,8 @@ function bindInteractions(canvas) {
     if (V.drag.pan) {
       panBy(dx, dy);
     } else {
-      // La scène suit le curseur : glisser vers la gauche l'emmène vers la
-      // gauche, comme le déplacement latéral juste au-dessus.
+      // The scene follows the cursor: dragging left takes it left, like the
+      // sideways pan just above.
       V.cam.yaw -= dx * 0.008;
       V.cam.pitch = Math.max(-1.45, Math.min(1.45, V.cam.pitch + dy * 0.008));
     }
@@ -1152,11 +1167,11 @@ function bindInteractions(canvas) {
     "wheel",
     (e) => {
       e.preventDefault();
-      // Les réglages viennent de app.js ; ils sont enregistrés entre deux lancements.
+      // Settings come from app.js; they are saved between launches.
       const dir = state.invertWheel ? -1 : 1;
       const speed = state.wheelSpeed || 1;
-      // Le pincement du trackpad arrive en molette avec ctrl : c'est toujours un zoom,
-      // et jamais inversé, sinon le geste devient contre-intuitif.
+      // A trackpad pinch arrives as a wheel event with ctrl: always a zoom, and
+      // never inverted, otherwise the gesture becomes counter-intuitive.
       const pinch = e.ctrlKey;
       const action = pinch ? "zoom" : state.wheelAction || "zoom";
 
@@ -1196,10 +1211,10 @@ $("v-plate").addEventListener("click", () => {
 });
 document.addEventListener("keydown", (e) => {
   const box = $("viewer");
-  // Ancré dans une conversation, le clavier appartient au terminal : un « R »
-  // au fil d'une phrase ne doit pas recadrer la caméra.
+  // Docked in a conversation, the keyboard belongs to the terminal: an "R"
+  // in the middle of a sentence must not reframe the camera.
   if (box.classList.contains("hidden") || box.classList.contains("docked")) return;
-  // Une sheet ouverte par-dessus (envoi à l'imprimante) garde le clavier.
+  // A sheet open on top (send to printer) keeps the keyboard.
   if (document.querySelector(".modal:not(.hidden)")) return;
   if (e.key === "Escape") closeViewer();
   if (e.key.toLowerCase() === "r") frameCamera();

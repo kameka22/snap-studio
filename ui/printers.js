@@ -1,16 +1,16 @@
 "use strict";
-/* Vue « Imprimantes ».
-   Le statut est lu par l'API HTTP Moonraker de l'imprimante (Klipper) :
-   la Snapmaker U1 l'expose sur le port 7125, et sur le port 80 derrière son nginx.
-   La recherche réseau (mDNS) ne tourne que pendant l'affichage de la liste
-   « Sur le réseau » ; sinon, seules les adresses enregistrées sont interrogées. */
+/* "Printers" view.
+   Status is read through the printer's Moonraker HTTP API (Klipper): the
+   Snapmaker U1 exposes it on port 7125, and on port 80 behind its nginx.
+   The network search (mDNS) only runs while the "On the network" list is
+   shown; otherwise only the saved addresses are queried. */
 
 const P = {
   list: [],
   sel: null,
-  status: new Map(),   // id -> dernier statut connu
-  seen: new Map(),     // id -> horodatage de la dernière donnée reçue
-  live: new Map(),     // id -> flux temps réel établi
+  status: new Map(),   // id -> last known status
+  seen: new Map(),     // id -> time of the last data received
+  live: new Map(),     // id -> live feed established
   timer: null,
   editing: null,
   busy: false,
@@ -32,12 +32,12 @@ function switchView(v) {
   }
   if (v === "prints") pjRender();
   else if (typeof pjCamStop === "function") pjCamStop();
-  // Les vues natives de la Bibliothèque ne doivent vivre que dans son onglet.
+  // The Library's native views must only live in its tab.
   libSetVisible(v === "library");
   if (v === "settings") refreshCacheSize();
   if (v === "prepare") prepareShow();
   if (v === "ia") iaRefresh();
-  // Le visualiseur ancré doit suivre l'onglet, pas y rester prisonnier.
+  // The docked viewer follows the tab instead of staying trapped in it.
   iaSetVisible(v === "ia");
   tbRender();
   sideSync();
@@ -46,13 +46,16 @@ function switchView(v) {
 document.querySelectorAll(".sidebar .side-item[data-view]").forEach((b) =>
   b.addEventListener("click", () => switchView(b.dataset.view))
 );
-tbSet("prepare", "Plateau");
-tbSet("library", "Bibliothèque");
-tbSet("ia", "IA");
-tbSet("printers", "Imprimantes");
-tbSet("settings", "Réglages");
+/* Titles of the views that have nothing more specific to show. */
+function tbDefaults() {
+  tbSet("prepare", tr("slice.plate"));
+  tbSet("library", tr("nav.library"));
+  tbSet("printers", tr("nav.printers"));
+  tbSet("settings", tr("nav.settings"));
+}
+tbDefaults();
 
-/* ------------------------------------------------------------ liste */
+/* ------------------------------------------------------------ list */
 
 async function prnLoad(selectId) {
   P.list = await invoke("printers_list");
@@ -74,9 +77,9 @@ function ledClass(st, id) {
 
 const SIDE_PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/></svg>';
 
-/* Les imprimantes s'affichent dans la barre latérale, voyant d'état à droite.
-   Les statuts arrivent en continu : si la liste n'a pas changé, on ne touche
-   qu'aux voyants, sans remplacer les entrées (un clic en cours serait perdu). */
+/* Printers show in the sidebar, status light on the right. Statuses arrive
+   continuously: when the list has not changed, only the lights are touched,
+   without replacing the entries (a click in progress would be lost). */
 function prnRenderList() {
   const box = $("side-printers");
   const items = [...box.children];
@@ -106,33 +109,35 @@ function prnRenderList() {
     };
     el.oncontextmenu = (e) =>
       nativeMenu([
-        { id: "prn:edit:" + p.id, label: "Modifier…" },
+        { id: "prn:edit:" + p.id, label: tr("printers.edit_menu") },
         {},
-        { id: "prn:remove:" + p.id, label: "Supprimer" },
+        { id: "prn:remove:" + p.id, label: tr("common.delete") },
       ], e.clientX, e.clientY);
     box.appendChild(el);
   }
   sideSync();
 }
 
-/* ------------------------------------------------------------ détail */
+/* ------------------------------------------------------------ detail */
 
+/* Printer state → label key and light class. */
 const STATES = {
-  standby: ["Prête", "ok"],
-  ready: ["Prête", "ok"],
-  printing: ["Impression en cours", "busy"],
-  paused: ["En pause", "busy"],
-  complete: ["Impression terminée", "ok"],
-  cancelled: ["Impression annulée", ""],
-  error: ["Erreur", "err"],
-  offline: ["Hors ligne", "err"],
+  standby: ["printers.state.ready", "ok"],
+  ready: ["printers.state.ready", "ok"],
+  printing: ["printers.state.printing", "busy"],
+  paused: ["printers.state.paused", "busy"],
+  complete: ["printers.state.complete", "ok"],
+  cancelled: ["printers.state.cancelled", ""],
+  error: ["printers.state.error", "err"],
+  offline: ["printers.state.offline", "err"],
 };
+const stateLabel = (s) => (STATES[s] ? tr(STATES[s][0]) : s);
 
 const fmtHms = (s) => {
   if (s == null || !isFinite(s)) return null;
   s = Math.max(0, Math.round(s));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h > 0 ? `${h} h ${String(m).padStart(2, "0")}` : `${m} min`;
+  return h > 0 ? tr("units.hm", { h, m: String(m).padStart(2, "0") }) : tr("units.min", { m });
 };
 
 function current() {
@@ -141,13 +146,13 @@ function current() {
 
 function prnRenderDetail() {
   const p = current();
-  // La caméra suit l'imprimante affichée : on coupe en changeant d'imprimante.
+  // The camera follows the printer shown: switching printer turns it off.
   if (CAM.id && CAM.id !== p?.id) camStop();
   $("prn-empty").classList.toggle("hidden", !!p);
   $("prn-detail").classList.toggle("hidden", !p);
   $("prn-tools").classList.toggle("hidden", !p);
   if (!p) {
-    tbSet("printers", "Imprimantes");
+    tbSet("printers", tr("nav.printers"));
     return;
   }
   tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}`);
@@ -158,24 +163,24 @@ function renderStatus(st) {
   const pill = $("prn-pill");
   if (!st) {
     pill.className = "pill";
-    pill.textContent = "Interrogation…";
+    pill.textContent = tr("printers.querying");
     paintPrinter({ online: false, state: "offline", nozzles: [] });
     return;
   }
-  const [label, cls] = STATES[st.online ? st.state : "offline"] || [st.state, ""];
-  pill.className = "pill " + cls;
-  pill.textContent = label;
+  const s = st.online ? st.state : "offline";
+  pill.className = "pill " + (STATES[s]?.[1] ?? "");
+  pill.textContent = stateLabel(s);
 
   const msg = $("prn-msg");
   const text = !st.online
-    ? "Imprimante injoignable. " + (st.message || "")
+    ? tr("printers.unreachable") + " " + (st.message || "")
     : st.state === "error"
-    ? st.message || "Erreur signalée par Klipper."
+    ? st.message || tr("printers.klipper_error")
     : "";
   msg.textContent = text;
   msg.classList.toggle("hidden", !text);
 
-  // Anneau de progression
+  // Progress ring
   const printing = st.job && st.progress != null;
   const pct = printing ? Math.round(st.progress * 100) : null;
   const C = 2 * Math.PI * 50;
@@ -184,83 +189,83 @@ function renderStatus(st) {
   ring.style.opacity = printing ? 1 : 0;
   $("prn-jobpct").textContent = pct != null ? pct + " %" : "—";
   $("prn-ringlbl").textContent = printing
-    ? "imprimé"
+    ? tr("printers.printed")
     : st.online
-    ? (STATES[st.state] || ["au repos"])[0].toLowerCase()
-    : "hors ligne";
-  $("prn-jobname").textContent = st.job || (st.online ? "Aucune impression en cours" : "Aucune donnée");
+    ? (STATES[st.state] ? stateLabel(st.state) : tr("printers.idle")).toLowerCase()
+    : tr("printers.state.offline").toLowerCase();
+  $("prn-jobname").textContent = st.job || tr(st.online ? "printers.no_job" : "printers.no_data");
 
   const times = [];
   const el = fmtHms(st.elapsed_s);
   const re = fmtHms(st.remaining_s);
-  if (el) times.push("écoulé " + el);
-  if (re) times.push("reste environ " + re);
+  if (el) times.push(tr("printers.elapsed", { t: el }));
+  if (re) times.push(tr("printers.remaining", { t: re }));
   $("prn-times").textContent = times.join(" · ");
 
-  // Étiquettes de contexte
+  // Context chips
   const chips = [];
-  if (st.layer) chips.push(chip("Couche", `${st.layer[0]} / ${st.layer[1]}`));
-  if (st.filament_mm) chips.push(chip("Filament", (st.filament_mm / 1000).toFixed(2).replace(".", ",") + " m"));
+  if (st.layer) chips.push(chip(tr("printers.layer"), `${st.layer[0]} / ${st.layer[1]}`));
+  if (st.filament_mm) chips.push(chip(tr("files.col.weight"), fmtDec(st.filament_mm / 1000, 2) + " m"));
   const act = (st.nozzles || []).find((n) => n.active);
   if (act) {
-    const t = act.current.toFixed(1).replace(".", ",");
-    chips.push(chip("Buse T" + act.index, act.target > 0 ? `${t} → ${Math.round(act.target)} °C` : `${t} °C`));
+    const t = fmtDec(act.current, 1);
+    chips.push(chip(tr("printers.nozzle", { i: act.index }), act.target > 0 ? `${t} → ${Math.round(act.target)} °C` : `${t} °C`));
   }
-  // Une vitesse à 100 % n'apprend rien : on ne l'affiche que si elle est modifiée.
+  // A 100 % speed tells nothing: shown only when changed.
   if (st.speed_factor != null && Math.round(st.speed_factor * 100) !== 100)
-    chips.push(chip("Vitesse", Math.round(st.speed_factor * 100) + " %"));
-  if (st.fan != null) chips.push(chip("Ventilateur", Math.round(st.fan * 100) + " %"));
+    chips.push(chip(tr("printers.speed"), Math.round(st.speed_factor * 100) + " %"));
+  if (st.fan != null) chips.push(chip(tr("printers.fan"), Math.round(st.fan * 100) + " %"));
   $("prn-chips").innerHTML = chips.join("");
 
-  // Filaments chargés (U1) et températures
+  // Loaded filaments (U1) and temperatures
   renderFilaments(st);
   const rows = [];
   if (!(st.filaments || []).length) {
-    // Imprimante sans emplacements déclarés : les buses restent listées ici.
+    // Printer without declared slots: the nozzles stay listed here.
     for (const n of st.nozzles || []) {
-      rows.push(tempRow(`Buse T${n.index}`, n.active ? "tête active" : "", n.current, n.target, n.active, ICON_NOZZLE));
+      rows.push(tempRow(tr("printers.nozzle", { i: n.index }), n.active ? tr("printers.active_head") : "", n.current, n.target, n.active, ICON_NOZZLE));
     }
   }
-  if (st.bed) rows.push(tempRow("Plateau", "", st.bed.current, st.bed.target, false, ICON_BED));
-  if (st.chamber) rows.push(tempRow("Caisson", "", st.chamber.current, st.chamber.target, false, ICON_BED));
+  if (st.bed) rows.push(tempRow(tr("slice.plate"), "", st.bed.current, st.bed.target, false, ICON_BED));
+  if (st.chamber) rows.push(tempRow(tr("printers.chamber"), "", st.chamber.current, st.chamber.target, false, ICON_BED));
   $("prn-temps").innerHTML = rows.join("");
 
-  // Informations
+  // Information
   const p = current();
   const info = [];
   const add = (k, v) => v != null && v !== "" && info.push(
     `<div class="grow-row"><span class="k">${esc(k)}</span><span class="val">${esc(String(v))}</span></div>`
   );
-  add("Modèle", p?.model);
-  add("Adresse", `${p?.host}:${p?.port}`);
-  add("Nom d'hôte", st.hostname);
+  add(tr("printers.form.model"), p?.model);
+  add(tr("printers.address"), `${p?.host}:${p?.port}`);
+  add(tr("printers.hostname"), st.hostname);
   add("Klipper", st.klipper);
-  add("Note", p?.note);
+  add(tr("printers.note"), p?.note);
   $("prn-info").innerHTML = info.join("");
 
   paintPrinter(st);
   updateFreshness();
 }
 
-/* Nom français approximatif d'une couleur, pour décrire une bobine. */
+/* Approximate name of a color, to describe a spool. */
 function colorName(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
   if (!m) return "";
   const n = parseInt(m[1], 16);
   const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
-  if (d < 0.08) return l > 0.85 ? "blanc" : l < 0.12 ? "noir" : "gris";
+  if (d < 0.08) return tr(l > 0.85 ? "color.white" : l < 0.12 ? "color.black" : "color.grey");
   let deg = mx === r ? 60 * (((g - b) / d) % 6) : mx === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
   if (deg < 0) deg += 360;
-  const table = [[15, "rouge"], [45, "orange"], [70, "jaune"], [160, "vert"], [200, "cyan"],
-                 [255, "bleu"], [290, "violet"], [330, "rose"], [361, "rouge"]];
-  let name = table.find(([lim]) => deg < lim)[1];
-  if (l < 0.22) name += " foncé";
-  else if (l > 0.82) name += " clair";
+  const table = [[15, "red"], [45, "orange"], [70, "yellow"], [160, "green"], [200, "cyan"],
+                 [255, "blue"], [290, "violet"], [330, "pink"], [361, "red"]];
+  const name = tr("color." + table.find(([lim]) => deg < lim)[1]);
+  if (l < 0.22) return tr("color.dark", { c: name });
+  if (l > 0.82) return tr("color.light", { c: name });
   return name;
 }
 
-/* Bobines chargées, la tête active en premier. */
+/* Loaded spools, the active head first. */
 function renderFilaments(st) {
   const box = $("prn-filaments");
   const fils = st.filaments || [];
@@ -283,23 +288,23 @@ function renderFilaments(st) {
     const bits = [];
     if (f.present) {
       const kind = [f.kind, f.sub_type].filter(Boolean).join(" ");
-      // Le code hexadécimal est une donnée technique : en ui-monospace.
+      // The hex code is technical data: in ui-monospace.
       const col = f.color ? `${esc(colorName(f.color))} <code>${esc(f.color.toUpperCase())}</code>` : "";
       bits.push([esc(kind), col].filter(Boolean).join(" · "));
       if (f.vendor) bits.push(esc(f.vendor));
     } else {
-      bits.push("emplacement vide");
+      bits.push(esc(tr("printers.slot_empty")));
     }
     const tags = [];
     if (on) {
-      tags.push(`<span class="ftag accent">${printing ? "EN EXTRUSION" : "TÊTE ACTIVE"}</span>`);
+      tags.push(`<span class="ftag accent">${esc(tr(printing ? "printers.extruding" : "printers.active_head_tag"))}</span>`);
     } else if (f.used && st.job) {
-      // `extruders_used` garde la trace du dernier travail : sans impression en
-      // cours, la mention n'aurait plus de sens.
-      tags.push('<span class="ftag">utilisé par le travail</span>');
+      // `extruders_used` remembers the last job: with no print running, the
+      // mention would no longer make sense.
+      tags.push(`<span class="ftag">${esc(tr("printers.used_by_job"))}</span>`);
     }
-    if (!f.present) tags.push('<span class="ftag">vide</span>');
-    const temp = n ? `${n.current.toFixed(1).replace(".", ",")} °C` : "";
+    if (!f.present) tags.push(`<span class="ftag">${esc(tr("printers.empty_tag"))}</span>`);
+    const temp = n ? `${fmtDec(n.current, 1)} °C` : "";
     const sw = f.present && f.color ? `background:${esc(f.color)}` : "";
     return `<div class="frow${on ? " on" : ""}">
       <span class="fbar"></span>
@@ -310,7 +315,7 @@ function renderFilaments(st) {
   });
 
   box.innerHTML =
-    `<div class="ghead">Filaments chargés<span class="note">${fils.length} emplacements</span></div>` +
+    `<div class="ghead">${esc(tr("printers.loaded"))}<span class="note">${esc(tr("printers.slots", { n: fils.length }))}</span></div>` +
     rows.join("");
 }
 
@@ -327,13 +332,13 @@ function tempRow(label, sub, cur, target, active, icon) {
     <span class="ic">${icon}</span>
     <span class="k">${esc(label)}${sub ? `<span class="sub">${esc(sub)}</span>` : ""}</span>
     <span class="heat"><i style="width:${(heat * 100).toFixed(0)}%"></i></span>
-    <span class="v"><b>${cur.toFixed(1).replace(".", ",")} °C</b>
-      <span>${target > 0 ? "→ " + Math.round(target) + " °C" : "sans chauffe"}</span></span>
+    <span class="v"><b>${fmtDec(cur, 1)} °C</b>
+      <span>${target > 0 ? "→ " + Math.round(target) + " °C" : esc(tr("printers.not_heating"))}</span></span>
   </div>`;
 }
 
-/* Anime l'illustration avec les données réelles : tête active désignée,
-   couleurs des bobines et des tubes, chaleur, pièce qui grandit. */
+/* Animates the illustration with live data: active head highlighted, spool
+   and tube colors, heat, part growing. */
 const HEADS = [[103, 71], [126, 63], [150, 54], [173, 46]];
 
 function paintPrinter(st) {
@@ -357,7 +362,7 @@ function paintPrinter(st) {
   pv.querySelectorAll(".pv-head").forEach((h) => {
     const i = +h.dataset.i;
     h.classList.toggle("on", i === ai);
-    // Sans information, on montre les quatre têtes de la U1.
+    // Without information, show the U1's four heads.
     h.style.display = !st.nozzles?.length || noz(i) ? "" : "none";
   });
   pv.querySelectorAll(".pv-chip").forEach((c) => {
@@ -370,7 +375,7 @@ function paintPrinter(st) {
     t.style.stroke = colorOf(+t.dataset.i) || "";
   });
 
-  // Désignation de la tête active : halo, étiquette et trait de rappel.
+  // Active head: glow, label and leader line.
   const badge = $("pv-badge");
   if (ai >= 0) {
     const [x, y] = HEADS[ai];
@@ -398,7 +403,7 @@ function paintPrinter(st) {
   const bed = st.bed ? Math.max(0, Math.min(1, (st.bed.current - 30) / 60)) : 0;
   $("pv-bedglow").setAttribute("opacity", (bed * 0.8).toFixed(2));
 
-  // La pièce grandit sur le plateau, dans la couleur du filament employé.
+  // The part grows on the bed, in the color of the filament in use.
   const h = st.job && st.progress != null ? 4 + st.progress * 40 : 0;
   const obj = $("pv-obj");
   obj.setAttribute("d", `M181 ${(172 - h).toFixed(1)} L206 ${(163 - h).toFixed(1)} L206 163 L181 172 Z`);
@@ -410,7 +415,7 @@ function paintPrinter(st) {
   );
 }
 
-/* ------------------------------------------------------------ interrogation */
+/* ------------------------------------------------------------ polling */
 
 async function pollOne(p) {
   try {
@@ -418,7 +423,7 @@ async function pollOne(p) {
     P.status.set(p.id, st);
     P.seen.set(p.id, Date.now());
   } catch {
-    P.status.set(p.id, { online: false, state: "offline", message: "Erreur interne" });
+    P.status.set(p.id, { online: false, state: "offline", message: tr("printers.internal_error") });
   }
 }
 
@@ -441,12 +446,11 @@ async function refreshAll() {
   if (current()) renderStatus(P.status.get(P.sel));
 }
 
-/* Flux temps réel : l'imprimante pousse ses changements par WebSocket
-   (JSON-RPC Moonraker). Les connexions ne vivent que pendant l'affichage
-   de cet onglet. */
+/* Live feed: the printer pushes its changes over WebSocket (Moonraker
+   JSON-RPC). Connections only live while this tab is shown. */
 function startLive() {
   invoke("printers_watch_start").catch((e) => toast(String(e), true));
-  // Rafraîchit l'horodatage « il y a … » sans aucun trafic réseau.
+  // Refreshes the "… ago" timestamp without any network traffic.
   clearInterval(P.timer);
   P.timer = setInterval(() => {
     if (current()) updateFreshness();
@@ -474,31 +478,31 @@ function updateFreshness() {
   const live = P.live.get(P.sel);
   const box = $("prn-updated");
   if (!seen) {
-    box.textContent = live ? "Connexion au flux temps réel…" : "";
+    box.textContent = live ? tr("printers.live.connecting") : "";
     return;
   }
   const age = Math.round((Date.now() - seen) / 1000);
   box.textContent = live
-    ? `Flux temps réel · donnée reçue il y a ${age} s`
-    : `Hors ligne · dernière donnée à ${new Date(seen).toLocaleTimeString("fr-FR")}`;
+    ? tr("printers.live.age", { s: age })
+    : tr("printers.live.offline", { time: new Date(seen).toLocaleTimeString(locale()) });
 }
 
-/* ------------------------------------------------------------ formulaire */
+/* ------------------------------------------------------------ form */
 
-/* ------------------------------------------------- recherche réseau */
+/* ------------------------------------------------- network search */
 
-/* Liste « Sur le réseau », partagée par la fenêtre d'ajout et l'assistant de
-   bienvenue : une seule recherche à la fois, affichée dans la dernière liste
-   ouverte. Les imprimantes arrivent au fil des réponses, une par adresse. */
+/* "On the network" list, shared by the add sheet and the welcome assistant:
+   one search at a time, shown in the last list opened. Printers arrive as
+   they answer, one per address. */
 const DISC = { items: new Map(), running: false, error: null, picked: null, view: null };
 
 function discoveryList(box, onPick) {
   DISC.view = { box, onPick };
   box.classList.add("disc");
   box.innerHTML = `<div class="disc-head">
-      <span class="disc-title">Sur le réseau</span>
+      <span class="disc-title">${esc(tr("disc.title"))}</span>
       <span class="disc-state"></span>
-      <button class="btn small disc-again hidden">Relancer</button>
+      <button class="btn small disc-again hidden">${esc(tr("disc.again"))}</button>
     </div>
     <div class="disc-list"></div>`;
   box.querySelector(".disc-again").onclick = discoverStart;
@@ -526,17 +530,17 @@ function discoverStop() {
   DISC.view = null;
 }
 
-/* Modèle à proposer pour une imprimante trouvée. */
+/* Model suggested for a printer found. */
 const discModel = (f) => f.model || (f.service === "snapmaker" ? "Snapmaker U1" : "Klipper / Moonraker");
 
-/* Déjà enregistrée : même adresse. */
+/* Already saved: same address. */
 const discKnown = (f) => P.list.some((p) => p.host === f.ip);
 
 listen("printer-found", (e) => {
   const f = e.payload;
   const prev = DISC.items.get(f.ip);
-  // Une U1 s'annonce parfois deux fois (Snapmaker et Moonraker) : la fiche
-  // Snapmaker, plus riche, l'emporte.
+  // A U1 sometimes announces itself twice (Snapmaker and Moonraker): the
+  // richer Snapmaker record wins.
   if (prev?.service === "snapmaker" && f.service !== "snapmaker") return;
   DISC.items.set(f.ip, f);
   discRender();
@@ -549,19 +553,21 @@ listen("printer-discover-done", () => {
 function discRender() {
   const v = DISC.view;
   if (!v) return;
-  const items = [...DISC.items.values()].sort((a, b) => a.name.localeCompare(b.name));
+  v.box.querySelector(".disc-title").textContent = tr("disc.title");
+  v.box.querySelector(".disc-again").textContent = tr("disc.again");
+  const items = [...DISC.items.values()].sort((a, b) => collate(a.name, b.name));
   const st = v.box.querySelector(".disc-state");
   st.innerHTML = DISC.running
-    ? '<span class="spinner small"></span>Recherche…'
+    ? `<span class="spinner small"></span>${esc(tr("disc.searching"))}`
     : items.length
-      ? `${items.length} trouvée${items.length > 1 ? "s" : ""}`
+      ? esc(tr("disc.found", { n: items.length }))
       : "";
   v.box.querySelector(".disc-again").classList.toggle("hidden", DISC.running);
   const list = v.box.querySelector(".disc-list");
   if (!items.length) {
     list.innerHTML = DISC.running
       ? ""
-      : `<div class="disc-empty">${esc(DISC.error || "Aucune imprimante trouvée — vérifiez qu'elle est allumée et sur le même réseau, ou saisissez son adresse.")}</div>`;
+      : `<div class="disc-empty">${esc(DISC.error || tr("disc.none"))}</div>`;
     return;
   }
   list.innerHTML = "";
@@ -570,10 +576,10 @@ function discRender() {
     const el = document.createElement("button");
     el.className = "disc-item" + (DISC.picked === f.ip ? " on" : "");
     el.disabled = known;
-    const sub = [f.ip, discModel(f), f.firmware && `firmware ${f.firmware}`].filter(Boolean).join(" · ");
+    const sub = [f.ip, discModel(f), f.firmware && tr("disc.firmware", { v: f.firmware })].filter(Boolean).join(" · ");
     el.innerHTML = `<span class="glyph">${SIDE_PRINTER}</span>
       <span class="disc-text"><b>${esc(f.name)}</b><small>${esc(sub)}</small></span>
-      ${known ? '<span class="disc-tag">déjà ajoutée</span>' : ""}`;
+      ${known ? `<span class="disc-tag">${esc(tr("disc.known"))}</span>` : ""}`;
     el.onclick = () => {
       DISC.picked = f.ip;
       discRender();
@@ -585,14 +591,14 @@ function discRender() {
 
 function openForm(printer) {
   P.editing = printer || null;
-  $("pmodal-title").textContent = printer ? "Modifier l'imprimante" : "Ajouter une imprimante";
+  $("pmodal-title").textContent = tr(printer ? "printers.edit_title" : "printers.add");
   $("pf-name").value = printer?.name || "";
   $("pf-host").value = printer?.host || "";
   $("pf-port").value = printer?.port || 7125;
   $("pf-model").value = printer?.model || "Snapmaker U1";
   $("pf-test").textContent = "";
   $("pf-test").className = "pf-test";
-  // La recherche ne sert qu'à un ajout.
+  // The search is only for adding.
   $("pf-disc").classList.toggle("hidden", !!printer);
   if (!printer) {
     discoveryList($("pf-disc"), (f) => {
@@ -618,7 +624,7 @@ async function probeForm() {
   if (!host) return;
   const box = $("pf-test");
   box.className = "pf-test";
-  box.textContent = "Test en cours…";
+  box.textContent = tr("printers.form.testing");
   const r = await invoke("printer_probe", { host, port: +$("pf-port").value || 7125 });
   box.className = "pf-test " + (r.ok ? "ok" : "err");
   box.textContent = r.detail;
@@ -632,7 +638,7 @@ async function saveForm() {
   const host = $("pf-host").value.trim();
   if (!host) {
     $("pf-test").className = "pf-test err";
-    $("pf-test").textContent = "Indiquez l'adresse IP ou le nom d'hôte de l'imprimante.";
+    $("pf-test").textContent = tr("printers.form.host_missing");
     return;
   }
   const printer = {
@@ -649,13 +655,13 @@ async function saveForm() {
     closeForm();
     await prnLoad(printer.id || saved?.id);
     switchView("printers");
-    toast(P.editing ? "Imprimante mise à jour" : "Imprimante ajoutée");
+    toast(tr(P.editing ? "printers.updated" : "printers.added"));
   } catch (e) {
-    toast("Enregistrement impossible : " + e, true);
+    toast(tr("printers.form.save_failed", { err: e }), true);
   }
 }
 
-/* suppression en deux temps, sans fenêtre supplémentaire */
+/* context menu of a printer in the sidebar */
 onMenu("prn", (arg) => {
   const i = arg.indexOf(":");
   const what = arg.slice(0, i), id = arg.slice(i + 1);
@@ -665,13 +671,13 @@ onMenu("prn", (arg) => {
   if (what === "remove") askRemove(p);
 });
 
-/* Suppression : confirmation par une alerte native. */
+/* Removal: confirmed by a native alert. */
 async function askRemove(target) {
   const p = target && target.id ? target : current();
   if (!p) return;
   const ok = await confirmDelete(
-    `Supprimer « ${p.name || p.host} » ?`,
-    "Elle disparaîtra de la liste ; rien n'est modifié sur la machine."
+    tr("printers.remove.title", { name: p.name || p.host }),
+    tr("printers.remove.text")
   );
   if (!ok) return;
   invoke("printer_remove", { id: p.id })
@@ -680,16 +686,16 @@ async function askRemove(target) {
       if (P.sel === p.id) P.sel = null;
       return prnLoad();
     })
-    .then(() => toast("Imprimante supprimée"))
+    .then(() => toast(tr("printers.removed")))
     .catch((e) => toast(String(e), true));
 }
 
-/* ------------------------------------------------------------ caméra */
+/* ------------------------------------------------------------ camera */
 
-/* Comme Snapmaker Orca : la caméra est réveillée par `camera.start_monitor`,
-   publie une image JPEG renouvelée en continu, qu'on relit en boucle ; elle
-   s'éteint d'elle-même si on ne la relance pas, d'où la relance toutes les
-   10 s. Une seule lecture en vol à la fois : la suivante part au chargement. */
+/* As in Snapmaker Orca: the camera is woken by `camera.start_monitor` and
+   publishes a continuously renewed JPEG, read again in a loop; it switches
+   itself off unless restarted, hence the restart every 10 s. One read in
+   flight at a time: the next one starts on load. */
 const CAM = { id: null, on: false, n: 0, timer: 0, keep: 0 };
 
 async function camStart() {
@@ -697,8 +703,8 @@ async function camStart() {
   if (!p) return;
   camStop();
   Object.assign(CAM, { id: p.id, on: true });
-  $("cam-toggle").textContent = "Masquer";
-  $("cam-note").textContent = "démarrage…";
+  $("cam-toggle").textContent = tr("common.hide");
+  $("cam-note").textContent = tr("printers.cam.starting");
   $("cam-box").classList.remove("hidden");
   try {
     await invoke("camera_start", { printerId: p.id });
@@ -723,7 +729,7 @@ function camStop() {
   clearInterval(CAM.keep);
   if (CAM.on && CAM.id) invoke("camera_stop", { printerId: CAM.id }).catch(() => {});
   Object.assign(CAM, { id: null, on: false, timer: 0, keep: 0 });
-  $("cam-toggle").textContent = "Afficher";
+  $("cam-toggle").textContent = tr("common.show");
   $("cam-note").textContent = "";
   $("cam-box").classList.add("hidden");
   $("cam-img").removeAttribute("src");
@@ -736,14 +742,14 @@ $("cam-img").addEventListener("load", () => {
 });
 $("cam-img").addEventListener("error", () => {
   if (!CAM.on) return;
-  $("cam-note").textContent = "image indisponible, nouvel essai…";
+  $("cam-note").textContent = tr("printers.cam.retry");
   CAM.timer = setTimeout(camNext, 1000);
 });
 $("cam-toggle").addEventListener("click", () => (CAM.on ? camStop() : camStart()));
-// Double-clic : l'image prend toute la largeur de l'écran de l'imprimante.
+// Double-click: the image takes the full width of the printer pane.
 $("cam-box").addEventListener("dblclick", () => $("cam-box").classList.toggle("big"));
 
-/* ------------------------------------------------------------ événements */
+/* ------------------------------------------------------------ events */
 
 $("prn-add").addEventListener("click", () => openForm(null));
 $("prn-add2").addEventListener("click", () => openForm(null));
@@ -760,6 +766,15 @@ $("pmodal").addEventListener("keydown", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("pmodal").classList.contains("hidden")) closeForm();
+});
+
+window.addEventListener("langchange", () => {
+  tbDefaults();
+  prnRenderDetail();
+  discRender();
+  $("cam-toggle").textContent = tr(CAM.on ? "common.hide" : "common.show");
+  if (P.editing !== undefined && !$("pmodal").classList.contains("hidden"))
+    $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
 });
 
 prnLoad();

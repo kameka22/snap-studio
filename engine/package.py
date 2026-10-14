@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Moteur allégé : copie la liste autorisée, puis archive et décrit.
+"""Slimmed-down engine: copies the allow list, then archives and describes it.
 
-    package.py prune   --platform macos --src <extrait> --dst <dossier>
-    package.py archive --dir <dossier> --out <archive.tar.zst> --entry <point d'entrée>
+    package.py prune   --platform macos --src <extracted> --dst <folder>
+    package.py archive --dir <folder> --out <archive.tar.zst> --entry <entry point>
                        --platform-key macos-aarch64 --url <url>  → <archive>.json
-    package.py manifest --version 2.4.0 <fragments *.json> → engine.json
+    package.py manifest --version 2.4.0 <*.json fragments> → engine.json
 
-La compression zstd passe par le paquet Python `zstandard` (pip install
-zstandard), disponible sur les trois systèmes.
+zstd compression goes through the `zstandard` Python package (pip install
+zstandard), available on all three systems.
 """
 
 import argparse
@@ -34,7 +34,7 @@ def patterns(platform):
         elif section == platform:
             out.append(line)
     if not out:
-        sys.exit(f"aucun motif pour {platform} dans keep.txt")
+        sys.exit(f"no pattern for {platform} in keep.txt")
     return out
 
 
@@ -44,8 +44,8 @@ def prune(args):
         shutil.rmtree(dst)
     kept, missing = 0, []
     for pat in patterns(args.platform):
-        # « dossier/** » : tout son contenu (le `**` de pathlib ne rend que
-        # des dossiers avant Python 3.13).
+        # "folder/**": all its content (pathlib's `**` only yields folders
+        # before Python 3.13).
         found = (src / pat[:-3]).rglob("*") if pat.endswith("/**") else src.glob(pat)
         hits = [p for p in found if p.is_file() or p.is_symlink()]
         if not hits:
@@ -54,16 +54,16 @@ def prune(args):
             rel = p.relative_to(src)
             out = dst / rel
             out.parent.mkdir(parents=True, exist_ok=True)
-            # Liens symboliques (cadres macOS) conservés comme liens.
+            # Symbolic links (macOS frameworks) kept as links.
             if p.is_symlink():
                 os.symlink(os.readlink(p), out)
             else:
                 shutil.copy2(p, out)
             kept += 1
     if missing:
-        sys.exit("motifs sans correspondance (paquet officiel modifié ?) :\n  " + "\n  ".join(missing))
+        sys.exit("patterns without a match (official package changed?):\n  " + "\n  ".join(missing))
     size = sum(f.stat().st_size for f in dst.rglob("*") if f.is_file())
-    print(f"{kept} fichiers gardés, {size / 1e6:.1f} Mo")
+    print(f"{kept} files kept, {size / 1e6:.1f} MB")
 
 
 def sha256(path):
@@ -82,7 +82,7 @@ def archive(args):
     with open(out, "wb") as fh:
         with zstandard.ZstdCompressor(level=19, threads=-1).stream_writer(fh) as zw:
             with tarfile.open(fileobj=zw, mode="w|") as tar:
-                # Contenu à la racine de l'archive ; ordre stable.
+                # Content at the archive's root; stable order.
                 for p in sorted(root.rglob("*")):
                     tar.add(p, arcname=p.relative_to(root).as_posix(), recursive=False)
     info = {
@@ -94,7 +94,7 @@ def archive(args):
         "entry": args.entry,
     }
     out.with_suffix("").with_suffix(".json").write_text(json.dumps(info, indent=2))
-    print(f"{out.name} : {info['size'] / 1e6:.1f} Mo, sha256 {info['sha256']}")
+    print(f"{out.name}: {info['size'] / 1e6:.1f} MB, sha256 {info['sha256']}")
 
 
 def manifest(args):

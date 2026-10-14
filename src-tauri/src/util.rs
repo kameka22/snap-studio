@@ -1,4 +1,4 @@
-/// Nettoie une description HTML issue des slicers (MakerWorld encode deux fois).
+/// Cleans an HTML description coming from slicers (MakerWorld double-encodes).
 pub fn strip_html(input: &str) -> String {
     let mut s = input.to_string();
     for _ in 0..2 {
@@ -35,7 +35,7 @@ pub fn strip_html(input: &str) -> String {
     cleaned.trim().to_string()
 }
 
-/// Hachage FNV-1a 64 bits, pour les cles de cache.
+/// 64-bit FNV-1a hash, for cache keys.
 pub fn fnv1a(parts: &[&[u8]]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for p in parts {
@@ -49,11 +49,11 @@ pub fn fnv1a(parts: &[&[u8]]) -> u64 {
     h
 }
 
-/// Cherche un exécutable, comme `which`, mais sans dépendre du shell.
+/// Looks for an executable, like `which`, without depending on the shell.
 ///
-/// Une application lancée depuis le Finder n'hérite pas du `PATH` du terminal :
-/// on ajoute donc les emplacements usuels, sans quoi `claude` ou `docker`
-/// resteraient introuvables alors qu'ils sont bien installés.
+/// An app launched from the Finder does not inherit the terminal's `PATH`: so
+/// the usual locations are added, otherwise `claude` or `docker` would stay
+/// missing although they are installed.
 pub fn which(name: &str) -> Option<std::path::PathBuf> {
     let extra = [
         "/opt/homebrew/bin",
@@ -70,7 +70,7 @@ pub fn which(name: &str) -> Option<std::path::PathBuf> {
         dirs.push(h.join(".local/bin"));
         dirs.push(h.join("bin"));
     }
-    // Windows : la commande s'écrit sans son extension.
+    // Windows: the command is written without its extension.
     let names: Vec<String> = if cfg!(windows) {
         vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_string()]
     } else {
@@ -81,7 +81,7 @@ pub fn which(name: &str) -> Option<std::path::PathBuf> {
     })
 }
 
-/// Windows : lance la commande sans ouvrir de fenêtre de console.
+/// Windows: runs the command without opening a console window.
 pub fn no_window(cmd: &mut std::process::Command) -> &mut std::process::Command {
     #[cfg(windows)]
     {
@@ -92,10 +92,11 @@ pub fn no_window(cmd: &mut std::process::Command) -> &mut std::process::Command 
     cmd
 }
 
-/// Encode en base64, sans dépendance : le pendant du décodeur de `gcode.rs`.
+/// Base64 encoding, without a dependency: the counterpart of `gcode.rs`'s
+/// decoder.
 ///
-/// Sert à faire passer les octets bruts d'un terminal jusqu'à l'interface,
-/// où seul l'émulateur sait recoller un caractère coupé en deux.
+/// Carries a terminal's raw bytes up to the UI, where only the emulator can
+/// glue back a character split in two.
 pub fn b64_encode(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
@@ -121,7 +122,7 @@ mod tests {
             ("abc", "YWJj"),
             ("bonjour, été", "Ym9uam91ciwgw6l0w6k="),
         ] {
-            assert_eq!(super::b64_encode(raw.as_bytes()), enc, "pour {raw:?}");
+            assert_eq!(super::b64_encode(raw.as_bytes()), enc, "for {raw:?}");
         }
     }
 }

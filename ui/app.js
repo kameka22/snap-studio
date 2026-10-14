@@ -4,13 +4,13 @@ const { listen } = window.__TAURI__.event;
 
 const $ = (id) => document.getElementById(id);
 
-/* Sur macOS, la barre de menus porte les raccourcis à ⌘ et la fenêtre est
-   vibrante, barre de titre en surimpression ; ailleurs, fenêtre classique. */
+/* On macOS the menu bar carries the ⌘ shortcuts and the window is vibrant,
+   with an overlaid title bar; elsewhere, a classic window. */
 const IS_MAC = /Macintosh|Mac OS X/.test(navigator.userAgent);
 document.documentElement.classList.toggle("mac", IS_MAC);
 
-/* Reprise des réglages de l'ancienne « 3MF Studio » (clés trimf.*). Le
-   stockage WebKit lui-même a été recopié par le Rust au démarrage. */
+/* Settings carried over from the former "3MF Studio" (trimf.* keys). The
+   WebKit storage itself was copied by Rust at startup. */
 for (const [o, n] of [["trimf", "snapstudio"], ["trimf.slice", "snapstudio.slice"], ["trimf.libtabs", "snapstudio.libtabs"]]) {
   if (localStorage.getItem(n) === null && localStorage.getItem(o) !== null) {
     localStorage.setItem(n, localStorage.getItem(o));
@@ -18,7 +18,7 @@ for (const [o, n] of [["trimf", "snapstudio"], ["trimf.slice", "snapstudio.slice
   }
 }
 
-/* ------------------------------------------------------------------ état */
+/* ------------------------------------------------------------------ state */
 
 const DEFAULTS = {
   view: "grid",
@@ -58,36 +58,39 @@ function save() {
   );
 }
 
-/* ------------------------------------------------------------- formatage */
+/* ------------------------------------------------------------ formatting */
 
+/* Sizes in 1024 steps, units from the catalog ("B KB MB…" / "o Ko Mo…"). */
 const fmtSize = (b) => {
-  if (b < 1024) return b + " o";
-  const u = ["Ko", "Mo", "Go", "To"];
-  let v = b / 1024, i = 0;
+  const u = tr("units.size").split(" ");
+  if (b < 1024) return `${b} ${u[0]}`;
+  let v = b / 1024, i = 1;
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
-  return (v < 10 ? v.toFixed(1) : Math.round(v)).toString().replace(".", ",") + " " + u[i];
+  return (v < 10 ? fmtDec(v, 1) : fmtNum(Math.round(v))) + " " + u[i];
 };
 
 const fmtDuration = (s) => {
   if (s == null) return null;
   const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
-  return h > 0 ? `${h} h ${String(m).padStart(2, "0")}` : `${Math.max(m, 1)} min`;
+  return h > 0
+    ? tr("units.hm", { h, m: String(m).padStart(2, "0") })
+    : tr("units.min", { m: Math.max(m, 1) });
 };
 
-const fmtWeight = (g) => (g == null ? null : `${g < 10 ? g.toFixed(1).replace(".", ",") : Math.round(g)} g`);
+const fmtWeight = (g) => (g == null ? null : `${g < 10 ? fmtDec(g, 1) : fmtNum(Math.round(g))} g`);
 
-const dtf = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
-/* Heure du jour, « 16 h 40 » ; la date s'ajoute si ce n'est pas aujourd'hui. */
+/* Time of day; the date is added when it is not today. */
 function fmtClock(ms) {
   const d = new Date(ms);
-  const hm = `${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
+  const hm = d.toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" });
   return d.toDateString() === new Date().toDateString()
     ? hm
-    : `${d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })} ${hm}`;
+    : `${d.toLocaleDateString(locale(), { weekday: "short", day: "numeric" })} ${hm}`;
 }
-const fmtDate = (secs) => dtf.format(new Date(secs * 1000));
+const fmtDate = (secs) =>
+  new Date(secs * 1000).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" });
 
-/* --------------------------------------------------------------- vignettes */
+/* ------------------------------------------------------------ thumbnails */
 
 const SIZES = [192, 256, 320, 448, 640, 896];
 const bucket = (n) => SIZES.find((s) => s >= n) ?? SIZES[SIZES.length - 1];
@@ -97,19 +100,19 @@ function thumbUrl(f, px) {
   return `thumb://localhost/t?p=${encodeURIComponent(f.path)}&s=${s}&k=${state.pref}&v=${f.modified}`;
 }
 
-/* ------------------------------------------------------------------ thème */
+/* ------------------------------------------------------------------ theme */
 
-/* Clair ou sombre : seul le réglage du système décide. Les surfaces dessinées
-   hors CSS (WebGL, terminal) écoutent l'événement « themechange ». */
+/* Light or dark: only the system setting decides. Surfaces drawn outside
+   CSS (WebGL, terminal) listen to the "themechange" event. */
 const darkScheme = matchMedia("(prefers-color-scheme: dark)");
 const isDark = () => darkScheme.matches;
 darkScheme.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 
-/* ------------------------------------------------------- menus natifs */
+/* ------------------------------------------------------- native menus */
 
-/* Le menu est construit côté Rust ; chaque entrée porte un identifiant
-   « verbe:argument » qui revient par l'événement « menu ». Une entrée sans
-   id est un séparateur ; « checked » en fait une entrée cochable. */
+/* Menus are built by Rust; each entry carries a "verb:argument" id that
+   comes back through the "menu" event. An entry without an id is a
+   separator; "checked" makes it a checkable entry. */
 const MENU = {};
 const onMenu = (verb, fn) => (MENU[verb] = fn);
 listen("menu", (e) => {
@@ -121,31 +124,31 @@ listen("menu", (e) => {
 function nativeMenu(items, x, y) {
   return invoke("popup_menu", { items, x, y }).catch((e) => toast(String(e), true));
 }
-/* Toute suppression se confirme par une alerte native (NSAlert). */
-function confirmDelete(title, message) {
+/* Every deletion is confirmed by a native alert (NSAlert). */
+function confirmDelete(title, message, okLabel = tr("common.delete")) {
   return window.__TAURI__.dialog.ask(message, {
     title,
     kind: "warning",
-    okLabel: "Supprimer",
-    cancelLabel: "Annuler",
+    okLabel,
+    cancelLabel: tr("common.cancel"),
   });
 }
 
-/* Pas de menu contextuel du navigateur, sauf dans les champs de saisie. */
+/* No browser context menu, except in text fields. */
 document.addEventListener("contextmenu", (e) => {
   if (!e.target.closest("input, textarea, [contenteditable]")) e.preventDefault();
 });
 
-/* Menu ouvert sous un bouton de barre d'outils. */
+/* Menu opened under a toolbar button. */
 function menuUnder(el, items) {
   const r = el.getBoundingClientRect();
   return nativeMenu(items, r.left, r.bottom + 4);
 }
 
-/* ------------------------------------------------- barre d'outils commune */
+/* ------------------------------------------------------- shared toolbar */
 
-/* Chaque vue déclare son titre et son sous-titre ; seule la vue affichée
-   les montre. Ses contrôles vivent dans un créneau .tb-actions[data-for]. */
+/* Each view declares its title and subtitle; only the visible view shows
+   them. Its controls live in a .tb-actions[data-for] slot. */
 const TB = {};
 function tbSet(view, title, sub = "") {
   TB[view] = { title, sub };
@@ -159,7 +162,7 @@ function tbRender() {
   document.querySelectorAll(".tb-actions").forEach((el) => el.classList.toggle("on", el.dataset.for === v));
 }
 
-/* ------------------------------------------------------- barre latérale */
+/* ------------------------------------------------------------- sidebar */
 
 const SIDE_FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 const baseName = (p) => p.split("/").filter(Boolean).pop() || p;
@@ -184,9 +187,9 @@ function renderRecents() {
     };
     b.oncontextmenu = (e) =>
       nativeMenu([
-        { id: "recent:reveal:" + d, label: "Afficher dans le Finder" },
+        { id: "recent:reveal:" + d, label: tr("menu.file.reveal") },
         {},
-        { id: "recent:forget:" + d, label: "Retirer des récents" },
+        { id: "recent:forget:" + d, label: tr("files.forget_recent") },
       ], e.clientX, e.clientY);
     box.appendChild(b);
   }
@@ -204,8 +207,8 @@ onMenu("recent", (arg) => {
   }
 });
 
-/* Une seule sélection dans la barre latérale, comme dans le Finder : le
-   dossier ouvert, l'imprimante affichée, sinon l'entrée de la vue. */
+/* A single selection in the sidebar, as in the Finder: the open folder, the
+   printer shown, otherwise the view's entry. */
 function sideSync() {
   const v = window.currentView || "files";
   let target = null;
@@ -214,7 +217,7 @@ function sideSync() {
   if (v === "ia" && typeof IA !== "undefined" && IA.open) target = document.querySelector(`#side-ia [data-conv="${CSS.escape(IA.open)}"]`);
   if (v === "prints" && typeof PJ !== "undefined" && PJ.sel) {
     target = document.querySelector(`#side-prints [data-pj="${CSS.escape(PJ.sel)}"]`);
-    // Une impression en cours lancée par Snap Studio : son entrée « live ».
+    // A running print started by Snap Studio: its "live" entry.
     if (!target && PJ.sel.startsWith("job:")) {
       const j = PJ.jobs.find((x) => "job:" + x.id === PJ.sel);
       if (j?.state === "printing") target = document.querySelector(`#side-prints [data-pj="live:${CSS.escape(j.printer_id)}"]`);
@@ -222,16 +225,16 @@ function sideSync() {
   }
   if (!target) target = document.querySelector(`.sidebar .side-item[data-view="${v}"]`);
   document.querySelectorAll(".sidebar .side-item").forEach((el) => el.classList.toggle("on", el === target));
-  // Le décompte du dossier ouvert s'affiche sur son entrée.
+  // The open folder's count shows on its entry.
   document.querySelectorAll("#side-recents .count").forEach((c) => (c.textContent = ""));
   if (v === "files" && target && target.dataset.dir) {
     target.querySelector(".count").textContent = state.dir ? String(state.files.length || "") : "";
   }
 }
 
-/* La sélection passe au gris quand la fenêtre perd le focus. On écoute la
-   fenêtre native : le document perd aussi le focus quand on clique dans une
-   page de la Bibliothèque, qui vit dans une autre vue de la même fenêtre. */
+/* The selection turns grey when the window loses focus. We listen to the
+   native window: the document also loses focus when clicking into a Library
+   page, which lives in another view of the same window. */
 const setInactive = (off) => $("sidebar").classList.toggle("inactive", off);
 const tauriWin = window.__TAURI__.window?.getCurrentWindow?.();
 if (tauriWin) tauriWin.onFocusChanged(({ payload }) => setInactive(!payload));
@@ -242,8 +245,8 @@ else {
 
 /* ------------------------------------------------------------------ sheets */
 
-/* Feuilles modales façon AppKit : elles descendent de la barre de titre.
-   Clic sur le voile = Annuler ; le premier champ prend le focus. */
+/* AppKit-style modal sheets: they slide down from the title bar. Clicking
+   the backdrop = Cancel; the first field takes focus. */
 function openSheet(el) {
   el.classList.remove("closing", "hidden");
   requestAnimationFrame(() => {
@@ -273,7 +276,7 @@ document.querySelectorAll(".modal").forEach((m) =>
 const TOAST_OK = '<svg class="ok" viewBox="0 0 24 24"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.1 8.4 18.7 7z"/></svg>';
 const TOAST_KO = '<svg class="ko" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>';
 
-/* Capsule en bas de fenêtre, jamais de bouton ; 2,6 s, 5 s pour une erreur. */
+/* Capsule at the bottom of the window, never a button; 2.6 s, 5 s for an error. */
 function toast(msg, err = false) {
   const el = document.createElement("div");
   el.className = "toast" + (err ? " err" : "");
@@ -288,7 +291,7 @@ function toast(msg, err = false) {
   }, err ? 5000 : 2600);
 }
 
-/* ---------------------------------------------------------------- dossier */
+/* ----------------------------------------------------------------- folder */
 
 async function pickFolder() {
   const dir = await invoke("pick_folder");
@@ -297,8 +300,8 @@ async function pickFolder() {
 
 async function openDir(dir) {
   state.dir = dir;
-  // Un dossier déjà listé garde sa place dans la barre latérale ; seul un
-  // nouveau venu s'ajoute en tête (le plus ancien sort quand la liste est pleine).
+  // A folder already listed keeps its place in the sidebar; only a newcomer
+  // goes to the top (the oldest drops out when the list is full).
   if (!state.recents.includes(dir)) state.recents = [dir, ...state.recents].slice(0, 8);
   save();
   renderRecents();
@@ -328,7 +331,7 @@ async function refresh() {
   loadMetas();
 }
 
-/* Les métadonnées arrivent par lots pour ne pas bloquer l'affichage. */
+/* Metadata arrives in batches so as not to block rendering. */
 async function loadMetas() {
   const token = (loadMetas.token = Symbol());
   const paths = state.files.map((f) => f.path);
@@ -349,7 +352,7 @@ async function loadMetas() {
   }
 }
 
-/* --------------------------------------------------------- tri et filtrage */
+/* ---------------------------------------------------- sorting, filtering */
 
 function subtitle(f) {
   const m = state.meta.get(f.path);
@@ -378,11 +381,11 @@ function applyView() {
   }
 
   const dir = state.asc ? 1 : -1;
-  const byName = (a, b) => a.name.localeCompare(b.name, "fr", { numeric: true, sensitivity: "base" });
+  const byName = (a, b) => collate(a.name, b.name);
   const num = (v) => (v == null ? null : v);
   const cmpNullable = (av, bv, a, b) => {
     if (av == null && bv == null) return byName(a, b);
-    if (av == null) return 1;   // sans valeur : toujours en fin de liste
+    if (av == null) return 1;   // no value: always last
     if (bv == null) return -1;
     return (av - bv) * dir || byName(a, b);
   };
@@ -393,7 +396,7 @@ function applyView() {
       case "size": return (a.size - b.size) * dir || byName(a, b);
       case "time": return cmpNullable(num(state.meta.get(a.path)?.print_time_s), num(state.meta.get(b.path)?.print_time_s), a, b);
       case "weight": return cmpNullable(num(state.meta.get(a.path)?.weight_g), num(state.meta.get(b.path)?.weight_g), a, b);
-      case "folder": return a.rel.localeCompare(b.rel, "fr") * dir || byName(a, b);
+      case "folder": return collate(a.rel, b.rel) * dir || byName(a, b);
       default: return byName(a, b) * dir;
     }
   });
@@ -403,7 +406,7 @@ function applyView() {
   updateStatus();
 }
 
-/* ------------------------------------------------------------------ rendu */
+/* ---------------------------------------------------------------- render */
 
 const BATCH = 100;
 
@@ -418,9 +421,8 @@ function renderReset() {
   $("noresult").classList.toggle("hidden", !nothing);
   if (nothing) {
     $("noresult").querySelector("p").textContent = state.files.length
-      ? "Aucun fichier ne correspond à la recherche."
-      : "Aucun fichier 3MF dans ce dossier." +
-        (state.recursive ? "" : " Activez « Inclure les sous-dossiers » dans les options.");
+      ? tr("files.no_match")
+      : tr("files.no_file") + (state.recursive ? "" : " " + tr("files.no_file.recursive"));
   }
   $("empty").classList.toggle("hidden", !!state.dir);
   document.documentElement.style.setProperty("--tile", state.tile + "px");
@@ -457,7 +459,7 @@ function thumbImg(f, px, cls) {
     img.remove();
     const d = document.createElement("div");
     d.className = "fail";
-    d.textContent = cls === "row" ? "?" : "Aperçu indisponible";
+    d.textContent = cls === "row" ? "?" : tr("files.no_preview");
     box.appendChild(d);
   });
   return img;
@@ -466,7 +468,7 @@ function thumbImg(f, px, cls) {
 function pickBox() {
   const p = document.createElement("div");
   p.className = "pick";
-  p.title = "Ajouter à la sélection";
+  p.title = tr("files.add_to_selection");
   p.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9.5 17.2 4.8 12.5l1.4-1.4 3.3 3.3 8-8 1.4 1.4z"/></svg>';
   return p;
 }
@@ -542,7 +544,7 @@ function fillRow(row, f) {
   if (f.rel) parts.push(f.rel);
   if (m?.title && m.title !== f.name) parts.push(m.title);
   if (m?.designer) parts.push(m.designer);
-  if (m?.objects?.length > 1) parts.push(`${m.objects.length} pièces`);
+  if (m?.objects?.length > 1) parts.push(tr("files.parts", { n: m.objects.length }));
   sub.textContent = parts.join(" · ");
   const [t, w, sz, dt] = row.querySelectorAll(".cell");
   t.textContent = fmtDuration(m?.print_time_s) || "—";
@@ -558,7 +560,7 @@ function addBadges(card, f) {
     const b = document.createElement("div");
     b.className = "badge gcode";
     b.textContent = "G-code";
-    b.title = "Fichier de trajectoires prêt à imprimer";
+    b.title = tr("files.gcode_badge");
     card.querySelector(".thumb").appendChild(b);
     return;
   }
@@ -566,14 +568,14 @@ function addBadges(card, f) {
   if (state.pref === 3 || (state.pref !== 2 && !m.has_embedded_thumb)) {
     const b = document.createElement("div");
     b.className = "badge";
-    b.textContent = "Rendu 3D";
-    b.title = "Aucune vignette dans le fichier : rendu calculé depuis la géométrie";
+    b.textContent = tr("files.render_badge");
+    b.title = tr("files.render_badge.title");
     card.querySelector(".thumb").appendChild(b);
   }
   if (m.plates > 1) {
     const b = document.createElement("div");
     b.className = "badge plates";
-    b.textContent = m.plates + " plateaux";
+    b.textContent = tr("files.plates", { n: m.plates });
     card.querySelector(".thumb").appendChild(b);
   }
 }
@@ -591,7 +593,7 @@ function patchNode(path) {
   }
 }
 
-/* -------------------------------------------------------------- sélection */
+/* -------------------------------------------------------------- selection */
 
 function setSel(paths, { scroll = false } = {}) {
   state.sel = new Set(paths);
@@ -612,7 +614,7 @@ function updateSelBar() {
   bar.classList.toggle("hidden", n < 2);
   if (n >= 2) {
     const size = state.files.filter((f) => state.sel.has(f.path)).reduce((s, f) => s + f.size, 0);
-    $("selbar-txt").textContent = `${n} fichiers sélectionnés · ${fmtSize(size)}`;
+    $("selbar-txt").textContent = `${tr("files.selected", { n })} · ${fmtSize(size)}`;
   }
 }
 
@@ -663,7 +665,7 @@ function columns() {
   return Math.max(1, cs.split(" ").filter(Boolean).length);
 }
 
-/* ------------------------------------------------------------- détails */
+/* ---------------------------------------------------------------- details */
 
 async function updateDetails() {
   const n = state.sel.size;
@@ -673,8 +675,8 @@ async function updateDetails() {
 
   if (n > 1) {
     const files = state.files.filter((f) => state.sel.has(f.path));
-    $("multi-count").textContent = n;
-    $("multi-size").textContent = fmtSize(files.reduce((s, f) => s + f.size, 0)) + " au total";
+    $("multi-title").textContent = tr("files.selected", { n });
+    $("multi-size").textContent = tr("files.total", { size: fmtSize(files.reduce((s, f) => s + f.size, 0)) });
     return;
   }
   if (n !== 1) return;
@@ -699,28 +701,28 @@ async function updateDetails() {
     if (![...state.sel][0] || [...state.sel][0] !== path) return;
   }
   const m = state.meta.get(path) || {};
-  $("det-sub").textContent = [m.title, m.designer && "par " + m.designer].filter(Boolean).join(" — ");
+  $("det-sub").textContent = [m.title, m.designer && tr("files.by", { name: m.designer })].filter(Boolean).join(" — ");
   const rendered = state.pref === 3 || (state.pref !== 2 && !m.has_embedded_thumb);
-  $("det-badge").textContent = rendered ? "Rendu 3D" : "";
+  $("det-badge").textContent = rendered ? tr("files.render_badge") : "";
   $("det-badge").style.display = rendered ? "" : "none";
 
   const rows = [];
   const add = (k, v) => v && rows.push([k, v]);
-  add("Taille", fmtSize(f.size));
-  add("Modifié", fmtDate(f.modified));
-  if (f.rel) add("Sous-dossier", f.rel);
-  add("Durée", fmtDuration(m.print_time_s));
-  add("Filament", fmtWeight(m.weight_g));
-  if (m.plates > 1) add("Plateaux", m.plates);
-  if (m.objects?.length) add("Pièces", m.objects.length > 3 ? `${m.objects.length}` : m.objects.join(", "));
-  add("Imprimante", m.printer);
-  add("Logiciel", m.application);
-  add("Créé le", m.creation_date);
-  add("Licence", m.license);
+  add(tr("files.col.size"), fmtSize(f.size));
+  add(tr("files.col.date"), fmtDate(f.modified));
+  if (f.rel) add(tr("files.info.subfolder"), f.rel);
+  add(tr("files.col.time"), fmtDuration(m.print_time_s));
+  add(tr("files.col.weight"), fmtWeight(m.weight_g));
+  if (m.plates > 1) add(tr("files.info.plates"), m.plates);
+  if (m.objects?.length) add(tr("files.info.parts"), m.objects.length > 3 ? `${m.objects.length}` : m.objects.join(", "));
+  add(tr("slice.printer"), m.printer);
+  add(tr("files.info.software"), m.application);
+  add(tr("files.info.created"), m.creation_date);
+  add(tr("files.info.license"), m.license);
   const a = state.analysis.get(path);
   if (a) {
-    add("Encombrement", a.size_mm.map((v) => v.toFixed(1).replace(".", ",")).join(" × ") + " mm");
-    add("Triangles", a.triangles.toLocaleString("fr-FR") + (a.approximated ? " (échantillonné)" : ""));
+    add(tr("files.info.bbox"), a.size_mm.map((v) => fmtDec(v, 1)).join(" × ") + " mm");
+    add(tr("files.info.triangles"), fmtNum(a.triangles) + (a.approximated ? " " + tr("files.info.sampled") : ""));
   }
   $("det-info").innerHTML = rows
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`)
@@ -731,18 +733,18 @@ async function updateDetails() {
       (fl) => `<div class="fil"><span class="swatch" style="background:${esc(fl.color || "#888")}"></span>
       <span>${esc(fl.kind || "?")}</span>
       <span class="g">${fl.used_g != null ? esc(fmtWeight(fl.used_g)) : ""}${
-        fl.used_m != null ? " · " + fl.used_m.toFixed(1).replace(".", ",") + " m" : ""
+        fl.used_m != null ? " · " + fmtDec(fl.used_m, 1) + " m" : ""
       }</span></div>`
     )
     .join("");
 
-  // L'analyse géométrique ne concerne que les maillages.
+  // Geometry analysis only applies to meshes.
   const isGcode = f.kind === "gcode";
   $("act-analyze").classList.toggle("hidden", !!a || isGcode);
   $("act-plate").classList.toggle("hidden", isGcode);
   $("act-slice").parentElement.classList.toggle("hidden", isGcode);
   $("det-ia").classList.toggle("hidden", isGcode);
-  $("det-3d").lastChild.textContent = isGcode ? " Trajectoires" : " Vue 3D";
+  $("det-3d").querySelector("[data-i18n]").textContent = tr(isGcode ? "viewer.color.paths" : "files.view3d");
   $("det-desc").textContent = m.description || "";
 }
 
@@ -754,28 +756,29 @@ async function analyzeSelected() {
   if (!path) return;
   const btn = $("act-analyze");
   btn.disabled = true;
-  btn.textContent = "Analyse en cours…";
+  btn.textContent = tr("files.analyzing");
   try {
     const a = await invoke("analyze", { path });
     state.analysis.set(path, a);
     updateDetails();
   } catch (e) {
-    toast("Analyse impossible : " + e, true);
+    toast(tr("files.analyze_failed", { err: e }), true);
   }
   btn.disabled = false;
-  btn.textContent = "Analyser la géométrie";
+  btn.textContent = tr("files.analyze");
 }
 
-/* ------------------------------------------------------------ suppression */
+/* --------------------------------------------------------------- deletion */
 
 async function askDelete() {
   if (!state.sel.size) return;
   const files = state.files.filter((f) => state.sel.has(f.path));
   const ok = await confirmDelete(
-    files.length === 1 ? `Mettre « ${files[0].name} » à la corbeille ?` : `Mettre ${files.length} fichiers à la corbeille ?`,
+    files.length === 1 ? tr("files.trash.one", { name: files[0].name }) : tr("files.trash.many", { n: files.length }),
     files.length === 1
-      ? "Le fichier sera placé dans la corbeille du système."
-      : `${fmtSize(files.reduce((s, f) => s + f.size, 0))} seront placés dans la corbeille du système.`
+      ? tr("files.trash.one.text")
+      : tr("files.trash.many.text", { size: fmtSize(files.reduce((s, f) => s + f.size, 0)) }),
+    tr("files.trash.ok")
   );
   if (ok) doDelete();
 }
@@ -785,7 +788,7 @@ async function doDelete() {
   try {
     await invoke("trash_files", { paths });
   } catch (e) {
-    toast("Suppression impossible : " + e, true);
+    toast(tr("files.trash_failed", { err: e }), true);
     return;
   }
   const gone = new Set(paths);
@@ -795,30 +798,29 @@ async function doDelete() {
   applyView();
   const next = state.view_files[Math.min(idx, state.view_files.length - 1)];
   setSel(next ? [next.path] : []);
-  toast(paths.length === 1 ? "Fichier mis à la corbeille" : `${paths.length} fichiers mis à la corbeille`);
+  toast(tr("files.trashed", { n: paths.length }));
 }
 
-/* ------------------------------------------------------------ menu, divers */
+/* ------------------------------------------------------------ menus, misc */
 
-/* Menu contextuel natif d'un fichier ; il agit sur la sélection courante,
-   à laquelle le clic droit a déjà ajouté l'élément visé. Ses entrées portent
-   le chemin visé (« ctxfile:action:chemin »), distinctes de celles de la
-   barre de menus (« file:action »). */
+/* Native context menu of a file; it acts on the current selection, to which
+   the right-click already added the target. Its entries carry the target
+   path ("ctxfile:action:path"), distinct from the menu bar's ("file:action"). */
 function openMenu(x, y, path) {
   const many = state.sel.size > 1;
   const f0 = state.files.find((f) => f.path === path);
   const id = (what) => `ctxfile:${what}:${path}`;
   nativeMenu([
-    { id: id("open"), label: many ? `Ouvrir ${state.sel.size} fichiers` : "Ouvrir" },
-    ...(f0?.kind !== "gcode" ? [{ id: id("plate"), label: "Ajouter au plateau du trancheur" }] : []),
+    { id: id("open"), label: many ? tr("files.open_many", { n: state.sel.size }) : tr("common.open") },
+    ...(f0?.kind !== "gcode" ? [{ id: id("plate"), label: tr("menu.file.plate") }] : []),
     ...(many ? [] : [
       {},
-      { id: id("view3d"), label: f0?.kind === "gcode" ? "Voir les trajectoires" : "Vue 3D" },
-      { id: id("reveal"), label: "Afficher dans le Finder" },
-      { id: id("copy"), label: "Copier le chemin" },
+      { id: id("view3d"), label: f0?.kind === "gcode" ? tr("files.view_paths") : tr("files.view3d") },
+      { id: id("reveal"), label: tr("menu.file.reveal") },
+      { id: id("copy"), label: tr("files.copy_path") },
     ]),
     {},
-    { id: id("delete"), label: many ? `Mettre ${state.sel.size} fichiers à la corbeille` : "Mettre à la corbeille" },
+    { id: id("delete"), label: many ? tr("files.trash_many", { n: state.sel.size }) : tr("menu.file.trash") },
   ], x, y);
 }
 
@@ -835,7 +837,7 @@ onMenu("ctxfile", (arg) => {
   const path = arg.slice(i + 1);
   if (state.sel.has(path)) fileAction(arg.slice(0, i), path);
 });
-/* Depuis la barre de menus : vue Fichiers seulement, ni sheet ni saisie en cours. */
+/* From the menu bar: Files view only, with no sheet open and no typing. */
 onMenu("file", (what) => {
   const path = [...state.sel][0];
   if (!path || window.currentView !== "files") return;
@@ -848,7 +850,7 @@ onMenu("file", (what) => {
 async function copy(text) {
   try {
     await navigator.clipboard.writeText(text);
-    toast("Chemin copié");
+    toast(tr("files.path_copied"));
   } catch {
     const ta = document.createElement("textarea");
     ta.value = text;
@@ -856,7 +858,7 @@ async function copy(text) {
     ta.select();
     document.execCommand("copy");
     ta.remove();
-    toast("Chemin copié");
+    toast(tr("files.path_copied"));
   }
 }
 
@@ -864,15 +866,15 @@ function updateStatus() {
   const total = state.view_files.reduce((s, f) => s + f.size, 0);
   const filtered = state.view_files.length !== state.files.length;
   const sub = state.dir
-    ? `${state.view_files.length} fichier${state.view_files.length > 1 ? "s" : ""}${
-        filtered ? ` sur ${state.files.length}` : ""
-      } · ${fmtSize(total)}`
+    ? (filtered
+        ? tr("files.count_of", { n: state.view_files.length, total: state.files.length })
+        : tr("files.count", { n: state.view_files.length })) + ` · ${fmtSize(total)}`
     : "";
-  tbSet("files", state.dir ? baseName(state.dir) : "Fichiers", sub);
+  tbSet("files", state.dir ? baseName(state.dir) : tr("nav.files"), sub);
   sideSync();
 }
 
-/* ------------------------------------------------------------- évènements */
+/* ----------------------------------------------------------------- events */
 
 $("items").addEventListener("mousedown", (e) => {
   const node = e.target.closest("[data-path]");
@@ -908,16 +910,16 @@ document.addEventListener("mousedown", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  // Les raccourcis de la vue Fichiers ne s'appliquent qu'à elle.
+  // The Files view's shortcuts only apply to it.
   if (window.currentView && window.currentView !== "files") return;
   if (!$("viewer").classList.contains("hidden")) return;
-  // Une sheet ouverte garde le clavier pour elle.
+  // An open sheet keeps the keyboard to itself.
   if (document.querySelector(".modal:not(.hidden)")) return;
   const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName);
   const mod = e.metaKey || e.ctrlKey;
-  // ⌘A sélectionne les fichiers ; ailleurs, la sélection native du menu Édition.
+  // ⌘A selects the files; elsewhere, the Edit menu's native selection.
   if (mod && e.key.toLowerCase() === "a" && !typing) { e.preventDefault(); selectAll(); return; }
-  // Sur macOS, les autres combinaisons sont des accélérateurs de la barre de menus.
+  // On macOS the other combinations are menu bar accelerators.
   if (mod && IS_MAC) return;
   if (mod && e.key.toLowerCase() === "o") { e.preventDefault(); pickFolder(); return; }
   if (mod && e.key.toLowerCase() === "r") { e.preventDefault(); refresh(); return; }
@@ -937,7 +939,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); askDelete(); return; }
   if (e.key === "Enter") {
-    sendToSlicer(mod);   // ⌘⏎ ajoute au plateau
+    sendToSlicer(mod);   // ⌘⏎ adds to the plate
     return;
   }
   const cols = columns();
@@ -954,30 +956,23 @@ $("stage").addEventListener("scroll", () => {
 });
 
 $("search").addEventListener("input", () => applyView());
-const SORTS = [
-  ["name", "Nom"],
-  ["date", "Date de modification"],
-  ["size", "Taille du fichier"],
-  ["time", "Durée d'impression"],
-  ["weight", "Poids de filament"],
-  ["folder", "Dossier"],
-];
+const SORTS = ["name", "date", "size", "time", "weight", "folder"];
 $("btn-sort").addEventListener("click", (e) =>
   menuUnder(e.currentTarget, [
-    ...SORTS.map(([k, label]) => ({ id: "sort:" + k, label, checked: state.sort === k })),
+    ...SORTS.map((k) => ({ id: "sort:" + k, label: tr("files.sort." + k), checked: state.sort === k })),
     {},
-    { id: "order:asc", label: "Croissant", checked: state.asc },
-    { id: "order:desc", label: "Décroissant", checked: !state.asc },
+    { id: "order:asc", label: tr("files.sort.asc"), checked: state.asc },
+    { id: "order:desc", label: tr("files.sort.desc"), checked: !state.asc },
   ])
 );
 onMenu("sort", (k) => { state.sort = k; save(); applyView(); syncHead(); });
 onMenu("order", (o) => { state.asc = o === "asc"; save(); applyView(); syncHead(); });
 $("btn-add").addEventListener("click", (e) =>
   menuUnder(e.currentTarget, [
-    { id: "files:open", label: "Ouvrir un dossier…", accel: "CmdOrCtrl+O" },
-    { id: "files:refresh", label: "Actualiser", accel: "CmdOrCtrl+R", enabled: !!state.dir },
+    { id: "files:open", label: tr("menu.file.open"), accel: "CmdOrCtrl+O" },
+    { id: "files:refresh", label: tr("menu.file.refresh"), accel: "CmdOrCtrl+R", enabled: !!state.dir },
     {},
-    { id: "files:reveal", label: "Afficher dans le Finder", enabled: !!state.dir },
+    { id: "files:reveal", label: tr("menu.file.reveal"), enabled: !!state.dir },
   ])
 );
 onMenu("nav", (v) => switchView(v));
@@ -987,7 +982,7 @@ onMenu("edit", (what) => {
 });
 onMenu("files", (what) => {
   if (what === "open") { switchView("files"); pickFolder(); }
-  // ⌘R recharge la page dans la Bibliothèque, le dossier ailleurs.
+  // ⌘R reloads the page in the Library, the folder elsewhere.
   if (what === "refresh") window.currentView === "library" ? libCmd("reload") : refresh();
   if (what === "reveal" && state.dir) invoke("reveal", { path: state.dir }).catch((e) => toast(String(e), true));
 });
@@ -1007,7 +1002,7 @@ function sendToSlicer(add) {
   invoke("open_in_slicer", { paths, app: state.slicer || null, add })
     .then(() => {
       const n = paths.length;
-      if (add) toast(n > 1 ? `${n} pièces ajoutées au plateau` : "Pièce ajoutée au plateau");
+      if (add) toast(tr("files.added_to_plate", { n }));
     })
     .catch((e) => toast(String(e), true));
 }
@@ -1028,7 +1023,7 @@ $("det-img").addEventListener("click", () => {
   if (p) open3d(p);
 });
 
-/* Le visualiseur est défini dans viewer.js, chargé après ce fichier. */
+/* The viewer is defined in viewer.js, loaded after this file. */
 function open3d(path) {
   const f = state.files.find((x) => x.path === path);
   if (f) openViewer(f.path, f.name, f.kind);
@@ -1065,7 +1060,7 @@ function setView(v) {
   renderReset();
 }
 
-/* réglages */
+/* settings */
 $("set-invert-wheel").addEventListener("change", () => {
   state.invertWheel = $("set-invert-wheel").checked;
   save();
@@ -1076,7 +1071,7 @@ $("set-wheel-action").addEventListener("change", () => {
 });
 $("set-wheel-speed").addEventListener("input", () => {
   state.wheelSpeed = +$("set-wheel-speed").value;
-  $("set-wheel-speed-val").textContent = state.wheelSpeed.toFixed(1).replace(".", ",") + "×";
+  $("set-wheel-speed-val").textContent = fmtDec(state.wheelSpeed, 1) + "×";
   save();
 });
 $("opt-slicer").addEventListener("change", () => {
@@ -1088,10 +1083,10 @@ async function fillSlicers() {
   const list = await invoke("slicers_list");
   const sel = $("opt-slicer");
   sel.innerHTML =
-    '<option value="">Application par défaut du système</option>' +
+    `<option value="">${esc(tr("settings.slicer.default"))}</option>` +
     list.map((s) => `<option value="${esc(s.path)}">${esc(s.name)}</option>`).join("");
-  // Premier lancement : on retient le trancheur le mieux placé, Snapmaker Orca
-  // en tête de la liste des applications reconnues.
+  // First launch: keep the best-ranked slicer, Snapmaker Orca heading the
+  // list of known applications.
   if (state.slicer === null && list.length) {
     state.slicer = list[0].path;
     save();
@@ -1113,7 +1108,7 @@ $("opt-pref").addEventListener("change", () => {
 $("opt-clear").addEventListener("click", async () => {
   const n = await invoke("clear_cache");
   refreshCacheSize();
-  toast(`${n} vignettes supprimées du cache`);
+  toast(tr("settings.cache.cleared", { n }));
   renderReset();
 });
 
@@ -1122,7 +1117,7 @@ function refreshCacheSize() {
 }
 
 
-/* glisser-déposer d'un dossier */
+/* drag and drop of a folder */
 listen("tauri://drag-enter", () => document.body.classList.add("dragover"));
 listen("tauri://drag-leave", () => document.body.classList.remove("dragover"));
 listen("tauri://drag-drop", (e) => {
@@ -1131,7 +1126,7 @@ listen("tauri://drag-drop", (e) => {
   if (p) openDir(p.replace(/\/[^/]+\.3mf$/i, ""));
 });
 
-/* sélection au lasso dans la zone vide */
+/* rubber-band selection in the empty area */
 (() => {
   const stage = $("stage");
   const items = $("items");
@@ -1153,7 +1148,7 @@ listen("tauri://drag-drop", (e) => {
       box = document.createElement("div");
       box.className = "rubber";
       document.body.appendChild(box);
-      // Les positions sont figées au début du geste : un seul calcul de mise en page.
+      // Positions are frozen at the start of the gesture: a single layout pass.
       rects = [...state.nodes].map(([p, n]) => [p, n.getBoundingClientRect()]);
     }
     const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
@@ -1175,7 +1170,7 @@ listen("tauri://drag-drop", (e) => {
   });
 })();
 
-/* largeur du panneau de détail */
+/* width of the details panel */
 (() => {
   const sp = $("splitter");
   let startX = 0, startW = 0, dragging = false;
@@ -1200,23 +1195,11 @@ listen("tauri://drag-drop", (e) => {
   });
 })();
 
-/* ------------------------------------------------------------ démarrage */
+/* ---------------------------------------------------------------- startup */
 
-async function boot() {
-  $("opt-recursive").checked = state.recursive;
-  $("set-invert-wheel").checked = state.invertWheel;
-  $("set-wheel-action").value = state.wheelAction;
-  $("set-wheel-speed").value = state.wheelSpeed;
-  $("set-wheel-speed-val").textContent = state.wheelSpeed.toFixed(1).replace(".", ",") + "×";
-  $("opt-pref").value = String(state.pref);
-  $("tile").value = state.tile;
-  $("details").style.width = state.detailsWidth + "px";
-  setView(state.view);
-  syncHead();
-
-  await fillSlicers();
-
-  const places = await invoke("quick_places");
+/* Usual folders (Downloads, Documents…), named by Rust in the current language. */
+async function fillPlaces() {
+  const places = await invoke("quick_places").catch(() => []);
   $("places").innerHTML = "";
   for (const p of places) {
     const b = document.createElement("button");
@@ -1226,6 +1209,23 @@ async function boot() {
     b.onclick = () => openDir(p.path);
     $("places").appendChild(b);
   }
+}
+
+async function boot() {
+  $("stage").dataset.drop = tr("files.drop");
+  $("opt-recursive").checked = state.recursive;
+  $("set-invert-wheel").checked = state.invertWheel;
+  $("set-wheel-action").value = state.wheelAction;
+  $("set-wheel-speed").value = state.wheelSpeed;
+  $("set-wheel-speed-val").textContent = fmtDec(state.wheelSpeed, 1) + "×";
+  $("opt-pref").value = String(state.pref);
+  $("tile").value = state.tile;
+  $("details").style.width = state.detailsWidth + "px";
+  setView(state.view);
+  syncHead();
+
+  await fillSlicers();
+  await fillPlaces();
 
   const arg = await invoke("initial_dir");
   if (arg) state.dir = arg;
@@ -1234,5 +1234,20 @@ async function boot() {
   updateStatus();
   if (state.dir) await refresh();
 }
+
+/* A new language: everything Files builds in code is rebuilt. */
+window.addEventListener("langchange", () => {
+  renderRecents();
+  renderReset();
+  updateDetails();
+  updateSelBar();
+  updateStatus();
+  fillSlicers();
+  fillPlaces();
+  refreshCacheSize();
+  $("set-wheel-speed-val").textContent = fmtDec(state.wheelSpeed, 1) + "×";
+  if (!$("act-analyze").disabled) $("act-analyze").textContent = tr("files.analyze");
+  $("stage").dataset.drop = tr("files.drop");
+});
 
 boot();

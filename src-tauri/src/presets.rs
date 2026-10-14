@@ -1,19 +1,19 @@
-//! Préréglages de Snapmaker Orca : inventaire, résolution de l'héritage, et
-//! écriture de configurations complètes pour le moteur de découpe.
+//! Snapmaker Orca presets: inventory, inheritance resolution, and writing
+//! complete configurations for the slicing engine.
 //!
-//! Les préréglages livrés avec l'application et ceux de l'utilisateur ne sont
-//! que des différentiels : chacun porte un `inherits` vers un parent. Le moteur
-//! en ligne de commande, lui, refuse tout ce qui n'est pas complet — il exige
-//! aussi les champs `type` et `from`, absents des préréglages utilisateur.
+//! The presets shipped with the app and the user's are only differentials:
+//! each carries an `inherits` towards a parent. The command-line engine
+//! refuses anything that is not complete — it also requires the `type` and
+//! `from` fields, missing from user presets.
 //!
-//! Deux pièges découverts à l'usage, corrigés ici :
+//! Two traps found in use, fixed here:
 //!
-//! * `normalize_fdm` lit `wipe_tower_filament` (préréglage process) et
-//!   `nozzle_diameter` (préréglage machine) **dans le même objet** ; si le
-//!   second manque, le moteur déréférence un pointeur nul et meurt. On recopie
-//!   donc `nozzle_diameter` dans la configuration process.
-//! * les filaments compatibles avec la buse 0.4 n'ont aucun suffixe dans leur
-//!   nom : il faut les filtrer sur `compatible_printers`, jamais sur le nom.
+//! * `normalize_fdm` reads `wipe_tower_filament` (process preset) and
+//!   `nozzle_diameter` (machine preset) **in the same object**; if the second
+//!   is missing, the engine dereferences a null pointer and dies. So
+//!   `nozzle_diameter` is copied into the process configuration.
+//! * filaments compatible with the 0.4 nozzle have no suffix in their name:
+//!   they must be filtered on `compatible_printers`, never on the name.
 
 use anyhow::{anyhow, Result};
 use serde::Serialize;
@@ -50,31 +50,31 @@ struct Entry {
 
 pub struct Index {
     entries: HashMap<String, Entry>,
-    /// Préréglages sélectionnés dans Snapmaker Orca, s'ils sont lisibles.
+    /// Presets selected in Snapmaker Orca, if readable.
     pub selected: HashMap<String, String>,
 }
 
-/// Clés de gestion des préréglages, sans intérêt pour l'utilisateur.
+/// Preset bookkeeping keys, of no interest to the user.
 const META: &[&str] = &["name", "type", "from", "inherits", "instantiation", "setting_id", "filament_id", "version", "is_custom_defined"];
 
-/// Contenu d'un préréglage pour la fenêtre de détail.
+/// Content of a preset for the details sheet.
 #[derive(Serialize, Debug)]
 pub struct Details {
     pub name: String,
     pub kind: Kind,
     pub user: bool,
-    /// Du préréglage vers ses ancêtres.
+    /// From the preset to its ancestors.
     pub chain: Vec<String>,
-    /// Valeurs effectives : héritage résolu, ajouts de Snap Studio compris.
+    /// Effective values: inheritance resolved, Snap Studio's additions included.
     pub values: Map<String, Value>,
-    /// Réglages modifiés par Snap Studio pour cette découpe.
+    /// Settings changed by Snap Studio for this slice.
     pub snap: Vec<String>,
-    /// Préréglage personnel : réglages qui diffèrent du préréglage système.
+    /// Custom preset: settings that differ from the system preset.
     pub custom: Vec<String>,
 }
 
-/// Ce que Snap Studio ajoute au préréglage d'impression : le plateau (par
-/// défaut celui de la machine), puis les surcharges de l'utilisateur.
+/// What Snap Studio adds to the process preset: the plate (the machine's by
+/// default), then the user's overrides.
 pub fn process_extra(index: &Index, machine: &str, overrides: &Map<String, Value>) -> Map<String, Value> {
     let (_, bed) = index.bed_types(machine);
     let mut out = Map::new();
@@ -85,8 +85,7 @@ pub fn process_extra(index: &Index, machine: &str, overrides: &Map<String, Value
     out
 }
 
-/// Ce que Snap Studio ajoute à un préréglage filament : la couleur réelle de
-/// la bobine.
+/// What Snap Studio adds to a filament preset: the spool's real color.
 pub fn filament_extra(color: Option<&str>) -> Map<String, Value> {
     let mut out = Map::new();
     if let Some(c) = color.filter(|c| is_hex_color(c)) {
@@ -95,7 +94,7 @@ pub fn filament_extra(color: Option<&str>) -> Map<String, Value> {
     out
 }
 
-/// Type de plateau : valeur attendue par le moteur, libellé affiché.
+/// Plate type: value expected by the engine, label shown.
 #[derive(Serialize, Clone, Debug)]
 pub struct BedType {
     pub value: String,
@@ -106,10 +105,10 @@ pub struct BedType {
 pub struct PresetDto {
     pub name: String,
     pub kind: Kind,
-    /// Vrai pour un préréglage créé par l'utilisateur.
+    /// True for a preset created by the user.
     pub user: bool,
-    /// Filaments seulement : matière (`PLA`, `PETG`…) et fabricant, pour
-    /// retrouver le préréglage qui correspond à une bobine chargée.
+    /// Filaments only: material (`PLA`, `PETG`…) and vendor, to find the preset
+    /// matching a loaded spool.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ftype: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -120,26 +119,23 @@ fn read_json(p: &Path) -> Option<Value> {
     serde_json::from_slice(&std::fs::read(p).ok()?).ok()
 }
 
-/// Dossier de données de Snapmaker Orca.
+/// Snapmaker Orca's data folder.
 pub fn datadir() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(std::env::temp_dir)
         .join("Snapmaker_Orca")
 }
 
-/// Dossier des profils livrés avec l'application.
+/// Folder of the profiles shipped with the app.
 fn system_profiles(app: &Path) -> Option<PathBuf> {
     crate::slicers::resources(app).map(|r| r.join("profiles/Snapmaker"))
 }
 
 impl Index {
-    /// Inventorie les profils système de `app` et les préréglages de l'utilisateur.
+    /// Inventories `app`'s system profiles and the user's presets.
     pub fn build(app: &Path) -> Result<Index> {
         let Some(sys) = system_profiles(app).filter(|p| p.is_dir()) else {
-            return Err(anyhow!(
-                "profils introuvables dans {} — cette application n'est pas Snapmaker Orca",
-                app.display()
-            ));
+            return Err(anyhow!(crate::t!("err.not_orca", path = app.display())));
         };
         let mut entries = HashMap::new();
         let add = |dir: PathBuf, kind: Kind, user: bool, entries: &mut HashMap<String, Entry>| {
@@ -155,7 +151,7 @@ impl Index {
                     .and_then(|v| v.as_str())
                     .map(String::from)
                     .unwrap_or_else(|| p.file_stem().unwrap_or_default().to_string_lossy().to_string());
-                // Un préréglage utilisateur masque celui du système de même nom.
+                // A user preset hides the system one of the same name.
                 if user || !entries.contains_key(&name) {
                     entries.insert(name, Entry { kind, json, user });
                 }
@@ -175,7 +171,7 @@ impl Index {
         })
     }
 
-    /// Configuration complète d'un préréglage, héritage résolu.
+    /// Complete configuration of a preset, inheritance resolved.
     pub fn flatten(&self, name: &str) -> Option<Map<String, Value>> {
         self.flatten_inner(name, &mut HashSet::new(), 0)
     }
@@ -205,7 +201,7 @@ impl Index {
         self.entries.get(name).map(|e| e.kind)
     }
 
-    /// Chaîne d'héritage, du préréglage vers ses ancêtres.
+    /// Inheritance chain, from the preset to its ancestors.
     pub fn chain(&self, name: &str) -> Vec<String> {
         let mut out = vec![];
         let mut cur = Some(name.to_string());
@@ -225,8 +221,8 @@ impl Index {
         out
     }
 
-    /// Contenu d'un préréglage tel qu'il part au moteur : héritage résolu,
-    /// puis `extra`, ce que Snap Studio y ajoute pour cette découpe.
+    /// Content of a preset as it goes to the engine: inheritance resolved, then
+    /// `extra`, what Snap Studio adds for this slice.
     pub fn details(&self, name: &str, extra: &Map<String, Value>) -> Option<Details> {
         let e = self.entries.get(name)?;
         let mut values = self.flatten(name)?;
@@ -238,7 +234,7 @@ impl Index {
             values.insert(k.clone(), v.clone());
         }
         let chain = self.chain(name);
-        // Préréglage personnel : ce qui diffère de son premier ancêtre système.
+        // Custom preset: what differs from its first system ancestor.
         let custom = chain
             .iter()
             .skip(1)
@@ -259,7 +255,7 @@ impl Index {
         Some(Details { name: name.to_string(), kind: e.kind, user: e.user, chain, values, snap, custom })
     }
 
-    /// Préréglages d'un type donné, proposables à l'utilisateur.
+    /// Presets of a given type that can be offered to the user.
     fn selectable(&self, kind: Kind) -> Vec<(&String, &Entry)> {
         self.entries
             .iter()
@@ -281,11 +277,11 @@ impl Index {
         v
     }
 
-    /// La machine choisie et ses ancêtres.
+    /// The chosen machine and its ancestors.
     ///
-    /// Un préréglage machine personnel hérite du profil système, et les listes
-    /// `compatible_printers` citent le nom du parent : sans cette remontée, un
-    /// profil personnalisé n'aurait aucun process ni filament compatible.
+    /// A custom machine preset inherits the system profile, and the
+    /// `compatible_printers` lists cite the parent's name: without walking up, a
+    /// custom profile would have no compatible process nor filament.
     fn machine_aliases(&self, machine: &str) -> Vec<String> {
         let mut out = vec![machine.to_string()];
         let mut cur = machine.to_string();
@@ -305,22 +301,22 @@ impl Index {
         out
     }
 
-    /// Préréglages compatibles avec une machine donnée.
+    /// Presets compatible with a given machine.
     fn compatible(&self, kind: Kind, machine: &str) -> Vec<PresetDto> {
         let names = self.machine_aliases(machine);
         let mut v: Vec<PresetDto> = self
             .selectable(kind)
             .into_iter()
             .filter_map(|(n, e)| {
-                // La compatibilité peut être déclarée sur le préréglage lui-même
-                // ou héritée de son parent ; l'héritage résolu sert aussi à lire
-                // la matière et le fabricant d'un filament.
+                // Compatibility can be declared on the preset itself or inherited from
+                // its parent; the resolved inheritance also gives a filament's material
+                // and vendor.
                 let flat = self.flatten(n).unwrap_or_default();
                 let ok = match flat.get("compatible_printers").and_then(|v| v.as_array()) {
                     Some(list) if !list.is_empty() => list
                         .iter()
                         .any(|x| x.as_str().map(|s| names.iter().any(|n| n == s)).unwrap_or(false)),
-                    // Sans liste explicite, le préréglage vaut pour tout le monde.
+                    // Without an explicit list, the preset applies to everyone.
                     _ => true,
                 };
                 if !ok {
@@ -346,7 +342,7 @@ impl Index {
         self.compatible(Kind::Filament, machine)
     }
 
-    /// Dimensions utiles du plateau, en millimètres.
+    /// Usable bed dimensions, in millimeters.
     pub fn plate_size(&self, machine: &str) -> (f32, f32) {
         let corners = self
             .flatten(machine)
@@ -354,7 +350,7 @@ impl Index {
             .unwrap_or_default();
         let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
         for c in corners {
-            // Format « 270.5x271 ».
+            // "270.5x271" format.
             let Some((a, b)) = c.as_str().and_then(|s| s.split_once('x')) else {
                 continue;
             };
@@ -373,7 +369,7 @@ impl Index {
         }
     }
 
-    /// Modèle d'imprimante d'un préréglage machine (« Snapmaker U1 »…).
+    /// Printer model of a machine preset ("Snapmaker U1"…).
     pub fn printer_model(&self, machine: &str) -> Option<String> {
         self.flatten(machine)?
             .get("printer_model")?
@@ -382,38 +378,39 @@ impl Index {
             .map(String::from)
     }
 
-    /// Plateaux proposés pour une machine, et celui par défaut.
+    /// Plates offered for a machine, and the default one.
     ///
-    /// La température du plateau dépend du plateau choisi : chaque profil
-    /// filament en porte une par type (`textured_plate_temp`,
-    /// `cool_plate_temp`…). Sans `curr_bed_type`, le moteur prend la Cool
-    /// Plate — 35 °C pour le PLA de la U1, au lieu de 65 °C.
+    /// The bed temperature depends on the chosen plate: each filament profile
+    /// carries one per type (`textured_plate_temp`, `cool_plate_temp`…). Without
+    /// `curr_bed_type`, the engine takes the Cool Plate — 35 °C for the U1's PLA,
+    /// instead of 65 °C.
     pub fn bed_types(&self, machine: &str) -> (Vec<BedType>, String) {
         let cfg = self.flatten(machine).unwrap_or_default();
         let u1 = cfg
             .get("printer_model")
             .and_then(|v| v.as_str())
             .is_some_and(|m| m.contains("U1"));
-        // Mêmes listes que l'interface d'Orca (`PrintConfig.cpp`).
+        // Same lists as Orca's interface (`PrintConfig.cpp`).
         let list: &[(&str, &str)] = if u1 {
             &[
-                ("Textured PEI Plate", "PEI texturé"),
-                ("High Temp Plate", "PEI lisse"),
-                ("Graphic Effect Plate", "Plateau à effet graphique"),
+                ("Textured PEI Plate", "bed.textured_pei"),
+                ("High Temp Plate", "bed.smooth_pei"),
+                ("Graphic Effect Plate", "bed.graphic"),
             ]
         } else {
             &[
-                ("Textured PEI Plate", "PEI texturé"),
-                ("High Temp Plate", "PEI lisse (High Temp)"),
-                ("Cool Plate", "Cool Plate lisse"),
-                ("Textured Cool Plate", "Cool Plate texturé"),
-                ("Engineering Plate", "Engineering Plate"),
-                ("Supertack Plate", "Cool Plate (SuperTack)"),
+                ("Textured PEI Plate", "bed.textured_pei"),
+                ("High Temp Plate", "bed.high_temp"),
+                ("Cool Plate", "bed.cool"),
+                ("Textured Cool Plate", "bed.textured_cool"),
+                ("Engineering Plate", "bed.engineering"),
+                ("Supertack Plate", "bed.supertack"),
             ]
         };
+        // The second element is the label's translation key.
         let types: Vec<BedType> = list
             .iter()
-            .map(|(value, label)| BedType { value: value.to_string(), label: label.to_string() })
+            .map(|(value, key)| BedType { value: value.to_string(), label: crate::t!(key) })
             .collect();
         let default = cfg
             .get("default_bed_type")
@@ -424,7 +421,7 @@ impl Index {
         (types, default)
     }
 
-    /// Nombre de têtes déclarées par une machine.
+    /// Number of heads a machine declares.
     pub fn extruder_count(&self, machine: &str) -> usize {
         self.flatten(machine)
             .and_then(|m| {
@@ -437,8 +434,8 @@ impl Index {
     }
 }
 
-/// Les préréglages utilisateur d'abord, puis par ordre alphabétique naturel.
-/// Première valeur d'un réglage, qu'il soit écrit en liste ou en texte.
+/// User presets first, then natural alphabetical order.
+/// First value of a setting, whether written as a list or as text.
 fn first_str(cfg: &Map<String, Value>, key: &str) -> Option<String> {
     let v = cfg.get(key)?;
     let s = match v {
@@ -454,7 +451,7 @@ fn sort_presets(v: &mut [PresetDto]) {
     v.sort_by(|a, b| b.user.cmp(&a.user).then_with(|| a.name.cmp(&b.name)));
 }
 
-/// Préréglages actuellement sélectionnés dans Snapmaker Orca.
+/// Presets currently selected in Snapmaker Orca.
 fn read_selected() -> HashMap<String, String> {
     let mut out = HashMap::new();
     let p = datadir().join("Snapmaker_Orca.conf");
@@ -469,29 +466,28 @@ fn read_selected() -> HashMap<String, String> {
     out
 }
 
-/// Fichiers de configuration prêts pour le moteur de découpe.
+/// Configuration files ready for the slicing engine.
 pub struct Prepared {
     pub machine: PathBuf,
     pub process: PathBuf,
     pub filaments: Vec<PathBuf>,
 }
 
-/// Déclare la machine dans `compatible_printers`.
+/// Declares the machine in `compatible_printers`.
 ///
-/// Le moteur vérifie la compatibilité sur le **nom** du préréglage machine. Un
-/// préréglage personnel s'appelle « … LCA » alors que les process listent le
-/// nom du parent : sans cet ajout, il répond « process not compatible with
-/// printer » et s'arrête.
+/// The engine checks compatibility on the machine preset's **name**. A custom
+/// preset is called "… LCA" while processes list the parent's name: without
+/// this addition it answers "process not compatible with printer" and stops.
 fn declare_compatible(cfg: &mut Map<String, Value>, machine: &str) {
     let Some(list) = cfg.get_mut("compatible_printers").and_then(|v| v.as_array_mut()) else {
-        return; // sans liste, le préréglage vaut déjà pour toutes les machines
+        return; // without a list, the preset already applies to every machine
     };
     if !list.iter().any(|x| x.as_str() == Some(machine)) {
         list.push(Value::String(machine.to_string()));
     }
 }
 
-/// `#rrggbb` : seule forme acceptée pour une couleur de filament.
+/// `#rrggbb`: the only form accepted for a filament color.
 fn is_hex_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit())
 }
@@ -499,8 +495,8 @@ fn is_hex_color(c: &str) -> bool {
 fn write_config(dir: &Path, kind: Kind, name: &str, mut cfg: Map<String, Value>, suffix: &str) -> Result<PathBuf> {
     cfg.insert("type".into(), Value::String(kind.tag().into()));
     cfg.insert("name".into(), Value::String(name.into()));
-    // Le moteur n'accepte que « system » ou « User » ; nos fichiers sont des
-    // configurations complètes, pas des différentiels d'utilisateur.
+    // The engine only accepts "system" or "User"; our files are complete
+    // configurations, not user differentials.
     cfg.insert("from".into(), Value::String("system".into()));
     cfg.insert("instantiation".into(), Value::String("true".into()));
     let path = dir.join(format!("{}{}.json", kind.dir(), suffix));
@@ -508,12 +504,11 @@ fn write_config(dir: &Path, kind: Kind, name: &str, mut cfg: Map<String, Value>,
     Ok(path)
 }
 
-/// Écrit les configurations complètes dans `dir`.
+/// Writes the complete configurations into `dir`.
 ///
-/// `filaments` contient un préréglage par tête ; s'il en manque, le premier est
-/// répété, comme le fait l'interface d'Orca. `colors` porte la couleur réelle
-/// de chaque bobine : elle remplace celle du préréglage, et se retrouve dans le
-/// G-code et l'aperçu.
+/// `filaments` holds one preset per head; when some are missing, the first is
+/// repeated, as Orca's interface does. `colors` carries each spool's real
+/// color: it replaces the preset's, and ends up in the G-code and preview.
 pub fn prepare(
     index: &Index,
     dir: &Path,
@@ -525,25 +520,25 @@ pub fn prepare(
 ) -> Result<Prepared> {
     std::fs::create_dir_all(dir)?;
     if index.kind_of(machine) != Some(Kind::Machine) {
-        return Err(anyhow!("préréglage machine inconnu : {machine}"));
+        return Err(anyhow!(crate::t!("err.unknown_machine", name = machine)));
     }
     if index.kind_of(process) != Some(Kind::Process) {
-        return Err(anyhow!("préréglage d'impression inconnu : {process}"));
+        return Err(anyhow!(crate::t!("err.unknown_process", name = process)));
     }
     let machine_cfg = index
         .flatten(machine)
-        .ok_or_else(|| anyhow!("héritage irrésoluble pour {machine}"))?;
+        .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = machine)))?;
     let mut process_cfg = index
         .flatten(process)
-        .ok_or_else(|| anyhow!("héritage irrésoluble pour {process}"))?;
+        .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = process)))?;
 
-    // Sans cette recopie, `normalize_fdm` cherche `nozzle_diameter` à côté de
-    // `wipe_tower_filament` et tombe sur un pointeur nul.
+    // Without this copy, `normalize_fdm` looks for `nozzle_diameter` next to
+    // `wipe_tower_filament` and hits a null pointer.
     if let Some(nd) = machine_cfg.get("nozzle_diameter") {
         process_cfg.insert("nozzle_diameter".into(), nd.clone());
     }
-    // Plateau par défaut de la machine ; le choix de l'utilisateur, passé
-    // dans `overrides`, l'emporte.
+    // The machine's default plate; the user's choice, passed in `overrides`,
+    // wins.
     for (k, v) in process_extra(index, machine, overrides) {
         process_cfg.insert(k, v);
     }
@@ -558,13 +553,13 @@ pub fn prepare(
         let name = filaments
             .get(i)
             .or_else(|| filaments.first())
-            .ok_or_else(|| anyhow!("aucun filament choisi"))?;
+            .ok_or_else(|| anyhow!(crate::t!("err.no_filament")))?;
         if index.kind_of(name) != Some(Kind::Filament) {
-            return Err(anyhow!("préréglage de filament inconnu : {name}"));
+            return Err(anyhow!(crate::t!("err.unknown_filament", name = name)));
         }
         let mut cfg = index
             .flatten(name)
-            .ok_or_else(|| anyhow!("héritage irrésoluble pour {name}"))?;
+            .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = name)))?;
         declare_compatible(&mut cfg, machine);
         for (k, v) in filament_extra(colors.get(i).and_then(|c| c.as_deref())) {
             cfg.insert(k, v);
@@ -603,55 +598,55 @@ mod tests {
         let procs = idx.processes_for(&user_machine.name);
         let fils = idx.filaments_for(&user_machine.name);
         println!(
-            "préréglage personnel « {} » : {} process, {} filaments",
+            "custom preset “{}”: {} processes, {} filaments",
             user_machine.name,
             procs.len(),
             fils.len()
         );
-        assert!(!procs.is_empty(), "les process du parent restent compatibles");
-        assert!(!fils.is_empty(), "les filaments du parent restent compatibles");
+        assert!(!procs.is_empty(), "the parent's processes stay compatible");
+        assert!(!fils.is_empty(), "the parent's filaments stay compatible");
     }
 
     #[test]
     fn indexes_and_resolves() {
         let Some(idx) = index() else { return };
         let machines = idx.machines();
-        println!("{} machines proposables", machines.len());
+        println!("{} machines offered", machines.len());
         let u1 = machines
             .iter()
             .find(|m| m.name == "Snapmaker U1 (0.4 nozzle)")
-            .expect("la U1 0.4 est proposée");
-        println!("sélection courante : {:?}", idx.selected.get("machine"));
+            .expect("the U1 0.4 is offered");
+        println!("current selection: {:?}", idx.selected.get("machine"));
 
         let flat = idx.flatten(&u1.name).unwrap();
-        assert!(flat.len() > 50, "configuration complète ({} clés)", flat.len());
+        assert!(flat.len() > 50, "complete configuration ({} keys)", flat.len());
         assert!(flat.contains_key("nozzle_diameter"));
-        assert!(flat.contains_key("machine_start_gcode"), "hérité du parent");
-        assert!(!flat.contains_key("inherits"), "l'héritage est résolu");
-        assert_eq!(idx.extruder_count(&u1.name), 4, "la U1 a quatre têtes");
+        assert!(flat.contains_key("machine_start_gcode"), "inherited from the parent");
+        assert!(!flat.contains_key("inherits"), "inheritance is resolved");
+        assert_eq!(idx.extruder_count(&u1.name), 4, "the U1 has four heads");
 
         let procs = idx.processes_for(&u1.name);
         let fils = idx.filaments_for(&u1.name);
-        println!("{} process, {} filaments compatibles", procs.len(), fils.len());
+        println!("{} processes, {} filaments compatible", procs.len(), fils.len());
         assert!(!procs.is_empty() && !fils.is_empty());
-        // Le piège du nommage : les filaments de la buse 0.4 n'ont pas de suffixe.
+        // The naming trap: 0.4 nozzle filaments have no suffix.
         assert!(
             fils.iter().any(|f| f.name.contains("PLA")),
-            "au moins un PLA compatible"
+            "at least one compatible PLA"
         );
         assert!(
             !fils.iter().any(|f| f.name.contains("0.2 nozzle")),
-            "aucun filament d'une autre buse"
+            "no filament for another nozzle"
         );
     }
 
-    /// Profils du clone de référence d'OrcaSlicer, s'il est là (non versionné).
+    /// Profiles of OrcaSlicer's reference clone, if it is there (not versioned).
     fn repo_index() -> Option<Index> {
         let readme = Path::new(env!("CARGO_MANIFEST_DIR")).join("../OrcaSlicer/README.md");
         readme.is_file().then(|| Index::build(&readme).ok()).flatten()
     }
 
-    /// Le détail affiché est exactement ce que reçoit le moteur.
+    /// The details shown are exactly what the engine receives.
     #[test]
     fn details_match_what_the_engine_gets() {
         let Some(idx) = repo_index().or_else(index) else { return };
@@ -664,9 +659,9 @@ mod tests {
 
         let d = idx.details(&process, &process_extra(&idx, machine, &over)).unwrap();
         assert_eq!(d.kind, Kind::Process);
-        assert!(d.chain.len() > 1, "héritage : {:?}", d.chain);
+        assert!(d.chain.len() > 1, "inheritance: {:?}", d.chain);
         assert!(d.snap.contains(&"curr_bed_type".to_string()));
-        assert!(!d.values.contains_key("inherits"), "clés de gestion retirées");
+        assert!(!d.values.contains_key("inherits"), "bookkeeping keys removed");
 
         let dir = std::env::temp_dir().join("snapstudio_details_test");
         let p = prepare(&idx, &dir, machine, &process, &[filament.clone()], &[Some("#ff8800".into())], &over).unwrap();
@@ -678,7 +673,7 @@ mod tests {
         let fw: Value = serde_json::from_slice(&std::fs::read(&p.filaments[0]).unwrap()).unwrap();
         assert_eq!(fw["filament_colour"], f.values["filament_colour"]);
         assert_eq!(fw["hot_plate_temp"], f.values["hot_plate_temp"]);
-        println!("{} : {:?} · plateau {} → {}", process, d.chain, d.values["curr_bed_type"], f.values["hot_plate_temp"]);
+        println!("{}: {:?} · plate {} → {}", process, d.chain, d.values["curr_bed_type"], f.values["hot_plate_temp"]);
     }
 
     #[test]
@@ -691,7 +686,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
 
         let p = prepare(&idx, &dir, machine, &process, &[filament.clone()], &[], &Map::new()).unwrap();
-        assert_eq!(p.filaments.len(), 4, "un filament par tête");
+        assert_eq!(p.filaments.len(), 4, "one filament per head");
 
         let m: Value = serde_json::from_slice(&std::fs::read(&p.machine).unwrap()).unwrap();
         assert_eq!(m["type"], "machine");
@@ -700,20 +695,20 @@ mod tests {
         assert_eq!(pr["type"], "process");
         assert!(
             pr.get("nozzle_diameter").is_some(),
-            "nozzle_diameter recopié : c'est ce qui évite le plantage"
+            "nozzle_diameter copied: it is what avoids the crash"
         );
-        assert_eq!(pr["curr_bed_type"], "Textured PEI Plate", "plateau par défaut de la U1");
-        println!("process « {process} », filament « {filament} » → {}", dir.display());
+        assert_eq!(pr["curr_bed_type"], "Textured PEI Plate", "the U1's default plate");
+        println!("process “{process}”, filament “{filament}” → {}", dir.display());
     }
 
-    /// Le moteur de découpe doit accepter ce que l'on écrit : on le lance pour
-    /// de bon sur un modèle et on attend un G-code.
+    /// The slicing engine must accept what we write: run it for real on a model
+    /// and expect a G-code.
     #[test]
     fn engine_accepts_prepared_configs() {
         let (Some(idx), Ok(model)) = (index(), std::env::var("SLICE_MODEL")) else {
             return;
         };
-        // On part des préréglages réellement sélectionnés dans Orca.
+        // Start from the presets actually selected in Orca.
         let machine = idx
             .selected
             .get("machine")
@@ -754,7 +749,7 @@ mod tests {
             .arg("--outputdir").arg(&out)
             .arg(&model)
             .output()
-            .expect("moteur lançable");
+            .expect("engine can be started");
         let status = out_cmd.status;
         let mut msg = String::from_utf8_lossy(&out_cmd.stdout).to_string();
         msg.push_str(&String::from_utf8_lossy(&out_cmd.stderr));
@@ -764,7 +759,7 @@ mod tests {
             .rev()
             .take(4)
             .collect();
-        println!("moteur : {:?}", tail);
+        println!("engine: {:?}", tail);
 
         let produced: Vec<_> = std::fs::read_dir(&out)
             .unwrap()
@@ -773,16 +768,16 @@ mod tests {
             .filter(|p| p.extension().and_then(|x| x.to_str()) == Some("gcode"))
             .collect();
         println!(
-            "machine « {machine} »\nprocess « {process} »\nfilament « {filament} »\n→ code {:?} en {} ms, {} fichier(s) : {:?}",
+            "machine “{machine}”\nprocess “{process}”\nfilament “{filament}”\n→ code {:?} in {} ms, {} file(s): {:?}",
             status.code(),
             t.elapsed().as_millis(),
             produced.len(),
             produced.iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect::<Vec<_>>()
         );
-        assert!(status.success(), "le moteur a refusé la configuration");
-        assert!(!produced.is_empty(), "aucun G-code produit");
+        assert!(status.success(), "the engine refused the configuration");
+        assert!(!produced.is_empty(), "no G-code produced");
         let size = std::fs::metadata(&produced[0]).unwrap().len();
-        assert!(size > 1000, "G-code trop court ({size} octets)");
+        assert!(size > 1000, "G-code too short ({size} bytes)");
     }
 
     #[test]

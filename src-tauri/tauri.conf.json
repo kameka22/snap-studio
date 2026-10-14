@@ -12,6 +12,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Snap Studio",
         "width": 1380,
         "height": 900,
@@ -38,9 +39,13 @@
       "icons/icon.ico"
     ],
     "category": "Utility",
-    "shortDescription": "Explorateur de fichiers 3MF",
+    "shortDescription": "3MF file browser and slicer for the Snapmaker U1",
     "macOS": {
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "files": {
+        "Resources/en.lproj/InfoPlist.strings": "./locales/en.lproj/InfoPlist.strings",
+        "Resources/fr.lproj/InfoPlist.strings": "./locales/fr.lproj/InfoPlist.strings"
+      }
     }
   },
   "plugins": {

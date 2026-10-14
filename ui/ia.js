@@ -1,28 +1,26 @@
 "use strict";
-/* Onglet IA : une conversation par objet — à modifier, ou à créer de zéro.
+/* AI tab: one conversation per object — to modify, or to create from scratch.
 
-   Chaque conversation possède son dossier de travail, préparé côté Rust :
-   l'objet converti en STL, les consignes et les outils. Ici on ne fait que
-   créer, lister et supprimer ; le terminal et le volet 3D viendront se poser
-   dans l'écran de détail. */
+   Each conversation owns a working folder, prepared by Rust: the object
+   converted to STL, the instructions and the tools. The detail screen holds
+   the Claude terminal and the 3D pane. */
 
 const IA = {
   list: [],
   engine: null,
-  /* Le fichier choisi dans Fichiers, le temps de la modale ; null quand on
-     crée un objet de zéro. */
+  /* The file picked in Files, while the sheet is open; null when creating
+     an object from scratch. */
   source: null,
-  /* « edit » depuis Fichiers, « create » depuis le bouton ＋. */
+  /* "edit" from Files, "create" from the ＋ button. */
   mode: "edit",
-  /* Conversation dont la suppression attend confirmation. */
-  /* Conversation ouverte à l'écran, ou null si l'on est sur la liste. */
+  /* Conversation open on screen, or null on the list. */
   open: null,
-  /* Un émulateur par conversation : quitter l'onglet ne doit rien effacer.
+  /* One emulator per conversation: leaving the tab must not erase anything.
      id -> { term, fit, el, dead } */
   terms: new Map(),
 };
 
-/* ------------------------------------------------------------ chargement */
+/* ------------------------------------------------------------ loading */
 
 async function iaRefresh() {
   try {
@@ -31,8 +29,8 @@ async function iaRefresh() {
     IA.list = [];
   }
   iaRender();
-  // L'état du bac à sable change sans prévenir — Docker se démarre et
-  // s'arrête — et l'interroger prend un instant : on rafraîchit à côté.
+  // The sandbox state changes without notice — Docker starts and stops —
+  // and querying it takes a moment: refresh on the side.
   invoke("ia_engine")
     .then((e) => {
       IA.engine = e;
@@ -41,8 +39,8 @@ async function iaRefresh() {
     .catch(() => {});
 }
 
-/* Le bac à sable n'est utilisable que si le démon répond : Docker installé
-   mais arrêté est le cas le plus courant sur macOS. */
+/* The sandbox is only usable when the daemon answers: Docker installed but
+   stopped is the most common case on macOS. */
 const iaSandboxReady = () => {
   const e = IA.engine || {};
   return !!(e.docker && e.daemon && e.yolobox);
@@ -54,52 +52,45 @@ function iaDefaultEngine() {
 
 function iaEngineLabel() {
   const e = IA.engine || {};
-  if (!e.claude) return "Claude Code introuvable";
-  if (iaSandboxReady()) return "Conteneur disponible";
-  if (e.docker && e.yolobox && !e.daemon) return "Docker installé mais arrêté";
-  return "Mode local";
+  if (!e.claude) return tr("ia.engine.no_claude");
+  if (iaSandboxReady()) return tr("ia.engine.container_ok");
+  if (e.docker && e.yolobox && !e.daemon) return tr("ia.engine.docker_stopped");
+  return tr("ia.engine.local_mode");
 }
 
-/* Pourquoi le conteneur n'est pas proposé, dit en clair. */
+/* Why the container is not offered, in plain words. */
 function iaSandboxReason() {
   const e = IA.engine || {};
-  if (iaSandboxReady()) return "Conteneur (isolé)";
-  if (!e.docker) return "Conteneur — Docker absent";
-  if (!e.daemon) return "Conteneur — Docker arrêté";
-  return "Conteneur — yolobox absent";
+  if (iaSandboxReady()) return tr("ia.engine.container");
+  if (!e.docker) return tr("ia.engine.no_docker");
+  if (!e.daemon) return tr("ia.engine.daemon_off");
+  return tr("ia.engine.no_yolobox");
 }
 
-/* ------------------------------------------------------------ affichage */
-
-const iaWhen = (secs) => {
-  const d = new Date(secs * 1000);
-  const mins = (Date.now() - d.getTime()) / 60000;
-  if (mins < 1) return "à l'instant";
-  if (mins < 60) return `il y a ${Math.round(mins)} min`;
-  if (mins < 60 * 24) return `il y a ${Math.round(mins / 60)} h`;
-  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-};
+/* ------------------------------------------------------------ display */
 
 const iaIsCreation = (c) => c.kind === "create";
-/* Objet créé que Claude n'a pas encore exporté une première fois. */
+/* A created object Claude has not exported a first time yet. */
 const iaEmpty = (c) => !!c && iaIsCreation(c) && !c.version;
 
-/* La vignette de l'objet d'origine, servie par le protocole des miniatures.
-   Un objet créé n'en a pas : on montre l'aperçu que l'application rend pour
-   Claude, la version servant de brise-cache. */
+/* The original object's thumbnail, served by the thumbnail protocol. A
+   created object has none: show the preview the app renders for Claude, the
+   version busting the cache. */
 const iaThumb = (c) =>
   iaIsCreation(c)
     ? `thumb://localhost/ia?ia=${encodeURIComponent(c.id)}&v=${c.version}`
     : `thumb://localhost/t?p=${encodeURIComponent(c.source)}&s=176&k=0&v=${c.created_at}`;
 
-/* « d'après support.3mf », ou « création · Mes modèles » pour un objet neuf. */
+/* "from support.3mf", or "new design · My models" for a new object. */
 function iaOrigin(c) {
-  if (!iaIsCreation(c)) return `d'après ${c.source_name}`;
-  return c.dest_dir ? `création · ${baseName(c.dest_dir)}` : "création";
+  if (!iaIsCreation(c)) return tr("ia.from", { name: c.source_name });
+  return c.dest_dir ? `${tr("ia.creation")} · ${baseName(c.dest_dir)}` : tr("ia.creation");
 }
 
-/* Source introuvable ou illisible : on garde la tuile, vide.
-   Un pixel transparent évite l'icône d'image cassée du moteur de rendu. */
+const iaEngineName = (c) => tr(c.engine === "container" ? "ia.engine.container_short" : "ia.engine.local_short");
+
+/* Missing or unreadable source: keep the tile, empty. A transparent pixel
+   avoids the renderer's broken-image icon. */
 const IA_BLANK =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 function iaNoThumb(img) {
@@ -108,12 +99,12 @@ function iaNoThumb(img) {
 }
 
 function iaStatus(c) {
-  if (c.saved) return `<span class="ia-badge done">✓ Enregistré dans Fichiers</span>`;
-  return `<span class="ia-badge">○ En attente</span>`;
+  if (c.saved) return `<span class="ia-badge done">✓ ${esc(tr("ia.saved_badge"))}</span>`;
+  return `<span class="ia-badge">○ ${esc(tr("ia.pending_badge"))}</span>`;
 }
 
-/* Conversations sous l'entrée IA de la barre latérale, comme les dossiers
-   récents sous Fichiers ; la conversation ouverte y est sélectionnée. */
+/* Conversations under the sidebar's AI entry, like recent folders under
+   Files; the open conversation is selected there. */
 const IA_GLYPH = '<svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg>';
 function iaRenderSide() {
   const box = $("side-ia");
@@ -130,10 +121,10 @@ function iaRenderSide() {
     };
     b.oncontextmenu = (e) =>
       nativeMenu([
-        { id: "ia:open:" + c.id, label: "Ouvrir la conversation" },
-        { id: "ia:folder:" + c.id, label: "Afficher le dossier de travail" },
+        { id: "ia:open:" + c.id, label: tr("ia.open_conv") },
+        { id: "ia:folder:" + c.id, label: tr("ia.show_workspace") },
         {},
-        { id: "ia:delete:" + c.id, label: "Supprimer" },
+        { id: "ia:delete:" + c.id, label: tr("common.delete") },
       ], e.clientX, e.clientY);
     box.appendChild(b);
   }
@@ -150,8 +141,8 @@ function iaRender() {
   if (!detail) $("ia-engine-tag").textContent = iaEngineLabel();
   sideCount("ia", IA.list.length);
   const c = detail && IA.list.find((x) => x.id === IA.open);
-  if (c) tbSet("ia", c.title, `${iaOrigin(c)} · ${c.engine === "container" ? "conteneur" : "local"}`);
-  else tbSet("ia", "IA", IA.list.length ? `${IA.list.length} conversation${IA.list.length > 1 ? "s" : ""}` : "");
+  if (c) tbSet("ia", c.title, `${iaOrigin(c)} · ${iaEngineName(c)}`);
+  else tbSet("ia", tr("nav.ia"), IA.list.length ? tr("ia.count", { n: IA.list.length }) : "");
   $("ia-detail").classList.toggle("hidden", !detail);
   $("ia-empty").classList.toggle("hidden", detail || IA.list.length > 0);
   $("ia-list").classList.toggle("hidden", detail || IA.list.length === 0);
@@ -159,7 +150,7 @@ function iaRender() {
 
   $("ia-list").innerHTML = IA.list
     .map((c) => {
-      // Un objet créé n'a rien à montrer avant le premier export de Claude.
+      // A created object has nothing to show before Claude's first export.
       const thumb = c.version
         ? `<img class="ia-thumb" src="${esc(iaThumb(c))}" alt="" onerror="iaNoThumb(this)" />`
         : `<div class="ia-thumb blank">${IA_GLYPH}</div>`;
@@ -168,39 +159,28 @@ function iaRender() {
         <div class="ia-body">
           <h3>${esc(c.title)}</h3>
           <div class="ia-sub">${esc(iaOrigin(c))}</div>
-          <div class="ia-meta">${esc(iaWhen(c.updated_at))} · ${c.version ? `v${c.version}` : "brouillon"} · ${
-            c.engine === "container" ? "conteneur" : "local"
-          }</div>
+          <div class="ia-meta">${esc(fmtAgo(c.updated_at))} · ${c.version ? `v${c.version}` : esc(tr("ia.draft"))} · ${esc(
+            iaEngineName(c)
+          )}</div>
           ${iaStatus(c)}
         </div>
-        <button class="ia-del" data-act="ask" data-id="${esc(c.id)}" title="Supprimer">✕</button>
+        <button class="ia-del" data-act="ask" data-id="${esc(c.id)}" title="${esc(tr("common.delete"))}">✕</button>
       </article>`;
     })
     .join("");
 }
 
-/* ------------------------------------------------------------ création */
+/* ------------------------------------------------------------ creation */
 
-const IA_HINTS = {
-  edit:
-    "Essayez : « perce un trou de 4 mm au centre » · « creuse l'intérieur, " +
-    "parois 2 mm » · « arrondis les angles de la base »",
-  create:
-    "Essayez : « boîte 80 × 50 × 30 mm avec couvercle à glissière » · " +
-    "« support de téléphone incliné à 60° » · « entretoise Ø 20, trou M5, hauteur 12 »",
-};
-
-/* La modale sert aux deux chemins : seuls les libellés et les champs propres
-   à la création changent. */
+/* The sheet serves both paths: only the labels and the creation fields
+   change. */
 function iaSheet(mode) {
   IA.mode = mode;
   const create = mode === "create";
-  $("ia-mtitle").textContent = create ? "Nouvel objet" : "Nouvelle conversation";
-  $("ia-plabel").textContent = create ? "Décrivez l'objet à créer" : "Que voulez-vous modifier ?";
-  $("ia-prompt").placeholder = create
-    ? "Un crochet mural pour casque audio, fixé par deux vis M4, porte-à-faux 60 mm"
-    : "Incline le plateau de 15° vers l'arrière";
-  $("ia-hints").textContent = IA_HINTS[mode];
+  $("ia-mtitle").textContent = tr(create ? "ia.new_object" : "ia.new.title");
+  $("ia-plabel").textContent = tr(create ? "ia.new.describe" : "ia.new.what");
+  $("ia-prompt").placeholder = tr(create ? "ia.new.placeholder_create" : "ia.new.placeholder_edit");
+  $("ia-hints").textContent = tr(create ? "ia.new.hints_create" : "ia.new.hints_edit");
   $("ia-cfields").classList.toggle("hidden", !create);
   $("ia-prompt").value = "";
   $("ia-msg").textContent = "";
@@ -215,7 +195,7 @@ function iaSheet(mode) {
   $("ia-prompt").focus();
 }
 
-/* Appelé depuis l'écran Fichiers. */
+/* Called from the Files screen. */
 function iaStart(file) {
   if (!file || file.kind === "gcode") return;
   IA.source = file;
@@ -223,13 +203,13 @@ function iaStart(file) {
   iaSheet("edit");
 }
 
-/* Les dossiers proposés pour ranger l'objet : celui qu'affiche Fichiers, puis
-   les récents, et de quoi en choisir un autre. */
+/* Folders offered to store the object: the one Files shows, then the
+   recent ones, and a way to pick another. */
 function iaFillDest(pick) {
   const dirs = [...new Set([pick, state.dir, ...(state.recents || [])].filter(Boolean))];
   $("ia-dest").innerHTML =
     dirs.map((d) => `<option value="${esc(d)}" title="${esc(d)}">${esc(baseName(d))}</option>`).join("") +
-    `<option value="">Autre dossier…</option>`;
+    `<option value="">${esc(tr("ia.new.other_folder"))}</option>`;
   $("ia-dest").value = dirs[0] || "";
   $("ia-dest").dataset.prev = dirs[0] || "";
 }
@@ -245,7 +225,7 @@ $("ia-dest").addEventListener("change", async () => {
   else sel.value = sel.dataset.prev;
 });
 
-/* Création de zéro : l'encombrement part du plateau de l'imprimante. */
+/* Creation from scratch: the size limit starts from the printer's bed. */
 function iaNew() {
   IA.source = null;
   $("ia-src").textContent = "";
@@ -257,7 +237,7 @@ function iaNew() {
   iaSheet("create");
 }
 
-/* L'encombrement saisi, ou null s'il est incomplet : on n'impose alors rien. */
+/* The size entered, or null when incomplete: then nothing is imposed. */
 function iaBounds() {
   const v = ["ia-bx", "ia-by", "ia-bz"].map((k) => parseFloat($(k).value));
   return v.every((x) => x > 0) ? v : null;
@@ -267,19 +247,19 @@ async function iaCreate() {
   const create = IA.mode === "create";
   if (!create && !IA.source) return;
   if (create && !$("ia-prompt").value.trim()) {
-    $("ia-msg").textContent = "Décrivez l'objet à créer.";
+    $("ia-msg").textContent = tr("ia.new.need_prompt");
     $("ia-msg").className = "pf-test err";
     $("ia-prompt").focus();
     return;
   }
   if (create && !$("ia-dest").value) {
-    $("ia-msg").textContent = "Choisissez où enregistrer l'objet.";
+    $("ia-msg").textContent = tr("ia.new.need_dest");
     $("ia-msg").className = "pf-test err";
     return;
   }
   const btn = $("ia-go");
   btn.disabled = true;
-  $("ia-msg").textContent = "Préparation de l'espace de travail…";
+  $("ia-msg").textContent = tr("ia.new.preparing");
   $("ia-msg").className = "pf-test busy";
   try {
     const c = create
@@ -297,7 +277,7 @@ async function iaCreate() {
     closeSheet($("iamodal"));
     await iaRefresh();
     switchView("ia");
-    toast("Conversation créée");
+    toast(tr("ia.created"));
     iaOpen(c.id);
   } catch (e) {
     $("ia-msg").textContent = String(e);
@@ -312,13 +292,13 @@ async function iaCreate() {
 async function iaAskDelete(id) {
   const c = IA.list.find((x) => x.id === id);
   if (!c) return;
-  if (await confirmDelete(`Supprimer « ${c.title} » ?`, "La conversation et son dossier de travail seront effacés.")) iaDelete(id);
+  if (await confirmDelete(tr("printers.remove.title", { name: c.title }), tr("ia.delete.text"))) iaDelete(id);
 }
 
 async function iaDelete(id) {
   try {
     IA.list = await invoke("ia_delete", { id });
-    // Le terminal a été fermé côté application : son émulateur n'a plus d'objet.
+    // The terminal was closed on the app side: its emulator has no purpose left.
     const t = IA.terms.get(id);
     if (t) {
       t.term.dispose();
@@ -326,13 +306,13 @@ async function iaDelete(id) {
     }
     if (IA.open === id) iaBack();
     iaRender();
-    toast("Conversation supprimée");
+    toast(tr("ia.deleted"));
   } catch (e) {
     toast(String(e), true);
   }
 }
 
-/* ------------------------------------------------------------ évènements */
+/* ------------------------------------------------------------ events */
 
 $("ia-list").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-act]");
@@ -351,10 +331,10 @@ $("ia-list").addEventListener("contextmenu", (ev) => {
   const card = ev.target.closest(".ia-card");
   if (!card) return;
   nativeMenu([
-    { id: "ia:open:" + card.dataset.id, label: "Ouvrir la conversation" },
-    { id: "ia:folder:" + card.dataset.id, label: "Afficher le dossier de travail" },
+    { id: "ia:open:" + card.dataset.id, label: tr("ia.open_conv") },
+    { id: "ia:folder:" + card.dataset.id, label: tr("ia.show_workspace") },
     {},
-    { id: "ia:delete:" + card.dataset.id, label: "Supprimer" },
+    { id: "ia:delete:" + card.dataset.id, label: tr("common.delete") },
   ], ev.clientX, ev.clientY);
 });
 onMenu("ia", async (arg) => {
@@ -382,23 +362,23 @@ $("ia-cancel").addEventListener("click", () => closeSheet($("iamodal")));
 document.addEventListener("keydown", (e) => {
   if ($("iamodal").classList.contains("hidden")) return;
   if (e.key === "Escape") closeSheet($("iamodal"));
-  // Entrée valide, sauf dans la zone de texte où elle sert à aller à la ligne.
+  // ⌘⏎ confirms; plain Enter makes a new line in the text area.
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-    e.preventDefault(); // sinon ⌘⏎ part aussi vers « Ajouter au plateau »
+    e.preventDefault(); // otherwise ⌘⏎ also goes to "Add to Slicer Plate"
     iaCreate();
   }
 });
 
 /* ------------------------------------------------------------ terminal */
 
-/* Un émulateur par conversation, gardé en mémoire tant que l'application vit.
-   Changer d'onglet ou revenir à la liste ne doit rien effacer : on détache
-   l'élément, on ne le détruit pas. */
+/* One emulator per conversation, kept in memory while the app lives.
+   Switching tabs or going back to the list must not erase anything: the
+   element is detached, not destroyed. */
 
-/* Couleurs du terminal calées sur les jetons : fond --content-bg, texte --text,
-   curseur à la couleur d'accent du système. */
+/* Terminal colors matched to the tokens: --content-bg background, --text
+   text, cursor in the system accent color. */
 function iaTheme() {
-  // --accent peut valoir le mot-clé AccentColor : on lit la couleur résolue.
+  // --accent may be the AccentColor keyword: read the resolved color.
   const probe = document.createElement("i");
   probe.style.color = "var(--accent)";
   document.body.appendChild(probe);
@@ -435,8 +415,8 @@ window.addEventListener("themechange", () => {
   for (const t of IA.terms.values()) t.term.options.theme = iaTheme();
 });
 
-/* L'ajustement dépend de la taille réelle à l'écran : il faut que l'élément
-   soit visible, donc après l'affichage. */
+/* Fitting depends on the real on-screen size: the element must be visible,
+   so after display. */
 function iaFit(id) {
   const t = IA.terms.get(id);
   if (!t || !t.opened) return;
@@ -446,15 +426,12 @@ function iaFit(id) {
   } catch {}
 }
 
-/* Dire à l'avance ce qui va se passer, plutôt que de laisser l'utilisateur
-   devant une question en anglais ou devant un fil qui ne revient pas. */
+/* Say ahead what is going to happen, rather than leave the user facing an
+   unexpected question or a thread that does not come back. */
 async function iaHint(c) {
   const el = $("ia-hint");
   if (!c.started) {
-    el.innerHTML =
-      "Première ouverture : Claude vous demandera de confirmer le dossier de " +
-      "travail. Répondez <b>« Yes, I trust this folder »</b> — c'est un dossier " +
-      "que l'application vient de créer pour cette conversation.";
+    el.innerHTML = tr("ia.hint.first");
     el.classList.remove("hidden");
     return;
   }
@@ -466,10 +443,7 @@ async function iaHint(c) {
     el.classList.add("hidden");
     return;
   }
-  el.innerHTML =
-    "La conversation précédente n'a pas été retrouvée : Claude repart à neuf " +
-    "dans le même dossier de travail. <b>L'objet et son historique de versions " +
-    "sont intacts</b> — seul le fil de la discussion manque.";
+  el.innerHTML = tr("ia.hint.lost");
   el.classList.remove("hidden");
 }
 
@@ -491,19 +465,16 @@ async function iaOpen(id) {
   $("ia-dead").classList.toggle("hidden", !t.dead);
   iaHint(c);
 
-  // Le volet 3D et la surveillance du dossier vivent avec l'écran.
+  // The 3D pane and the folder watch live with the screen.
   iaQueue(() => iaLoadPane(id));
 
-  // Une frame d'attente : xterm mesure la cellule sur l'élément affiché.
+  // Wait one frame: xterm measures the cell on the displayed element.
   requestAnimationFrame(async () => {
     iaFit(id);
     if (!t.dead) {
       if (c.engine === "container" && !t.greeted) {
         t.greeted = true;
-        t.term.writeln(
-          "\x1b[90mDémarrage du bac à sable… la première fois, l'image se " +
-            "construit et cela peut prendre une minute.\x1b[0m"
-        );
+        t.term.writeln(`\x1b[90m${tr("ia.sandbox_starting")}\x1b[0m`);
       }
       try {
         await invoke("pty_open", { id, cols: t.term.cols, rows: t.term.rows });
@@ -517,9 +488,9 @@ async function iaOpen(id) {
   });
 }
 
-/* Le visualiseur est unique : il doit quitter le volet dès qu'on change
-   d'onglet, sinon les fichiers ouverts ailleurs s'afficheraient dans une vue
-   masquée — et reviendraient hanter la conversation. */
+/* The viewer is unique: it must leave the pane as soon as the tab changes,
+   otherwise files opened elsewhere would show in a hidden view — and come
+   back to haunt the conversation. */
 function iaSetVisible(on) {
   if (!IA.open) return;
   if (on) {
@@ -533,7 +504,7 @@ function iaSetVisible(on) {
 function iaBack() {
   iaUndock();
   IA.open = null;
-  // L'élément retourne en réserve : l'historique du terminal est conservé.
+  // The element goes back in reserve: the terminal history is kept.
   const host = $("ia-term");
   if (host.firstChild) host.removeChild(host.firstChild);
   iaRefresh();
@@ -555,8 +526,8 @@ async function iaRestart() {
   }
 }
 
-/* Les octets arrivent en base64 : on les rend tels quels à l'émulateur, qui
-   sait recoller un caractère coupé entre deux paquets. */
+/* Bytes arrive in base64: hand them as is to the emulator, which can glue
+   back a character split across two packets. */
 listen("ia-pty", (e) => {
   const t = IA.terms.get(e.payload.id);
   if (!t) return;
@@ -573,7 +544,7 @@ listen("ia-exit", (e) => {
   if (IA.open === e.payload.id) $("ia-dead").classList.remove("hidden");
 });
 
-/* ------------------------------------------------------------ détail */
+/* ------------------------------------------------------------ detail */
 
 $("ia-back").addEventListener("click", iaBack);
 $("ia-restart").addEventListener("click", iaRestart);
@@ -594,10 +565,10 @@ const iaResizeObserver = new ResizeObserver(() => {
 });
 iaResizeObserver.observe($("ia-term"));
 
-/* ------------------------------------------------------------ volet 3D */
+/* ------------------------------------------------------------ 3D pane */
 
-/* Le visualiseur n'est pas dupliqué : on déplace celui de l'application dans
-   le volet. Même contexte graphique, même code, aucune divergence possible. */
+/* The viewer is not duplicated: the app's own is moved into the pane. Same
+   graphics context, same code, no possible divergence. */
 
 function iaDock() {
   const v = $("viewer");
@@ -618,9 +589,9 @@ function iaUndock(hide = true) {
   if (v.parentElement !== document.body) document.body.appendChild(v);
 }
 
-/* Le volet est étroit : on doit pouvoir examiner la pièce en grand, comme
-   depuis l'écran Fichiers. Le visualiseur quitte son cadre sans rien recharger,
-   et Fermer — ou Échap — le remet à sa place. */
+/* The pane is narrow: the part must be examinable full size, as from the
+   Files screen. The viewer leaves its frame without reloading anything, and
+   Close — or Esc — puts it back. */
 function iaExpand() {
   if (!IA.open || $("viewer").classList.contains("hidden")) return;
   iaUndock(false);
@@ -631,25 +602,23 @@ function iaExpand() {
   };
 }
 
-const fmtMm = (x) => x.toFixed(1).replace(".", ",");
-
-/* Masse estimée : le PLA pèse 1,24 g par centimètre cube. Sans maillage fermé,
-   le volume ne veut rien dire, et on s'abstient. */
+/* Estimated mass: PLA weighs 1.24 g per cubic centimeter. Without a closed
+   mesh the volume means nothing, so we abstain. */
 function iaRenderStats(s) {
-  const rows = [["Dimensions", s.size.map(fmtMm).join(" × ") + " mm"]];
+  IA.stats = s;
+  const rows = [[tr("ia.stats.size"), s.size.map((x) => fmtDec(x, 1)).join(" × ") + " mm"]];
   if (s.watertight === true) {
-    rows.push(["Masse estimée", `≈ ${Math.round(s.volume_cm3 * 1.24)} g de PLA`]);
+    rows.push([tr("ia.stats.mass"), tr("ia.stats.mass_v", { g: Math.round(s.volume_cm3 * 1.24) })]);
   }
+  const leak = s.watertight === false;
   rows.push([
-    "Étanche",
-    s.watertight === null ? "non vérifié" : s.watertight ? "oui" : "non",
+    tr("ia.stats.watertight"),
+    tr(s.watertight === null ? "ia.stats.unchecked" : s.watertight ? "common.yes" : "common.no"),
+    leak,
   ]);
-  rows.push(["Faces", s.triangles.toLocaleString("fr-FR")]);
+  rows.push([tr("ia.stats.faces"), fmtNum(s.triangles)]);
   $("ia-stats").innerHTML = rows
-    .map(
-      ([k, v]) =>
-        `<dt>${esc(k)}</dt><dd${k === "Étanche" && s.watertight === false ? ' class="warn"' : ""}>${esc(v)}</dd>`
-    )
+    .map(([k, v, warn]) => `<dt>${esc(k)}</dt><dd${warn ? ' class="warn"' : ""}>${esc(v)}</dd>`)
     .join("");
 }
 
@@ -663,13 +632,13 @@ async function iaRenderVersions(id, current) {
     .map(
       (v) =>
         `<button class="ia-ver${v.n === current ? " on" : ""}" data-v="${v.n}"
-          title="${v.n === 1 ? "Objet d'origine" : "Revenir à cet état"}">v${v.n}</button>`
+          title="${esc(tr(v.n === 1 ? "ia.version.first" : "ia.version.revert"))}">v${v.n}</button>`
     )
     .join("");
 }
 
-/* Un objet créé de zéro n'a rien à montrer avant le premier export : le volet
-   l'annonce, et rien ne s'enregistre ni ne se découpe encore. */
+/* An object created from scratch has nothing to show before its first
+   export: the pane says so, and nothing can be saved or sliced yet. */
 function iaWaiting(on) {
   $("ia-wait").classList.toggle("hidden", !on);
   $("ia-save").disabled = on;
@@ -677,8 +646,8 @@ function iaWaiting(on) {
   if (on) iaUndock();
 }
 
-/* Recharge l'objet affiché. Le numéro de version sert de brise-cache : sans
-   lui, l'adresse ne changeant pas, l'ancien maillage serait resservi. */
+/* Reloads the object shown. The stamp busts the cache: the address never
+   changes, and the old mesh would be served again. */
 async function iaShowCurrent(id) {
   const c = IA.list.find((x) => x.id === id);
   if (iaEmpty(c)) {
@@ -691,13 +660,13 @@ async function iaShowCurrent(id) {
     iaDock();
     await openViewer(path, c ? c.title : "", "3mf", stamp);
   } catch (e) {
-    $("ia-stats").innerHTML = `<dt>Objet</dt><dd class="warn">${esc(String(e))}</dd>`;
+    $("ia-stats").innerHTML = `<dt>${esc(tr("ia.stats.object"))}</dt><dd class="warn">${esc(String(e))}</dd>`;
   }
 }
 
-/* Les chargements du volet se suivent : deux écritures rapprochées de Claude
-   lanceraient sinon deux lectures dont la plus ancienne peut finir la dernière,
-   et l'objet affiché ne correspondrait plus aux mesures affichées à côté. */
+/* Pane loads are chained: two close writes by Claude would otherwise start
+   two reads where the older may finish last, and the object shown would no
+   longer match the measurements beside it. */
 let iaChain = Promise.resolve();
 const iaQueue = (fn) => (iaChain = iaChain.then(fn).catch(() => {}));
 
@@ -718,7 +687,7 @@ async function iaLoadPane(id) {
   }
 }
 
-/* Claude vient d'écrire : l'objet change sous les yeux de l'utilisateur. */
+/* Claude just wrote: the object changes before the user's eyes. */
 listen("ia-mesh", async (e) => {
   const { id, version, stats } = e.payload;
   const c = IA.list.find((x) => x.id === id);
@@ -747,10 +716,10 @@ const iaStageObserver = new ResizeObserver(() => {
 });
 iaStageObserver.observe($("ia-stage"));
 
-/* ------------------------------------------------------------ sortie */
+/* ------------------------------------------------------------ output */
 
-/* Verse l'état courant dans vos fichiers et renvoie son chemin.
-   Le 3MF rejoint le dossier de l'objet d'origine, sous un nom libre. */
+/* Saves the current state into your files and returns its path. The 3MF
+   joins the original object's folder (or the chosen one), under a free name. */
 async function iaSave(then) {
   if (!IA.open) return;
   const btns = [$("ia-save"), $("ia-slice")];
@@ -760,7 +729,7 @@ async function iaSave(then) {
     const c = IA.list.find((x) => x.id === IA.open);
     if (c) c.saved = path;
     await refresh();
-    toast("Enregistré : " + path.split("/").pop());
+    toast(tr("ia.saved_toast", { name: path.split("/").pop() }));
     if (then) await then(path);
   } catch (e) {
     toast(String(e), true);
@@ -771,9 +740,9 @@ async function iaSave(then) {
 
 $("ia-save").addEventListener("click", () => iaSave());
 
-/* Découper enchaîne sur la fenêtre de découpe existante, le fichier fraîchement
-   écrit étant devenu un fichier comme un autre — même rangé hors du dossier
-   affiché, comme peut l'être un objet créé. */
+/* Slice goes on to the plate, the freshly written file being a file like
+   any other — even stored outside the folder shown, as a created object may
+   be. */
 $("ia-slice").addEventListener("click", () =>
   iaSave(async (path) => {
     iaBack();
@@ -789,5 +758,22 @@ $("ia-reframe").addEventListener("click", () => {
 $("ia-expand").addEventListener("click", iaExpand);
 $("ia-stage").addEventListener("dblclick", iaExpand);
 
-// Conversations listées dès le lancement, dans la barre latérale.
+window.addEventListener("langchange", () => {
+  iaRender();
+  if (IA.open) {
+    const c = IA.list.find((x) => x.id === IA.open);
+    if (c) iaHint(c);
+    if (IA.stats) iaRenderStats(IA.stats);
+    iaRenderVersions(IA.open, c?.version || 0);
+  }
+  if (!$("iamodal").classList.contains("hidden")) {
+    const create = IA.mode === "create";
+    $("ia-mtitle").textContent = tr(create ? "ia.new_object" : "ia.new.title");
+    $("ia-plabel").textContent = tr(create ? "ia.new.describe" : "ia.new.what");
+    $("ia-prompt").placeholder = tr(create ? "ia.new.placeholder_create" : "ia.new.placeholder_edit");
+    $("ia-hints").textContent = tr(create ? "ia.new.hints_create" : "ia.new.hints_edit");
+  }
+});
+
+// Conversations listed from launch, in the sidebar.
 iaRefresh();

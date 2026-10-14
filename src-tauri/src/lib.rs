@@ -5,6 +5,7 @@ mod discover;
 mod engine;
 mod favorites;
 mod gcode;
+mod i18n;
 mod ia;
 mod jobs;
 mod library;
@@ -42,9 +43,9 @@ use tauri_plugin_opener::OpenerExt;
 pub struct FileDto {
     path: String,
     name: String,
-    /// "3mf" ou "gcode"
+    /// "3mf" or "gcode"
     kind: String,
-    /// Sous-dossier relatif au dossier scanne ("" si a la racine).
+    /// Subfolder relative to the scanned folder ("" at the root).
     rel: String,
     size: u64,
     modified: u64,
@@ -94,7 +95,7 @@ pub struct CacheDto {
     bytes: u64,
 }
 
-// ---------------------------------------------------------------- commandes
+// ---------------------------------------------------------------- commands
 
 #[tauri::command]
 async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
@@ -105,8 +106,8 @@ async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
-/// Hors du fil principal : une demande d'autorisation de macOS ou un gros
-/// dossier ne gèlent pas l'interface.
+/// Off the main thread: a macOS permission prompt or a big folder does not
+/// freeze the UI.
 #[tauri::command]
 async fn scan_folder(dir: String, recursive: bool) -> Result<Vec<FileDto>, String> {
     tauri::async_runtime::spawn_blocking(move || scan_folder_sync(&dir, recursive))
@@ -118,7 +119,7 @@ fn scan_folder_sync(dir: &str, recursive: bool) -> Result<Vec<FileDto>, String> 
     let root = PathBuf::from(dir);
     access::ensure_dir(&root);
     if !root.is_dir() {
-        return Err(format!("Dossier introuvable : {}", dir));
+        return Err(t!("err.no_folder", path = dir));
     }
     Ok(scan::scan_dir(&root, recursive)
         .into_iter()
@@ -219,7 +220,7 @@ fn meta_of(path: &str) -> MetaDto {
     dto
 }
 
-/// Metadonnees d'un lot de fichiers, lues en parallele.
+/// Metadata of a batch of files, read in parallel.
 #[tauri::command]
 async fn read_metas(paths: Vec<String>) -> Vec<MetaDto> {
     let workers = std::thread::available_parallelism()
@@ -241,7 +242,7 @@ async fn read_metas(paths: Vec<String>) -> Vec<MetaDto> {
     out
 }
 
-/// Analyse geometrique a la demande : encombrement reel et nombre de triangles.
+/// On-demand geometry analysis: real bounding box and triangle count.
 #[tauri::command]
 async fn analyze(path: String) -> Result<AnalyzeDto, String> {
     let mut zip = model3mf::open(Path::new(&path)).map_err(|e| e.to_string())?;
@@ -274,7 +275,7 @@ fn open_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-// ---------------------------------------------------------------- bibliothèque
+// ---------------------------------------------------------------- library
 
 #[tauri::command]
 fn lib_sites() -> Vec<library::Site> {
@@ -291,8 +292,8 @@ fn lib_close(app: tauri::AppHandle, id: String) {
     library::close_tab(&app, &id);
 }
 
-/// Affiche un onglet ; sans identifiant, masque toutes les vues — c'est ce
-/// qu'on fait avant d'ouvrir un dialogue ou le visualiseur.
+/// Shows a tab; without an id, hides all views — which is done before
+/// opening a dialog or the viewer.
 #[tauri::command]
 fn lib_show(app: tauri::AppHandle, id: Option<String>) {
     library::show_only(&app, id.as_deref());
@@ -318,7 +319,7 @@ fn lib_command(app: tauri::AppHandle, id: String, what: String) -> Result<(), St
     library::command(&app, &id, &what).map_err(|e| e.to_string())
 }
 
-/// Déconnexion d'un site : ses cookies seulement, pas ceux des autres.
+/// Logs a site out: its cookies only, not the others'.
 #[tauri::command]
 async fn lib_logout(app: tauri::AppHandle, id: String) -> Result<usize, String> {
     library::logout(&app, &id).map_err(|e| e.to_string())
@@ -329,7 +330,7 @@ fn lib_url(app: tauri::AppHandle, id: String) -> Option<String> {
     library::current_url(&app, &id)
 }
 
-// ---------------------------------------------------------------- favoris
+// ---------------------------------------------------------------- favorites
 
 #[tauri::command]
 fn fav_list() -> Vec<favorites::Favorite> {
@@ -351,15 +352,15 @@ fn fav_done(id: String, done: bool) -> Result<Vec<favorites::Favorite>, String> 
     favorites::set_done(&id, done).map_err(|e| e.to_string())
 }
 
-// ---------------------------------------------------------------- découpe
+// ---------------------------------------------------------------- slicing
 
-/// Moteur de découpe embarqué : version, installé ou non, tailles.
+/// Bundled slicing engine: version, installed or not, sizes.
 #[tauri::command]
 fn engine_status() -> engine::Status {
     engine::status()
 }
 
-/// Télécharge et installe le moteur ; progression par `engine-progress`.
+/// Downloads and installs the engine; progress through `engine-progress`.
 #[tauri::command]
 async fn engine_install(app: tauri::AppHandle) -> Result<engine::Status, String> {
     engine::install(app).await.map_err(|e| e.to_string())
@@ -375,7 +376,7 @@ fn engine_remove() -> Result<engine::Status, String> {
     engine::remove().map_err(|e| e.to_string())
 }
 
-/// Contenu effectif d'un préréglage, pour la fenêtre de détail.
+/// Effective content of a preset, for the details sheet.
 #[tauri::command]
 async fn slice_details(
     name: String,
@@ -392,26 +393,26 @@ async fn slice_details(
     .map_err(|e| e.to_string())
 }
 
-/// Préréglages proposables pour la machine choisie.
+/// Presets that can be offered for the chosen machine.
 #[tauri::command]
 async fn slice_lists(machine: Option<String>) -> Result<slice::PresetLists, String> {
     slice::lists(machine.as_deref()).map_err(|e| e.to_string())
 }
 
-/// Valeurs de départ des réglages simplifiés pour un préréglage donné.
+/// Starting values of the simplified settings for a given preset.
 #[tauri::command]
 async fn slice_defaults(machine: String, process: String) -> Result<slice::Simple, String> {
     slice::defaults(&machine, &process).map_err(|e| e.to_string())
 }
 
-/// Lance une découpe en tâche de fond ; l'avancement arrive par l'évènement
-/// `slice-progress`.
+/// Starts a background slice; progress arrives through the `slice-progress`
+/// event.
 #[tauri::command]
 fn slice_start(app: tauri::AppHandle, request: slice::Request) -> Result<String, String> {
     slice::start(app, request).map_err(|e| e.to_string())
 }
 
-/// Enregistre l'aperçu d'une découpe ; renvoie le chemin du G-code écrit.
+/// Saves a slice's preview; returns the path of the G-code written.
 #[tauri::command]
 fn slice_save(id: String, dir: Option<String>) -> Result<String, String> {
     slice::save(&id, dir.as_deref())
@@ -419,13 +420,13 @@ fn slice_save(id: String, dir: Option<String>) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Abandonne l'aperçu d'une découpe.
+/// Discards a slice's preview.
 #[tauri::command]
 fn slice_discard(id: String) {
     slice::discard(&id);
 }
 
-/// Objets d'un fichier, à poser sur le plateau de la vue Préparer.
+/// A file's objects, to put on the Prepare view's plate.
 #[tauri::command]
 async fn plate_items(path: String) -> Result<Vec<plate::PlateItem>, String> {
     tauri::async_runtime::spawn_blocking(move || plate::items(Path::new(&path)))
@@ -434,7 +435,7 @@ async fn plate_items(path: String) -> Result<Vec<plate::PlateItem>, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Enveloppe convexe d'un objet du plateau (repère propre).
+/// Convex hull of a plate object (own frame).
 #[tauri::command]
 async fn plate_hull(path: String, item: usize) -> Result<orient::Hull, String> {
     tauri::async_runtime::spawn_blocking(move || plate::hull(Path::new(&path), item))
@@ -443,7 +444,7 @@ async fn plate_hull(path: String, item: usize) -> Result<orient::Hull, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Orientation automatique (règles d'Orca) : une rotation par objet.
+/// Auto-orientation (Orca's rules): one rotation per object.
 #[tauri::command]
 async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) -> Result<Vec<[[f64; 3]; 3]>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -455,7 +456,7 @@ async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) ->
     .map_err(|e| e.to_string())
 }
 
-/// Enregistre le plateau en 3MF.
+/// Saves the plate as 3MF.
 #[tauri::command]
 async fn plate_save(scene: Vec<plate::SceneItem>, path: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, Path::new(&path)))
@@ -464,7 +465,7 @@ async fn plate_save(scene: Vec<plate::SceneItem>, path: String) -> Result<(), St
         .map_err(|e| e.to_string())
 }
 
-/// Plateau de la machine (préréglage) : dimensions et modèle d'imprimante.
+/// The machine's bed (preset): dimensions and printer model.
 #[tauri::command]
 async fn plate_bed(machine: Option<String>) -> Result<slice::Bed, String> {
     tauri::async_runtime::spawn_blocking(move || slice::bed(machine.as_deref()))
@@ -472,7 +473,7 @@ async fn plate_bed(machine: Option<String>) -> Result<slice::Bed, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Filaments déclarés par un modèle, pour les associer aux têtes.
+/// Filaments declared by a model, to associate them with heads.
 #[tauri::command]
 async fn slice_model(path: String) -> Result<slice::ModelInfo, String> {
     tauri::async_runtime::spawn_blocking(move || slice::model_info(Path::new(&path)))
@@ -484,15 +485,15 @@ async fn slice_model(path: String) -> Result<slice::ModelInfo, String> {
 #[derive(serde::Deserialize)]
 struct SendRequest {
     printer_id: String,
-    /// Identifiant de l'aperçu de découpe à envoyer.
+    /// Id of the slice preview to send.
     job: String,
-    /// Têtes qui extrudent, d'après le G-code.
+    /// Heads that extrude, according to the G-code.
     tools: Vec<u8>,
     options: printers::StartOptions,
-    /// Profils de la découpe, gardés sur la fiche de l'impression.
+    /// Slicing profiles, kept on the print's record.
     #[serde(default)]
     profile: jobs::Profile,
-    /// Vrai : mise en file d'attente au lieu d'un lancement.
+    /// True: queue instead of starting.
     #[serde(default)]
     queue: bool,
 }
@@ -510,11 +511,11 @@ fn send_progress(app: &tauri::AppHandle, phase: &'static str, percent: Option<f3
     let _ = app.emit("print-send", SendProgress { phase, percent, message });
 }
 
-/// Lance un G-code sur une imprimante au repos.
+/// Starts a G-code on an idle printer.
 ///
-/// Même déroulé que Snapmaker Orca : préparation (têtes et options) par des
-/// macros Klipper, vérification dans `print_task_config`, puis téléversement
-/// avec lancement. Rend un avertissement si une option n'a pas été confirmée.
+/// Same run as Snapmaker Orca: preparation (heads and options) through
+/// Klipper macros, check in `print_task_config`, then upload with launch.
+/// Returns a warning if an option was not confirmed.
 async fn launch(
     app: &tauri::AppHandle,
     p: &printers::Printer,
@@ -526,39 +527,39 @@ async fn launch(
     send_progress(app, "check", None, None);
     let st = printers::status(&p.host, p.port).await;
     if !st.online {
-        return Err(format!("{} ne répond pas", p.name));
+        return Err(t!("err.printer_silent", name = p.name));
     }
     if matches!(st.state.as_str(), "printing" | "paused") {
-        return Err(format!("{} est déjà en train d'imprimer", p.name));
+        return Err(t!("err.printer_busy", name = p.name));
     }
-    // Une tête employée sans bobine : refus, même pour un travail mis en
-    // file avant qu'on la vide.
+    // A head used without a spool: refused, even for a job queued before it
+    // was emptied.
     let empty: Vec<String> = tools
         .iter()
         .filter(|t| st.filaments.iter().any(|f| f.index == **t && !f.present))
         .map(|t| format!("T{t}"))
         .collect();
     if !empty.is_empty() {
-        return Err(format!("{} : tête {} sans bobine", p.name, empty.join(", ")));
+        return Err(t!("err.head_empty", name = p.name, heads = empty.join(", ")));
     }
 
     send_progress(app, "prepare", None, None);
     let script = printers::preprint_script(options, tools, false);
     if let Err(e) = printers::gcode_script(&p.host, p.port, &script).await {
-        // Firmware antérieur à 1.3.0 : une seule macro pour les options.
+        // Firmware older than 1.3.0: a single macro for the options.
         if !printers::is_unknown_command(&e) {
-            return Err(format!("préparation refusée : {e}"));
+            return Err(t!("err.prepare_refused", err = e));
         }
         let legacy = printers::preprint_script(options, tools, true);
         printers::gcode_script(&p.host, p.port, &legacy)
             .await
-            .map_err(|e| format!("préparation refusée : {e}"))?;
+            .map_err(|e| t!("err.prepare_refused", err = e))?;
     }
     let mut warning = None;
     if let Some(cfg) = printers::task_config(&p.host, p.port).await {
         let missing = printers::unapplied_options(&cfg, options);
         if !missing.is_empty() {
-            warning = Some(format!("options non confirmées par l'imprimante : {}", missing.join(", ")));
+            warning = Some(t!("err.options_unconfirmed", opts = missing.join(", ")));
         }
     }
 
@@ -572,12 +573,12 @@ async fn launch(
     Ok(warning)
 }
 
-/// Envoie l'aperçu d'une découpe : lancement immédiat, ou mise en file
-/// d'attente. Rend l'identifiant du travail créé.
+/// Sends a slice's preview: immediate start, or queueing. Returns the id of
+/// the job created.
 #[tauri::command]
 async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<String, String> {
     let p = printer_by_id(&request.printer_id)?;
-    let gcode = slice::preview_gcode(&request.job).ok_or("aperçu introuvable ; relancez la découpe")?;
+    let gcode = slice::preview_gcode(&request.job).ok_or_else(|| t!("err.no_preview"))?;
     let name = slice::preview_name(&request.job).unwrap_or_else(|| "snapstudio.gcode".into());
     let stem = name.trim_end_matches(".gcode").to_string();
     let id = printers::new_id();
@@ -592,7 +593,7 @@ async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<Strin
         profile: request.profile,
         source: slice::preview_source(&request.job),
     };
-    // Copie et analyse du G-code : hors du fil asynchrone.
+    // G-code copy and parsing: off the async thread.
     let add = |gcode: PathBuf, new: jobs::NewJob, state: &'static str, remote: String| {
         tauri::async_runtime::spawn_blocking(move || jobs::add(&gcode, new, state, &remote))
     };
@@ -605,12 +606,12 @@ async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<Strin
         return Ok(job.id);
     }
     let warning = launch(&app, &p, &gcode, &remote, &request.options, &request.tools).await?;
-    // La fiche de l'impression garde le G-code et son bilan. L'impression est
-    // partie : un échec ici ne doit pas la faire passer pour ratée.
+    // The print's record keeps the G-code and its summary. The print has left:
+    // a failure here must not make it look failed.
     let id = match add(gcode, new, "printing", remote).await.map_err(|e| anyhow::anyhow!("{e}")).and_then(|r| r) {
         Ok(job) => job.id,
         Err(e) => {
-            eprintln!("[jobs] fiche non enregistrée : {e}");
+            eprintln!("[jobs] record not saved: {e}");
             String::new()
         }
     };
@@ -624,32 +625,32 @@ fn emit_jobs(app: &tauri::AppHandle) {
     let _ = app.emit("jobs-changed", ());
 }
 
-/// Impressions connues : file d'attente, en cours, historique.
+/// Known prints: queue, running, history.
 #[tauri::command]
 fn jobs_list() -> Vec<jobs::Job> {
     jobs::list()
 }
 
-/// Dernier état des imprimantes vu par le suivi de fond.
+/// Last printer state seen by the background tracking.
 #[tauri::command]
 fn prints_status() -> Vec<jobs::Live> {
     jobs::snapshot()
 }
 
-/// Lance un travail de la file (l'utilisateur a confirmé que le plateau est libre).
+/// Starts a queued job (the user confirmed the bed is clear).
 #[tauri::command]
 async fn job_launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    let job = jobs::get(&id).ok_or("travail inconnu")?;
+    let job = jobs::get(&id).ok_or_else(|| t!("err.job_unknown"))?;
     if job.state != "queued" {
-        return Err("ce travail n'est plus en attente".into());
+        return Err(t!("err.not_queued"));
     }
     let p = printer_by_id(&job.printer_id)?;
-    // Nom propre à chaque travail : deux impressions du même modèle ne
-    // s'écrasent pas sur l'imprimante.
+    // A name of its own for each job: two prints of the same model do not
+    // overwrite each other on the printer.
     let remote = jobs::remote_name(&job.name, &job.id);
     let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools).await?;
     if let Err(e) = jobs::mark_started(&id, &remote) {
-        eprintln!("[jobs] lancement non enregistré : {e}");
+        eprintln!("[jobs] launch not recorded: {e}");
     }
     emit_jobs(&app);
     send_progress(&app, "done", Some(100.0), warning);
@@ -684,7 +685,7 @@ fn job_edit(
 
 #[tauri::command]
 async fn job_requeue(app: tauri::AppHandle, id: String) -> Result<jobs::Job, String> {
-    // Copie du G-code : hors du fil principal.
+    // G-code copy: off the main thread.
     let j = tauri::async_runtime::spawn_blocking(move || jobs::requeue(&id))
         .await
         .map_err(|e| e.to_string())?
@@ -693,19 +694,19 @@ async fn job_requeue(app: tauri::AppHandle, id: String) -> Result<jobs::Job, Str
     Ok(j)
 }
 
-/// « Plus tard » : ne pas reproposer la suivante avant la prochaine impression.
+/// "Later": do not offer the next one again before the next print.
 #[tauri::command]
 fn queue_dismiss(printer_id: String) {
     jobs::dismiss(&printer_id);
 }
 
-/// Repose la question pour les imprimantes libres avec une file (interface prête).
+/// Asks the question again for free printers with a queue (UI ready).
 #[tauri::command]
 fn queue_check(app: tauri::AppHandle) {
     jobs::ask_again(&app);
 }
 
-/// Pause, reprise ou annulation de l'impression en cours.
+/// Pause, resume or cancel the running print.
 #[tauri::command]
 async fn print_action(printer_id: String, action: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
@@ -713,10 +714,10 @@ async fn print_action(printer_id: String, action: String) -> Result<(), String> 
 }
 
 fn printer_by_id(id: &str) -> Result<printers::Printer, String> {
-    printers::load().into_iter().find(|p| p.id == id).ok_or_else(|| "imprimante inconnue".to_string())
+    printers::load().into_iter().find(|p| p.id == id).ok_or_else(|| t!("err.unknown_printer"))
 }
 
-/// Réveille la caméra d'une imprimante ; à relancer toutes les 10 s.
+/// Wakes a printer's camera; to restart every 10 s.
 #[tauri::command]
 async fn camera_start(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
@@ -729,9 +730,9 @@ async fn camera_stop(printer_id: String) -> Result<(), String> {
     printers::camera_stop(&p.host, p.port).await.map_err(|e| e.to_string())
 }
 
-/// `cam://localhost/f?id=<imprimante>` : dernière image de sa caméra.
-/// L'imprimante est désignée par son identifiant, jamais par une adresse :
-/// le protocole ne peut viser que les machines enregistrées.
+/// `cam://localhost/f?id=<printer>`: latest image of its camera. The printer
+/// is designated by its id, never by an address: the protocol can only reach
+/// saved machines.
 async fn handle_cam(uri: String) -> Response<Vec<u8>> {
     let fail = |code: u16| {
         Response::builder()
@@ -763,14 +764,14 @@ fn slice_cancel(id: String) -> bool {
     slice::cancel(&id)
 }
 
-/// Trancheurs détectés sur la machine.
+/// Slicers detected on the machine.
 #[tauri::command]
 fn slicers_list() -> Vec<slicers::Slicer> {
     slicers::list()
 }
 
-/// Ouvre les fichiers dans un trancheur ; `add` envoie une copie allégée de ses
-/// réglages de projet, pour une simple pose sur le plateau courant.
+/// Opens the files in a slicer; `add` sends a copy stripped of its project
+/// settings, to simply lay it on the current plate.
 #[tauri::command]
 async fn open_in_slicer(paths: Vec<String>, app: Option<String>, add: bool) -> Result<(), String> {
     slicers::open_with(&paths, app.as_deref(), add).map_err(|e| e.to_string())
@@ -789,21 +790,21 @@ fn quick_places() -> Vec<PlaceDto> {
             }
         }
     };
-    push("Téléchargements", dirs::download_dir());
-    push("Documents", dirs::document_dir());
-    push("Bureau", dirs::desktop_dir());
-    push("Dossier personnel", dirs::home_dir());
+    push(&t!("place.downloads"), dirs::download_dir());
+    push(&t!("place.documents"), dirs::document_dir());
+    push(&t!("place.desktop"), dirs::desktop_dir());
+    push(&t!("place.home"), dirs::home_dir());
     v
 }
 
-// ---------------------------------------------------------------- imprimantes
+// ---------------------------------------------------------------- printers
 
 #[tauri::command]
 fn printers_list() -> Vec<printers::Printer> {
     printers::load()
 }
 
-/// Ajoute une imprimante, ou met a jour celle qui porte le meme identifiant.
+/// Adds a printer, or updates the one with the same id.
 #[tauri::command]
 fn printer_save(mut printer: printers::Printer) -> Result<Vec<printers::Printer>, String> {
     let mut list = printers::load();
@@ -826,7 +827,7 @@ fn printer_remove(id: String) -> Result<Vec<printers::Printer>, String> {
     Ok(list)
 }
 
-/// Teste une adresse saisie par l'utilisateur (aucune exploration du reseau).
+/// Tests an address typed by the user (no network exploration).
 #[tauri::command]
 async fn printer_probe(host: String, port: u16) -> printers::Probe {
     printers::probe(&host, port).await
@@ -837,7 +838,7 @@ async fn printer_status(host: String, port: u16) -> printers::Status {
     printers::status(&host, port).await
 }
 
-/// Ouvre les flux temps reel (onglet Imprimantes affiche).
+/// Opens the live feeds (Printers tab shown).
 #[tauri::command]
 fn printers_watch_start(app: tauri::AppHandle) {
     watch::start(app);
@@ -848,7 +849,7 @@ fn printers_watch_stop() {
     watch::stop();
 }
 
-/// Dossier passe en argument au lancement : `snap-studio ~/Downloads`.
+/// Folder passed as an argument at launch: `snap-studio ~/Downloads`.
 #[tauri::command]
 fn initial_dir() -> Option<String> {
     std::env::args()
@@ -868,7 +869,7 @@ fn clear_cache() -> usize {
     thumbs::clear()
 }
 
-// ---------------------------------------------------------------- protocole thumb://
+// ---------------------------------------------------------------- thumb:// protocol
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
@@ -906,7 +907,7 @@ fn query_param(uri: &str, key: &str) -> Option<String> {
     None
 }
 
-/// Vignette d'un favori, mise en cache au moment de l'ajout.
+/// A favorite's thumbnail, cached when it is added.
 fn handle_favimg(uri: &str) -> Response<Vec<u8>> {
     let deny = || {
         Response::builder()
@@ -918,7 +919,7 @@ fn handle_favimg(uri: &str) -> Response<Vec<u8>> {
     let Some(name) = query_param(uri, "f") else {
         return deny();
     };
-    // Le nom vient de notre propre magasin, mais on refuse tout chemin.
+    // The name comes from our own store, but any path is refused.
     if name.contains('/') || name.contains("..") {
         return deny();
     }
@@ -945,7 +946,7 @@ fn handle_favimg(uri: &str) -> Response<Vec<u8>> {
     }
 }
 
-/// Trajectoires d'un G-code pour le visualiseur.
+/// A G-code's toolpaths for the viewer.
 fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
     let fail = |code: u16, msg: &str| {
         Response::builder()
@@ -956,7 +957,7 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
             .unwrap()
     };
     let Some(path) = query_param(uri, "p") else {
-        return fail(400, "chemin manquant");
+        return fail(400, "missing path");
     };
     access::ensure_file(Path::new(&path));
     let file = match std::fs::File::open(&path) {
@@ -975,8 +976,8 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
     }
 }
 
-/// Maillage brut pour le visualiseur 3D.
-/// Verse l'état courant dans les fichiers de l'utilisateur, en 3MF.
+/// Raw mesh for the 3D viewer.
+/// Saves the current state into the user's files, as 3MF.
 #[tauri::command]
 fn ia_save(id: String) -> Result<String, String> {
     ia::save_to_files(&id).map_err(|e| e.to_string())
@@ -997,7 +998,7 @@ fn ia_stats(id: String) -> Result<mesh::Stats, String> {
     ia::current_stats(&id).map_err(|e| e.to_string())
 }
 
-/// Ouvre — ou rouvre — le terminal d'une conversation.
+/// Opens — or reopens — a conversation's terminal.
 #[tauri::command]
 fn pty_open(app: tauri::AppHandle, id: String, cols: u16, rows: u16) -> Result<(), String> {
     let c = ia::get(&id).map_err(|e| e.to_string())?;
@@ -1019,19 +1020,19 @@ fn pty_close(id: String) {
     pty::close(&id);
 }
 
-/// Vrai si Claude a une session enregistrée pour cette conversation.
+/// True if Claude has a saved session for this conversation.
 #[tauri::command]
 fn ia_resumable(id: String) -> bool {
     ia::has_session(&id)
 }
 
-/// Vrai si un terminal tourne déjà pour cette conversation.
+/// True if a terminal is already running for this conversation.
 #[tauri::command]
 fn pty_running(id: String) -> bool {
     pty::is_open(&id)
 }
 
-/// Dossier de travail, pour l'ouvrir dans le Finder.
+/// Working folder, to open it in the Finder.
 #[tauri::command]
 fn ia_workspace(id: String) -> String {
     ia::workspace(&id).to_string_lossy().to_string()
@@ -1075,17 +1076,17 @@ fn ia_create_blank(
 
 #[tauri::command]
 fn ia_delete(id: String) -> Result<Vec<ia::Conversation>, String> {
-    // Effacer le dossier sous les pieds d'un Claude en cours le laisserait
-    // tourner sans répertoire : on ferme d'abord, on efface ensuite.
+    // Deleting the folder under a running Claude would leave it running without
+    // a directory: close first, delete afterwards.
     pty::close(&id);
     ia::remove(&id).map_err(|e| e.to_string())?;
     Ok(ia::list())
 }
 
-/// Chemin du maillage courant et empreinte de sa dernière écriture.
+/// Path of the current mesh and stamp of its last write.
 #[tauri::command]
 fn ia_current(id: String) -> Result<ia::CurrentDto, String> {
-    ia::current_dto(&id).map_err(|_| "aucun objet dans cette conversation".to_string())
+    ia::current_dto(&id).map_err(|_| t!("err.conv_empty"))
 }
 
 fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
@@ -1098,21 +1099,21 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
             .unwrap()
     };
     let Some(path) = query_param(uri, "p") else {
-        return fail(400, "chemin manquant");
+        return fail(400, "missing path");
     };
-    // Au-delà, l'affichage devient lourd sans gagner en lisibilité : le
-    // chargeur échantillonne alors les triangles.
+    // Beyond this, display gets heavy without gaining readability: the loader
+    // then samples the triangles.
     let budget: usize = query_param(uri, "b")
         .and_then(|s| s.parse().ok())
         .unwrap_or(900_000)
         .clamp(10_000, 3_000_000);
 
-    // L'onglet IA travaille en STL ; le même protocole sert les deux formats,
-    // l'extension suffit à trancher.
+    // The AI tab works in STL; the same protocol serves both formats, the
+    // extension decides.
     let is_stl = Path::new(&path)
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
-    // `i` : un seul objet du fichier, dans son repère propre (vue Préparer).
+    // `i`: a single object of the file, in its own frame (Prepare view).
     if let Some(index) = query_param(uri, "i").and_then(|s| s.parse::<usize>().ok()) {
         return match plate::display_mesh(Path::new(&path), index, budget) {
             Ok(m) => Response::builder()
@@ -1156,8 +1157,8 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
             .body(Vec::new())
             .unwrap()
     };
-    // Un objet créé par l'IA n'a pas d'original : sa vignette est l'aperçu
-    // que l'application rend pour Claude.
+    // An object created by the AI has no original: its thumbnail is the
+    // preview the app renders for Claude.
     if let Some(id) = query_param(uri, "ia") {
         return match ia::preview_png(&id) {
             Ok(png) => Response::builder()
@@ -1194,17 +1195,32 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
     }
 }
 
+// ---------------------------------------------------------------- language
+
+/// Switches language; the native menu bar is rebuilt to follow.
+#[tauri::command]
+fn language_set(app: tauri::AppHandle, lang: String) -> Result<(), String> {
+    i18n::set(&lang).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    if let Ok(menu) = menu::app_menu(&app) {
+        let _ = app.set_menu(menu);
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+    Ok(())
+}
+
 // ---------------------------------------------------------------- app
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Avant tout : reprise des données de l'ancienne « 3MF Studio ».
+    // First of all: carry over the data of the former "3MF Studio".
     migrate::run();
     std::thread::spawn(thumbs::prune_old);
     std::thread::spawn(slice::cleanup_stale);
 
     let builder = tauri::Builder::default();
-    // Barre de menus native sur macOS ; ailleurs, l'interface garde ses raccourcis.
+    // Native menu bar on macOS; elsewhere, the UI keeps its shortcuts.
     #[cfg(target_os = "macos")]
     let builder = builder.menu(|app| menu::app_menu(app));
     builder
@@ -1247,11 +1263,18 @@ pub fn run() {
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .setup(|app| {
             use tauri::Manager;
-            // Suivi de fond des impressions : fin d'impression, file d'attente.
+            // Background tracking of prints: end of print, queue.
             jobs::start(app.handle().clone());
+            // The main window is declared with `create: false` so that it can
+            // receive the translation catalogs before any of its scripts run.
+            if let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == "main") {
+                tauri::WebviewWindowBuilder::from_config(app.handle(), cfg)?
+                    .initialization_script(i18n::init_script())
+                    .build()?;
+            }
             if let Some(window) = app.get_webview_window("main") {
-                // Fenêtre entière vibrante : le CSS rend opaque la zone de
-                // contenu et laisse la barre latérale translucide.
+                // Whole window vibrant: the CSS makes the content area opaque and leaves
+                // the sidebar translucent.
                 #[cfg(target_os = "macos")]
                 {
                     use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
@@ -1262,12 +1285,13 @@ pub fn run() {
                         None,
                     );
                 }
-                // Créée invisible pour éviter le flash blanc avant le premier rendu.
+                // Created invisible to avoid the white flash before the first render.
                 let _ = window.show();
             }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            language_set,
             update::app_version,
             update::update_check,
             update::update_install,
@@ -1357,9 +1381,9 @@ pub fn run() {
             menu::popup_menu
         ])
         .build(tauri::generate_context!())
-        .expect("erreur au demarrage de l'application")
+        .expect("error while starting the application")
         .run(|_app, event| {
-            // Un terminal survivrait à la fenêtre : on le ferme avec elle.
+            // A terminal would outlive the window: close it with the window.
             if let tauri::RunEvent::Exit = event {
                 pty::close_all();
             }
@@ -1382,7 +1406,7 @@ mod tests {
         assert_eq!(query_param(u, "zz"), None);
     }
 
-    /// Affiche les metadonnees lues sur de vrais fichiers.
+    /// Shows the metadata read from real files.
     #[test]
     fn dump_meta() {
         let dir = std::env::var("PROBE_DIR")

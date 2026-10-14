@@ -1,15 +1,17 @@
 "use strict";
-/* Mises à jour de l'application.
+/* Application updates.
 
-   Au lancement (si la case des Réglages est cochée) et sur demande — bouton
-   des Réglages, menu Snap Studio —, le Rust interroge la dernière release
-   GitHub. Nouvelle version : une fenêtre propose l'installation ; le paquet est
-   téléchargé, sa signature vérifiée, puis l'application redémarre. */
+   At launch (when the Settings box is ticked) and on demand — Settings
+   button, Snap Studio menu — Rust queries the latest GitHub release. A new
+   version: a sheet offers to install it; the package is downloaded, its
+   signature checked, then the app restarts. */
 
 const UP = {
   found: null,
   checking: false,
   installing: false,
+  /* Status line shown in Settings, as a key and its parameters. */
+  status: ["update.never", {}],
   prefs: { auto: true, last: null, ...JSON.parse(localStorage.getItem("snapstudio.update") || "{}") },
 };
 
@@ -19,34 +21,35 @@ function upSave() {
   localStorage.setItem("snapstudio.update", JSON.stringify(UP.prefs));
 }
 
-function upStatus(text) {
-  const when = UP.prefs.last ? ` · vérifié le ${dtf.format(new Date(UP.prefs.last))}` : "";
-  $("up-status").textContent = (text || "Pas encore vérifié") + when;
+function upStatus(key = UP.status[0], params = UP.status[1]) {
+  UP.status = [key, params];
+  const when = UP.prefs.last ? " · " + tr("update.checked_on", { date: fmtDate(UP.prefs.last / 1000) }) : "";
+  $("up-status").textContent = tr(key, params) + when;
 }
 
-/* `manual` : demandé par l'utilisateur, qui attend une réponse même si tout
-   est à jour ; au lancement, on reste silencieux sauf nouvelle version. */
+/* `manual`: asked by the user, who expects an answer even when everything is
+   up to date; at launch, stay silent unless there is a new version. */
 async function upCheck(manual) {
   if (UP.checking || UP.installing) return;
   UP.checking = true;
   $("up-check").disabled = true;
-  $("up-status").textContent = "Recherche en cours…";
+  $("up-status").textContent = tr("update.checking");
   try {
     const r = await invoke("update_check");
     UP.prefs.last = Date.now();
     upSave();
     UP.found = r;
-    $("up-check").textContent = r ? "Afficher" : "Rechercher";
+    $("up-check").textContent = tr(r ? "common.show" : "settings.update_check");
     if (r) {
-      upStatus(`Version ${r.version} disponible`);
+      upStatus("update.available", { version: r.version });
       upOpen();
     } else {
-      upStatus("Snap Studio est à jour");
-      if (manual) toast("Snap Studio est à jour");
+      upStatus("update.uptodate");
+      if (manual) toast(tr("update.uptodate"));
     }
   } catch (e) {
-    upStatus("Vérification impossible");
-    if (manual) toast(`Vérification impossible : ${e}`, true);
+    upStatus("update.failed");
+    if (manual) toast(tr("update.failed_err", { err: e }), true);
   } finally {
     UP.checking = false;
     $("up-check").disabled = false;
@@ -56,19 +59,17 @@ async function upCheck(manual) {
 function upOpen() {
   const r = UP.found;
   if (!r) return;
-  $("u-sub").textContent = `Snap Studio ${r.version} est disponible — vous avez la ${r.current}.`;
-  $("u-notes").textContent = r.notes || "Pas de notes pour cette version.";
+  $("u-sub").textContent = tr("update.sub", { version: r.version, current: r.current });
+  $("u-notes").textContent = r.notes || tr("update.no_notes");
   $("u-progress").classList.add("hidden");
-  $("u-msg").textContent = r.installable
-    ? ""
-    : "Cette installation ne peut pas se mettre à jour seule : téléchargez la nouvelle version sur GitHub.";
-  $("u-go").textContent = r.installable ? "Installer et redémarrer" : "Ouvrir la page de téléchargement";
+  $("u-msg").textContent = r.installable ? "" : tr("update.manual");
+  $("u-go").textContent = tr(r.installable ? "update.install" : "update.open_page");
   $("u-go").disabled = false;
   $("u-later").disabled = false;
   openSheet($("umodal"));
 }
 
-/* Une découpe ou un envoi en cours serait perdu au redémarrage. */
+/* A slice or an upload in progress would be lost on restart. */
 const upBusy = () => Boolean(SL.job || SL.sending);
 
 async function upInstall() {
@@ -83,24 +84,24 @@ async function upInstall() {
   $("u-go").disabled = true;
   $("u-later").disabled = true;
   while (upBusy()) {
-    $("u-msg").textContent = "Une découpe ou un envoi est en cours : l'installation commencera à sa fin.";
+    $("u-msg").textContent = tr("update.wait_busy");
     await new Promise((ok) => setTimeout(ok, 1500));
   }
-  $("u-msg").textContent = "Téléchargement…";
+  $("u-msg").textContent = tr("update.downloading");
   $("u-progress").classList.remove("hidden");
   $("u-progress").firstElementChild.style.width = "2%";
   try {
-    // En cas de succès, l'application redémarre : cet appel ne revient pas.
+    // On success the app restarts: this call never returns.
     await invoke("update_install");
   } catch (e) {
     UP.installing = false;
     $("u-progress").classList.add("hidden");
-    $("u-msg").textContent = `Installation impossible : ${e}`;
+    $("u-msg").textContent = tr("update.install_failed", { err: e });
     $("u-go").disabled = false;
     $("u-later").disabled = false;
-    // Le Rust a consommé la mise à jour : une nouvelle vérification la retrouve.
+    // Rust consumed the update: a new check finds it again.
     UP.found = null;
-    $("up-check").textContent = "Rechercher";
+    $("up-check").textContent = tr("settings.update_check");
     upCheck(false);
   }
 }
@@ -108,12 +109,14 @@ async function upInstall() {
 listen("update-progress", (e) => {
   const { done, total } = e.payload;
   if (!total) {
-    $("u-msg").textContent = `Téléchargement… ${fmtSize(done)}`;
+    $("u-msg").textContent = tr("update.downloading_n", { done: fmtSize(done) });
     return;
   }
   const pct = Math.min(100, (done / total) * 100);
   $("u-progress").firstElementChild.style.width = Math.max(2, pct) + "%";
-  $("u-msg").textContent = pct >= 100 ? "Installation…" : `Téléchargement… ${fmtSize(done)} sur ${fmtSize(total)}`;
+  $("u-msg").textContent = pct >= 100
+    ? tr("update.installing")
+    : tr("update.downloading_of", { done: fmtSize(done), total: fmtSize(total) });
 });
 
 $("u-go").addEventListener("click", upInstall);
@@ -124,7 +127,7 @@ $("umodal").addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !UP.installing) closeSheet($("umodal"));
 });
 $("up-check").addEventListener("click", () => {
-  // Une version déjà trouvée : rouvrir la fenêtre plutôt que réinterroger.
+  // A version already found: reopen the sheet rather than ask again.
   if (UP.found) upOpen();
   else upCheck(true);
 });
@@ -139,11 +142,17 @@ onMenu("app", (what) => {
   }
 });
 
+window.addEventListener("langchange", () => {
+  if (!UP.checking) upStatus();
+  $("up-check").textContent = tr(UP.found ? "common.show" : "settings.update_check");
+  if (UP.found && !$("umodal").classList.contains("hidden") && !UP.installing) upOpen();
+});
+
 (async () => {
   $("up-auto").checked = UP.prefs.auto;
   upStatus();
   $("up-version").textContent = await invoke("app_version").catch(() => "—");
-  // Laisser l'application finir de démarrer avant d'interroger le réseau.
-  // Pas de fenêtre de mise à jour par-dessus l'assistant de bienvenue.
+  // Let the app finish starting before going to the network.
+  // No update sheet over the welcome assistant.
   if (UP.prefs.auto) setTimeout(() => !W.open && upCheck(false), 3000);
 })();

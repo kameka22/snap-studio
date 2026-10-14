@@ -1,4 +1,4 @@
-// Pas de console noire au demarrage sous Windows.
+// No black console window at startup on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {

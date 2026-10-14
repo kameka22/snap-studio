@@ -6,11 +6,11 @@ pub struct ScannedFile {
     pub name: String,
     pub size: u64,
     pub modified: SystemTime,
-    /// "3mf" ou "gcode"
+    /// "3mf" or "gcode"
     pub kind: &'static str,
 }
 
-/// Extensions prises en charge, avec la famille correspondante.
+/// Supported extensions, with their family.
 pub fn kind_of(path: &Path) -> Option<&'static str> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     match ext.as_str() {
@@ -20,7 +20,7 @@ pub fn kind_of(path: &Path) -> Option<&'static str> {
     }
 }
 
-/// Liste les .3mf d'un repertoire (recursif optionnel), fichiers caches exclus.
+/// Lists the .3mf of a directory (optionally recursive), hidden files excluded.
 pub fn scan_dir(root: &Path, recursive: bool) -> Vec<ScannedFile> {
     let depth = if recursive { usize::MAX } else { 1 };
     let mut out = Vec::new();

@@ -1,22 +1,22 @@
 "use strict";
-/* Bibliothèque : navigation dans les sites de modèles.
-   Chaque onglet est une vue web native posée par-dessus notre interface. Nous
-   ne dessinons donc que ce qui l'entoure — barre d'onglets, barre d'adresse —
-   et nous lui indiquons son rectangle. Elle doit être masquée dès qu'autre
-   chose passe devant : autre entrée de la barre latérale, dialogue, visualiseur 3D. */
+/* Library: browsing model sites.
+   Each tab is a native web view laid over our interface. So we only draw
+   what surrounds it — tab bar, address bar — and tell it its rectangle. It
+   must be hidden as soon as something else comes in front: another sidebar
+   entry, a dialog, the 3D viewer. */
 
 const LIB = {
   sites: [],
   favs: [],
   restored: false,
   tabs: [],          // { id, name, url }
-  active: "home",    // "home" ou l'identifiant d'un site
-  visible: false,    // la vue Bibliothèque est-elle à l'écran ?
+  active: "home",    // "home" or a site id
+  visible: false,    // is the Library view on screen?
 };
 
 /* ------------------------------------------------------------ rectangle */
 
-/* La vue native se place où se trouve notre cadre, en points d'interface. */
+/* The native view goes where our frame is, in interface points. */
 function libRect() {
   const r = $("lib-frame").getBoundingClientRect();
   return { x: r.left, y: r.top, w: r.width, h: r.height };
@@ -25,14 +25,14 @@ function libRect() {
 function pushRect() {
   invoke("lib_rect", {
     rect: libRect(),
-    // La hauteur de notre page sert à déduire celle de la barre de titre, dont
-    // la vue native doit être décalée.
+    // Our page height gives away the title bar's, by which the native view
+    // must be offset.
     viewport: window.innerHeight,
     visible: LIB.visible && LIB.active !== "home" ? LIB.active : null,
   }).catch(() => {});
 }
 
-/* ------------------------------------------------------------ onglets */
+/* ------------------------------------------------------------ tabs */
 
 function renderTabs() {
   document.querySelector('.lib-tab[data-tab="home"]').classList.toggle("on", LIB.active === "home");
@@ -41,7 +41,7 @@ function renderTabs() {
   for (const t of LIB.tabs) {
     const el = document.createElement("button");
     el.className = "lib-tab" + (t.id === LIB.active ? " on" : "");
-    el.innerHTML = `<span class="name">${esc(t.name)}</span><span class="x" title="Fermer">✕</span>`;
+    el.innerHTML = `<span class="name">${esc(t.name)}</span><span class="x" title="${esc(tr("common.close"))}">✕</span>`;
     el.onclick = (e) => {
       if (e.target.classList.contains("x")) closeTab(t.id);
       else activateTab(t.id);
@@ -67,8 +67,8 @@ function setUrl(url) {
   $("lib-url").title = url || "";
 }
 
-/* La zone d'adresse sert aussi de ligne d'état : une bulle de notification
-   s'afficherait derrière la vue native. */
+/* The address area doubles as a status line: a notification bubble would
+   show behind the native view. */
 let statusTimer = 0;
 function libStatus(text, ms = 3000) {
   clearTimeout(statusTimer);
@@ -89,7 +89,7 @@ async function openSite(site) {
   LIB.active = site.id;
   renderTabs();
   saveTabs();
-  // Le rectangle doit être connu avant la création, sinon la vue naît ailleurs.
+  // The rectangle must be known before creation, otherwise the view is born elsewhere.
   pushRect();
   try {
     await invoke("lib_open", { id: site.id, url: site.url });
@@ -107,7 +107,7 @@ function activateTab(id) {
   invoke("lib_show", { id: id === "home" ? null : id }).catch(() => {});
 }
 
-/* Les onglets ouverts sont retrouvés au lancement suivant. */
+/* Open tabs come back at the next launch. */
 function saveTabs() {
   localStorage.setItem(
     "snapstudio.libtabs",
@@ -115,8 +115,8 @@ function saveTabs() {
   );
 }
 
-/* Les vues natives coûtent de la mémoire : on ne les recrée qu'à la première
-   visite de la Bibliothèque, pas au démarrage de l'application. */
+/* Native views cost memory: they are only recreated on the first visit to
+   the Library, not at app startup. */
 async function restoreTabs() {
   if (LIB.restored) return;
   LIB.restored = true;
@@ -147,10 +147,10 @@ function closeTab(id) {
 
 function tabMenu(e, tab) {
   nativeMenu([
-    { id: "tab:reload:" + tab.id, label: "Recharger" },
-    { id: "tab:logout:" + tab.id, label: `Se déconnecter de ${tab.name}` },
+    { id: "tab:reload:" + tab.id, label: tr("library.reload") },
+    { id: "tab:logout:" + tab.id, label: tr("library.logout", { name: tab.name }) },
     {},
-    { id: "tab:close:" + tab.id, label: "Fermer l'onglet" },
+    { id: "tab:close:" + tab.id, label: tr("library.close_tab") },
   ], e.clientX, e.clientY);
 }
 onMenu("tab", async (arg) => {
@@ -163,17 +163,18 @@ onMenu("tab", async (arg) => {
   if (what === "logout") {
     try {
       const n = await invoke("lib_logout", { id });
-      libStatus(n ? `Déconnecté (${n} témoins effacés)` : "Aucune session à effacer");
+      libStatus(n ? tr("library.logged_out", { n }) : tr("library.no_session"));
     } catch (err) {
       libStatus(String(err), 4000);
     }
   }
 });
 
-/* ------------------------------------------------------------ favoris */
+/* ------------------------------------------------------------ favorites */
 
-/* Icône de marque : carré arrondi à la couleur du site, initiale blanche ou
-   sombre selon la luminance du fond. Couleur dérivée du nom si inconnue. */
+/* Brand icon: rounded square in the site's color, white or dark initial
+   depending on the background luminance. Color derived from the name when
+   unknown. */
 const BRAND = { makerworld: "#00AE42", printables: "#FA6831", thingiverse: "#248BFB" };
 const IOS_PALETTE = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#00C7BE", "#30B0C7", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#A2845E"];
 function brandIcon(name, size = 18) {
@@ -190,19 +191,20 @@ function brandIcon(name, size = 18) {
 
 const relDate = (secs) => {
   const d = Math.floor(Date.now() / 1000) - secs;
-  if (d < 3600) return "à l'instant";
-  if (d < 86400) return `il y a ${Math.floor(d / 3600)} h`;
-  if (d < 7 * 86400) return `il y a ${Math.floor(d / 86400)} j`;
-  return new Date(secs * 1000).toLocaleDateString("fr-FR");
+  const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: "auto", style: "short" });
+  if (d < 3600) return tr("library.just_now");
+  if (d < 86400) return rtf.format(-Math.floor(d / 3600), "hour");
+  if (d < 7 * 86400) return rtf.format(-Math.floor(d / 86400), "day");
+  return new Date(secs * 1000).toLocaleDateString(locale());
 };
 
-/* Titre de la barre d'outils : le site affiché, ou le décompte des favoris. */
+/* Toolbar title: the site shown, or the favorites count. */
 function libTitle() {
   const todo = LIB.favs.filter((f) => !f.done).length;
   sideCount("library", todo);
   const t = LIB.active !== "home" && LIB.tabs.find((x) => x.id === LIB.active);
   if (t) tbSet("library", t.name, "");
-  else tbSet("library", "Bibliothèque", LIB.favs.length ? `${todo} à imprimer sur ${LIB.favs.length}` : "");
+  else tbSet("library", tr("nav.library"), LIB.favs.length ? tr("library.todo", { n: todo, total: LIB.favs.length }) : "");
 }
 
 async function favAct(what, id) {
@@ -211,7 +213,7 @@ async function favAct(what, id) {
   if (what === "open") return openFavorite(f);
   if (what === "done") LIB.favs = await invoke("fav_done", { id, done: !f.done });
   if (what === "remove") {
-    if (!(await confirmDelete(`Retirer « ${f.title} » ?`, "Le modèle disparaîtra de vos prints ; la page reste accessible sur le site."))) return;
+    if (!(await confirmDelete(tr("library.remove.title", { name: f.title }), tr("library.remove.text"), tr("prints.remove")))) return;
     LIB.favs = await invoke("fav_remove", { id });
   }
   renderFavs();
@@ -236,34 +238,34 @@ function renderFavs() {
       <div class="fav-img">${
         f.image
           ? `<img src="favimg://localhost/i?f=${encodeURIComponent(f.image)}" alt="" />`
-          : '<span class="none">sans aperçu</span>'
+          : `<span class="none">${esc(tr("library.no_preview"))}</span>`
       }</div>
       <div class="fav-body">
         <div class="fav-title">${esc(f.title)}</div>
         <div class="fav-site">${brandIcon(f.site)}${esc(f.site)} · ${relDate(f.added_at)}${
-          f.done ? '<span class="fav-flag">FAIT</span>' : ""
+          f.done ? `<span class="fav-flag">${esc(tr("library.done_flag"))}</span>` : ""
         }</div>
       </div>
       <div class="fav-actions">
-        <button class="btn small go">Ouvrir</button>
-        <button class="btn small done" title="Marquer comme imprimé">${f.done ? "À refaire" : "Fait"}</button>
-        <button class="btn small danger del" title="Retirer">Retirer</button>
+        <button class="btn small go">${esc(tr("common.open"))}</button>
+        <button class="btn small done" title="${esc(tr("library.mark_done"))}">${esc(tr(f.done ? "library.redo" : "library.done"))}</button>
+        <button class="btn small danger del">${esc(tr("prints.remove"))}</button>
       </div>`;
     el.querySelector(".go").onclick = () => favAct("open", f.id);
     el.querySelector(".done").onclick = () => favAct("done", f.id);
     el.querySelector(".del").onclick = () => favAct("remove", f.id);
     el.oncontextmenu = (e) =>
       nativeMenu([
-        { id: "fav:open:" + f.id, label: "Ouvrir" },
-        { id: "fav:done:" + f.id, label: f.done ? "Marquer à refaire" : "Marquer comme imprimé" },
+        { id: "fav:open:" + f.id, label: tr("common.open") },
+        { id: "fav:done:" + f.id, label: tr(f.done ? "library.mark_redo" : "library.mark_done") },
         {},
-        { id: "fav:remove:" + f.id, label: "Retirer de vos prints" },
+        { id: "fav:remove:" + f.id, label: tr("library.remove_menu") },
       ], e.clientX, e.clientY);
     grid.appendChild(el);
   }
 }
 
-/* Ouvre un favori dans l'onglet de son site, créé au besoin. */
+/* Opens a favorite in its site's tab, created when needed. */
 async function openFavorite(f) {
   const host = (() => {
     try {
@@ -290,43 +292,43 @@ async function loadFavs() {
 $("lib-fav").addEventListener("click", async () => {
   const t = LIB.tabs.find((x) => x.id === LIB.active);
   if (!t) return;
-  libStatus("Lecture de la page…", 0);
+  libStatus(tr("library.reading"), 0);
   try {
     LIB.favs = await invoke("fav_add", { url: t.url });
     renderFavs();
-    libStatus("Ajouté à vos prints ★");
+    libStatus(tr("library.added"));
   } catch (e) {
     libStatus(String(e), 4000);
   }
 });
 
-/* ------------------------------------------------------------ téléchargements */
+/* ------------------------------------------------------------ downloads */
 
 listen("lib-download", async (e) => {
   const { phase, path } = e.payload;
   const name = (path || "").split("/").pop();
   if (phase === "started") {
-    libStatus(`Téléchargement de ${name}…`, 0);
+    libStatus(tr("library.dl.started", { name }), 0);
   } else if (phase === "finished") {
-    libStatus(`${name} téléchargé`, 2500);
-    // Le fichier arrive dans Téléchargements : on va le montrer.
+    libStatus(tr("library.dl.finished", { name }), 2500);
+    // The file lands in Downloads: go and show it.
     switchView("files");
     await refresh();
     const f = state.files.find((x) => x.path === path);
     if (f) {
       setSel([f.path], { scroll: true });
-      toast(`${f.name} ajouté à la bibliothèque`);
+      toast(tr("library.dl.added", { name: f.name }));
     } else {
-      toast(`Téléchargé : ${name}`);
+      toast(tr("library.dl.done", { name }));
     }
   } else {
-    libStatus("Téléchargement interrompu", 4000);
+    libStatus(tr("library.dl.failed"), 4000);
   }
 });
 
-/* ------------------------------------------------------------ visibilité */
+/* ------------------------------------------------------------ visibility */
 
-/* Appelé par la barre latérale : la Bibliothèque entre ou sort de l'écran. */
+/* Called by the sidebar: the Library comes on or goes off screen. */
 function libSetVisible(on) {
   LIB.visible = on;
   if (on) {
@@ -338,7 +340,7 @@ function libSetVisible(on) {
   }
 }
 
-/* Masque la vue le temps qu'un dialogue ou le visualiseur passe devant. */
+/* Hides the view while a dialog or the viewer is in front. */
 function libSuspend() {
   invoke("lib_show", { id: null }).catch(() => {});
 }
@@ -347,7 +349,7 @@ function libResume() {
   if (LIB.visible) libSetVisible(true);
 }
 
-/* ------------------------------------------------------------ évènements */
+/* ------------------------------------------------------------ events */
 
 listen("lib-url", (e) => {
   const { id, url } = e.payload;
@@ -395,8 +397,13 @@ new ResizeObserver(() => LIB.visible && pushRect()).observe($("lib-frame"));
   await loadFavs();
 })();
 
-/* Les vues natives se dessinent au-dessus de tout : on les efface pendant
-   qu'un dialogue ou le visualiseur occupe l'écran, et on les rappelle après. */
+window.addEventListener("langchange", () => {
+  renderTabs();
+  renderFavs();
+});
+
+/* Native views draw on top of everything: they are hidden while a dialog or
+   the viewer takes the screen, and brought back afterwards. */
 const OVERLAYS = ["smodal", "pmodal", "iamodal", "sendmodal", "viewer"];
 (() => {
   const check = () => {

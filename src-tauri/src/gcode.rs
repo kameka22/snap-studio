@@ -1,8 +1,8 @@
-//! Lecture d'un fichier G-code : trajectoires, couches et métadonnées.
+//! Reading a G-code file: toolpaths, layers and metadata.
 //!
-//! Les marqueurs reconnus couvrent les trois familles rencontrées en pratique :
-//! Orca et Bambu (`;LAYER_CHANGE`, `;TYPE:`), PrusaSlicer (mêmes marqueurs,
-//! autres noms de types) et Cura (`;LAYER:`, types en majuscules).
+//! The markers recognized cover the three families met in practice: Orca and
+//! Bambu (`;LAYER_CHANGE`, `;TYPE:`), PrusaSlicer (same markers, other type
+//! names) and Cura (`;LAYER:`, upper-case types).
 
 use anyhow::{anyhow, Result};
 use std::io::{BufRead, BufReader, Read};
@@ -45,7 +45,7 @@ pub struct Seg {
     pub feature: u8,
     pub tool: u8,
     pub travel: bool,
-    /// Largeur d'extrusion en centièmes de mm (`;WIDTH:`), 0 si inconnue.
+    /// Extrusion width in hundredths of a mm (`;WIDTH:`), 0 if unknown.
     pub width: u8,
 }
 
@@ -57,7 +57,7 @@ pub struct GMeta {
     pub print_time_s: Option<u32>,
     pub first_layer_s: Option<u32>,
     pub filament_g: Option<f32>,
-    /// Consommation par extrudeur, telle qu'Orca l'écrit en pied de fichier.
+    /// Consumption per extruder, as Orca writes it at the end of the file.
     pub per_tool_mm: Vec<f32>,
     pub per_tool_cm3: Vec<f32>,
     pub per_tool_g: Vec<f32>,
@@ -65,21 +65,21 @@ pub struct GMeta {
     pub layer_height: Option<f32>,
     pub total_layers: Option<u32>,
     pub generator: Option<String>,
-    /// Couleur de chaque filament (`#rrggbb`), vide si le trancheur ne l'écrit pas.
+    /// Color of each filament (`#rrggbb`), empty if the slicer does not write it.
     pub colors: Vec<String>,
 }
 
-/// Temps calculés en parcourant les trajectoires (longueur ÷ vitesse), sans
-/// tenir compte des accélérations : ils servent à répartir le temps total
-/// estimé par le trancheur, pas à le remplacer.
+/// Times computed by walking the toolpaths (length ÷ speed), ignoring
+/// acceleration: they split the total time estimated by the slicer, they do
+/// not replace it.
 #[derive(Default, Clone)]
 pub struct RawTimes {
-    /// Secondes d'extrusion par famille de trajectoire (index = `feature_id`).
+    /// Extrusion seconds per path feature (index = `feature_id`).
     pub feature: [f32; FEATURE_COUNT],
     pub travel: f32,
-    /// Secondes cumulées à la fin de chaque couche.
+    /// Cumulative seconds at the end of each layer.
     pub layer_end: Vec<f32>,
-    /// Outils (têtes) qui ont réellement extrudé.
+    /// Tools (heads) that actually extruded.
     pub tools: Vec<u8>,
 }
 
@@ -93,9 +93,9 @@ pub struct GcodeData {
     pub times: RawTimes,
 }
 
-/// Au-delà, l'affichage n'apporte plus rien et la mémoire s'envole.
+/// Beyond this, display gains nothing and memory blows up.
 const MAX_SEGS: usize = 3_000_000;
-/// Nombre de familles reconnues par `feature_id`.
+/// Number of features recognized by `feature_id`.
 pub const FEATURE_COUNT: usize = 12;
 
 fn num_after(line: &str, key: u8) -> Option<f32> {
@@ -118,12 +118,12 @@ fn num_after(line: &str, key: u8) -> Option<f32> {
     None
 }
 
-/// Valeur d'un commentaire de la forme `; clé : valeur` ou `;clé=valeur`.
+/// Value of a comment shaped `; key : value` or `;key=value`.
 ///
-/// Le séparateur est obligatoire : sans lui, la clé `LAYER` avalerait
-/// `layer_height = 0.3` et la vraie valeur ne serait jamais lue.
-/// `#FF8800;#00FF00FF;""` → couleurs `#rrggbb` (alpha retiré) ; une entrée
-/// vide ou illisible reste vide, pour garder l'index de chaque tête.
+/// The separator is required: without it, the `LAYER` key would swallow
+/// `layer_height = 0.3` and the real value would never be read.
+/// `#FF8800;#00FF00FF;""` → `#rrggbb` colors (alpha removed); an empty or
+/// unreadable entry stays empty, to keep each head's index.
 fn hex_list(v: &str) -> Vec<String> {
     v.split([';', ','])
         .map(|s| {
@@ -145,8 +145,8 @@ fn comment_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     if !low.starts_with(&k) {
         return None;
     }
-    // Séparateur exigé : deux-points, égal, ou au moins une espace. Sans cette
-    // règle, la clé `LAYER` avalerait `layer_height = 0.3`.
+    // Separator required: colon, equals, or at least one space. Without this
+    // rule, the `LAYER` key would swallow `layer_height = 0.3`.
     let rest = &l[key.len()..];
     match rest.chars().next() {
         None => Some(""),
@@ -160,7 +160,7 @@ fn comment_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
 }
 
 fn parse_duration(s: &str) -> Option<u32> {
-    // Formats rencontrés : "1h 37m 12s", "5843", "2 h 3 m".
+    // Formats met: "1h 37m 12s", "5843", "2 h 3 m".
     if let Ok(v) = s.trim().parse::<f64>() {
         return Some(v as u32);
     }
@@ -206,7 +206,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     let mut last_z = f32::MIN;
     let mut truncated = false;
     let mut line = String::new();
-    // Vitesse courante en mm/min (modale) et temps calculés au fil des segments.
+    // Current speed in mm/min (modal) and times computed segment by segment.
     let mut feed: f32 = 1800.0;
     let mut times = RawTimes::default();
     let mut clock = 0f32;
@@ -236,13 +236,13 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
             if rl.starts_with("type:") {
                 feature = feature_id(&r[5..]);
             } else if rl.starts_with("width:") {
-                // Orca, PrusaSlicer : `;WIDTH:0.42`, largeur des extrusions qui suivent.
+                // Orca, PrusaSlicer: `;WIDTH:0.42`, width of the extrusions that follow.
                 width = r[6..].trim().parse::<f32>().map(|w| (w * 100.0).round().clamp(0.0, 255.0) as u8).unwrap_or(0);
             } else if rl == "layer_change" {
                 layer = layer.saturating_add(1);
                 seen_layer_marker = true;
             } else if let Some(v) = comment_value(l, "LAYER") {
-                // Cura : `;LAYER:12`
+                // Cura: `;LAYER:12`
                 if let Ok(n) = v.parse::<i32>() {
                     layer = n.max(0) as u16;
                     seen_layer_marker = true;
@@ -270,9 +270,9 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
             } else if let Some(v) = comment_value(l, "estimated first layer printing time (normal mode)") {
                 meta.first_layer_s = meta.first_layer_s.or_else(|| parse_duration(v));
             } else if let Some(v) = comment_value(l, "model printing time") {
-                // Orca : `; model printing time: 1h 2m; total estimated time: 1h 10m`.
-                // Le total (préchauffe comprise) est la valeur utile ; ne surtout
-                // pas additionner les deux durées de la ligne.
+                // Orca: `; model printing time: 1h 2m; total estimated time: 1h 10m`.
+                // The total (preheat included) is the useful value; never add up the two
+                // durations of the line.
                 let total = v
                     .split(';')
                     .find_map(|part| comment_value(part, "total estimated time"))
@@ -309,7 +309,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
             } else if let Some(v) = comment_value(l, "filament_colour") {
                 meta.colors = hex_list(v);
             } else if let Some(v) = comment_value(l, "extruder_colour") {
-                // PrusaSlicer : couleur de l'extrudeur, à défaut de celle du filament.
+                // PrusaSlicer: the extruder's color, failing the filament's.
                 if meta.colors.iter().all(|c| c.is_empty()) {
                     meta.colors = hex_list(v);
                 }
@@ -319,7 +319,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
             continue;
         }
 
-        // Changement d'outil : T0 à T3.
+        // Tool change: T0 to T3.
         if l.len() >= 2 && l.as_bytes()[0].to_ascii_uppercase() == b'T' {
             if let Ok(t) = l[1..].split_whitespace().next().unwrap_or("").parse::<u8>() {
                 if t < 16 {
@@ -395,7 +395,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                     (None, _) => 0.0,
                 };
 
-                // Sans marqueur de couche, on en déduit une à chaque montée en Z.
+                // Without a layer marker, one is inferred at each Z rise.
                 if !seen_layer_marker && z > last_z + 0.01 {
                     if last_z > f32::MIN {
                         layer = layer.saturating_add(1);
@@ -407,7 +407,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                 if !moved {
                     continue;
                 }
-                // Temps brut du segment : longueur ÷ vitesse programmée.
+                // Raw segment time: length ÷ programmed speed.
                 let dist = ((x - px).powi(2) + (y - py).powi(2) + (z - pz).powi(2)).sqrt();
                 let dt = dist / (feed / 60.0);
                 clock += dt;
@@ -442,7 +442,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     }
 
     if segs.is_empty() {
-        return Err(anyhow!("aucune trajectoire trouvée"));
+        return Err(anyhow!(crate::t!("err.no_paths")));
     }
 
     let mut layers = 0u16;
@@ -450,8 +450,8 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
         layers = layers.max(s.layer);
     }
 
-    // Cadrage sur la pièce : ni les déplacements à vide, ni les trajectoires du
-    // G-code de démarrage (ligne d'amorçage), qui traversent tout le plateau.
+    // Framing on the part: neither travel moves, nor the start G-code's paths
+    // (prime line), which cross the whole bed.
     let bbox = |keep: &dyn Fn(&Seg) -> bool| {
         let mut min = [f32::MAX; 3];
         let mut max = [f32::MIN; 3];
@@ -489,15 +489,15 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     })
 }
 
-/// Temps d'une famille de trajectoires dans l'aperçu.
+/// Time of a path feature in the preview.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct FeatureTime {
     pub feature: u8,
     pub seconds: f32,
 }
 
-/// Bilan d'une découpe pour l'aperçu : valeurs du trancheur quand il les donne,
-/// répartitions calculées et ramenées à son temps total.
+/// Summary of a slice for the preview: the slicer's values when it gives
+/// them, computed breakdowns scaled to its total time.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 #[serde(default)]
 pub struct SliceStats {
@@ -509,22 +509,22 @@ pub struct SliceStats {
     pub per_tool_m: Vec<f32>,
     pub per_tool_cm3: Vec<f32>,
     pub cost: Option<f32>,
-    /// Répartition du temps par famille, de la plus longue à la plus courte.
+    /// Time breakdown by feature, longest first.
     pub features: Vec<FeatureTime>,
     pub travel_s: f32,
-    /// Temps écoulé à la fin de chaque couche.
+    /// Elapsed time at the end of each layer.
     pub layer_end_s: Vec<f32>,
-    /// Têtes qui extrudent réellement.
+    /// Heads that actually extrude.
     pub tools: Vec<u8>,
-    /// Vrai quand aucun temps total n'a été trouvé : tout est calculé.
+    /// True when no total time was found: everything is computed.
     pub estimated_only: bool,
 }
 
 pub fn stats(d: &GcodeData) -> SliceStats {
     let t = &d.times;
     let raw_total: f32 = t.feature.iter().sum::<f32>() + t.travel;
-    // Le calcul ignore accélérations et préchauffe : on le recale sur le total
-    // annoncé par le trancheur quand il existe.
+    // The computation ignores acceleration and preheat: it is scaled to the
+    // total announced by the slicer when there is one.
     let k = match d.meta.print_time_s {
         Some(total) if raw_total > 0.0 => total as f32 / raw_total,
         _ => 1.0,
@@ -554,16 +554,16 @@ pub fn stats(d: &GcodeData) -> SliceStats {
     }
 }
 
-/// Sérialisation pour le visualiseur.
+/// Serialization for the viewer.
 ///
-/// En-tête de 40 octets :
-/// `"3MFG"` | version u8 | drapeaux u8 (bit 0 : tronqué) | réservé u8×2 |
-/// nombre de segments u32 | nombre de couches u32 | min f32×3 | max f32×3 |
-/// positions (6 f32 par segment) | attributs (couche u16, famille u8,
-/// outil sur les 4 bits hauts + déplacement sur le bit 0).
+/// 40-byte header:
+/// `"3MFG"` | version u8 | flags u8 (bit 0: truncated) | reserved u8×2 |
+/// segment count u32 | layer count u32 | min f32×3 | max f32×3 |
+/// positions (6 f32 per segment) | attributes (layer u16, feature u8,
+/// tool on the 4 high bits + travel on bit 0).
 ///
-/// Les segments sont triés par couche : le visualiseur affiche les couches
-/// jusqu'à un rang donné avec un seul appel de dessin.
+/// Segments are sorted by layer: the viewer shows layers up to a given rank
+/// with a single draw call.
 pub fn encode(data: &GcodeData) -> Vec<u8> {
     let mut order: Vec<&Seg> = data.segs.iter().collect();
     order.sort_by_key(|s| (s.layer, s.travel));
@@ -571,7 +571,7 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
 
     let mut out = Vec::with_capacity(40 + n * 28);
     out.extend_from_slice(b"3MFG");
-    // Version 2 : largeur par segment et couleurs des filaments à la suite.
+    // Version 2: width per segment and filament colors after it.
     out.push(2);
     out.push(if data.truncated { 1 } else { 0 });
     out.extend_from_slice(&[0, 0]);
@@ -593,8 +593,8 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
     for s in &order {
         out.push(s.width);
     }
-    // Couleurs : leur nombre, puis par tête un drapeau (1 connue, 0 inconnue)
-    // et les trois composantes RVB.
+    // Colors: their count, then per head a flag (1 known, 0 unknown) and the
+    // three RGB components.
     let colors = &data.meta.colors;
     out.push(colors.len().min(16) as u8);
     for c in colors.iter().take(16) {
@@ -607,7 +607,7 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
     out
 }
 
-/// Vignette PNG encodée en base64 dans les commentaires, si le profil en a mis une.
+/// PNG thumbnail encoded in base64 in the comments, if the profile put one.
 pub fn embedded_thumbnail(read: impl Read) -> Option<Vec<u8>> {
     let rd = BufReader::with_capacity(1 << 16, read);
     let mut best: Option<Vec<u8>> = None;
@@ -620,7 +620,7 @@ pub fn embedded_thumbnail(read: impl Read) -> Option<Vec<u8>> {
         } else if tl.starts_with("thumbnail end") || tl.starts_with("thumbnail_png end") {
             if let Some(b64) = cur.take() {
                 if let Some(bytes) = b64_decode(&b64) {
-                    // On garde la plus grande : c'est la plus lisible en vignette.
+                    // Keep the largest: it is the most readable as a thumbnail.
                     if best.as_ref().map(|b| bytes.len() > b.len()).unwrap_or(true) {
                         best = Some(bytes);
                     }
@@ -629,7 +629,7 @@ pub fn embedded_thumbnail(read: impl Read) -> Option<Vec<u8>> {
         } else if let Some(buf) = cur.as_mut() {
             buf.push_str(t);
         } else if tl.starts_with("g1") || tl.starts_with("g0") {
-            break; // passé l'en-tête, il n'y a plus de vignette
+            break; // past the header, there is no thumbnail any more
         }
     }
     best
@@ -695,8 +695,8 @@ G1 X30 Y30 F9000
 ; estimated printing time (normal mode) = 1h 37m 12s
 ";
 
-    /// Pied de fichier d'Orca : consommations par tête, coût, temps total sans
-    /// additionner les deux durées de la ligne « model printing time ».
+    /// Orca's file footer: consumption per head, cost, total time without adding
+    /// up the two durations of the "model printing time" line.
     #[test]
     fn orca_footer_statistics() {
         let g = "; HEADER\n;TYPE:Outer wall\nG1 F600\nG1 X10 Y0 E1\n;LAYER_CHANGE\nT1\n;TYPE:Sparse infill\nG1 X10 Y20 E2\nG1 X0 Y20\n\
@@ -708,7 +708,7 @@ G1 X30 Y30 F9000
 ; estimated first layer printing time (normal mode) = 1m 30s\n\
 ; model printing time: 1h 2m 3s; total estimated time: 1h 10m 0s\n";
         let d = parse(g.as_bytes()).unwrap();
-        assert_eq!(d.meta.print_time_s, Some(4200), "le total, pas la somme des deux");
+        assert_eq!(d.meta.print_time_s, Some(4200), "the total, not the sum of both");
         assert_eq!(d.meta.first_layer_s, Some(90));
         assert_eq!(d.meta.per_tool_g, vec![3.58, 0.90]);
         assert_eq!(d.meta.cost, Some(0.09));
@@ -716,8 +716,8 @@ G1 X30 Y30 F9000
         assert_eq!(st.tools, vec![0, 1]);
         assert_eq!(st.per_tool_m, vec![1.2005, 0.3]);
         let sum: f32 = st.features.iter().map(|f| f.seconds).sum::<f32>() + st.travel_s;
-        assert!((sum - 4200.0).abs() < 1.0, "répartition recalée sur le total : {sum}");
-        assert_eq!(st.features[0].feature, 5, "remplissage (20 mm) avant la paroi (10 mm)");
+        assert!((sum - 4200.0).abs() < 1.0, "breakdown scaled to the total: {sum}");
+        assert_eq!(st.features[0].feature, 5, "infill (20 mm) before the wall (10 mm)");
         assert_eq!(st.layer_end_s.len(), 2);
         assert!((st.layer_end_s[1] - 4200.0).abs() < 1.0);
     }
@@ -725,34 +725,34 @@ G1 X30 Y30 F9000
     #[test]
     fn parse_basics() {
         let d = parse(SAMPLE.as_bytes()).unwrap();
-        assert_eq!(d.layers, 2, "deux changements de couche");
+        assert_eq!(d.layers, 2, "two layer changes");
         assert_eq!(d.meta.total_layers, Some(2));
         assert_eq!(d.meta.print_time_s, Some(3600 + 37 * 60 + 12));
         assert!(d.meta.generator.as_deref().unwrap_or("").contains("Orca"));
 
         let extr: Vec<&Seg> = d.segs.iter().filter(|s| !s.travel).collect();
         let trav: Vec<&Seg> = d.segs.iter().filter(|s| s.travel).collect();
-        assert_eq!(extr.len(), 4, "quatre extrusions");
-        // Le premier positionnement et le déplacement rapide sont des trajets à vide.
-        assert!(trav.len() >= 2, "déplacements détectés");
+        assert_eq!(extr.len(), 4, "four extrusions");
+        // The first positioning and the rapid move are travel moves.
+        assert!(trav.len() >= 2, "travel moves detected");
 
-        assert_eq!(extr[0].feature, 1, "paroi extérieure");
+        assert_eq!(extr[0].feature, 1, "outer wall");
         assert_eq!(extr[2].feature, 5, "remplissage");
-        assert_eq!(extr[3].feature, 2, "paroi intérieure");
+        assert_eq!(extr[3].feature, 2, "inner wall");
         assert_eq!(extr[3].layer, 2);
 
-        // Le cadrage ignore les déplacements à vide : X ne dépasse pas 20.
+        // Framing ignores travel moves: X does not go beyond 20.
         assert!((d.max[0] - 20.0).abs() < 0.01, "max x = {}", d.max[0]);
     }
 
-    /// Le séparateur distingue une clé d'une autre qui commence pareil.
+    /// The separator tells a key from another one starting the same.
     #[test]
     fn comment_keys_need_a_separator() {
         assert_eq!(comment_value("; layer_height = 0.3", "layer_height"), Some("0.3"));
         assert_eq!(comment_value(";LAYER:12", "LAYER"), Some("12"));
-        assert_eq!(comment_value("; layer_height = 0.3", "LAYER"), None, "pas un préfixe");
+        assert_eq!(comment_value("; layer_height = 0.3", "LAYER"), None, "not a prefix");
         assert_eq!(comment_value("; total layer number: 42", "total layer number"), Some("42"));
-        // L'espace seule sert aussi de séparateur.
+        // A lone space is a separator too.
         assert_eq!(comment_value("; generated by OrcaSlicer 2.3.6", "generated by"), Some("OrcaSlicer 2.3.6"));
     }
 
@@ -766,11 +766,11 @@ G1 X30 Y30 F9000
 
     #[test]
     fn relative_extrusion_is_not_a_travel() {
-        // En mode absolu (M82), une valeur E qui n'augmente pas est une rétraction.
+        // In absolute mode (M82), an E value that does not increase is a retraction.
         let g = "G90\nM82\nG1 X0 Y0 Z0.2\nG1 X10 Y0 E1.0\nG1 X20 Y0 E0.5\n";
         let d = parse(g.as_bytes()).unwrap();
         let extr: Vec<&Seg> = d.segs.iter().filter(|s| !s.travel).collect();
-        assert_eq!(extr.len(), 1, "seule la montée de E est une extrusion");
+        assert_eq!(extr.len(), 1, "only the E increase is an extrusion");
     }
 
     #[test]
@@ -780,22 +780,22 @@ G1 X30 Y30 F9000
         assert_eq!(&b[0..4], b"3MFG");
         let n = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
         assert_eq!(n, d.segs.len());
-        assert_eq!(u32::from_le_bytes(b[12..16].try_into().unwrap()), 3, "couches 0 à 2");
-        // En-tête de 40 octets, positions, attributs, largeurs, puis les
-        // couleurs (leur nombre, 4 octets chacune).
+        assert_eq!(u32::from_le_bytes(b[12..16].try_into().unwrap()), 3, "layers 0 to 2");
+        // 40-byte header, positions, attributes, widths, then the colors (their
+        // count, 4 bytes each).
         let colors = d.meta.colors.len();
         assert_eq!(b.len(), 40 + n * 24 + n * 4 + n + 1 + colors * 4);
-        // Les couches sont croissantes dans le tampon d'attributs.
+        // Layers are increasing in the attribute buffer.
         let base = 40 + n * 24;
         let mut prev = 0u16;
         for i in 0..n {
             let l = u16::from_le_bytes(b[base + i * 4..base + i * 4 + 2].try_into().unwrap());
-            assert!(l >= prev, "tri par couche");
+            assert!(l >= prev, "sorted by layer");
             prev = l;
         }
     }
 
-    /// Analyse un vrai G-code et écrit l'aperçu, pour vérification visuelle.
+    /// Parses a real G-code and writes the preview, for visual checking.
     #[test]
     fn dump_real_gcode() {
         let (Ok(src), Ok(out)) = (std::env::var("GCODE_IN"), std::env::var("GCODE_OUT")) else {
@@ -804,7 +804,7 @@ G1 X30 Y30 F9000
         let t = std::time::Instant::now();
         let d = parse(std::fs::File::open(&src).unwrap()).unwrap();
         println!(
-            "{} segments ({} extrusions), {} couches, {:?} — analysé en {} ms",
+            "{} segments ({} extrusions), {} layers, {:?} — parsed in {} ms",
             d.segs.len(),
             d.segs.iter().filter(|s| !s.travel).count(),
             d.layers + 1,
@@ -815,7 +815,7 @@ G1 X30 Y30 F9000
         for sg in d.segs.iter().filter(|s| !s.travel) {
             hist[sg.feature as usize] += 1;
         }
-        println!("répartition par famille : {hist:?}");
+        println!("breakdown by feature: {hist:?}");
         std::fs::write(format!("{out}.bin"), encode(&d)).unwrap();
         let img = crate::render::render_paths(&d.segs, d.min, d.max, 512);
         image::DynamicImage::ImageRgba8(img)
@@ -833,11 +833,11 @@ G1 X30 Y30 F9000
         assert_eq!(w, vec![45, 62]);
         let bin = encode(&d);
         assert_eq!(bin[4], 2, "version 2");
-        // Fin du tampon : 3 couleurs × 4 octets, précédées de leur nombre.
+        // End of the buffer: 3 colors × 4 bytes, preceded by their count.
         let tail = &bin[bin.len() - 13..];
         assert_eq!(tail[0], 3);
         assert_eq!(&tail[1..5], &[1, 0xff, 0x88, 0x00]);
-        assert_eq!(&tail[9..13], &[0, 0, 0, 0], "couleur inconnue");
+        assert_eq!(&tail[9..13], &[0, 0, 0, 0], "unknown color");
     }
 
     #[test]

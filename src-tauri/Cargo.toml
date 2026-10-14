@@ -41,6 +41,7 @@ tokio-tungstenite = { version = "0.30", default-features = false, features = ["c
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 portable-pty = "0.9.0"
 notify = "8.2.0"
+sys-locale = "0.3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 window-vibrancy = "0.8"

@@ -1,13 +1,12 @@
-//! Les terminaux des conversations IA.
+//! Terminals of the AI conversations.
 //!
-//! On n'imite pas Claude Code : on le fait tourner pour de bon, dans un
-//! pseudo-terminal. L'interface en affiche la sortie telle quelle, et lui
-//! renvoie les frappes. Tout ce que sait faire l'outil — mode plan, commandes
-//! slash, `@fichier`, interruption — fonctionne donc sans rien coder.
+//! We do not imitate Claude Code: we run it for real, in a pseudo-terminal.
+//! The UI shows its output as is, and sends it the keystrokes. Everything the
+//! tool can do — plan mode, slash commands, `@file`, interruption — therefore
+//! works without coding anything.
 //!
-//! Les octets remontent en base64 : découpés à la lecture, ils peuvent trancher
-//! un caractère accentué en deux, et seul l'émulateur côté interface sait
-//! recoller les morceaux.
+//! Bytes go up in base64: split when read, they may cut an accented character
+//! in two, and only the emulator on the UI side can glue the pieces back.
 
 use crate::ia::Conversation;
 use anyhow::{anyhow, Result};
@@ -33,8 +32,8 @@ struct Exit {
 
 struct Session {
     master: Box<dyn portable_pty::MasterPty + Send>,
-    /// Le canal d'écriture a son propre verrou : écrire peut bloquer si le
-    /// terminal ne consomme pas, et cela ne doit pas figer tout le reste.
+    /// The write channel has its own lock: writing may block if the terminal
+    /// does not consume, and that must not freeze everything else.
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
 }
@@ -44,7 +43,7 @@ fn sessions() -> &'static Mutex<HashMap<String, Session>> {
     S.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Les exécutables trouvés sur la machine.
+/// Executables found on the machine.
 pub struct Tools {
     pub claude: Option<PathBuf>,
     pub yolobox: Option<PathBuf>,
@@ -59,20 +58,20 @@ impl Tools {
     }
 }
 
-/// La ligne de commande qui ouvre la conversation.
+/// The command line that opens the conversation.
 ///
-/// L'identifiant de la conversation est aussi celui de la session Claude :
-/// `--session-id` à la première ouverture, `--resume` ensuite. C'est ce qui
-/// rend la reprise fiable sans jamais fouiller l'historique de Claude.
+/// The conversation id is also the Claude session's: `--session-id` on the
+/// first opening, `--resume` afterwards. It is what makes resuming reliable
+/// without ever digging into Claude's history.
 ///
-/// La forme du mode conteneur a été établie contre yolobox v0.19.4 : ses
-/// drapeaux suivent la sous-commande, et il transmet à Claude tout ce qu'il ne
-/// reconnaît pas — un séparateur `--` lui ferait avaler le reste.
+/// The container mode's form was established against yolobox v0.19.4: its
+/// flags follow the subcommand, and it passes on to Claude whatever it does
+/// not recognize — a `--` separator would make it swallow the rest.
 pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec<String>> {
     let claude = tools
         .claude
         .as_ref()
-        .ok_or_else(|| anyhow!("Claude Code est introuvable sur cette machine"))?;
+        .ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?;
 
     let mut inner: Vec<String> = Vec::new();
     if resume {
@@ -87,20 +86,18 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
         let yolobox = tools
             .yolobox
             .as_ref()
-            .ok_or_else(|| anyhow!("yolobox est introuvable ; essayez le mode local"))?;
+            .ok_or_else(|| anyhow!(crate::t!("err.no_yolobox")))?;
         if !resume && !c.prompt.is_empty() {
             inner.push(c.prompt.clone());
         }
-        // Les drapeaux de yolobox se placent après la sous-commande, et tout ce
-        // qu'il ne reconnaît pas file à Claude — donc pas de séparateur.
+        // yolobox's flags go after the subcommand, and whatever it does not
+        // recognize goes to Claude — hence no separator.
         //
-        // On ne demande pas les pleins pouvoirs ici : le bac à sable les
-        // accorde déjà de lui-même, et l'option déclencherait en plus son
-        // propre écran d'acceptation.
+        // Full permissions are not requested here: the sandbox already grants them
+        // on its own, and the option would also trigger its own acceptance screen.
         //
-        // `--claude-config` partage la configuration et, surtout, monte le
-        // dossier des sessions : c'est ce qui rend la reprise possible depuis
-        // l'hôte.
+        // `--claude-config` shares the configuration and, above all, mounts the
+        // sessions folder: that is what makes resuming possible from the host.
         let mut argv = vec![
             yolobox.to_string_lossy().to_string(),
             "claude".into(),
@@ -112,8 +109,8 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
         return Ok(argv);
     }
 
-    // En local, Claude travaille sur votre Mac : les modifications de fichiers
-    // sont acceptées d'office, les commandes restent soumises à votre accord.
+    // Locally, Claude works on your Mac: file edits are accepted outright,
+    // commands still need your approval.
     inner.push("--permission-mode".into());
     inner.push("acceptEdits".into());
     if !resume && !c.prompt.is_empty() {
@@ -124,13 +121,13 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
     Ok(argv)
 }
 
-/// Retire de l'environnement les marqueurs de session héritée.
+/// Removes the inherited session markers from the environment.
 ///
-/// Une application lancée depuis un terminal Claude Code en hérite, et Claude
-/// Code, en les voyant, **cesse d'enregistrer la conversation** : il n'y a alors
-/// plus rien à reprendre la fois suivante. On ne garde que `CLAUDE_CONFIG_DIR`,
-/// qui est un réglage délibéré de l'utilisateur, et l'on ne touche à rien
-/// d'autre — surtout pas aux identifiants d'API.
+/// An app launched from a Claude Code terminal inherits them, and Claude Code,
+/// seeing them, **stops recording the conversation**: there is then nothing
+/// to resume the next time. Only `CLAUDE_CONFIG_DIR` is kept, a deliberate
+/// user setting, and nothing else is touched — above all not the API
+/// credentials.
 fn purge_markers(cmd: &mut CommandBuilder, names: impl Iterator<Item = String>) {
     for k in names {
         if k.starts_with("CLAUDE") && k != "CLAUDE_CONFIG_DIR" {
@@ -139,15 +136,15 @@ fn purge_markers(cmd: &mut CommandBuilder, names: impl Iterator<Item = String>) 
     }
 }
 
-/// Vrai si un terminal tourne déjà pour cette conversation.
+/// True if a terminal is already running for this conversation.
 pub fn is_open(id: &str) -> bool {
     sessions().lock().map(|s| s.contains_key(id)).unwrap_or(false)
 }
 
-/// Ouvre le terminal d'une conversation, ou ne fait rien s'il tourne déjà.
+/// Opens a conversation's terminal, or does nothing if it already runs.
 pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<()> {
-    // Deux demandes simultanées lanceraient deux Claude sur la même session :
-    // les ouvertures se font une à une.
+    // Two simultaneous requests would start two Claudes on the same session:
+    // openings happen one at a time.
     static GATE: OnceLock<Mutex<()>> = OnceLock::new();
     let _gate = GATE.get_or_init(|| Mutex::new(())).lock().unwrap();
     if is_open(&c.id) {
@@ -155,15 +152,15 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
     }
     let ws = crate::ia::workspace(&c.id);
     if !ws.is_dir() {
-        return Err(anyhow!("dossier de travail introuvable"));
+        return Err(anyhow!(crate::t!("err.no_workspace")));
     }
 
-    // Consignes, outils et aperçus remis à niveau avant que Claude ne les lise.
+    // Instructions, tools and previews brought up to date before Claude reads them.
     crate::ia::refresh_workspace(&c.id);
 
     let tools = Tools::detect();
-    // La vérité est sur le disque, pas dans notre fiche : une session ne
-    // se reprend que si Claude en a écrit une.
+    // The truth is on disk, not in our record: a session can only be resumed
+    // if Claude wrote one.
     let argv = command_line(c, &tools, crate::ia::has_session(&c.id))?;
 
     let pair = native_pty_system().openpty(PtySize {
@@ -180,8 +177,8 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
     cmd.cwd(&ws);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    // Lancée depuis le Finder, l'application n'hérite pas du `PATH` du
-    // terminal : on le complète pour que Claude retrouve ses outils.
+    // Launched from the Finder, the app does not inherit the terminal's `PATH`:
+    // it is completed so that Claude finds its tools.
     let mut path: Vec<std::path::PathBuf> = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).collect())
         .unwrap_or_default();
@@ -208,13 +205,13 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
         },
     );
 
-    // Le dossier est surveillé tant que le terminal vit — et non tant que
-    // l'écran est affiché : ce que Claude écrit pendant qu'on regarde ailleurs
-    // doit être archivé quand même.
+    // The folder is watched while the terminal lives — not while the screen is
+    // shown: what Claude writes while one looks elsewhere must still be
+    // archived.
     let _ = crate::ia::watch_start(app.clone(), &c.id);
 
-    // Une fois lancée, la session existe pour Claude : la prochaine ouverture
-    // devra la reprendre plutôt que la créer.
+    // Once started, the session exists for Claude: the next opening must
+    // resume it rather than create it.
     crate::ia::mark_started(&c.id);
 
     let id = c.id.clone();
@@ -243,11 +240,11 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
 }
 
 pub fn write(id: &str, data: &str) -> Result<()> {
-    // On récupère le canal, puis on relâche le verrou général avant d'écrire :
-    // un collage volumineux peut bloquer plusieurs secondes.
+    // Take the channel, then release the global lock before writing: a large
+    // paste may block for several seconds.
     let w = {
         let s = sessions().lock().unwrap();
-        s.get(id).ok_or_else(|| anyhow!("terminal fermé"))?.writer.clone()
+        s.get(id).ok_or_else(|| anyhow!(crate::t!("err.terminal_closed")))?.writer.clone()
     };
     let mut w = w.lock().unwrap();
     w.write_all(data.as_bytes())?;
@@ -257,7 +254,7 @@ pub fn write(id: &str, data: &str) -> Result<()> {
 
 pub fn resize(id: &str, cols: u16, rows: u16) -> Result<()> {
     let s = sessions().lock().unwrap();
-    let sess = s.get(id).ok_or_else(|| anyhow!("terminal fermé"))?;
+    let sess = s.get(id).ok_or_else(|| anyhow!(crate::t!("err.terminal_closed")))?;
     sess.master.resize(PtySize {
         rows: rows.max(4),
         cols: cols.max(20),
@@ -267,22 +264,22 @@ pub fn resize(id: &str, cols: u16, rows: u16) -> Result<()> {
     Ok(())
 }
 
-/// Délai laissé à Claude pour se retirer de lui-même.
+/// Time left to Claude to leave on its own.
 const GRACE: std::time::Duration = std::time::Duration::from_millis(2500);
 
-/// Retire la session et attend la fin du processus.
+/// Removes the session and waits for the process to end.
 ///
-/// On demande d'abord poliment. Un outil interactif a du ménage à faire en
-/// partant — ne serait-ce qu'écrire sa conversation sur le disque — et le tuer
-/// net le lui interdit. La manière forte reste, mais en dernier recours.
+/// Ask politely first. An interactive tool has some tidying to do on its way
+/// out — if only writing its conversation to disk — and killing it outright
+/// prevents that. The hard way remains, but as a last resort.
 fn close_and_wait(id: &str) -> i32 {
     crate::ia::watch_stop(id);
     let Some(mut sess) = sessions().lock().unwrap().remove(id) else {
         return 0;
     };
 
-    // Échap referme une éventuelle boîte de dialogue, puis deux interruptions
-    // rapprochées font sortir Claude Code.
+    // Esc closes a possible dialog, then two quick interrupts make Claude Code
+    // exit.
     if let Ok(mut w) = sess.writer.lock() {
         let _ = w.write_all(b"\x1b");
         let _ = w.flush();
@@ -313,7 +310,7 @@ pub fn close(id: &str) {
     close_and_wait(id);
 }
 
-/// Ferme tous les terminaux — à la fermeture de l'application.
+/// Closes all terminals — when the app closes.
 pub fn close_all() {
     let ids: Vec<String> = sessions()
         .lock()
@@ -356,46 +353,46 @@ mod tests {
 
     #[test]
     fn first_run_creates_the_session() {
-        let c = conv("local", "Incline de 15°", false);
+        let c = conv("local", "Tilt by 15°", false);
         let argv = command_line(&c, &tools(), false).unwrap();
         assert_eq!(argv[0], "/usr/local/bin/claude");
         assert!(argv.contains(&"--session-id".to_string()));
         assert!(argv.contains(&c.id));
         assert!(!argv.contains(&"--resume".to_string()));
-        assert_eq!(argv.last().unwrap(), "Incline de 15°", "la demande est passée telle quelle");
+        assert_eq!(argv.last().unwrap(), "Tilt by 15°", "the request is passed as is");
     }
 
     #[test]
     fn reopening_resumes_it() {
-        let c = conv("local", "Incline de 15°", true);
+        let c = conv("local", "Tilt by 15°", true);
         let argv = command_line(&c, &tools(), true).unwrap();
         assert!(argv.contains(&"--resume".to_string()));
         assert!(!argv.contains(&"--session-id".to_string()));
         assert!(
-            !argv.contains(&"Incline de 15°".to_string()),
-            "la demande initiale ne doit pas être renvoyée à la reprise"
+            !argv.contains(&"Tilt by 15°".to_string()),
+            "the initial request must not be sent again when resuming"
         );
     }
 
-    /// La forme exacte a été vérifiée contre le vrai yolobox : ses drapeaux
-    /// suivent la sous-commande, il transmet à Claude ce qu'il ne reconnaît
-    /// pas, et un séparateur `--` lui ferait avaler le reste.
+    /// The exact form was checked against the real yolobox: its flags follow
+    /// the subcommand, it passes on to Claude what it does not recognize, and a
+    /// `--` separator would make it swallow the rest.
     #[test]
     fn container_wraps_the_command() {
-        let c = conv("container", "Creuse la base", false);
+        let c = conv("container", "Hollow the base", false);
         let argv = command_line(&c, &tools(), false).unwrap();
         assert_eq!(argv[0], "/opt/homebrew/bin/yolobox");
-        assert_eq!(argv[1], "claude", "la sous-commande vient en premier");
-        assert!(!argv.iter().any(|a| a == "--"), "aucun séparateur");
+        assert_eq!(argv[1], "claude", "the subcommand comes first");
+        assert!(!argv.iter().any(|a| a == "--"), "no separator");
         assert!(
             !argv.iter().any(|a| a == "--dangerously-skip-permissions"),
-            "le bac à sable s'en charge, et l'option ouvrirait un dialogue"
+            "the sandbox handles it, and the option would open a dialog"
         );
 
         let cfg = argv.iter().position(|a| a == "--claude-config").unwrap();
         let sid = argv.iter().position(|a| a == "--session-id").unwrap();
-        assert!(cfg < sid, "les drapeaux du bac à sable précèdent ceux de Claude");
-        assert_eq!(argv.last().unwrap(), "Creuse la base");
+        assert!(cfg < sid, "the sandbox flags come before Claude's");
+        assert_eq!(argv.last().unwrap(), "Hollow the base");
     }
 
     #[test]
@@ -415,7 +412,7 @@ mod tests {
         assert!(err.to_string().contains("yolobox"));
     }
 
-    /// Un terminal sur une commande banale : on écrit, on relit.
+    /// A terminal on a trivial command: write, read back.
     #[test]
     fn a_terminal_carries_bytes_both_ways() {
         let pair = native_pty_system()
@@ -459,18 +456,18 @@ mod essai_reel {
     use super::*;
     use std::time::{Duration, Instant};
 
-    /// Lance vraiment Claude Code dans un pseudo-terminal et regarde ce qui
-    /// en sort. Sans demande initiale, rien n'est envoyé au modèle : on
-    /// vérifie seulement que l'outil démarre au bon endroit.
+    /// Really runs Claude Code in a pseudo-terminal and looks at what comes
+    /// out. Without an initial request nothing is sent to the model: it only
+    /// checks that the tool starts in the right place.
     ///
-    /// `IA_PTY=/chemin/objet.3mf cargo test essai_reel -- --nocapture`
+    /// `IA_PTY=/path/object.3mf cargo test essai_reel -- --nocapture`
     #[test]
     fn claude_starts_in_the_workspace() {
         let Ok(src) = std::env::var("IA_PTY") else {
             return;
         };
         let c = crate::ia::create(std::path::Path::new(&src), "", "local").unwrap();
-        // Consignes, outils et aperçus remis à niveau avant que Claude ne les lise.
+        // Instructions, tools and previews brought up to date before Claude reads them.
     crate::ia::refresh_workspace(&c.id);
 
     let tools = Tools::detect();
@@ -518,12 +515,12 @@ mod essai_reel {
         }
         let _ = child.kill();
         let text = String::from_utf8_lossy(&seen);
-        println!("--- {} octets reçus ---", seen.len());
+        println!("--- {} bytes received ---", seen.len());
         println!("{}", text.chars().take(1500).collect::<String>());
-        assert!(seen.len() > 200, "Claude n'a rien affiché");
+        assert!(seen.len() > 200, "Claude showed nothing");
         assert!(
             seen.contains(&0x1b),
-            "aucune séquence d'échappement : ce n'est pas une interface de terminal"
+            "no escape sequence: this is not a terminal interface"
         );
         crate::ia::remove(&c.id).unwrap();
     }
@@ -531,13 +528,12 @@ mod essai_reel {
 
 #[cfg(test)]
 mod env_tests {
-    /// Les marqueurs de session héritée doivent disparaître de l'environnement
-    /// transmis à Claude Code.
+    /// Inherited session markers must disappear from the environment passed to
+    /// Claude Code.
     ///
-    /// C'est la cause exacte des conversations irrécupérables : voyant
-    /// `CLAUDE_CODE_CHILD_SESSION`, Claude affiche « Transcript saving is off »
-    /// et n'écrit aucune session — `--resume` comme `/resume` ne trouvent alors
-    /// plus rien.
+    /// It is the exact cause of unrecoverable conversations: seeing
+    /// `CLAUDE_CODE_CHILD_SESSION`, Claude shows "Transcript saving is off" and
+    /// writes no session — `--resume` and `/resume` then find nothing.
     #[test]
     fn inherited_markers_are_dropped() {
         use super::*;
@@ -567,10 +563,10 @@ mod env_tests {
             "CLAUDE_CODE_ENTRYPOINT",
             "CLAUDE_PID",
         ] {
-            assert!(!left.contains_key(k), "« {k} » aurait dû disparaître");
+            assert!(!left.contains_key(k), "“{k}” should have disappeared");
         }
-        assert_eq!(left.get("CLAUDE_CONFIG_DIR"), Some(&"/tmp/conf"), "réglage voulu");
-        assert_eq!(left.get("ANTHROPIC_API_KEY"), Some(&"secret"), "on n'y touche pas");
+        assert_eq!(left.get("CLAUDE_CONFIG_DIR"), Some(&"/tmp/conf"), "intended setting");
+        assert_eq!(left.get("ANTHROPIC_API_KEY"), Some(&"secret"), "left untouched");
         assert_eq!(left.get("PATH"), Some(&"/usr/bin"));
         assert_eq!(left.get("HOME"), Some(&"/Users/x"));
     }

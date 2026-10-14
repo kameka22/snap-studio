@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Checks the translation catalogs against the code.
+
+    python3 scripts/check-i18n.py
+
+Reports, and exits non-zero on:
+- keys used in the code (tr("…"), data-i18n…="…", t!("…")) but missing from
+  ui/i18n/en.json;
+- keys of en.json missing from another catalog, or the other way round;
+- placeholders ({name}) that differ between languages;
+- keys no code uses (keys built at run time are listed in DYNAMIC);
+- French left in the UI code outside the catalogs.
+"""
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+UI = ROOT / "ui"
+SRC = ROOT / "src-tauri" / "src"
+
+# Keys assembled at run time: any key starting with one of these is used.
+DYNAMIC = (
+    "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
+    "prints.state.", "slice.pstate.", "style.",
+)
+
+# French that may legitimately stay in the code (names, data matching).
+FRENCH_OK = re.compile(r"Français|générique")
+FRENCH = re.compile(r"[éèêàçùôîâûÉÈÀÇ«»]")
+
+
+def strip_comments(text):
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    return re.sub(r"(?m)^\s*//.*$", "", text)
+
+
+def used_keys():
+    keys = set()
+    for f in UI.glob("*.js"):
+        keys |= set(re.findall(r'\btr\(\s*"([\w.]+)"', f.read_text()))
+        # Keys picked by a ternary, tr(x ? "a" : "b"), or passed around as literals.
+        keys |= set(re.findall(r'"((?:[a-z_]+\.)+[a-z_0-9]+)"', strip_comments(f.read_text())))
+    html = (UI / "index.html").read_text()
+    keys |= set(re.findall(r'data-i18n(?:-[a-z]+)?="([\w.]+)"', html))
+    for f in SRC.glob("*.rs"):
+        text = f.read_text()
+        keys |= set(re.findall(r'\bt!\(\s*"([\w.]+)"', text))
+        # Keys passed around as literals (menu items, lookup tables).
+        keys |= set(re.findall(r'"((?:[a-z_]+\.)+[a-z_0-9]+)"', strip_comments(text)))
+    return keys
+
+
+def placeholders(v):
+    vals = v.values() if isinstance(v, dict) else [v]
+    return set(p for s in vals for p in re.findall(r"\{(\w+)\}", s))
+
+
+def main():
+    cats = {p.stem: json.loads(p.read_text()) for p in sorted((UI / "i18n").glob("*.json"))}
+    en = cats["en"]
+    problems = 0
+
+    def report(title, items):
+        nonlocal problems
+        if items:
+            problems += len(items)
+            print(f"{title} ({len(items)}):")
+            for i in sorted(items):
+                print("  ", i)
+
+    used = used_keys()
+    files = (".json", ".md", ".py", ".stl", ".3mf", ".png", ".js", ".rs")
+    catalog_like = {k for k in used if k.split(".")[0] in {x.split(".")[0] for x in en} and not k.endswith(files)}
+    report("used but missing from en.json", {k for k in catalog_like if k not in en and not k.startswith(DYNAMIC)})
+    for lang, cat in cats.items():
+        if lang == "en":
+            continue
+        report(f"missing from {lang}.json", set(en) - set(cat))
+        report(f"unknown to en.json, in {lang}.json", set(cat) - set(en))
+        report(
+            f"placeholders differ in {lang}.json",
+            {k for k in en if k in cat and placeholders(en[k]) != placeholders(cat[k])},
+        )
+    report("unused keys", {k for k in en if k not in used and not k.startswith(DYNAMIC)})
+
+    residue = []
+    for f in sorted(UI.glob("*.js")) + [UI / "index.html"]:
+        for n, line in enumerate(strip_comments(f.read_text()).split("\n"), 1):
+            if FRENCH.search(line) and not FRENCH_OK.search(line):
+                residue.append(f"{f.name}: {line.strip()[:100]}")
+    report("French left in the UI code", set(residue))
+
+    if problems:
+        sys.exit(1)
+    print(f"ok: {len(en)} keys, {len(cats)} languages")
+
+
+if __name__ == "__main__":
+    main()

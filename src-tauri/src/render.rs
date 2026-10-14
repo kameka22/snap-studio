@@ -1,13 +1,13 @@
-//! Rendu logiciel d'un maillage 3MF (aucun GPU requis) pour les fichiers
-//! depourvus de vignette integree.
+//! Software rendering of a 3MF mesh (no GPU required) for files without an
+//! embedded thumbnail.
 
 use crate::mesh::MeshData;
 use image::RgbaImage;
 
-/// Gris legerement chaud, lisible sur fond sombre comme sur fond clair.
+/// Slightly warm grey, readable on a dark background as on a light one.
 pub const DEFAULT_COLOR: [u8; 3] = [196, 202, 214];
 
-const SS: u32 = 2; // sur-echantillonnage
+const SS: u32 = 2; // supersampling
 
 #[inline]
 fn norm(v: [f32; 3]) -> [f32; 3] {
@@ -31,20 +31,20 @@ fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-/// Rendu isometrique trois-quarts, facon apercu de slicer.
+/// Three-quarter isometric render, like a slicer preview.
 pub fn render(mesh: &MeshData, size: u32) -> RgbaImage {
     render_from(mesh, size, [0.62, -1.0, 0.68])
 }
 
-/// Meme rendu, sous l'angle demande : `eye` pointe de l'objet vers l'observateur.
+/// Same render, from the requested angle: `eye` points from the object to the viewer.
 pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
     let w = (size * SS).max(16);
     let wf = w as f32;
 
     let eye = norm(eye);
     let f = [-eye[0], -eye[1], -eye[2]];
-    // Vu de l'aplomb, la verticale ne peut plus servir de reference : on prend
-    // alors l'axe des Y, sans quoi le repere camera s'effondre.
+    // Seen from straight above, the vertical can no longer serve as reference:
+    // the Y axis is used instead, otherwise the camera frame collapses.
     let axis = if f[0].abs() + f[1].abs() < 1e-3 {
         [0., 1., 0.]
     } else {
@@ -59,7 +59,7 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
         (mesh.min[2] + mesh.max[2]) * 0.5,
     ];
 
-    // Cadrage : bornes de la projection.
+    // Framing: projection bounds.
     let (mut sx0, mut sy0, mut sx1, mut sy1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
     for t in &mesh.tris {
         for v in &t.v {
@@ -81,7 +81,7 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
     let mut alpha = vec![0f32; (w * w) as usize];
     let mut zbuf = vec![f32::MAX; (w * w) as usize];
 
-    // Lumieres exprimees dans le repere camera (x droite, y haut, z vers le fond).
+    // Lights expressed in the camera frame (x right, y up, z towards the back).
     let key = norm([-0.45, 0.72, -0.58]);
     let fill = norm([0.75, -0.15, -0.35]);
 
@@ -106,7 +106,7 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
             continue;
         }
 
-        // Normale monde puis passage en repere camera, orientee vers l'observateur.
+        // World normal then camera frame, facing the viewer.
         let e1 = [
             t.v[1][0] - t.v[0][0],
             t.v[1][1] - t.v[0][1],
@@ -126,9 +126,9 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
 
         let diff = dot(nv, key).max(0.0);
         let fil = dot(nv, fill).max(0.0) * 0.22;
-        // Ambiante hemispherique : ciel au-dessus, sol plus sombre.
+        // Hemispheric ambient: sky above, darker ground.
         let amb = 0.30 + 0.16 * (n[2] * 0.5 + 0.5);
-        // Liseré de lumiere : detache les pieces sombres du fond.
+        // Rim light: sets dark parts off the background.
         let rim = (1.0 - facing).powi(3) * 0.55;
         let h = norm([key[0], key[1], key[2] - 1.0]);
         let spec = dot(nv, h).max(0.0).powi(26) * 0.30;
@@ -145,7 +145,7 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
             (base[2] * lit + spec + rim * 1.0).min(1.0),
         ];
 
-        // Rasterisation avec tampon de profondeur.
+        // Rasterization with a depth buffer.
         let minx = p[0][0].min(p[1][0]).min(p[2][0]).floor().max(0.0) as i64;
         let maxx = (p[0][0].max(p[1][0]).max(p[2][0]).ceil() as i64).min(w as i64 - 1);
         let miny = p[0][1].min(p[1][1]).min(p[2][1]).floor().max(0.0) as i64;
@@ -180,7 +180,7 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
         }
     }
 
-    // Reduction 2x2 (anticrenelage) vers l'image finale.
+    // 2x2 reduction (anti-aliasing) into the final image.
     let mut img = RgbaImage::new(size, size);
     for y in 0..size {
         for x in 0..size {
@@ -213,24 +213,24 @@ pub fn render_from(mesh: &MeshData, size: u32, eye: [f32; 3]) -> RgbaImage {
     img
 }
 
-/// Couleurs des familles de trajectoires, alignées sur celles du visualiseur.
+/// Path feature colors, aligned on the viewer's.
 pub const FEATURE_COLORS: [[u8; 3]; 12] = [
     [150, 158, 175], // autre
-    [232, 108, 62],  // paroi extérieure
-    [236, 168, 84],  // paroi intérieure
-    [226, 84, 106],  // surface supérieure
-    [120, 170, 226], // surface inférieure
+    [232, 108, 62],  // outer wall
+    [236, 168, 84],  // inner wall
+    [226, 84, 106],  // top surface
+    [120, 170, 226], // bottom surface
     [150, 120, 214], // remplissage
     [98, 186, 160],  // remplissage plein
     [70, 150, 235],  // pont
     [120, 132, 154], // support
-    [214, 200, 96],  // jupe et bordure
-    [180, 120, 190], // tour de purge
+    [214, 200, 96],  // skirt and brim
+    [180, 120, 190], // prime tower
     [242, 96, 96],   // surplomb
 ];
 
-/// Rendu d'aperçu des trajectoires : même cadrage isométrique que les maillages,
-/// lignes avec tampon de profondeur.
+/// Preview render of toolpaths: same isometric framing as meshes, lines with a
+/// depth buffer.
 pub fn render_paths(segs: &[crate::gcode::Seg], min: [f32; 3], max: [f32; 3], size: u32) -> RgbaImage {
     let w = (size * SS).max(16);
     let wf = w as f32;
@@ -250,8 +250,8 @@ pub fn render_paths(segs: &[crate::gcode::Seg], min: [f32; 3], max: [f32; 3], si
         (dot(rel, right), dot(rel, up), dot(rel, f))
     };
 
-    // Les trajectoires « autre » viennent du G-code de démarrage (ligne
-    // d'amorçage) : on les ignore dès qu'il existe de vraies trajectoires.
+    // "other" paths come from the start G-code (prime line): they are ignored
+    // as soon as real toolpaths exist.
     let has_typed = segs.iter().any(|s| !s.travel && s.feature != 0);
     let drawn = |s: &crate::gcode::Seg| !s.travel && (!has_typed || s.feature != 0);
 
@@ -291,7 +291,7 @@ pub fn render_paths(segs: &[crate::gcode::Seg], min: [f32; 3], max: [f32; 3], si
         let (x1, y1) = (ox + bx * scale, oy - by * scale);
         let steps = ((x1 - x0).abs().max((y1 - y0).abs()).ceil() as i64).max(1);
         let base = FEATURE_COLORS[(s.feature as usize).min(FEATURE_COLORS.len() - 1)];
-        // Les couches hautes sont un peu plus claires : cela donne du relief.
+        // Higher layers are a little lighter: it gives relief.
         let t = ((s.a[2] - min[2]) / (max[2] - min[2] + 1e-3)).clamp(0.0, 1.0);
         let shade = 0.68 + 0.32 * t;
         let rgb = [
