@@ -49,6 +49,12 @@ et les idées à discuter, il y a les [Discussions](https://github.com/kameka22/
 L'anglais est la référence, le français une traduction. Ajouter une langue
 est décrit dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#languages) (en anglais).
 
+## Code de conduite
+
+Toute participation — issues, discussions, pull requests — suit le
+[code de conduite](CODE_OF_CONDUCT.md) (en anglais) : respect, bienveillance,
+critiques constructives.
+
 ## Licence
 
 Snap Studio est un logiciel libre sous [GNU GPL v3](LICENSE) ou ultérieure.

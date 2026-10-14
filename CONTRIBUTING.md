@@ -49,6 +49,12 @@ ideas to talk over, use the [Discussions](https://github.com/kameka22/snap-studi
 English is the reference, French a translation. Adding a language is
 described in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#languages).
 
+## Code of conduct
+
+Everyone taking part — issues, discussions, pull requests — follows the
+[code of conduct](CODE_OF_CONDUCT.md): be respectful, constructive and
+welcoming.
+
 ## License
 
 Snap Studio is free software under the [GNU GPL v3](LICENSE) or later. By
