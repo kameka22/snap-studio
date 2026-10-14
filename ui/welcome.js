@@ -2,7 +2,8 @@
 /* Welcome assistant.
 
    Steps: welcome (with the language), models folder, printer (network search
-   or manual entry), slicing engine, summary and "Get Started". It opens on
+   or manual entry), slicing engine, AI (how to use it, then what it needs),
+   summary and "Get Started". It opens on
    first launch — no folder nor printer known — then on demand (Settings, Help
    menu). Finished or "Skip": it never comes back on its own. */
 
@@ -12,9 +13,12 @@ const W = {
   dir: null,
   added: [],
   confetti: 0,
+  /* AI step: the questions ("ask"), then the checks ("result"). */
+  ai: { phase: "ask", use: "yes", mode: "container" },
 };
-const W_STEPS = 5;
-/* Steps: 0 welcome, 1 models, 2 printer, 3 engine, 4 ready. */
+const W_STEPS = 6;
+/* Steps: 0 welcome, 1 models, 2 printer, 3 engine, 4 AI, 5 ready. */
+const W_AI = 4;
 const W_KEY = "snapstudio.welcome";
 const W_ORCA = "https://github.com/Snapmaker/OrcaSlicer/releases/latest";
 
@@ -45,7 +49,8 @@ function wGo(n) {
   if (from === 2 && W.step !== 2) discoverStop();
   if (W.step === 2 && (from !== 2 || !DISC.view)) discoveryList($("w-disc"), wPick);
   if (W.step === 3) wEngine();
-  if (W.step === 4) wSummary();
+  if (W.step === W_AI && from !== W_AI) wAiEnter();
+  if (W.step === W_STEPS - 1) wSummary();
   $("w-track").style.transform = `translateX(${-100 * W.step}%)`;
   document.querySelectorAll("#welcome .w-step").forEach((el, i) => {
     el.classList.toggle("on", i === W.step);
@@ -68,6 +73,7 @@ function wNav() {
     : true;
   $("w-next").textContent = tr(done ? "common.continue" : "common.skip");
   $("w-next").classList.toggle("primary", done);
+  if (W.step === W_AI) wAiNav();
 }
 
 function welcomeClose() {
@@ -226,11 +232,109 @@ async function wSummary() {
           ` <button class="w-link" id="w-orca">${esc(tr("common.download"))}</button>`);
   }
   ul.lastElementChild.outerHTML = html;
+  // The AI, as chosen on its step.
+  const ai = esc(tr("nav.ia"));
+  const allowed = aiAllowed();
+  ul.insertAdjacentHTML(
+    "beforeend",
+    state.aiModes === "off" || !state.aiModes
+      ? row(null, ai, esc(tr("welcome.sum.ai.later")))
+      : allowed.length
+        ? row(true, ai, esc(tr("ais.head.ready", { modes: allowed.map((m) => tr("ais.mode." + m)).join(" · ") })))
+        : row(false, ai, esc(tr("welcome.sum.ai.todo")))
+  );
   $("w-orca")?.addEventListener("click", () =>
     invoke("plugin:opener|open_url", { url: W_ORCA }).catch((e) => toast(String(e), true))
   );
   wConfetti();
 }
+
+/* ------------------------------------------------------------ AI */
+
+/* The sandbox does not run on Windows: only "this computer" is offered. */
+const wAiNoSandbox = () => navigator.userAgent.includes("Windows");
+
+/* Arriving on the step: the questions, prefilled with an earlier answer. */
+function wAiEnter() {
+  const prev = state.aiModes;
+  W.ai.phase = "ask";
+  W.ai.use = prev === "off" ? "no" : "yes";
+  W.ai.mode = wAiNoSandbox() ? "local" : prev && prev !== "off" ? prev : "container";
+  document.querySelectorAll('#w-ai-where .w-opt[data-mode="container"], #w-ai-where .w-opt[data-mode="both"]').forEach((el) =>
+    el.classList.toggle("hidden", wAiNoSandbox())
+  );
+  wAiRender();
+}
+
+function wAiRender() {
+  const ask = W.ai.phase === "ask";
+  $("w-ai-ask").classList.toggle("hidden", !ask);
+  $("w-ai-result").classList.toggle("hidden", ask);
+  document.querySelectorAll('input[name="w-ai-use"]').forEach((i) => (i.checked = i.value === W.ai.use));
+  document.querySelectorAll('input[name="w-ai-mode"]').forEach((i) => (i.checked = i.value === W.ai.mode));
+  $("w-ai-where").classList.toggle("off", W.ai.use === "no");
+  if (!ask) {
+    $("w-ai-choice").textContent = tr("welcome.ai.chosen." + W.ai.mode);
+    aiRenderChecks($("w-ai-checks"), W.ai.mode);
+  }
+  wNav();
+}
+
+/* The step's buttons: "Check" after the questions; then "Continue", or
+   "Continue without AI" while no chosen mode is ready. Never a dead end. */
+function wAiNav() {
+  const next = $("w-next");
+  if (W.ai.phase === "ask") {
+    const check = W.ai.use === "yes";
+    next.textContent = tr(check ? "welcome.ai.check" : "common.continue");
+    next.classList.add("primary");
+    return;
+  }
+  const ok = aiAllowed().length > 0;
+  next.textContent = tr(ok || AIS.pending ? "common.continue" : "welcome.ai.without");
+  next.classList.toggle("primary", ok);
+}
+
+/* "Next" on the AI step: check first, or save "not now" and go on. */
+function wAiNext() {
+  if (W.ai.phase === "ask") {
+    if (W.ai.use === "no") {
+      aiSetChoice("off");
+      return wGo(W.step + 1);
+    }
+    aiSetChoice(W.ai.mode);
+    W.ai.phase = "result";
+    aiCheck(true).then(() => W.step === W_AI && wAiRender());
+    wAiRender();
+    return;
+  }
+  wGo(W.step + 1);
+}
+
+document.querySelectorAll('input[name="w-ai-use"]').forEach((i) =>
+  i.addEventListener("change", () => {
+    W.ai.use = i.value;
+    wAiRender();
+  })
+);
+document.querySelectorAll('input[name="w-ai-mode"]').forEach((i) =>
+  i.addEventListener("change", () => {
+    W.ai.mode = i.value;
+    if (W.ai.use === "no") W.ai.use = "yes";
+    wAiRender();
+  })
+);
+$("w-ai-change").addEventListener("click", () => {
+  W.ai.phase = "ask";
+  wAiRender();
+});
+$("w-ai-recheck").addEventListener("click", () => {
+  aiCheck(true).then(() => W.step === W_AI && wAiRender());
+  wAiRender();
+});
+window.addEventListener("aichange", () => {
+  if (W.open && W.step === W_AI && W.ai.phase === "result") wAiRender();
+});
 
 /* A burst of confetti in the colors of the U1's four heads, once. */
 function wConfetti() {
@@ -280,8 +384,15 @@ function wConfetti() {
 
 /* ------------------------------------------------------------ events */
 
-$("w-next").addEventListener("click", () => wGo(W.step + 1));
-$("w-back").addEventListener("click", () => wGo(W.step - 1));
+$("w-next").addEventListener("click", () => (W.step === W_AI ? wAiNext() : wGo(W.step + 1)));
+$("w-back").addEventListener("click", () => {
+  // From the checks, back to the questions first.
+  if (W.step === W_AI && W.ai.phase === "result") {
+    W.ai.phase = "ask";
+    return wAiRender();
+  }
+  wGo(W.step - 1);
+});
 $("w-skip").addEventListener("click", welcomeClose);
 $("w-start").addEventListener("click", welcomeStart);
 $("w-pick").addEventListener("click", async () => {
@@ -308,7 +419,8 @@ window.addEventListener("langchange", () => {
   if (!W.open) return;
   wNav();
   wRenderPlaces().then(() => W.dir && wSetDir(W.dir));
-  if (W.step === 4) wSummary();
+  if (W.step === W_AI) wAiRender();
+  if (W.step === W_STEPS - 1) wSummary();
 });
 onMenu("welcome", welcomeOpen);
 
@@ -319,7 +431,7 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (typing && W.step === 2) wAdd();
     else if (W.step === W_STEPS - 1) welcomeStart();
-    else if (!e.target.closest("button")) wGo(W.step + 1);
+    else if (!e.target.closest("button")) W.step === W_AI ? wAiNext() : wGo(W.step + 1);
   } else if (!typing && (e.key === "ArrowLeft" || (e.metaKey && e.key === "["))) {
     wGo(W.step - 1);
   } else if (!typing && e.key === "ArrowRight") {

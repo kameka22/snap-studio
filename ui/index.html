@@ -11,6 +11,10 @@
 <div class="window">
 <aside id="sidebar" class="sidebar">
   <div class="titlebar" data-tauri-drag-region></div>
+  <div class="side-brand" data-tauri-drag-region>
+    <img src="assets/app-icon.png" alt="" data-tauri-drag-region />
+    <b data-tauri-drag-region>Snap Studio</b>
+  </div>
   <nav class="side-nav">
     <div class="side-block">
       <button class="side-item" data-view="library">
@@ -466,6 +470,10 @@
 </section>
 
 <section id="view-ia" class="view hidden">
+  <div id="ia-blocked" class="ia-blocked hidden">
+    <span id="ia-blocked-text"></span>
+    <button class="btn small" data-ai-settings data-i18n="ais.open_settings">Settings → AI</button>
+  </div>
 
   <div id="ia-list" class="ia-list"></div>
 
@@ -550,9 +558,20 @@
 </section>
 
 <section id="view-settings" class="view hidden">
-  <div class="settings-page">
-
-    <div class="set-section" data-i18n="settings.app">Application</div>
+  <div class="settings">
+  <nav id="set-menu" class="set-menu">
+    <button class="set-cat" data-cat="app"><span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span><span class="lbl" data-i18n="settings.app">Application</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="nav3d"><span class="glyph" style="color: #5856D6"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span><span class="lbl" data-i18n="settings.nav3d">3D navigation</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="files"><span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="lbl" data-i18n="nav.files">Files</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="ai"><span class="glyph" style="color: #AF52DE"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg></span><span class="lbl" data-i18n="nav.ia">AI</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="engine"><span class="glyph" style="color: #FF9500"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7m7.4-2.5a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5z"/></svg></span><span class="lbl" data-i18n="engine.title">Slicing engine</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="cache"><span class="glyph" style="color: #34C759"><svg viewBox="0 0 24 24"><path d="M4 5h16v4H4zm0 6h16v4H4zm0 6h16v2H4z"/></svg></span><span class="lbl" data-i18n="settings.cache">Thumbnail cache</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="about"><span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m1 15h-2v-6h2zm0-8h-2V7h2z"/></svg></span><span class="lbl" data-i18n="settings.about">About</span><i class="set-dot"></i></button>
+  </nav>
+  <div id="set-stage" class="set-stage">
+    <div class="set-pane" data-cat="app">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="settings.app">Application</h2>
     <div class="group">
       <div class="grow-row">
         <span class="k"><span data-i18n="lang.label">Language</span>
@@ -583,13 +602,11 @@
         <button id="w-again" class="btn small" data-i18n="settings.welcome.again">Show Welcome</button>
       </div>
     </div>
-
-    <div class="set-section" data-i18n="engine.title">Slicing engine</div>
-    <div class="group">
-      <div id="set-engine" class="grow-row eng-row"></div>
+      </div>
     </div>
-
-    <div class="set-section" data-i18n="settings.nav3d">3D navigation</div>
+    <div class="set-pane" data-cat="nav3d">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="settings.nav3d">3D navigation</h2>
     <div class="group">
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.wheel">Scroll wheel action</span>
@@ -622,8 +639,11 @@
         </span>
       </div>
     </div>
-
-    <div class="set-section" data-i18n="nav.files">Files</div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="files">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="nav.files">Files</h2>
     <div class="group">
       <label class="grow-row">
         <span class="k"><span data-i18n="settings.recursive">Include subfolders</span>
@@ -643,8 +663,31 @@
         </select>
       </div>
     </div>
-
-    <div class="set-section" data-i18n="nav.ia">AI</div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="ai">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="nav.ia">AI</h2>
+    <div class="set-section" data-i18n="settings.ai.use">Use</div>
+    <div class="group">
+      <div class="grow-row">
+        <span class="k"><span data-i18n="welcome.ai.q_where">Where should Claude work?</span>
+          <span class="sub" data-i18n="settings.ai.use.sub">Only the modes that are ready open a conversation</span>
+        </span>
+        <select id="set-ai-mode">
+          <option value="container" data-i18n="welcome.ai.container">In a sandbox</option>
+          <option value="local" data-i18n="welcome.ai.local">Directly on this computer</option>
+          <option value="both" data-i18n="welcome.ai.both">Both, chosen per conversation</option>
+          <option value="off" data-i18n="settings.ai.off">Do not use the AI</option>
+        </select>
+      </div>
+    </div>
+    <div class="set-section" data-i18n="settings.ai.components">Components</div>
+    <div class="group set-ai">
+      <div id="set-ai-checks"></div>
+      <div class="set-ai-foot"><button id="set-ai-recheck" class="btn small" data-i18n="ais.recheck">Check Again</button></div>
+    </div>
+    <div class="set-section" data-i18n="auth.title">Claude account</div>
     <div class="group">
       <div class="grow-row">
         <span class="k"><span data-i18n="auth.title">Claude account</span>
@@ -653,8 +696,19 @@
         <button id="opt-auth" class="btn small" data-i18n="settings.auth.manage">Manage…</button>
       </div>
     </div>
-
-    <div class="set-section" data-i18n="settings.cache">Thumbnail cache</div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="engine">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="engine.title">Slicing engine</h2>
+    <div class="group">
+      <div id="set-engine" class="grow-row eng-row"></div>
+    </div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="cache">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="settings.cache">Thumbnail cache</h2>
     <div class="group">
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.cache.size">Space used</span>
@@ -667,6 +721,48 @@
         <button id="opt-clear" class="btn small danger" data-i18n="settings.cache.clear_btn">Clear</button>
       </div>
     </div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="about">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="settings.about">About</h2>
+    <div class="about-head">
+      <img src="assets/app-icon.png" alt="" />
+      <span><b>Snap Studio</b><small id="about-version"></small></span>
+    </div>
+    <p class="about-text" data-i18n="about.text">Snap Studio is free software, developed in the open on GitHub. A bug, an idea, a printer that misbehaves? Say so: that is what moves the app forward.</p>
+    <div class="group">
+        <button class="grow-row about-link" data-about="bug">
+          <span class="about-ic" style="--c: #FF3B30"><svg viewBox="0 0 24 24"><path d="M14 12h-4v-2h4zm0 4h-4v-2h4zm6-8h-2.8a6 6 0 0 0-1.8-2l1.6-1.6L15.6 3l-2.2 2.2a6 6 0 0 0-2.8 0L8.4 3 7 4.4 8.6 6a6 6 0 0 0-1.8 2H4v2h2.1a6 6 0 0 0 0 2H4v2h2.1c0 .7 0 1.4.2 2H4v2h2.8a6 6 0 0 0 10.4 0H20v-2h-2.3c.2-.6.2-1.3.2-2H20v-2h-2.1a6 6 0 0 0 0-2H20z"/></svg></span>
+          <span class="k"><span data-i18n="about.bug">Report a Bug</span><span class="sub" data-i18n="about.bug.sub">What does not work, with the version and system already filled in</span></span>
+          <span class="about-go">↗</span>
+        </button>
+        <button class="grow-row about-link" data-about="idea">
+          <span class="about-ic" style="--c: #FFCC00"><svg viewBox="0 0 24 24"><path d="M9 21h6v-1H9zm3-19a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2"/></svg></span>
+          <span class="k"><span data-i18n="about.idea">Suggest an Idea</span><span class="sub" data-i18n="about.idea.sub">A missing feature, a need</span></span>
+          <span class="about-go">↗</span>
+        </button>
+        <button class="grow-row about-link" data-about="contribute">
+          <span class="about-ic" style="--c: #34C759"><svg viewBox="0 0 24 24"><path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6z"/></svg></span>
+          <span class="k"><span data-i18n="about.contribute">Contribute to the Code</span><span class="sub" data-i18n="about.contribute.sub">How to build, translate and propose a change</span></span>
+          <span class="about-go">↗</span>
+        </button>
+        <button class="grow-row about-link" data-about="discuss">
+          <span class="about-ic" style="--c: #5856D6"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H7l-3 3zm2 4v2h12V8zm0 4v2h8v-2z"/></svg></span>
+          <span class="k"><span data-i18n="about.discuss">Questions and Discussions</span><span class="sub" data-i18n="about.discuss.sub">Ask, share an idea before it becomes an issue</span></span>
+          <span class="about-go">↗</span>
+        </button>
+        <button class="grow-row about-link" data-about="github">
+          <span class="about-ic" style="--c: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.6.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2"/></svg></span>
+          <span class="k"><span data-i18n="about.github">The Project on GitHub</span><span class="sub" data-i18n="about.github.sub">github.com/kameka22/snap-studio</span></span>
+          <span class="about-go">↗</span>
+        </button>
+    </div>
+    <p class="about-note"><span data-i18n="about.search_first">Before reporting, check whether the subject is already among the open issues.</span> <button class="w-link" data-about="issues" data-i18n="about.issues">Open issues ↗</button></p>
+    <p class="about-note"><span data-i18n="about.license">Free software under the GNU GPL v3. Slicing engine: Snapmaker Orca (AGPL-3.0); libraries: marked, DOMPurify, xterm.js.</span> <button class="w-link" data-about="licenses" data-i18n="about.licenses">Licenses ↗</button></p>
+      </div>
+    </div>
+  </div>
   </div>
 </section>
 </div>
@@ -1102,6 +1198,40 @@
         </section>
 
         <section class="w-step">
+          <div class="w-badge" style="--c: #AF52DE"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg></div>
+          <h1 data-i18n="welcome.ai.title">Design with AI</h1>
+          <p class="w-lead" data-i18n="welcome.ai.lead">Claude can modify your models or create new ones, by chatting. It needs a few tools on this computer.</p>
+          <div id="w-ai-ask" class="w-ai">
+            <div class="w-ai-q" data-i18n="welcome.ai.q_use">Do you want to use the AI?</div>
+            <div class="w-opts two">
+              <label class="w-opt"><input type="radio" name="w-ai-use" value="yes" />
+                <b data-i18n="welcome.ai.yes">Yes</b><small data-i18n="welcome.ai.yes.sub">See what it needs</small></label>
+              <label class="w-opt"><input type="radio" name="w-ai-use" value="no" />
+                <b data-i18n="welcome.ai.no">Not now</b><small data-i18n="welcome.ai.no.sub">Settings → AI, later</small></label>
+            </div>
+            <div id="w-ai-where" class="w-ai-where">
+              <div class="w-ai-q" data-i18n="welcome.ai.q_where">Where should Claude work?</div>
+              <div class="w-opts">
+                <label class="w-opt" data-mode="container"><input type="radio" name="w-ai-mode" value="container" />
+                  <b><span data-i18n="welcome.ai.container">In a sandbox</span> <em data-i18n="welcome.ai.recommended">recommended</em></b>
+                  <small data-i18n="welcome.ai.container.sub">An isolated container: Claude only reaches the conversation's folder. Needs Docker or an equivalent.</small></label>
+                <label class="w-opt" data-mode="local"><input type="radio" name="w-ai-mode" value="local" />
+                  <b data-i18n="welcome.ai.local">Directly on this computer</b>
+                  <small data-i18n="welcome.ai.local.sub">Simpler to set up; Claude asks before each command. Needs Python and three modules.</small></label>
+                <label class="w-opt" data-mode="both"><input type="radio" name="w-ai-mode" value="both" />
+                  <b data-i18n="welcome.ai.both">Both, chosen per conversation</b>
+                  <small data-i18n="welcome.ai.both.sub">Everything is checked; each mode opens once it is ready.</small></label>
+              </div>
+            </div>
+          </div>
+          <div id="w-ai-result" class="w-ai hidden">
+            <div class="w-ai-sum"><span id="w-ai-choice"></span><button id="w-ai-change" class="w-link" data-i18n="welcome.ai.change">Change</button></div>
+            <div id="w-ai-checks"></div>
+            <button id="w-ai-recheck" class="btn small" data-i18n="ais.recheck">Check Again</button>
+          </div>
+        </section>
+
+        <section class="w-step">
           <div class="w-final">
             <canvas id="w-confetti"></canvas>
             <img class="w-icon big" src="assets/app-icon.png" alt="" />
@@ -1118,7 +1248,7 @@
     </div>
     <div class="w-nav">
       <button id="w-back" class="btn" data-i18n="common.back">Back</button>
-      <div id="w-dots" class="w-dots"><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="w-dots" class="w-dots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <button id="w-next" class="btn primary" data-i18n="common.continue">Continue</button>
     </div>
   </div>
@@ -1139,9 +1269,11 @@
 <script src="vendor/marked.js"></script>
 <script src="vendor/purify.js"></script>
 <script src="vendor/xterm-addon-fit.js"></script>
+<script src="ai-setup.js"></script>
 <script src="ia.js"></script>
 <script src="ia-chat.js"></script>
 <script src="auth.js"></script>
+<script src="settings.js"></script>
 <script src="update.js"></script>
 <script src="welcome.js"></script>
 </body>

@@ -105,6 +105,8 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
             "--customize-file".into(),
             crate::ia::dockerfile().to_string_lossy().to_string(),
         ];
+        // The engine found running at the last check (Docker, Podman…).
+        argv.extend(crate::setup::runtime_args());
         argv.extend(inner);
         return Ok(argv);
     }

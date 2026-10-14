@@ -34,7 +34,10 @@ function switchView(v) {
   else if (typeof pjCamStop === "function") pjCamStop();
   // The Library's native views must only live in its tab.
   libSetVisible(v === "library");
-  if (v === "settings") refreshCacheSize();
+  if (v === "settings") {
+    refreshCacheSize();
+    settingsShown();
+  }
   if (v === "prepare") prepareShow();
   if (v === "ia") iaRefresh();
   // The docked viewer follows the tab instead of staying trapped in it.

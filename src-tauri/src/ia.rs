@@ -649,54 +649,6 @@ No Blender, no OpenSCAD.
     )
 }
 
-// ------------------------------------------------------------ tooling
-
-#[derive(Serialize)]
-pub struct Engine {
-    /// The `docker` binary is installed.
-    pub docker: bool,
-    /// The daemon answers — installed does not mean started.
-    pub daemon: bool,
-    pub yolobox: bool,
-    pub claude: bool,
-}
-
-/// Does the Docker daemon answer?
-///
-/// A client installed without an active daemon is the most common case on
-/// macOS, where one is installed with `brew` and the other started by hand.
-/// Without this check, the app would offer a sandbox that would fail.
-///
-/// The wait is bounded: a missing socket answers at once, but a daemon
-/// starting up can keep one waiting forever.
-fn docker_ready(bin: &Path) -> bool {
-    let bin = bin.to_path_buf();
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let ok = std::process::Command::new(bin)
-            .args(["info", "--format", "{{.ServerVersion}}"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        let _ = tx.send(ok);
-    });
-    rx.recv_timeout(std::time::Duration::from_millis(2500))
-        .unwrap_or(false)
-}
-
-/// What is installed — and usable — on the machine.
-pub fn engine() -> Engine {
-    let docker = crate::util::which("docker");
-    Engine {
-        daemon: docker.as_deref().map(docker_ready).unwrap_or(false),
-        docker: docker.is_some(),
-        yolobox: crate::util::which("yolobox").is_some(),
-        claude: crate::util::which("claude").is_some(),
-    }
-}
-
 /// A conversation for other modules' tests.
 #[cfg(test)]
 pub fn tests_conversation() -> Conversation {

@@ -33,6 +33,8 @@ const DEFAULTS = {
   wheelSpeed: 1,
   dir: null,
   recents: [],
+  /* How the AI is used: "container", "local", "both", "off"; null until asked. */
+  aiModes: null,
 };
 
 const state = {
@@ -50,10 +52,10 @@ const state = {
 };
 
 function save() {
-  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents } = state;
+  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes } = state;
   localStorage.setItem(
     "snapstudio",
-    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents })
+    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes })
   );
 }
 

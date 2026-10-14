@@ -75,6 +75,8 @@ async function authClose() {
   AUTH.kind = null;
   $("auth-term-wrap").classList.add("hidden");
   closeSheet($("authmodal"));
+  // The sign-in may have changed: whoever shows it checks again.
+  window.dispatchEvent(new Event("authchange"));
 }
 
 /* A real check: one tiny call to the model, on either side. */

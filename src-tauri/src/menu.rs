@@ -135,6 +135,10 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     ])?;
     let help_sub = Submenu::with_items(app, t!("menu.help"), true, &[
         &item("welcome:open", "menu.help.welcome", None)?,
+        &sep()?,
+        &item("help:bug", "menu.help.bug", None)?,
+        &item("help:idea", "menu.help.idea", None)?,
+        &item("help:github", "menu.help.github", None)?,
     ])?;
     let _ = window_sub.set_as_windows_menu_for_nsapp();
     let _ = help_sub.set_as_help_menu_for_nsapp();

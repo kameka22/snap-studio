@@ -22,7 +22,7 @@ SRC = ROOT / "src-tauri" / "src"
 
 # Keys assembled at run time: any key starting with one of these is used.
 DYNAMIC = (
-    "chat.mode.", "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
+    "ais.item.", "ais.mode.", "welcome.ai.chosen.", "chat.mode.", "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
     "prints.state.", "slice.pstate.", "style.",
 )
 

@@ -349,6 +349,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .seg-btn:hover { color: var(--text); }
 .seg-btn.on { background: var(--card-bg); color: var(--text); box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.15); }
 .seg-btn.danger { color: var(--danger); }
+.seg-btn:disabled { opacity: 0.4; pointer-events: none; }
 @media (prefers-color-scheme: dark) {
   .seg-btn.on { background: rgba(255, 255, 255, 0.16); }
 }
@@ -837,6 +838,20 @@ body.dragover #stage::after {
   border-right: 1px solid var(--separator);
 }
 .sidebar .titlebar { height: var(--titlebar-height); flex: none; }
+/* The app's name at the top of the sidebar, under the window buttons. */
+.side-brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px 16px;
+  margin-top: -6px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.side-brand img { width: 34px; height: 34px; flex: none; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2)); }
+.side-brand b { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+
 .side-nav {
   flex: 1;
   overflow-y: auto;
@@ -1222,7 +1237,48 @@ body.dragover #stage::after {
 .det-preview:hover .btn.view3d { opacity: 1; }
 
 /* ---------- Settings page ---------- */
-#view-settings { overflow-y: auto; align-items: center; }
+#view-settings { overflow: hidden; }
+/* Menu on the left, one pane at a time on the right (settings.js slides). */
+.settings { flex: 1; display: flex; min-height: 0; }
+.set-menu {
+  width: 210px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 10px;
+  border-right: 1px solid var(--separator);
+  overflow-y: auto;
+}
+.set-cat {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+.set-cat:hover { background: var(--control-bg-hover); }
+.set-cat:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.set-cat.on { background: var(--accent); color: #fff; }
+.set-cat.on .glyph { color: #fff !important; }
+.set-cat .glyph { width: 16px; height: 16px; display: grid; place-items: center; flex: none; }
+.set-cat .glyph svg { width: 15px; height: 15px; fill: currentColor; }
+.set-cat .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); display: none; flex: none; }
+.set-cat.flag .set-dot { display: block; }
+.set-stage { flex: 1; position: relative; min-width: 0; overflow: hidden; }
+.set-pane { position: absolute; inset: 0; overflow-y: auto; display: none; justify-content: center; }
+.set-pane.on { display: flex; }
+.set-title { margin: 0 2px 14px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.set-ai { padding: 10px 14px; }
+.set-ai-foot { margin-top: 10px; }
 .settings-page { width: 100%; max-width: 640px; padding: 20px 22px 28px; }
 .set-section {
   margin: 20px 2px 8px;
@@ -2725,3 +2781,127 @@ body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
 }
 .auth-term-host .xterm-viewport { background: transparent !important; }
 .chat-note .chat-note-btn { margin-left: 8px; }
+
+/* ------------------------------------------------------------ AI setup checklist */
+
+.ais-checks { display: flex; flex-direction: column; gap: 2px; text-align: left; font-size: 13px; }
+.ais-note { margin: 0; color: var(--text-secondary); }
+.ais-head { font-weight: 600; margin-bottom: 6px; }
+.ais-head.ok { color: var(--success); }
+.ais-head.bad { color: var(--text); }
+.ais-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.ais-tag { padding: 1px 7px; border-radius: 999px; font-size: 10px; letter-spacing: 0; text-transform: none; }
+.ais-tag.ok { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.ais-tag.bad { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.ais-row {
+  display: grid;
+  grid-template-columns: 18px 172px minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 8px;
+  padding: 5px 0;
+}
+.ais-row + .ais-row { border-top: 1px solid var(--separator); }
+.ais-mark { font-weight: 700; text-align: center; }
+.ais-row.ais-ok .ais-mark { color: var(--success); }
+.ais-row.ais-bad .ais-mark { color: var(--danger); }
+.ais-row.ais-todo .ais-mark { color: var(--warning); }
+.ais-row.ais-note .ais-mark { color: var(--text-tertiary); }
+.ais-name { font-weight: 500; }
+.ais-status { color: var(--text-secondary); min-width: 0; overflow-wrap: anywhere; }
+.ais-help { grid-column: 2 / -1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 4px; }
+.ais-help p { flex-basis: 100%; margin: 0; color: var(--text-secondary); font-size: 12px; }
+.ais-cmd { display: flex; align-items: center; gap: 6px; flex-basis: 100%; min-width: 0; }
+.ais-cmd code {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* Welcome assistant: the AI step */
+.w-ai { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.w-ai-q { font-size: 13px; font-weight: 600; margin-top: 4px; }
+.w-opts { display: flex; flex-direction: column; gap: 6px; }
+.w-opts.two { flex-direction: row; }
+.w-opts.two .w-opt { flex: 1; }
+.w-opt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px 9px 34px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  background: var(--control-bg);
+  cursor: default;
+}
+.w-opt input { position: absolute; left: 12px; top: 11px; margin: 0; accent-color: var(--accent); }
+.w-opt b { font-size: 13px; font-weight: 600; }
+.w-opt b em { font-style: normal; font-weight: 500; font-size: 11px; color: var(--accent); margin-left: 4px; }
+.w-opt small { font-size: 11.5px; color: var(--text-secondary); line-height: 1.35; }
+.w-opt:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.w-ai-where.off { opacity: 0.4; }
+/* With the checks shown, the introduction gives them its room. */
+.w-step:has(#w-ai-result:not(.hidden)) .w-lead { display: none; }
+.w-ai-sum { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-weight: 600; }
+#w-ai-recheck { align-self: flex-start; }
+
+/* AI tab: why conversations cannot start */
+.ia-blocked {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 22px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  font-size: 13px;
+}
+.ia-blocked span { flex: 1; }
+
+/* Settings → About */
+.about-head { display: flex; align-items: center; gap: 14px; margin: 0 2px 14px; }
+.about-head img { width: 64px; height: 64px; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.2)); }
+.about-head span { display: flex; flex-direction: column; gap: 2px; }
+.about-head b { font-size: 17px; font-weight: 700; }
+.about-head small { font-size: 12px; color: var(--text-secondary); }
+.about-text { margin: 0 2px 14px; color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.about-link {
+  appearance: none;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.about-link:hover { background: var(--control-bg-hover); }
+.about-ic {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  color: var(--c);
+}
+.about-ic svg { width: 16px; height: 16px; fill: currentColor; }
+.about-go { color: var(--text-tertiary); flex: none; }
+.about-note { margin: 12px 2px 0; font-size: 12px; color: var(--text-secondary); line-height: 1.45; }

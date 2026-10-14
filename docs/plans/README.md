@@ -8,6 +8,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
+| [ai-setup.md](ai-setup.md) | AI dependency checks per mode (welcome step and Settings), AI locked until a mode is ready; Settings with a side menu | Implemented; checks on the Mac left (see the plan) |
 | [ai-chat.md](ai-chat.md) | AI conversations as a real chat view (Claude Code stream-json), terminal kept as advanced view | Implemented, with the Claude sign-in window; container mode and macOS checks left (see the plan) |
 
 ## To validate on the real machine

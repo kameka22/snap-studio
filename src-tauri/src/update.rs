@@ -36,6 +36,47 @@ pub fn app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
+/// The system, as a bug report needs it: "macOS 26.0 (arm64)".
+#[tauri::command]
+pub fn system_name() -> String {
+    let arch = std::env::consts::ARCH;
+    format!("{} ({arch})", os_version())
+}
+
+#[cfg(target_os = "macos")]
+fn os_version() -> String {
+    let v = std::process::Command::new("/usr/bin/sw_vers")
+        .arg("-productVersion")
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    format!("macOS {v}").trim().to_string()
+}
+
+#[cfg(target_os = "linux")]
+fn os_version() -> String {
+    std::fs::read_to_string("/etc/os-release")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find_map(|l| l.strip_prefix("PRETTY_NAME=").map(|v| v.trim_matches('"').to_string()))
+        })
+        .unwrap_or_else(|| "Linux".into())
+}
+
+#[cfg(windows)]
+fn os_version() -> String {
+    let mut cmd = std::process::Command::new("cmd");
+    cmd.args(["/C", "ver"]);
+    crate::util::no_window(&mut cmd);
+    cmd.output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "Windows".into())
+}
+
 /// Queries GitHub; `None` when the app is up to date.
 #[tauri::command]
 pub async fn update_check(app: AppHandle, pending: State<'_, Pending>) -> Result<Option<Available>, String> {

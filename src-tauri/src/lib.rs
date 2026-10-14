@@ -20,6 +20,7 @@ mod plate;
 mod pty;
 mod render;
 mod scan;
+mod setup;
 mod slice;
 mod slicers;
 mod stl;
@@ -1100,9 +1101,11 @@ fn ia_get(id: String) -> Result<ia::Conversation, String> {
 
 // ---------------------------------------------------------------- IA
 
+/// What the AI needs, mode by mode (sandbox, this Mac). A few seconds: the
+/// container engines and Python are asked.
 #[tauri::command]
-fn ia_engine() -> ia::Engine {
-    ia::engine()
+async fn ai_check() -> Result<setup::Report, String> {
+    tauri::async_runtime::spawn_blocking(setup::check).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1355,6 +1358,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             language_set,
             update::app_version,
+            update::system_name,
             update::update_check,
             update::update_install,
             discover::printer_discover_start,
@@ -1407,7 +1411,7 @@ pub fn run() {
             lib_command,
             lib_url,
             lib_logout,
-            ia_engine,
+            ai_check,
             ia_list,
             ia_create,
             ia_create_blank,

@@ -88,6 +88,8 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
             "--customize-file".into(),
             crate::ia::dockerfile().to_string_lossy().to_string(),
         ];
+        // The engine found running at the last check (Docker, Podman…).
+        argv.extend(crate::setup::runtime_args());
         argv.extend(inner);
         if mode.as_deref() == Some("plan") {
             argv.push("--permission-mode".into());
@@ -1078,7 +1080,12 @@ done
         };
         wait_for(3);
         close(id);
-        wait_for(4);
+        // Closing interrupts first: the fake may answer that interrupt with
+        // one more result before it exits. Wait for the end itself.
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while got.lock().unwrap().last().is_none_or(|e| e["type"] != "exited") && std::time::Instant::now() < end {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         let events = got.lock().unwrap().clone();
         assert_eq!(events[0]["message"]["content"][0]["text"], "pong");
         assert_eq!(events[1]["subtype"], "success");

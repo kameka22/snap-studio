@@ -115,6 +115,12 @@ function chatSetBusy(on) {
   if (on) chatAdd(chatWorking());
 }
 
+/* A conversation whose mode is not ready: its history only. */
+function chatSetLocked(on) {
+  for (const id of ["chat-input", "chat-send", "chat-add", "chat-mode"]) $(id).disabled = on;
+  $("chat-input").placeholder = tr(on ? "chat.placeholder_locked" : "chat.placeholder");
+}
+
 function chatStatus() {
   const cost = CHAT.cost
     ? fmtNum(CHAT.cost, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -606,9 +612,10 @@ async function chatOpen(c) {
   if (waiting.length && (await invoke("ia_chat_running", { id: c.id }).catch(() => false)) && CHAT.id === c.id) {
     for (const card of waiting) chatPermissionBody(card, card._ev, true);
   }
+  chatSetLocked(!!IA.locked);
   if (!past.length) {
     chatList.appendChild(chatDiv("chat-empty", tr(iaIsCreation(c) ? "chat.empty_create" : "chat.empty")));
-    if (c.prompt && !c.started && !CHAT.autoSent.has(c.id)) {
+    if (c.prompt && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
       CHAT.autoSent.add(c.id);
       chatSend(c.prompt, []);
     }

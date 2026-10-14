@@ -32,42 +32,40 @@ async function iaRefresh() {
     IA.list = [];
   }
   iaRender();
-  // The sandbox state changes without notice — Docker starts and stops —
-  // and querying it takes a moment: refresh on the side.
-  invoke("ia_engine")
-    .then((e) => {
-      IA.engine = e;
-      if (!IA.open) iaRender();
-    })
-    .catch(() => {});
+  // What the AI needs changes without notice — Docker starts and stops —
+  // and checking takes a moment: on the side, each time the tab opens.
+  aiCheck(true).then(() => {
+    if (!IA.open) iaRender();
+    iaApplyAi();
+  });
 }
 
-/* The sandbox is only usable when the daemon answers: Docker installed but
-   stopped is the most common case on macOS. */
-const iaSandboxReady = () => {
-  const e = IA.engine || {};
-  return !!(e.docker && e.daemon && e.yolobox);
-};
+/* New checks, or a new choice in Settings. */
+window.addEventListener("aichange", () => {
+  if (!IA.open) iaRender();
+  iaApplyAi();
+});
 
-function iaDefaultEngine() {
-  return iaSandboxReady() ? "container" : "local";
-}
+/* The modes a new conversation may use (see ai-setup.js). */
+const iaModes = () => aiAllowed();
 
 function iaEngineLabel() {
-  const e = IA.engine || {};
-  if (!e.claude) return tr("ia.engine.no_claude");
-  if (iaSandboxReady()) return tr("ia.engine.container_ok");
-  if (e.docker && e.yolobox && !e.daemon) return tr("ia.engine.docker_stopped");
-  return tr("ia.engine.local_mode");
+  const modes = iaModes();
+  if (!modes.length) return AIS.report ? tr("ia.engine.unavailable") : "";
+  return modes.map((m) => tr("ais.mode." + m)).join(" · ");
 }
 
-/* Why the container is not offered, in plain words. */
-function iaSandboxReason() {
-  const e = IA.engine || {};
-  if (iaSandboxReady()) return tr("ia.engine.container");
-  if (!e.docker) return tr("ia.engine.no_docker");
-  if (!e.daemon) return tr("ia.engine.daemon_off");
-  return tr("ia.engine.no_yolobox");
+/* Buttons that start a conversation, and the banner that says why they
+   cannot. */
+function iaApplyAi() {
+  const reason = AIS.report ? aiBlockedReason() : null;
+  for (const [id, title] of [["ia-new", "ia.new.button"], ["ia-empty-new", null], ["act-ia", null]]) {
+    const b = $(id);
+    b.disabled = !!reason;
+    b.title = reason || (title ? tr(title) : "");
+  }
+  $("ia-blocked").classList.toggle("hidden", !reason || !!IA.open);
+  $("ia-blocked-text").textContent = reason || "";
 }
 
 /* ------------------------------------------------------------ display */
@@ -142,6 +140,7 @@ function iaRender() {
   $("ia-dacts").classList.toggle("hidden", !detail);
   $("ia-back").classList.toggle("hidden", !detail);
   if (!detail) $("ia-engine-tag").textContent = iaEngineLabel();
+  iaApplyAi();
   sideCount("ia", IA.list.length);
   const c = detail && IA.list.find((x) => x.id === IA.open);
   if (c) tbSet("ia", c.title, `${iaOrigin(c)} · ${iaEngineName(c)}`);
@@ -189,10 +188,14 @@ function iaSheet(mode) {
   $("ia-msg").textContent = "";
   $("ia-msg").className = "pf-test";
 
+  // Only the modes that are chosen and ready.
   const sel = $("ia-engine");
-  sel.options[0].disabled = !iaSandboxReady();
-  sel.options[0].textContent = iaSandboxReason();
-  sel.value = iaDefaultEngine();
+  const modes = iaModes();
+  for (const o of sel.options) {
+    o.disabled = !modes.includes(o.value);
+    o.textContent = tr(o.value === "container" ? "ia.engine.container" : "ia.engine.local") + (o.disabled ? ` — ${tr("ia.engine.not_ready")}` : "");
+  }
+  sel.value = modes[0] || "";
 
   openSheet($("iamodal"));
   $("ia-prompt").focus();
@@ -249,6 +252,11 @@ function iaBounds() {
 async function iaCreate() {
   const create = IA.mode === "create";
   if (!create && !IA.source) return;
+  if (!iaModes().includes($("ia-engine").value)) {
+    $("ia-msg").textContent = aiBlockedReason() || tr("ia.engine.not_ready");
+    $("ia-msg").className = "pf-test err";
+    return;
+  }
   if (create && !$("ia-prompt").value.trim()) {
     $("ia-msg").textContent = tr("ia.new.need_prompt");
     $("ia-msg").className = "pf-test err";
@@ -433,6 +441,11 @@ function iaFit(id) {
    unexpected question or a thread that does not come back. */
 async function iaHint(c) {
   const el = $("ia-hint");
+  if (IA.locked) {
+    el.innerHTML = `${esc(IA.locked)} <button class="w-link" data-ai-settings>${esc(tr("ais.open_settings"))}</button>`;
+    el.classList.remove("hidden");
+    return;
+  }
   if (!c.started) {
     // Only the terminal asks whether to trust the folder; the chat never does.
     if (IA.view === "term") {
@@ -459,14 +472,24 @@ async function iaOpen(id) {
   const c = IA.list.find((x) => x.id === id);
   if (!c) return;
   IA.open = id;
+  // A conversation whose mode is not ready (anymore) is only read.
+  IA.locked = AIS.report && !iaModes().includes(c.engine) ? iaLockReason(c) : null;
+  if (IA.locked) IA.view = "chat";
   iaRender();
   $("ia-left").dataset.mode = IA.view;
   document.querySelectorAll("#ia-views [data-iaview]").forEach((b) => b.classList.toggle("on", b.dataset.iaview === IA.view));
   iaHint(c);
+  document.querySelector('#ia-views [data-iaview="term"]').disabled = !!IA.locked;
   // The 3D pane and the folder watch live with the screen.
   iaQueue(() => iaLoadPane(id));
   if (IA.view === "chat") chatOpen(c);
   else iaOpenTerminal(c);
+}
+
+/* Why a conversation is read-only. */
+function iaLockReason(c) {
+  if (aiChoice() === "off") return tr("ais.reason.off");
+  return tr("ia.locked", { mode: tr("ais.mode." + c.engine) });
 }
 
 /* The raw Claude Code terminal of the conversation. */

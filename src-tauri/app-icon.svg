@@ -1,101 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Snap Studio icon: the Snapmaker U1 of the Printers screen, set on a
-       gradient rounded square (macOS icon grid: 824 px, radius 185).
-       Source of `tauri icon`; colors are fixed, without CSS. -->
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#4f9dff" />
-      <stop offset="1" stop-color="#0b46c4" />
-    </linearGradient>
-    <radialGradient id="sheen" cx="0.5" cy="0" r="0.9">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28" />
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
-    </radialGradient>
-    <filter id="drop" x="-10%" y="-10%" width="120%" height="125%">
-      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.28" />
-    </filter>
-    <linearGradient id="pvFront" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" /><stop offset="1" stop-color="#dfe3ec" />
-    </linearGradient>
-    <linearGradient id="pvLeft" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#e9ebf2" /><stop offset="1" stop-color="#c6cbd8" />
-    </linearGradient>
-    <radialGradient id="pvAct">
-      <stop offset="0" stop-color="#9fd0ff" stop-opacity="0.9" />
-      <stop offset="1" stop-color="#9fd0ff" stop-opacity="0" />
-    </radialGradient>
-  </defs>
-
-  <!-- background -->
-  <g filter="url(#drop)">
-    <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" />
-  </g>
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)" />
-  <rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#000" stroke-opacity="0.12" />
-
-  <!-- printer: the illustration's 280 × 252 frame, enlarged 2.3 times -->
-  <g transform="translate(190 222) scale(2.3)">
-    <ellipse cx="140" cy="228" rx="96" ry="9" fill="#001a4d" fill-opacity="0.35" />
-
-    <path d="M34 66 L140 104 L140 216 L34 178 Z" fill="url(#pvLeft)" />
-    <path d="M140 104 L246 66 L246 178 L140 216 Z" fill="url(#pvFront)" />
-    <path d="M34 66 L140 28 L246 66 L140 104 Z" fill="#2a2e38" />
-    <path d="M44 66 L140 32 L236 66 L140 100 Z" fill="#1b1e26" />
-
-    <path d="M155 123 L233 95 L233 167 L155 195 Z" fill="#232833" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" />
-    <path d="M155 123 L233 95 L233 167 L155 195 Z" fill="#fff3d8" opacity="0.22" />
-    <path d="M177 176 L219 161 L219 167 L177 182 Z" fill="#5b6376" />
-    <path d="M184 171 L205 163.5 L205 148 L184 155.5 Z" fill="#ff9500" />
-    <path d="M184 155.5 L205 148 L205 148 L184 155.5 Z" fill="#ffb340" />
-    <path d="M228 120 L233 118 L233 140 L228 142 Z" fill="#767e90" />
-    <path d="M212 85 L238 76 L238 88 L212 97 Z" fill="#111319" />
-    <circle cx="217" cy="88" r="2.6" fill="#34c759" />
-
-    <g transform="matrix(1,0.358,0,1,0,0)">
-      <circle cx="72" cy="64" r="12.5" fill="#e6e8ef" stroke="#adb3c2" stroke-width="1.4" />
-      <circle cx="72" cy="64" r="6.5" fill="#ff3b30" />
-      <circle cx="72" cy="90" r="12.5" fill="#e6e8ef" stroke="#adb3c2" stroke-width="1.4" />
-      <circle cx="72" cy="90" r="6.5" fill="#ffcc00" />
-      <circle cx="72" cy="116" r="12.5" fill="#e6e8ef" stroke="#adb3c2" stroke-width="1.4" />
-      <circle cx="72" cy="116" r="6.5" fill="#ff9500" />
-      <circle cx="72" cy="142" r="12.5" fill="#e6e8ef" stroke="#adb3c2" stroke-width="1.4" />
-      <circle cx="72" cy="142" r="6.5" fill="#34c759" />
-    </g>
-
-    <g fill="none" stroke-width="2.6" stroke-linecap="round">
-      <path d="M103 70 C97 48 78 42 62 46" stroke="#ff3b30" />
-      <path d="M126 62 C120 38 96 30 74 34" stroke="#ffcc00" />
-      <path d="M150 53 C144 28 112 18 86 22" stroke="#ff9500" />
-      <path d="M173 45 C167 20 128 8 98 12" stroke="#34c759" />
-    </g>
-
-    <circle cx="150" cy="62" r="28" fill="url(#pvAct)" opacity="0.8" />
-    <g>
-      <path d="M90 75.6 L103 80.2 L103 92 L90 87.4 Z" fill="#5f6779" />
-      <path d="M103 80.2 L116 75.6 L116 87.4 L103 92 Z" fill="#767f94" />
-      <path d="M103 71 L116 75.6 L103 80.2 L90 75.6 Z" fill="#8d95a8" />
-      <path d="M103 71 L109 73.1 L103 75.2 L97 73.1 Z" fill="#ff3b30" />
-    </g>
-    <g>
-      <path d="M113 67.6 L126 72.2 L126 84 L113 79.4 Z" fill="#5f6779" />
-      <path d="M126 72.2 L139 67.6 L139 79.4 L126 84 Z" fill="#767f94" />
-      <path d="M126 63 L139 67.6 L126 72.2 L113 67.6 Z" fill="#8d95a8" />
-      <path d="M126 63 L132 65.1 L126 67.2 L120 65.1 Z" fill="#ffcc00" />
-    </g>
-    <g>
-      <path d="M137 58.6 L150 63.2 L150 75 L137 70.4 Z" fill="#0057c2" />
-      <path d="M150 63.2 L163 58.6 L163 70.4 L150 75 Z" fill="#007aff" />
-      <path d="M150 54 L163 58.6 L150 63.2 L137 58.6 Z" fill="#66a9ff" />
-      <path d="M150 54 L156 56.1 L150 58.2 L144 56.1 Z" fill="#ff9500" />
-    </g>
-    <g>
-      <path d="M160 50.6 L173 55.2 L173 67 L160 62.4 Z" fill="#5f6779" />
-      <path d="M173 55.2 L186 50.6 L186 62.4 L173 67 Z" fill="#767f94" />
-      <path d="M173 46 L186 50.6 L173 55.2 L160 50.6 Z" fill="#8d95a8" />
-      <path d="M173 46 L179 48.1 L173 50.2 L167 48.1 Z" fill="#34c759" />
-    </g>
-
-    <path d="M50 178 L60 181.6 L60 191 L50 187.4 Z" fill="#a8aebd" />
-    <path d="M222 178 L232 174.4 L232 183.8 L222 187.4 Z" fill="#a8aebd" />
-  </g>
+  <!-- Snap Studio icon: "U1" on a graphite rounded square (macOS icon grid:
+       824 px, radius 185). The U runs through the colors of the U1's four
+       heads, the 1 is white. Letters are stroked paths, no font: the icon
+       renders the same everywhere. Source of `tauri icon`. -->
+<defs>
+<filter id="drop" x="-10%" y="-10%" width="120%" height="125%">
+<feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.28"/>
+</filter>
+<radialGradient id="sheen" cx="0.5" cy="0" r="0.9">
+<stop offset="0" stop-color="#fff" stop-opacity="0.25"/>
+<stop offset="1" stop-color="#fff" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#3a3a3c"/>
+<stop offset="1" stop-color="#121214"/>
+</linearGradient>
+<linearGradient id="heads" gradientUnits="userSpaceOnUse" x1="210" y1="0" x2="580" y2="0">
+<stop offset="0" stop-color="#ff453a"/>
+<stop offset="0.36" stop-color="#ffd60a"/>
+<stop offset="0.66" stop-color="#30d158"/>
+<stop offset="1" stop-color="#0a84ff"/>
+</linearGradient>
+</defs>
+<g filter="url(#drop)">
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+</g>
+<path d="M 267 330 V 555 a 125 125 0 0 0 250 0 V 330" fill="none" stroke="url(#heads)" stroke-width="118" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M 672 405 L 757 330 V 700" fill="none" stroke="#fff" stroke-width="118" stroke-linecap="round" stroke-linejoin="round" />
 </svg>

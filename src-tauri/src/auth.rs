@@ -175,7 +175,9 @@ fn argv(engine: &str, tools: &Tools, claude_args: &[&str]) -> Result<Vec<String>
         .ok_or_else(|| anyhow!(crate::t!("err.no_yolobox")))?
         .to_string_lossy()
         .to_string();
-    let mut v = vec![yolobox, "run".into(), "--claude-config".into(), "claude".into()];
+    let mut v = vec![yolobox, "run".into(), "--claude-config".into()];
+    v.extend(crate::setup::runtime_args());
+    v.push("claude".into());
     v.extend(claude_args.iter().map(|s| s.to_string()));
     Ok(v)
 }
