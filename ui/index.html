@@ -96,6 +96,7 @@
   </div>
   <div class="tb-actions" data-for="ia">
     <span id="ia-engine-tag" class="ia-tag"></span>
+    <button id="ia-new" class="tb-btn" title="Créer un objet"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
     <div id="ia-dacts" class="tb-group hidden">
       <button id="ia-folder" class="tb-btn" title="Afficher le dossier de travail"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
       <button id="ia-stop" class="btn">Fermer la session</button>
@@ -459,7 +460,12 @@
             <span id="ia-vlabel" class="ia-vlabel"></span>
           </span>
         </div>
-        <div id="ia-stage" class="ia-stage"></div>
+        <div id="ia-stage" class="ia-stage">
+          <div id="ia-wait" class="ia-wait hidden">
+            <div class="ia-wait-bed"></div>
+            <span>En attente du premier maillage de Claude…</span>
+          </div>
+        </div>
         <div id="ia-versions" class="ia-versions"></div>
         <dl id="ia-stats" class="ia-stats"></dl>
         <div class="ia-rActions">
@@ -474,9 +480,20 @@
     <div class="empty-art">
       <svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg>
     </div>
-    <h1>Modifier une pièce en discutant</h1>
-    <p>Choisissez un objet dans <b>Fichiers</b>, puis « Modifier avec l'IA ».
-       Chaque conversation garde son propre espace de travail.</p>
+    <h1>Concevoir ou modifier une pièce en discutant</h1>
+    <p>Chaque conversation garde son propre espace de travail.</p>
+    <div class="ia-paths">
+      <div class="ia-path">
+        <h2>Créer un objet</h2>
+        <p>Décrivez-le, Claude le modélise de zéro.</p>
+        <button id="ia-empty-new" class="btn primary">Nouvel objet</button>
+      </div>
+      <div class="ia-path">
+        <h2>Modifier un objet</h2>
+        <p>Choisissez une pièce dans Fichiers, puis « Modifier avec l'IA ».</p>
+        <button id="ia-empty-files" class="btn">Ouvrir Fichiers</button>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -703,13 +720,25 @@
 </div>
 <div id="iamodal" class="modal hidden">
   <div class="modal-box">
-    <h3>Nouvelle conversation</h3>
+    <h3 id="ia-mtitle">Nouvelle conversation</h3>
     <div id="ia-src" class="det-sub"></div>
 
     <div class="form">
-      <label>Que voulez-vous modifier ?
+      <label><span id="ia-plabel">Que voulez-vous modifier ?</span>
         <textarea id="ia-prompt" rows="3" placeholder="Incline le plateau de 15° vers l'arrière"></textarea>
       </label>
+      <div id="ia-cfields" class="form hidden">
+        <label>Encombrement maximal
+          <span class="ia-dims">
+            <input id="ia-bx" class="field num" type="number" min="1" step="1" aria-label="X" /><span>×</span>
+            <input id="ia-by" class="field num" type="number" min="1" step="1" aria-label="Y" /><span>×</span>
+            <input id="ia-bz" class="field num" type="number" min="1" step="1" aria-label="Z" /><span>mm</span>
+          </span>
+        </label>
+        <label>Enregistrer dans
+          <select id="ia-dest"></select>
+        </label>
+      </div>
       <label>Bac à sable
         <select id="ia-engine">
           <option value="container">Conteneur (isolé)</option>
@@ -718,10 +747,7 @@
       </label>
     </div>
 
-    <div class="ia-hints">
-      Essayez : « perce un trou de 4 mm au centre » · « creuse l'intérieur,
-      parois 2 mm » · « arrondis les angles de la base »
-    </div>
+    <div id="ia-hints" class="ia-hints"></div>
 
     <div id="ia-msg" class="pf-test"></div>
     <div class="modal-actions">

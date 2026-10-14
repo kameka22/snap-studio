@@ -1064,6 +1064,16 @@ fn ia_create(
 }
 
 #[tauri::command]
+fn ia_create_blank(
+    prompt: String,
+    engine: String,
+    dest: String,
+    bounds: Option<[f32; 3]>,
+) -> Result<ia::Conversation, String> {
+    ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn ia_delete(id: String) -> Result<Vec<ia::Conversation>, String> {
     // Effacer le dossier sous les pieds d'un Claude en cours le laisserait
     // tourner sans répertoire : on ferme d'abord, on efface ensuite.
@@ -1146,6 +1156,19 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
             .body(Vec::new())
             .unwrap()
     };
+    // Un objet créé par l'IA n'a pas d'original : sa vignette est l'aperçu
+    // que l'application rend pour Claude.
+    if let Some(id) = query_param(uri, "ia") {
+        return match ia::preview_png(&id) {
+            Ok(png) => Response::builder()
+                .status(200)
+                .header("Content-Type", "image/png")
+                .header("Access-Control-Allow-Origin", "*")
+                .body(png)
+                .unwrap(),
+            Err(_) => not_found(),
+        };
+    }
     let Some(path) = query_param(uri, "p") else {
         return not_found();
     };
@@ -1302,6 +1325,7 @@ pub fn run() {
             ia_engine,
             ia_list,
             ia_create,
+            ia_create_blank,
             ia_delete,
             ia_current,
             ia_get,

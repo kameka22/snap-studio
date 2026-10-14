@@ -12,6 +12,9 @@
 //!     CLAUDE.md  source.stl  outils/  out/current.stl  versions/v1.stl
 //! ```
 //!
+//! Une conversation peut aussi partir de rien, pour concevoir un objet : pas de
+//! `source.stl` alors, et `out/current.stl` n'existe qu'au premier export.
+//!
 //! Le dossier de travail appartient à Claude ; l'application n'y écrit qu'à la
 //! création, puis se contente de regarder ce qui en sort.
 
@@ -48,6 +51,22 @@ pub struct Conversation {
     /// Vrai dès que la session Claude a été créée : on la reprend ensuite.
     #[serde(default)]
     pub started: bool,
+    /// « create » pour un objet conçu de zéro, vide pour une modification.
+    #[serde(default)]
+    pub kind: String,
+    /// Dossier où verser l'objet créé ; une modification retourne, elle,
+    /// auprès de son original.
+    #[serde(default)]
+    pub dest_dir: Option<String>,
+    /// Encombrement maximal demandé pour un objet créé, en millimètres.
+    #[serde(default)]
+    pub bounds: Option<[f32; 3]>,
+}
+
+impl Conversation {
+    pub fn is_creation(&self) -> bool {
+        self.kind == "create"
+    }
 }
 
 fn one() -> u32 {
@@ -286,6 +305,55 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
         version: 1,
         saved: None,
         started: false,
+        kind: String::new(),
+        dest_dir: None,
+        bounds: None,
+    };
+    save(&c)?;
+    Ok(c)
+}
+
+/// Prépare une conversation sans objet de départ : Claude conçoit la pièce.
+///
+/// Le dossier de sortie existe d'emblée — la surveillance s'y accroche — mais
+/// il reste vide : le premier maillage exporté deviendra la v1.
+pub fn create_blank(
+    prompt: &str,
+    engine: &str,
+    dest_dir: &Path,
+    bounds: Option<[f32; 3]>,
+) -> Result<Conversation> {
+    let prompt = prompt.trim();
+    if prompt.is_empty() {
+        return Err(anyhow!("décrivez l'objet à créer"));
+    }
+    if !dest_dir.is_dir() {
+        return Err(anyhow!("dossier de destination introuvable"));
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let ws = workspace(&id);
+    std::fs::create_dir_all(ws.join("outils"))?;
+    std::fs::create_dir_all(ws.join("out"))?;
+    std::fs::create_dir_all(ws.join("versions"))?;
+    std::fs::write(ws.join("CLAUDE.md"), consignes_creation(bounds))?;
+    std::fs::write(ws.join("outils").join("mesure.py"), MESURE_PY)?;
+    std::fs::write(ws.join("outils").join("exporter.py"), EXPORTER_PY)?;
+
+    let c = Conversation {
+        id,
+        title: title_for(prompt, Path::new("Nouvel objet")),
+        source: String::new(),
+        source_name: String::new(),
+        prompt: prompt.to_string(),
+        engine: engine.to_string(),
+        created_at: now(),
+        updated_at: now(),
+        version: 0,
+        saved: None,
+        started: false,
+        kind: "create".into(),
+        dest_dir: Some(dest_dir.to_string_lossy().to_string()),
+        bounds,
     };
     save(&c)?;
     Ok(c)
@@ -341,6 +409,77 @@ L'objet d'origine compte {tris} triangles.
 ## Outils disponibles
 
 `trimesh`, `manifold3d` (booléens), `numpy`. Pas de Blender.
+"
+    )
+}
+
+/// Le mode d'emploi d'une conversation qui part de rien.
+fn consignes_creation(bounds: Option<[f32; 3]>) -> String {
+    let fmt = |v: f32| format!("{v:.0}");
+    let gabarit = match bounds {
+        Some([x, y, z]) => format!(
+            "La pièce doit tenir dans **{} × {} × {} mm** (X × Y × Z) : c'est le
+volume imprimable demandé. Vérifie-le avec `outils/mesure.py` à chaque export.",
+            fmt(x),
+            fmt(y),
+            fmt(z)
+        ),
+        None => "Aucun encombrement n'est imposé ; reste raisonnable et demande si la
+taille n'est pas claire."
+            .into(),
+    };
+    format!(
+        "# Création d'une pièce à imprimer
+
+Tu conçois une pièce **à partir de rien**, d'après la description de
+l'utilisateur. Ce que tu exportes s'affiche en direct dans l'application, à côté
+de cette conversation.
+
+## Avant de modéliser
+
+Si une cote, un usage ou une contrainte manque — diamètre de vis, épaisseur,
+côté d'appui — **pose la question** plutôt que de deviner. Annonce ensuite en
+quelques lignes ce que tu vas construire : formes de base, cotes principales,
+orientation d'impression.
+
+## Les fichiers
+
+- `out/current.stl` — l'état courant, celui qui s'affiche à l'écran. Il
+  n'existe pas encore : c'est ton premier export qui le crée.
+- `apercu/` — trois rendus de l'état courant (`face.png`, `trois-quarts.png`,
+  `dessus.png`), régénérés par l'application après **chaque** export. En
+  lecture seule.
+- `versions/` — l'historique, géré par l'application. N'y touche pas.
+- `outils/mesure.py` — dimensions, volume, étanchéité.
+- `outils/exporter.py` — vérifie un maillage et l'installe comme état courant.
+
+## La marche à suivre
+
+1. Écris un script Python, `modele.py`, qui construit la pièce avec `trimesh`
+   (primitives : boîtes, cylindres, extrusions de profils) et `manifold3d` pour
+   les booléens. Garde les cotes en variables nommées en tête du script : on
+   y reviendra.
+2. Installe le résultat : `python3 outils/exporter.py resultat.stl`
+3. Ouvre `apercu/trois-quarts.png` et lance `python3 outils/mesure.py`.
+4. Corrige et recommence ; chaque export devient une nouvelle version.
+
+Les aperçus sont ta seule façon de voir la pièce : un trou décentré, une paroi
+qui traverse ne se lisent pas dans les coordonnées. Regarde après chaque export.
+
+## Ce qui compte
+
+- Les unités sont des **millimètres**, l'axe Z est la hauteur, et la pièce est
+  posée sur `z = 0`, centrée en X et Y.
+- {gabarit}
+- Le maillage doit être **étanche** : sans quoi la découpe échouera.
+- Pense à l'impression FDM : une grande face plane au sol, des surplombs de
+  moins de 45°, des parois d'au moins 1,2 mm, 0,2 à 0,3 mm de jeu entre deux
+  pièces qui s'emboîtent.
+- Avance par petites étapes vérifiables plutôt qu'en un seul grand script.
+
+## Outils disponibles
+
+`trimesh`, `manifold3d` (booléens), `numpy`. Pas de Blender, pas d'OpenSCAD.
 "
     )
 }
@@ -614,6 +753,44 @@ mod tests {
     }
 
     #[test]
+    fn a_blank_conversation_starts_without_an_object() {
+        let dest = std::env::temp_dir().join("snapstudio-ia-blank");
+        std::fs::create_dir_all(&dest).unwrap();
+        assert!(create_blank("  ", "local", &dest, None).is_err(), "description obligatoire");
+
+        let c = create_blank("Crochet mural pour casque", "local", &dest, Some([270.0, 270.0, 270.0]))
+            .unwrap();
+        let ws = workspace(&c.id);
+        assert!(c.is_creation());
+        assert_eq!(c.version, 0);
+        assert!(ws.join("out").is_dir(), "la surveillance a besoin du dossier");
+        assert!(!current(&c.id).exists());
+        assert!(!ws.join("source.stl").exists());
+        let md = std::fs::read_to_string(ws.join("CLAUDE.md")).unwrap();
+        assert!(md.contains("270 × 270 × 270 mm"));
+        assert!(save_to_files(&c.id).is_err(), "rien à enregistrer avant le premier export");
+
+        // Premier export : la v1 apparaît, et l'objet part vers le dossier choisi.
+        let tris = crate::stl::tests_cube();
+        crate::stl::write(&current(&c.id), &tris).unwrap();
+        let last = Mutex::new(0);
+        assert!(matches!(consider(&c.id, &last), Change::Archived(1, _)));
+        assert!(previews_dir(&c.id).join("trois-quarts.png").is_file());
+        let out = save_to_files(&c.id).unwrap();
+        assert_eq!(Path::new(&out).parent(), Some(dest.as_path()));
+        assert!(out.ends_with("crochet-mural-pour-casque-ia.3mf"), "{out}");
+        std::fs::remove_file(&out).unwrap();
+        remove(&c.id).unwrap();
+    }
+
+    #[test]
+    fn slugs_make_tidy_file_names() {
+        assert_eq!(slug("Crochet mural, 60 mm"), "crochet-mural-60-mm");
+        assert_eq!(slug("Boîte à vis…"), "boîte-à-vis");
+        assert_eq!(slug("  !!  "), "objet");
+    }
+
+    #[test]
     fn title_falls_back_on_the_file_name() {
         let p = PathBuf::from("/tmp/support-v2.3mf");
         assert_eq!(title_for("", &p), "support-v2");
@@ -785,6 +962,15 @@ pub fn write_previews(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// La vue de trois quarts, pour la vignette d'un objet créé : il n'a pas
+/// d'original dont tirer une miniature.
+pub fn preview_png(id: &str) -> Result<Vec<u8>> {
+    if !valid_id(id) {
+        return Err(anyhow!("conversation inconnue"));
+    }
+    Ok(std::fs::read(previews_dir(id).join("trois-quarts.png"))?)
+}
+
 /// Remet à jour ce qui appartient à l'application dans un dossier de travail.
 ///
 /// Les consignes et les outils s'améliorent au fil des versions : une
@@ -796,13 +982,18 @@ pub fn refresh_workspace(id: &str) {
     if !ws.is_dir() {
         return;
     }
-    let name = get(id).map(|c| c.source_name).unwrap_or_default();
-    let tris = crate::stl::count(&ws.join("source.stl")).unwrap_or(0);
+    let Ok(c) = get(id) else { return };
+    let text = if c.is_creation() {
+        consignes_creation(c.bounds)
+    } else {
+        let tris = crate::stl::count(&ws.join("source.stl")).unwrap_or(0);
+        consignes(&c.source_name, tris)
+    };
     let _ = std::fs::create_dir_all(ws.join("outils"));
-    let _ = std::fs::write(ws.join("CLAUDE.md"), consignes(&name, tris));
+    let _ = std::fs::write(ws.join("CLAUDE.md"), text);
     let _ = std::fs::write(ws.join("outils").join("mesure.py"), MESURE_PY);
     let _ = std::fs::write(ws.join("outils").join("exporter.py"), EXPORTER_PY);
-    if !previews_dir(id).join("trois-quarts.png").is_file() {
+    if current(id).is_file() && !previews_dir(id).join("trois-quarts.png").is_file() {
         let _ = write_previews(id);
     }
 }
@@ -824,23 +1015,49 @@ fn free_name(dir: &Path, stem: &str) -> PathBuf {
     dir.join(format!("{stem}-ia-{}.3mf", now()))
 }
 
+/// Nom de fichier tiré d'un titre : « Crochet mural, 60 mm » → `crochet-mural-60-mm`.
+fn slug(title: &str) -> String {
+    let mut out = String::new();
+    for ch in title.trim_end_matches('…').chars().flat_map(char::to_lowercase) {
+        if ch.is_alphanumeric() {
+            out.push(ch);
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let out: String = out.trim_end_matches('-').chars().take(40).collect();
+    let out = out.trim_end_matches('-').to_string();
+    if out.is_empty() {
+        "objet".into()
+    } else {
+        out
+    }
+}
+
 /// Verse l'état courant dans vos fichiers, en 3MF.
 ///
-/// L'objet retourne auprès de celui dont il est issu ; si ce dossier a disparu,
-/// il atterrit dans les téléchargements plutôt que de se perdre.
+/// Un objet modifié retourne auprès de celui dont il est issu, un objet créé
+/// dans le dossier choisi à la création ; si ce dossier a disparu, il atterrit
+/// dans les téléchargements plutôt que de se perdre.
 pub fn save_to_files(id: &str) -> Result<String> {
     let c = get(id)?;
-    let src = PathBuf::from(&c.source);
-    let dir = src
-        .parent()
+    if !current(id).is_file() {
+        return Err(anyhow!("aucun objet à enregistrer pour l'instant"));
+    }
+    let (home, stem) = if c.is_creation() {
+        (c.dest_dir.clone().map(PathBuf::from), slug(&c.title))
+    } else {
+        let src = PathBuf::from(&c.source);
+        let stem = src
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "objet".into());
+        (src.parent().map(PathBuf::from), stem)
+    };
+    let dir = home
         .filter(|d| d.is_dir())
-        .map(PathBuf::from)
         .or_else(dirs::download_dir)
         .ok_or_else(|| anyhow!("aucun dossier où écrire"))?;
-    let stem = src
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "objet".into());
     let dst = free_name(&dir, &stem);
     stl_to_3mf(&current(id), &dst, &stem)?;
 

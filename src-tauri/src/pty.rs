@@ -341,6 +341,9 @@ mod tests {
             version: 1,
             saved: None,
             started,
+            kind: String::new(),
+            dest_dir: None,
+            bounds: None,
         }
     }
 

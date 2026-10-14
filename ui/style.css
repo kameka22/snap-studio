@@ -1512,6 +1512,46 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .ia-empty h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
 .ia-empty p { margin: 0; max-width: 420px; color: var(--text-secondary); }
 
+.ia-paths { display: flex; gap: 14px; margin-top: 14px; }
+.ia-path {
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 16px 16px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+}
+.ia-path h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.ia-path p { font-size: 12px; flex: 1; }
+.ia-path .btn { margin-top: 6px; justify-content: center; }
+.ia-dims { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.ia-dims input { width: 72px; color: var(--text); }
+.ia-thumb.blank { display: flex; align-items: center; justify-content: center; color: #AF52DE; }
+.ia-thumb.blank svg { width: 32px; height: 32px; fill: currentColor; opacity: 0.7; }
+.ia-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.ia-wait-bed {
+  width: 55%;
+  aspect-ratio: 2.4;
+  border: 1.5px dashed var(--card-border);
+  border-radius: 8px;
+  transform: perspective(300px) rotateX(55deg);
+}
 .ia-hints { margin: 0; font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
 #ia-prompt { resize: vertical; }
 
