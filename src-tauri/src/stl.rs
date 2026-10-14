@@ -9,6 +9,7 @@
 
 use crate::mesh::{MeshData, Tri};
 use anyhow::{anyhow, Result};
+#[cfg(test)]
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
@@ -118,22 +119,8 @@ pub fn read(path: &Path) -> Result<MeshData> {
     })
 }
 
-/// Triangle count of a binary STL, read from the header alone.
-///
-/// Counting without parsing: on a mesh of several million faces, a full read
-/// would cost seconds for a four-byte piece of information.
-pub fn count(path: &Path) -> Option<usize> {
-    use std::io::Read;
-    crate::access::ensure_file(path);
-    let mut f = std::fs::File::open(path).ok()?;
-    let mut head = [0u8; HEADER];
-    f.read_exact(&mut head).ok()?;
-    let n = u32::from_le_bytes([head[80], head[81], head[82], head[83]]) as usize;
-    let len = f.metadata().ok()?.len() as usize;
-    (HEADER + n * RECORD == len).then_some(n)
-}
-
 /// Unit normal of a triangle; zero if the triangle is degenerate.
+#[cfg(test)]
 fn normal(v: &[[f32; 3]; 3]) -> [f32; 3] {
     let u = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
     let w = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
@@ -150,7 +137,9 @@ fn normal(v: &[[f32; 3]; 3]) -> [f32; 3] {
     }
 }
 
-/// Writes a binary STL. Colors are lost: the format has none.
+/// Writes a binary STL. Colors are lost: the format has none. The app no
+/// longer writes STL; tests do, to build the files of older conversations.
+#[cfg(test)]
 pub fn write(path: &Path, tris: &[Tri]) -> Result<()> {
     if tris.is_empty() {
         return Err(anyhow!(crate::t!("err.no_triangle")));

@@ -22,7 +22,7 @@ SRC = ROOT / "src-tauri" / "src"
 
 # Keys assembled at run time: any key starting with one of these is used.
 DYNAMIC = (
-    "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
+    "chat.mode.", "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
     "prints.state.", "slice.pstate.", "style.",
 )
 
@@ -71,9 +71,9 @@ def main():
                 print("  ", i)
 
     used = used_keys()
-    files = (".json", ".md", ".py", ".stl", ".3mf", ".png", ".js", ".rs")
+    files = (".json", ".jsonl", ".md", ".py", ".stl", ".3mf", ".png", ".js", ".rs")
     catalog_like = {k for k in used if k.split(".")[0] in {x.split(".")[0] for x in en} and not k.endswith(files)}
-    report("used but missing from en.json", {k for k in catalog_like if k not in en and not k.startswith(DYNAMIC)})
+    report("used but missing from en.json", {k for k in catalog_like if k not in en and not k.startswith(DYNAMIC) and not k.endswith(".")})
     for lang, cat in cats.items():
         if lang == "en":
             continue

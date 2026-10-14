@@ -619,7 +619,7 @@ pub fn embedded_thumbnail(read: impl Read) -> Option<Vec<u8>> {
             cur = Some(String::new());
         } else if tl.starts_with("thumbnail end") || tl.starts_with("thumbnail_png end") {
             if let Some(b64) = cur.take() {
-                if let Some(bytes) = b64_decode(&b64) {
+                if let Some(bytes) = crate::util::b64_decode(&b64) {
                     // Keep the largest: it is the most readable as a thumbnail.
                     if best.as_ref().map(|b| bytes.len() > b.len()).unwrap_or(true) {
                         best = Some(bytes);
@@ -633,39 +633,6 @@ pub fn embedded_thumbnail(read: impl Read) -> Option<Vec<u8>> {
         }
     }
     best
-}
-
-fn b64_decode(s: &str) -> Option<Vec<u8>> {
-    const INVALID: u8 = 255;
-    let val = |c: u8| -> u8 {
-        match c {
-            b'A'..=b'Z' => c - b'A',
-            b'a'..=b'z' => c - b'a' + 26,
-            b'0'..=b'9' => c - b'0' + 52,
-            b'+' => 62,
-            b'/' => 63,
-            _ => INVALID,
-        }
-    };
-    let mut out = Vec::with_capacity(s.len() / 4 * 3);
-    let mut acc: u32 = 0;
-    let mut bits = 0;
-    for c in s.bytes() {
-        if c == b'=' {
-            break;
-        }
-        let v = val(c);
-        if v == INVALID {
-            continue;
-        }
-        acc = (acc << 6) | v as u32;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((acc >> bits) as u8);
-        }
-    }
-    (!out.is_empty()).then_some(out)
 }
 
 #[cfg(test)]

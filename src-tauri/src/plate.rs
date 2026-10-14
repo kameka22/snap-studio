@@ -147,7 +147,7 @@ pub fn display_mesh(path: &Path, index: usize, budget: usize) -> Result<MeshData
     Ok(m)
 }
 
-fn hex_rgb(s: &str) -> Option<[u8; 3]> {
+pub fn hex_rgb(s: &str) -> Option<[u8; 3]> {
     let h = s.trim_start_matches('#');
     if h.len() < 6 {
         return None;

@@ -9,16 +9,24 @@
 //! ~/.config/snap-studio/ia/<uuid>/
 //!   meta.json
 //!   workspace/          ← mounted in the container
-//!     CLAUDE.md  source.stl  tools/  out/current.stl  versions/v1.stl
+//!     CLAUDE.md  .claude/skills/  source.3mf  tools/  out/current.3mf  versions/v1.3mf
 //! ```
 //!
+//! Everything is 3MF: one object made of parts, each with its color and its
+//! head, so that a multicolor model stays one. Claude reads and writes them
+//! through `tools/mf.py`, which writes the layout of `write3mf.rs`.
+//! Conversations from before kept STL files: their current state and source
+//! are converted when opened, their old versions stay readable.
+//!
 //! A conversation may also start from nothing, to design an object: then there
-//! is no `source.stl`, and `out/current.stl` only exists after the first export.
+//! is no `source.3mf`, and `out/current.3mf` only exists after the first export.
 //!
 //! The working folder belongs to Claude; the app only writes there at creation,
 //! then just watches what comes out.
 
 use crate::mesh::{Mat, MeshData};
+use crate::write3mf::Part;
+#[cfg(test)]
 use crate::write3mf::SceneObject;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -104,10 +112,13 @@ pub fn workspace(id: &str) -> PathBuf {
     dir(id).join("workspace")
 }
 
-/// The mesh the app shows: what Claude produced last.
+/// The object the app shows: what Claude produced last.
 pub fn current(id: &str) -> PathBuf {
-    workspace(id).join("out").join("current.stl")
+    workspace(id).join("out").join(CURRENT)
 }
+
+const CURRENT: &str = "current.3mf";
+const SOURCE: &str = "source.3mf";
 
 fn meta_path(id: &str) -> PathBuf {
     dir(id).join("meta.json")
@@ -222,27 +233,78 @@ pub fn mesh_of_3mf(path: &Path) -> Result<MeshData> {
     crate::mesh::load_mesh(&mut zip, usize::MAX)
 }
 
-/// Converts the original 3MF to STL in the working folder.
-pub fn source_to_stl(src: &Path, dst: &Path) -> Result<usize> {
-    let m = mesh_of_3mf(src)?;
-    crate::stl::write(dst, &m.tris)?;
-    Ok(m.tris.len())
+/// Reads an object of the workspace: 3MF, or STL in older conversations.
+pub fn read_mesh(path: &Path) -> Result<MeshData> {
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("stl")) {
+        crate::stl::read(path)
+    } else {
+        mesh_of_3mf(path)
+    }
 }
 
-/// Converts an STL back to 3MF, ready to slice.
+/// The parts of an original 3MF: one per head when the file assigns heads,
+/// triangles without a color of their own taking their head's filament color
+/// — the colors the user sees in the slicer.
+pub fn parts_of_3mf(src: &Path) -> Result<Vec<Part>> {
+    let mut zip = crate::model3mf::open(src)?;
+    let m = crate::mesh::load_mesh(&mut zip, usize::MAX)?;
+    let colors: Vec<Option<[u8; 3]>> = crate::model3mf::project_filaments(&mut zip)
+        .iter()
+        .map(|f| f.color.as_deref().and_then(crate::plate::hex_rgb))
+        .collect();
+    Ok(split_by_head(m, &colors))
+}
+
+fn split_by_head(m: MeshData, filament_colors: &[Option<[u8; 3]>]) -> Vec<Part> {
+    let by_head = m.extruders.len() == m.tris.len();
+    let mut groups: std::collections::BTreeMap<u8, Vec<crate::mesh::Tri>> = Default::default();
+    for (i, mut t) in m.tris.into_iter().enumerate() {
+        let head = if by_head { m.extruders[i].clamp(1, 16) } else { 1 };
+        if t.c == crate::render::DEFAULT_COLOR {
+            if let Some(Some(c)) = filament_colors.get(head as usize - 1) {
+                t.c = *c;
+            }
+        }
+        groups.entry(head).or_default().push(t);
+    }
+    groups
+        .into_iter()
+        .map(|(head, tris)| Part {
+            name: format!("part-{head}"),
+            tris,
+            extruder: head,
+        })
+        .collect()
+}
+
+/// An STL as a one-part 3MF, for conversations from before 3MF.
 pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
     let m = crate::stl::read(src)?;
     let n = m.tris.len();
-    crate::write3mf::write_scene(
-        dst,
-        &[SceneObject {
-            name: name.to_string(),
-            tris: m.tris,
-            transform: Mat::IDENTITY,
-            extruder: None,
-        }],
-    )?;
+    let part = Part {
+        name: "part-1".into(),
+        tris: m.tris,
+        extruder: 1,
+    };
+    write_3mf(dst, name, &[part])?;
     Ok(n)
+}
+
+/// Writes parts as one object, the way Claude's tools do, replacing `dst`
+/// at once: the watch must never read a half-written file.
+fn write_3mf(dst: &Path, name: &str, parts: &[Part]) -> Result<()> {
+    let tmp = dst.with_file_name(format!(".writing-{}", dst.file_name().unwrap_or_default().to_string_lossy()));
+    crate::write3mf::write_multipart(&tmp, name, parts, &Mat::IDENTITY)?;
+    std::fs::rename(&tmp, dst)?;
+    Ok(())
+}
+
+/// Copies a file over another at once (same reason).
+fn replace_with(src: &Path, dst: &Path) -> Result<()> {
+    let tmp = dst.with_file_name(format!(".writing-{}", dst.file_name().unwrap_or_default().to_string_lossy()));
+    std::fs::copy(src, &tmp)?;
+    std::fs::rename(&tmp, dst)?;
+    Ok(())
 }
 
 // ------------------------------------------------------------ creation
@@ -274,19 +336,20 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
     std::fs::create_dir_all(ws.join("versions"))?;
 
     // Conversion first: if the object is unreadable, nothing must remain.
-    let src_stl = ws.join("source.stl");
-    let tris = match source_to_stl(source, &src_stl) {
-        Ok(n) => n,
+    let stem = source.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let src_3mf = ws.join(SOURCE);
+    let parts = match parts_of_3mf(source).and_then(|p| write_3mf(&src_3mf, &stem, &p).map(|_| p)) {
+        Ok(p) => p,
         Err(e) => {
             let _ = std::fs::remove_dir_all(dir(&id));
             return Err(e);
         }
     };
-    std::fs::copy(&src_stl, ws.join("out").join("current.stl"))?;
-    std::fs::copy(&src_stl, ws.join("versions").join("v1.stl"))?;
+    std::fs::copy(&src_3mf, ws.join("out").join(CURRENT))?;
+    std::fs::copy(&src_3mf, ws.join("versions").join("v1.3mf"))?;
 
     let name = source.file_name().unwrap_or_default().to_string_lossy().to_string();
-    std::fs::write(ws.join("CLAUDE.md"), instructions(&name, tris))?;
+    std::fs::write(ws.join("CLAUDE.md"), instructions(&name, &Summary::of(&parts)))?;
     write_tools(&ws)?;
 
     let _ = write_previews(&id);
@@ -359,15 +422,26 @@ pub fn create_blank(
 
 /// Folder of the tools the app leaves to Claude.
 const TOOLS: &str = "tools";
-/// Measurement tool, and the one that installs a mesh as the current state.
-const MEASURE: &str = "measure.py";
-const EXPORT: &str = "export.py";
+/// The tools: 3MF reading and writing, measurements, and the one that
+/// installs parts as the current state.
+const TOOL_FILES: [(&str, &str); 3] = [
+    ("mf.py", include_str!("ia_tools/mf.py")),
+    ("measure.py", include_str!("ia_tools/measure.py")),
+    ("export.py", include_str!("ia_tools/export.py")),
+];
+/// The skill with the detailed export recipe; Claude Code finds it in the
+/// project's `.claude/skills/`.
+const SKILL_DIR: &str = ".claude/skills/export-3mf";
+const SKILL: &str = include_str!("ia_tools/SKILL.md");
 
-/// Writes (or refreshes) the tools of a working folder.
+/// Writes (or refreshes) the tools and the skill of a working folder.
 fn write_tools(ws: &Path) -> Result<()> {
     std::fs::create_dir_all(ws.join(TOOLS))?;
-    std::fs::write(ws.join(TOOLS).join(MEASURE), MEASURE_PY)?;
-    std::fs::write(ws.join(TOOLS).join(EXPORT), EXPORT_PY)?;
+    for (name, text) in TOOL_FILES {
+        std::fs::write(ws.join(TOOLS).join(name), text)?;
+    }
+    std::fs::create_dir_all(ws.join(SKILL_DIR))?;
+    std::fs::write(ws.join(SKILL_DIR).join("SKILL.md"), SKILL)?;
     Ok(())
 }
 
@@ -379,22 +453,84 @@ fn reply_language() -> &'static str {
     }
 }
 
+/// What the original holds, for the instructions.
+struct Summary {
+    tris: usize,
+    /// Name, color and head of each part.
+    parts: Vec<(String, String, u8)>,
+}
+
+impl Summary {
+    fn of(parts: &[Part]) -> Summary {
+        let dominant = |p: &Part| {
+            let mut count: HashMap<[u8; 3], usize> = HashMap::new();
+            for t in &p.tris {
+                *count.entry(t.c).or_default() += 1;
+            }
+            let c = count.into_iter().max_by_key(|(_, n)| *n).map(|(c, _)| c).unwrap_or(crate::render::DEFAULT_COLOR);
+            format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2])
+        };
+        Summary {
+            tris: parts.iter().map(|p| p.tris.len()).sum(),
+            parts: parts.iter().map(|p| (p.name.clone(), dominant(p), p.extruder)).collect(),
+        }
+    }
+
+    fn describe(&self) -> String {
+        let mut s = format!("The original object has {} triangles in {} part(s):\n\n", self.tris, self.parts.len());
+        for (name, color, head) in &self.parts {
+            s.push_str(&format!("- `{name}` — {color}, head {head}\n"));
+        }
+        s
+    }
+}
+
+/// What both kinds of conversation share: the files, the export, the rules
+/// of a printable part.
+const COMMON: &str = "## Saving your work: always 3MF
+
+The app shows, versions and prints **3MF** files: one object made of
+**parts**, each with its **color** and the **head** (1 to 4 on the
+Snapmaker U1) that prints it. That is how a multicolor model stays one.
+**Never hand over an STL as the result**: it has no color and no parts.
+
+- Install a result with `python3 tools/export.py …` — the only way to make
+  it the current state. Each install becomes a new version in the app.
+- One part per color: `python3 tools/export.py body.stl:#E8E8E8 eyes.stl:#101010`,
+  or build the parts in Python and write them with `mf.write` (see the
+  `export-3mf` skill, with examples).
+- Keep the colors and heads of the current state unless asked otherwise:
+  read it with `mf.read(\"out/current.3mf\")`, change the parts' meshes,
+  write them back with their names, colors and heads.
+- Parts of different colors must not overlap: subtract one from the other
+  where they meet.
+
+## Tools
+
+- `tools/mf.py` — `mf.read(path)` gives the parts (`name`, `color`,
+  `extruder`, `mesh` as a trimesh), `mf.write(path, parts)` writes them.
+  Import it with `sys.path.insert(0, \"tools\")`.
+- `tools/export.py` — checks the parts and installs them.
+- `tools/measure.py` — dimensions, volume, watertightness, part by part.
+- `trimesh`, `manifold3d` (booleans), `numpy`.";
+
 /// The instructions left to Claude in the working folder.
-fn instructions(source_name: &str, tris: usize) -> String {
+fn instructions(source_name: &str, source: &Summary) -> String {
     let lang = reply_language();
+    let parts = source.describe();
     format!(
         "# Modifying a part to print
 
-You work on **{source_name}**, converted to STL for this session. What you
-write shows live in the app, next to this conversation.
+You work on **{source_name}**. What you install shows live in the app, next
+to this conversation.
 
 **Always answer the user in {lang}.**
 
 ## Look before acting
 
 The `preview/` folder holds three renders of the current state — `front.png`,
-`three-quarter.png`, `top.png` — that the app renders again after **every**
-change you save.
+`three-quarter.png`, `top.png`, in its colors — that the app renders again
+after **every** install.
 
 Open them. They are your only way to see the part: an off-center hole, a wall
 that goes through, a part resting askew do not show in the coordinates. Look
@@ -402,36 +538,38 @@ before changing, and look again afterwards.
 
 ## The files
 
-- `source.stl` — the original object. **Never modify it.**
-- `out/current.stl` — the current state, the one shown on screen.
+- `source.3mf` — the original object. **Never modify it.**
+- `out/current.3mf` — the current state, the one shown on screen.
 - `preview/` — the three renders. Read-only, the app writes them.
 - `versions/` — the history, managed by the app. Do not touch it.
-- `tools/measure.py` — dimensions, volume, watertightness.
-- `tools/export.py` — checks a mesh and installs it as the current state.
+- `chat.jsonl`, `attachments/` — this conversation as the app shows it, and
+  the images the user attached. Read attachments when asked; never modify
+  either.
+
+{parts}
+{COMMON}
 
 ## How to proceed
 
 1. `python3 tools/measure.py` then look at `preview/three-quarter.png`.
-2. Write a Python transformation script, with `trimesh`.
-3. Install the result: `python3 tools/export.py result.stl`
+2. Write a Python script that reads `out/current.3mf` with `mf.read`,
+   transforms the parts' meshes with `trimesh`, and writes `result.3mf`
+   with `mf.write`.
+3. Install it: `python3 tools/export.py result.3mf`
 4. Look at the previews again, and start over if it is not right.
 
 ## What matters
 
 - Units are **millimeters**, the Z axis is the height, and the part rests on
   `z = 0`. After a rotation, put it back on the ground.
-- The mesh must stay **watertight**: otherwise slicing will fail.
-- Always start from `out/current.stl`, never from `source.stl`, to chain
+- Each part must stay **watertight**: otherwise slicing will fail.
+- Always start from `out/current.3mf`, never from `source.3mf`, to chain
   several changes.
 - Move in small checkable steps rather than one big script.
 - If a request is ambiguous — which side, which face, which dimension — ask
   rather than guess.
 
-The original object has {tris} triangles.
-
-## Available tools
-
-`trimesh`, `manifold3d` (booleans), `numpy`. No Blender.
+No Blender.
 "
     )
 }
@@ -456,101 +594,60 @@ fn instructions_creation(bounds: Option<[f32; 3]>) -> String {
         "# Creating a part to print
 
 You design a part **from scratch**, from the user's description. What you
-export shows live in the app, next to this conversation.
+install shows live in the app, next to this conversation.
 
 **Always answer the user in {lang}.**
 
 ## Before modeling
 
-If a dimension, a use or a constraint is missing — screw diameter, thickness,
-bearing side — **ask** rather than guess. Then announce in a few lines what you
-are going to build: base shapes, main dimensions, print orientation.
+If a dimension, a use, a constraint or the colors are missing — screw
+diameter, thickness, bearing side, one color or several — **ask** rather
+than guess. Then announce in a few lines what you are going to build: base
+shapes, main dimensions, colors, print orientation.
 
 ## The files
 
-- `out/current.stl` — the current state, the one shown on screen. It does not
-  exist yet: your first export creates it.
+- `out/current.3mf` — the current state, the one shown on screen. It does
+  not exist yet: your first install creates it.
 - `preview/` — three renders of the current state (`front.png`,
-  `three-quarter.png`, `top.png`), rendered again by the app after **every**
-  export. Read-only.
+  `three-quarter.png`, `top.png`), in its colors, rendered again by the app
+  after **every** install. Read-only.
 - `versions/` — the history, managed by the app. Do not touch it.
-- `tools/measure.py` — dimensions, volume, watertightness.
-- `tools/export.py` — checks a mesh and installs it as the current state.
+- `chat.jsonl`, `attachments/` — this conversation as the app shows it, and
+  the images the user attached (sketches, photos: look at them). Never modify
+  either.
+
+{COMMON}
 
 ## How to proceed
 
 1. Write a Python script, `model.py`, that builds the part with `trimesh`
    (primitives: boxes, cylinders, profile extrusions) and `manifold3d` for
-   booleans. Keep the dimensions as named variables at the top of the script:
-   they will be revisited.
-2. Install the result: `python3 tools/export.py result.stl`
+   booleans — one mesh per color. Keep the dimensions and colors as named
+   variables at the top of the script: they will be revisited.
+2. Write the parts with `mf.write(\"result.3mf\", …)` and install them:
+   `python3 tools/export.py result.3mf`
 3. Open `preview/three-quarter.png` and run `python3 tools/measure.py`.
-4. Fix and start again; each export becomes a new version.
+4. Fix and start again; each install becomes a new version.
 
 The previews are your only way to see the part: an off-center hole, a wall that
-goes through do not show in the coordinates. Look after each export.
+goes through do not show in the coordinates. Look after each install.
 
 ## What matters
 
 - Units are **millimeters**, the Z axis is the height, and the part rests on
   `z = 0`, centered in X and Y.
 - {envelope}
-- The mesh must be **watertight**: otherwise slicing will fail.
+- Each part must be **watertight**: otherwise slicing will fail.
 - Think FDM printing: a large flat face on the ground, overhangs under 45°,
   walls of at least 1.2 mm, 0.2 to 0.3 mm of clearance between two parts that
   fit together.
 - Move in small checkable steps rather than one big script.
 
-## Available tools
-
-`trimesh`, `manifold3d` (booleans), `numpy`. No Blender, no OpenSCAD.
+No Blender, no OpenSCAD.
 "
     )
 }
-
-const MEASURE_PY: &str = r#"#!/usr/bin/env python3
-"""Dimensions, volume and health of a mesh."""
-import sys
-import trimesh
-
-path = sys.argv[1] if len(sys.argv) > 1 else "out/current.stl"
-m = trimesh.load(path, force="mesh")
-x, y, z = m.extents
-print(f"file       : {path}")
-print(f"dimensions : {x:.2f} x {y:.2f} x {z:.2f} mm")
-print(f"minimum    : {m.bounds[0].round(2).tolist()}")
-print(f"maximum    : {m.bounds[1].round(2).tolist()}")
-print(f"volume     : {m.volume / 1000:.2f} cm3")
-print(f"faces      : {len(m.faces)}")
-print(f"watertight : {'yes' if m.is_watertight else 'NO'}")
-if not m.is_watertight:
-    print("warning    : a mesh that is not watertight will not slice")
-"#;
-
-const EXPORT_PY: &str = r#"#!/usr/bin/env python3
-"""Checks a mesh then installs it as the current state.
-
-    python3 tools/export.py result.stl
-"""
-import shutil
-import sys
-import trimesh
-
-if len(sys.argv) < 2:
-    sys.exit("usage: export.py <file.stl>")
-
-src = sys.argv[1]
-m = trimesh.load(src, force="mesh")
-if len(m.faces) == 0:
-    sys.exit("refused: empty mesh")
-if not m.is_watertight:
-    print("warning: mesh not watertight, slicing may fail")
-
-shutil.copyfile(src, "out/current.stl")
-x, y, z = m.extents
-print(f"installed: {x:.2f} x {y:.2f} x {z:.2f} mm, {len(m.faces)} faces")
-print("the previews are rendered again: look at preview/three-quarter.png")
-"#;
 
 // ------------------------------------------------------------ tooling
 
@@ -600,6 +697,27 @@ pub fn engine() -> Engine {
     }
 }
 
+/// A conversation for other modules' tests.
+#[cfg(test)]
+pub fn tests_conversation() -> Conversation {
+    Conversation {
+        id: "11111111-2222-3333-4444-555555555555".into(),
+        title: "Test".into(),
+        source: "/tmp/x.3mf".into(),
+        source_name: "x.3mf".into(),
+        prompt: String::new(),
+        engine: "local".into(),
+        created_at: 0,
+        updated_at: 0,
+        version: 1,
+        saved: None,
+        started: false,
+        kind: String::new(),
+        dest_dir: None,
+        bounds: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -618,6 +736,11 @@ mod tests {
         .unwrap();
     }
 
+    /// Claude installs an object: what `tools/export.py` does.
+    fn install(id: &str, tris: Vec<crate::mesh::Tri>) {
+        write_3mf(&current(id), "object", &[Part { name: "part-1".into(), tris, extruder: 1 }]).unwrap();
+    }
+
     #[test]
     fn creates_and_removes_a_workspace() {
         let tmp = std::env::temp_dir().join("snapstudio-ia-test");
@@ -629,11 +752,13 @@ mod tests {
         let ws = workspace(&c.id);
         for f in [
             "CLAUDE.md",
-            "source.stl",
+            ".claude/skills/export-3mf/SKILL.md",
+            "source.3mf",
+            "tools/mf.py",
             "tools/measure.py",
             "tools/export.py",
-            "out/current.stl",
-            "versions/v1.stl",
+            "out/current.3mf",
+            "versions/v1.3mf",
         ] {
             assert!(ws.join(f).exists(), "{f} should exist");
         }
@@ -648,32 +773,148 @@ mod tests {
         let _ = std::fs::remove_file(&src);
     }
 
+    /// A two-color original keeps its parts, colors and heads all the way.
     #[test]
-    fn converts_both_ways() {
+    fn a_multicolor_original_keeps_its_parts() {
         let tmp = std::env::temp_dir().join("snapstudio-ia-test");
         std::fs::create_dir_all(&tmp).unwrap();
-        let src = tmp.join("aller.3mf");
-        cube_3mf(&src);
+        let src = tmp.join("deux-couleurs.3mf");
+        let paint = |c: [u8; 3]| -> Vec<crate::mesh::Tri> {
+            crate::stl::tests_cube().into_iter().map(|mut t| { t.c = c; t }).collect()
+        };
+        let parts = [
+            Part { name: "body".into(), tris: paint([240, 240, 240]), extruder: 1 },
+            Part { name: "eyes".into(), tris: paint([20, 20, 20]), extruder: 2 },
+        ];
+        crate::write3mf::write_multipart(&src, "duo", &parts, &Mat::IDENTITY).unwrap();
 
-        let stl = tmp.join("milieu.stl");
-        let n = source_to_stl(&src, &stl).unwrap();
-        assert_eq!(n, 12);
+        let c = create(&src, "", "local").unwrap();
+        let got = parts_of_3mf(&current(&c.id)).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!((got[0].extruder, got[0].tris[0].c), (1, [240, 240, 240]));
+        assert_eq!((got[1].extruder, got[1].tris[0].c), (2, [20, 20, 20]));
+        let md = std::fs::read_to_string(workspace(&c.id).join("CLAUDE.md")).unwrap();
+        assert!(md.contains("`part-2` — #141414, head 2"), "{md}");
 
-        let back = tmp.join("retour.3mf");
-        assert_eq!(stl_to_3mf(&stl, &back, "cube").unwrap(), 12);
-
-        let a = mesh_of_3mf(&src).unwrap();
-        let b = mesh_of_3mf(&back).unwrap();
-        assert_eq!(a.tris.len(), b.tris.len());
-        for k in 0..3 {
-            assert!((a.min[k] - b.min[k]).abs() < 1e-4, "box kept");
-            assert!((a.max[k] - b.max[k]).abs() < 1e-4, "box kept");
-        }
-        for f in [src, stl, back] {
-            let _ = std::fs::remove_file(f);
-        }
+        // Saved as is: the slicer finds both heads and their colors.
+        let out = save_to_files(&c.id).unwrap();
+        let info = crate::slice::model_info(Path::new(&out)).unwrap();
+        assert_eq!(info.used, vec![1, 2]);
+        assert_eq!(info.filaments[1].color.as_deref(), Some("#141414"));
+        std::fs::remove_file(&out).unwrap();
+        remove(&c.id).unwrap();
+        let _ = std::fs::remove_file(&src);
     }
 
+    /// The filament colors of an Orca project color the parts of its heads.
+    #[test]
+    fn heads_take_their_filament_color() {
+        let mut m = crate::mesh::MeshData {
+            tris: crate::stl::tests_cube(),
+            min: [0.0; 3],
+            max: [1.0; 3],
+            truncated: false,
+            extruders: vec![1; 12],
+        };
+        for e in &mut m.extruders[6..] {
+            *e = 3;
+        }
+        let parts = split_by_head(m, &[Some([255, 0, 0]), None, Some([0, 0, 255])]);
+        assert_eq!(parts.len(), 2);
+        assert_eq!((parts[0].extruder, parts[0].tris[0].c), (1, [255, 0, 0]));
+        assert_eq!((parts[1].extruder, parts[1].tris[0].c), (3, [0, 0, 255]));
+    }
+
+    /// A conversation from the STL days is brought to 3MF when opened; its
+    /// old versions stay usable.
+    #[test]
+    fn stl_conversations_move_to_3mf() {
+        let tmp = std::env::temp_dir().join("snapstudio-ia-test");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("ancienne.3mf");
+        cube_3mf(&src);
+        let c = create(&src, "", "local").unwrap();
+        let ws = workspace(&c.id);
+        // The old layout.
+        for f in ["source.3mf", "out/current.3mf", "versions/v1.3mf"] {
+            std::fs::remove_file(ws.join(f)).unwrap();
+        }
+        let cube = crate::stl::tests_cube();
+        for f in ["source.stl", "out/current.stl", "versions/v1.stl"] {
+            crate::stl::write(&ws.join(f), &cube).unwrap();
+        }
+
+        refresh_workspace(&c.id);
+        assert!(current(&c.id).is_file() && ws.join("source.3mf").is_file());
+        assert!(!ws.join("out/current.stl").exists() && !ws.join("source.stl").exists());
+        assert_eq!(current_stats(&c.id).unwrap().triangles, 12);
+        assert!(ws.join("tools/mf.py").is_file());
+
+        install(&c.id, cube[..10].to_vec());
+        assert_eq!(capture(&c.id).unwrap(), 2, "numbering goes on after v1.stl");
+        assert!(ws.join("versions/v2.3mf").is_file());
+        revert(&c.id, 1).unwrap();
+        assert_eq!(current_stats(&c.id).unwrap().triangles, 12, "back from v1.stl");
+
+        remove(&c.id).unwrap();
+        let _ = std::fs::remove_file(&src);
+    }
+
+    /// What `tools/mf.py` writes is read by the app with its parts, colors
+    /// and heads. The fixture comes from `mf.write`; the live test below
+    /// regenerates it when Python has trimesh.
+    #[test]
+    fn python_3mf_is_read_with_its_colors_and_heads() {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mf-two-parts.3mf");
+        let parts = parts_of_3mf(&p).unwrap();
+        assert_eq!(parts.len(), 2);
+        assert_eq!((parts[0].extruder, parts[0].tris[0].c), (1, [0xF2, 0xF2, 0xF2]));
+        assert_eq!((parts[1].extruder, parts[1].tris[0].c), (2, [0x15, 0x15, 0x15]));
+        let info = crate::slice::model_info(&p).unwrap();
+        assert_eq!(info.used, vec![1, 2]);
+        let stats = crate::mesh::stats(&read_mesh(&p).unwrap());
+        assert_eq!(stats.watertight, Some(true));
+    }
+
+    /// The tools for real: `export.py` installs two colored parts, the watch
+    /// archives them. Needs a Python with trimesh:
+    /// `SS_PYTHON=/path/to/python cargo test --lib python_tools -- --ignored`.
+    #[test]
+    #[ignore]
+    fn python_tools_install_a_multicolor_result() {
+        let Ok(python) = std::env::var("SS_PYTHON") else { return };
+        let tmp = std::env::temp_dir().join("snapstudio-ia-test");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("outils.3mf");
+        cube_3mf(&src);
+        let c = create(&src, "", "local").unwrap();
+        let ws = workspace(&c.id);
+        let script = r#"
+import sys; sys.path.insert(0, "tools")
+import mf, trimesh
+body = trimesh.creation.box((20, 20, 10)); body.apply_translation((0, 0, 5))
+eye = trimesh.creation.icosphere(radius=3); eye.apply_translation((0, 0, 13))
+body.export("body.stl"); eye.export("eye.stl")
+"#;
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new(&python).args(args).current_dir(&ws).output().unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        run(&["-c", script]);
+        println!("{}", run(&["tools/export.py", "body.stl:#F2F2F2", "eye.stl:#151515"]));
+        let last = Mutex::new(hash_file(&ws.join("versions/v1.3mf")).unwrap());
+        assert!(matches!(consider(&c.id, &last), Change::Archived(2, _)));
+        let parts = parts_of_3mf(&current(&c.id)).unwrap();
+        assert_eq!(parts.iter().map(|p| p.extruder).collect::<Vec<_>>(), vec![1, 2]);
+        println!("{}", run(&["tools/measure.py"]));
+        if std::env::var("SS_FIXTURE").is_ok() {
+            let dst = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mf-two-parts.3mf");
+            std::fs::copy(current(&c.id), dst).unwrap();
+        }
+        remove(&c.id).unwrap();
+        let _ = std::fs::remove_file(&src);
+    }
 
     #[test]
     fn versions_are_captured_and_restored() {
@@ -688,15 +929,15 @@ mod tests {
         // Claude writes a different object: one face less.
         let mut tris = crate::stl::tests_cube();
         tris.truncate(10);
-        crate::stl::write(&current(&c.id), &tris).unwrap();
+        install(&c.id, tris);
         assert_eq!(capture(&c.id).unwrap(), 2);
         assert_eq!(versions(&c.id).len(), 2);
         assert_eq!(get(&c.id).unwrap().version, 2);
-        assert_eq!(crate::stl::read(&current(&c.id)).unwrap().tris.len(), 10);
+        assert_eq!(read_mesh(&current(&c.id)).unwrap().tris.len(), 10);
 
         // Going back: the current state becomes the original again.
         revert(&c.id, 1).unwrap();
-        assert_eq!(crate::stl::read(&current(&c.id)).unwrap().tris.len(), 12);
+        assert_eq!(read_mesh(&current(&c.id)).unwrap().tris.len(), 12);
         assert_eq!(get(&c.id).unwrap().version, 1);
         assert_eq!(versions(&c.id).len(), 2, "going back archives nothing");
         assert!(revert(&c.id, 9).is_err(), "version that does not exist");
@@ -722,7 +963,7 @@ mod tests {
         // Claude writes a different object.
         let mut tris = crate::stl::tests_cube();
         tris.truncate(10);
-        crate::stl::write(&current(&c.id), &tris).unwrap();
+        install(&c.id, tris.clone());
         let Change::Archived(v, stats) = consider(&c.id, &last) else {
             panic!("the change should have been archived");
         };
@@ -731,7 +972,7 @@ mod tests {
         assert_eq!(stats.watertight, Some(false));
 
         // Writing the same content again must not create one more version.
-        crate::stl::write(&current(&c.id), &tris).unwrap();
+        install(&c.id, tris);
         assert!(matches!(consider(&c.id, &last), Change::Nothing));
         assert_eq!(versions(&c.id).len(), 2);
 
@@ -789,14 +1030,13 @@ mod tests {
         assert_eq!(c.version, 0);
         assert!(ws.join("out").is_dir(), "the watch needs the folder");
         assert!(!current(&c.id).exists());
-        assert!(!ws.join("source.stl").exists());
+        assert!(!ws.join("source.3mf").exists());
         let md = std::fs::read_to_string(ws.join("CLAUDE.md")).unwrap();
         assert!(md.contains("270 × 270 × 270 mm"));
         assert!(save_to_files(&c.id).is_err(), "nothing to save before the first export");
 
         // First export: v1 appears, and the object goes to the chosen folder.
-        let tris = crate::stl::tests_cube();
-        crate::stl::write(&current(&c.id), &tris).unwrap();
+        install(&c.id, crate::stl::tests_cube());
         let last = Mutex::new(0);
         assert!(matches!(consider(&c.id, &last), Change::Archived(1, _)));
         assert!(previews_dir(&c.id).join("three-quarter.png").is_file());
@@ -805,6 +1045,15 @@ mod tests {
         assert!(out.ends_with("wall-hook-for-headphones-ai.3mf"), "{out}");
         std::fs::remove_file(&out).unwrap();
         remove(&c.id).unwrap();
+    }
+
+    #[test]
+    fn attachments_stay_in_their_folder() {
+        let id = "11111111-2222-3333-4444-555555555555";
+        for bad in ["../meta.json", "a/b.png", ".hidden", "", "x y.png"] {
+            assert!(attachment(id, bad).is_err(), "{bad:?} must be refused");
+        }
+        assert!(attachment("not-an-id", "001-a.png").is_err());
     }
 
     #[test]
@@ -828,6 +1077,60 @@ mod tests {
 mod essai_reel {
     use super::*;
 
+    /// A real Claude in the sandbox designs a two-color part, following the
+    /// instructions and the skill alone. Long (image, model):
+    /// `IA_REAL=1 cargo test --lib real_container_multicolor -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_container_multicolor() {
+        if std::env::var("IA_REAL").is_err() {
+            return;
+        }
+        let dest = std::env::temp_dir().join("snapstudio-ia-real");
+        std::fs::create_dir_all(&dest).unwrap();
+        let c = create_blank(
+            "A keychain tag, 40 x 20 x 3 mm, white, with a black stripe 4 mm wide inlaid across its top face. \
+             Do not ask questions: choose the remaining details yourself, install the result, and stop.",
+            "container",
+            &dest,
+            None,
+        )
+        .unwrap();
+        let ws = workspace(&c.id);
+        let argv = [
+            "claude".to_string(),
+            "--claude-config".into(),
+            "--customize-file".into(),
+            dockerfile().to_string_lossy().to_string(),
+            "-p".into(),
+            c.prompt.clone(),
+            "--output-format".into(),
+            "json".into(),
+        ];
+        let mut cmd = std::process::Command::new(crate::util::which("yolobox").expect("yolobox"));
+        cmd.args(&argv).current_dir(&ws).stdin(std::process::Stdio::null());
+        for (k, v) in crate::auth::sandbox_env("container") {
+            cmd.env(k, v);
+        }
+        let out = cmd.output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        let start = text.find('{').unwrap_or(0);
+        let v: serde_json::Value = serde_json::from_str(text[start..].trim()).unwrap_or_default();
+        println!("claude: {}", v["result"].as_str().unwrap_or(&text));
+        let parts = parts_of_3mf(&current(&c.id)).expect("out/current.3mf");
+        let summary = Summary::of(&parts);
+        println!("{}", summary.describe());
+        assert!(!ws.join("out/current.stl").exists());
+        assert!(parts.len() >= 2, "two colors, so two parts");
+        let colors: std::collections::HashSet<_> = summary.parts.iter().map(|p| p.1.clone()).collect();
+        let heads: std::collections::HashSet<_> = summary.parts.iter().map(|p| p.2).collect();
+        assert!(colors.len() >= 2 && heads.len() >= 2, "{colors:?} {heads:?}");
+        println!("folder: {}", ws.display());
+        if std::env::var("IA_KEEP").is_err() {
+            remove(&c.id).unwrap();
+        }
+    }
+
     /// Prepares a real conversation from a 3MF on disk.
     ///
     /// `IA_3MF=/path/object.3mf cargo test essai_reel -- --nocapture`
@@ -839,26 +1142,22 @@ mod essai_reel {
         let src = PathBuf::from(src);
         let c = create(&src, "Essai", "local").unwrap();
         let ws = workspace(&c.id);
-        let stl = crate::stl::read(&ws.join("source.stl")).unwrap();
+        let got = read_mesh(&ws.join(SOURCE)).unwrap();
         let orig = mesh_of_3mf(&src).unwrap();
+        let parts = parts_of_3mf(&ws.join(SOURCE)).unwrap();
         println!(
-            "{} : {} triangles, encombrement {:?} mm",
+            "{} : {} triangles in {} part(s), encombrement {:?} mm",
             c.source_name,
-            stl.tris.len(),
-            stl.size()
+            got.tris.len(),
+            parts.len(),
+            got.size()
         );
-        assert_eq!(stl.tris.len(), orig.tris.len(), "no triangle lost");
+        assert_eq!(got.tris.len(), orig.tris.len(), "no triangle lost");
         for k in 0..3 {
-            assert!((stl.min[k] - orig.min[k]).abs() < 1e-3);
-            assert!((stl.max[k] - orig.max[k]).abs() < 1e-3);
+            assert!((got.min[k] - orig.min[k]).abs() < 1e-3);
+            assert!((got.max[k] - orig.max[k]).abs() < 1e-3);
         }
-
-        // And the way back to 3MF must stay faithful.
-        let back = ws.join("retour.3mf");
-        stl_to_3mf(&ws.join("out/current.stl"), &back, "object").unwrap();
-        let round = mesh_of_3mf(&back).unwrap();
-        assert_eq!(round.tris.len(), orig.tris.len());
-        println!("round trip checked, folder: {}", ws.display());
+        println!("folder: {}", ws.display());
 
         // The previews: what Claude will open to look at its work.
         write_previews(&c.id).unwrap();
@@ -962,7 +1261,11 @@ fn flatten(img: image::RgbaImage) -> image::RgbaImage {
 }
 
 pub fn previews_dir(id: &str) -> PathBuf {
-    workspace(id).join("preview")
+    previews_dir_of(&workspace(id))
+}
+
+pub fn previews_dir_of(ws: &Path) -> PathBuf {
+    ws.join("preview")
 }
 
 /// Renders three views of the current state into `preview/`.
@@ -974,7 +1277,7 @@ pub fn previews_dir(id: &str) -> PathBuf {
 /// They are written outside the watched folder, so as not to wake the watch
 /// at each render.
 pub fn write_previews(id: &str) -> Result<()> {
-    let mut mesh = crate::stl::read(&current(id))?;
+    let mut mesh = read_mesh(&current(id))?;
     crate::mesh::downsample(&mut mesh, PREVIEW_BUDGET);
     let dir = previews_dir(id);
     std::fs::create_dir_all(&dir)?;
@@ -1000,6 +1303,26 @@ pub fn preview_png(id: &str) -> Result<Vec<u8>> {
     Ok(std::fs::read(&png).or_else(|_| std::fs::read(legacy))?)
 }
 
+/// An image the user attached to the conversation, with its MIME type. Only a
+/// plain file name of `attachments/` is accepted: no path, no way out.
+pub fn attachment(id: &str, name: &str) -> Result<(Vec<u8>, &'static str)> {
+    let plain = !name.is_empty()
+        && !name.starts_with('.')
+        && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_'));
+    if !valid_id(id) || !plain {
+        return Err(anyhow!("unknown attachment"));
+    }
+    let path = crate::chat::attachments_dir(&workspace(id)).join(name);
+    let mime = match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()) {
+        Some(e) if e == "png" => "image/png",
+        Some(e) if e == "jpg" || e == "jpeg" => "image/jpeg",
+        Some(e) if e == "gif" => "image/gif",
+        Some(e) if e == "webp" => "image/webp",
+        _ => "application/octet-stream",
+    };
+    Ok((std::fs::read(path)?, mime))
+}
+
 /// Brings what belongs to the app in a working folder up to date.
 ///
 /// Instructions and tools improve from version to version: a conversation
@@ -1012,16 +1335,28 @@ pub fn refresh_workspace(id: &str) {
         return;
     }
     let Ok(c) = get(id) else { return };
+    migrate_to_3mf(&ws);
     let text = if c.is_creation() {
         instructions_creation(c.bounds)
     } else {
-        let tris = crate::stl::count(&ws.join("source.stl")).unwrap_or(0);
-        instructions(&c.source_name, tris)
+        let parts = parts_of_3mf(&ws.join(SOURCE)).unwrap_or_default();
+        instructions(&c.source_name, &Summary::of(&parts))
     };
     let _ = std::fs::write(ws.join("CLAUDE.md"), text);
     let _ = write_tools(&ws);
     if current(id).is_file() && !previews_dir(id).join(format!("{THREE_QUARTER}.png")).is_file() {
         let _ = write_previews(id);
+    }
+}
+
+/// A conversation from the STL days: its source and current state become
+/// one-part 3MF files. The old versions stay as they are, still readable.
+fn migrate_to_3mf(ws: &Path) {
+    for (old, new) in [("source.stl", SOURCE), ("out/current.stl", "out/current.3mf")] {
+        let (old, new) = (ws.join(old), ws.join(new));
+        if old.is_file() && !new.exists() && stl_to_3mf(&old, &new, "object").is_ok() {
+            let _ = std::fs::remove_file(&old);
+        }
     }
 }
 
@@ -1086,7 +1421,7 @@ pub fn save_to_files(id: &str) -> Result<String> {
         .or_else(dirs::download_dir)
         .ok_or_else(|| anyhow!(crate::t!("err.nowhere_to_write")))?;
     let dst = free_name(&dir, &stem);
-    stl_to_3mf(&current(id), &dst, &stem)?;
+    std::fs::copy(current(id), &dst)?;
 
     let mut c = c;
     c.saved = Some(dst.to_string_lossy().to_string());
@@ -1118,7 +1453,7 @@ pub fn versions(id: &str) -> Vec<Version> {
         let name = e.file_name().to_string_lossy().to_string();
         let Some(n) = name
             .strip_prefix('v')
-            .and_then(|s| s.strip_suffix(".stl"))
+            .and_then(|s| s.strip_suffix(".3mf").or_else(|| s.strip_suffix(".stl")))
             .and_then(|s| s.parse::<u32>().ok())
         else {
             continue;
@@ -1150,7 +1485,7 @@ fn hash_file(p: &Path) -> Option<u64> {
 fn capture(id: &str) -> Result<u32> {
     let cur = current(id);
     let n = versions(id).last().map(|v| v.n).unwrap_or(0) + 1;
-    std::fs::copy(&cur, versions_dir(id).join(format!("v{n}.stl")))?;
+    std::fs::copy(&cur, versions_dir(id).join(format!("v{n}.3mf")))?;
     if let Ok(mut c) = get(id) {
         c.version = n;
         c.updated_at = now();
@@ -1164,11 +1499,15 @@ fn capture(id: &str) -> Result<u32> {
 /// The watch is told: this going back must not create one more version,
 /// otherwise the history would swell at every round trip.
 pub fn revert(id: &str, n: u32) -> Result<()> {
-    let src = versions_dir(id).join(format!("v{n}.stl"));
-    if !src.is_file() {
+    let file = |ext: &str| versions_dir(id).join(format!("v{n}.{ext}"));
+    if file("3mf").is_file() {
+        replace_with(&file("3mf"), &current(id))?;
+    } else if file("stl").is_file() {
+        // A version from the STL days.
+        stl_to_3mf(&file("stl"), &current(id), "object")?;
+    } else {
         return Err(anyhow!(crate::t!("err.no_version", n = n)));
     }
-    std::fs::copy(&src, current(id))?;
     if let Some(h) = hash_file(&current(id)) {
         if let Some(w) = watchers().lock().unwrap().get(id) {
             *w.last.lock().unwrap() = h;
@@ -1244,7 +1583,7 @@ pub fn current_dto(id: &str) -> Result<CurrentDto> {
 
 /// Reads the current state and takes its measurements.
 pub fn current_stats(id: &str) -> Result<crate::mesh::Stats> {
-    Ok(crate::mesh::stats(&crate::stl::read(&current(id))?))
+    Ok(crate::mesh::stats(&read_mesh(&current(id))?))
 }
 
 /// Watches a conversation's output folder.
@@ -1353,7 +1692,10 @@ fn watch_loop(
             pending = None;
 
             let (version, stats) = match consider(id, last) {
-                Change::Archived(v, s) => (v, s),
+                Change::Archived(v, s) => {
+                    crate::chat::note(id, serde_json::json!({ "type": "version", "n": v }));
+                    (v, s)
+                }
                 Change::Nothing => continue,
                 // An unreadable mesh often means a write in progress: let it go, the next
                 // stir will catch it.

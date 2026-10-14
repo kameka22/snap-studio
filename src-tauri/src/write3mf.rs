@@ -7,8 +7,8 @@
 //!   precision lost. It is what lets a part be added to a slicer's plate
 //!   without overwriting its session, and it is also the workaround for
 //!   Snapmaker Orca's command line crashing on project files.
-//! * [`write_scene`] composes a new 3MF from meshes and their placements, for
-//!   a plate one arranges oneself.
+//! * [`write_multipart`] / [`write_objects`] compose a new 3MF from parts, each
+//!   with its head, for a plate one arranges oneself or an AI result.
 //!
 //! Beware downstream: Orca's command line rearranges the plate on its own. For
 //! the placement written here to be the one printed, it must be called with
@@ -72,6 +72,7 @@ pub fn strip_project(src: &Path, dst: &Path) -> Result<usize> {
 }
 
 /// An object to put on the plate.
+#[cfg(test)]
 pub struct SceneObject {
     pub name: String,
     /// Triangles in the object's frame.
@@ -362,6 +363,7 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
 }
 
 /// Writes a geometry 3MF holding the objects and their placements.
+#[cfg(test)]
 pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
     if objects.is_empty() {
         return Err(anyhow!(crate::t!("err.no_object_to_write")));

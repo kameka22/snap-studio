@@ -1,6 +1,8 @@
 mod menu;
 mod migrate;
 mod access;
+mod auth;
+mod chat;
 mod discover;
 mod engine;
 mod favorites;
@@ -998,6 +1000,108 @@ fn ia_stats(id: String) -> Result<mesh::Stats, String> {
     ia::current_stats(&id).map_err(|e| e.to_string())
 }
 
+// ---------------------------------------------------------------- AI chat
+
+/// A conversation's past, for the chat view: its log, or Claude's transcript.
+#[tauri::command]
+fn ia_chat_history(id: String) -> Vec<serde_json::Value> {
+    chat::history(&id)
+}
+
+/// Sends a message (and its images), starting Claude when needed. Slow
+/// enough (process start, image writing) to stay off the main thread.
+#[tauri::command]
+async fn ia_chat_send(
+    app: tauri::AppHandle,
+    id: String,
+    text: String,
+    images: Vec<chat::Attachment>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let c = ia::get(&id).map_err(|e| e.to_string())?;
+        chat::send(&app, &c, &text, &images).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn ia_chat_stop(id: String) -> Result<(), String> {
+    chat::stop(&id).map_err(|e| e.to_string())
+}
+
+/// Answers a permission request; `input` carries an `AskUserQuestion`'s answers.
+#[tauri::command]
+fn ia_chat_answer(
+    id: String,
+    request_id: String,
+    allow: bool,
+    always: bool,
+    input: Option<serde_json::Value>,
+) -> Result<(), String> {
+    chat::answer(&id, &request_id, allow, always, input).map_err(|e| e.to_string())
+}
+
+/// Permission mode of the conversation (accept edits, ask, plan…).
+#[tauri::command]
+fn ia_chat_mode(id: String, mode: String) -> Result<(), String> {
+    chat::set_mode(&id, &mode).map_err(|e| e.to_string())
+}
+
+/// True while Claude runs for this conversation in chat mode.
+#[tauri::command]
+fn ia_chat_running(id: String) -> bool {
+    chat::is_open(&id)
+}
+
+#[tauri::command]
+async fn ia_chat_close(id: String) {
+    let _ = tauri::async_runtime::spawn_blocking(move || chat::close(&id)).await;
+}
+
+// ---------------------------------------------------------------- Claude sign-in
+
+/// Claude's sign-in on this Mac ("local") or in the sandbox ("container"),
+/// as Claude reports it. Slow in the sandbox (a container starts).
+#[tauri::command]
+async fn auth_status(engine: String) -> Result<auth::Status, String> {
+    tauri::async_runtime::spawn_blocking(move || auth::status(&engine))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// A real check of the sign-in: one tiny call to the model.
+#[tauri::command]
+async fn auth_verify(engine: String) -> Result<auth::Check, String> {
+    tauri::async_runtime::spawn_blocking(move || auth::verify(&engine))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// True if the sandbox has a token of its own.
+#[tauri::command]
+fn auth_sandbox_present() -> bool {
+    auth::sandbox_token().is_some()
+}
+
+/// Stores a sandbox token pasted by hand.
+#[tauri::command]
+fn auth_sandbox_set(token: String) -> Result<(), String> {
+    auth::set_sandbox_token(&token).map_err(|e| e.to_string())
+}
+
+/// Forgets the sandbox token: the sandbox goes back to the Mac's login.
+#[tauri::command]
+fn auth_sandbox_clear() -> Result<(), String> {
+    auth::clear_sandbox_token().map_err(|e| e.to_string())
+}
+
+/// Opens the sign-in terminal: "login" (this Mac) or "setup" (sandbox token).
+#[tauri::command]
+fn auth_term_open(app: tauri::AppHandle, kind: String, cols: u16, rows: u16) -> Result<(), String> {
+    auth::term_open(&app, &kind, cols, rows).map_err(|e| e.to_string())
+}
+
 /// Opens — or reopens — a conversation's terminal.
 #[tauri::command]
 fn pty_open(app: tauri::AppHandle, id: String, cols: u16, rows: u16) -> Result<(), String> {
@@ -1079,6 +1183,7 @@ fn ia_delete(id: String) -> Result<Vec<ia::Conversation>, String> {
     // Deleting the folder under a running Claude would leave it running without
     // a directory: close first, delete afterwards.
     pty::close(&id);
+    chat::close(&id);
     ia::remove(&id).map_err(|e| e.to_string())?;
     Ok(ia::list())
 }
@@ -1108,8 +1213,8 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
         .unwrap_or(900_000)
         .clamp(10_000, 3_000_000);
 
-    // The AI tab works in STL; the same protocol serves both formats, the
-    // extension decides.
+    // STL and 3MF go through the same protocol (older AI conversations kept
+    // STL versions); the extension decides.
     let is_stl = Path::new(&path)
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
@@ -1160,6 +1265,18 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
     // An object created by the AI has no original: its thumbnail is the
     // preview the app renders for Claude.
     if let Some(id) = query_param(uri, "ia") {
+        // An image attached in the conversation view.
+        if let Some(name) = query_param(uri, "att") {
+            return match ia::attachment(&id, &name) {
+                Ok((bytes, mime)) => Response::builder()
+                    .status(200)
+                    .header("Content-Type", mime)
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(bytes)
+                    .unwrap(),
+                Err(_) => not_found(),
+            };
+        }
         return match ia::preview_png(&id) {
             Ok(png) => Response::builder()
                 .status(200)
@@ -1359,6 +1476,19 @@ pub fn run() {
             ia_revert,
             ia_stats,
             pty_open,
+            ia_chat_history,
+            ia_chat_send,
+            ia_chat_stop,
+            ia_chat_answer,
+            ia_chat_mode,
+            ia_chat_running,
+            ia_chat_close,
+            auth_status,
+            auth_verify,
+            auth_sandbox_present,
+            auth_sandbox_set,
+            auth_sandbox_clear,
+            auth_term_open,
             pty_write,
             pty_resize,
             pty_close,
@@ -1386,6 +1516,7 @@ pub fn run() {
             // A terminal would outlive the window: close it with the window.
             if let tauri::RunEvent::Exit = event {
                 pty::close_all();
+                chat::close_all();
             }
         });
 }

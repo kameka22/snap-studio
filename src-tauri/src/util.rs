@@ -97,6 +97,40 @@ pub fn no_window(cmd: &mut std::process::Command) -> &mut std::process::Command 
 ///
 /// Carries a terminal's raw bytes up to the UI, where only the emulator can
 /// glue back a character split in two.
+/// Base64 decoding, tolerant: invalid characters are skipped.
+pub fn b64_decode(s: &str) -> Option<Vec<u8>> {
+    const INVALID: u8 = 255;
+    let val = |c: u8| -> u8 {
+        match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => INVALID,
+        }
+    };
+    let mut out = Vec::with_capacity(s.len() / 4 * 3);
+    let mut acc: u32 = 0;
+    let mut bits = 0;
+    for c in s.bytes() {
+        if c == b'=' {
+            break;
+        }
+        let v = val(c);
+        if v == INVALID {
+            continue;
+        }
+        acc = (acc << 6) | v as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
 pub fn b64_encode(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);

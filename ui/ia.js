@@ -1,9 +1,9 @@
 "use strict";
 /* AI tab: one conversation per object — to modify, or to create from scratch.
 
-   Each conversation owns a working folder, prepared by Rust: the object
-   converted to STL, the instructions and the tools. The detail screen holds
-   the Claude terminal and the 3D pane. */
+   Each conversation owns a working folder, prepared by Rust: the object as
+   a 3MF of colored parts, the instructions, the tools and the export skill.
+   The detail screen holds the conversation and the 3D pane. */
 
 const IA = {
   list: [],
@@ -15,6 +15,9 @@ const IA = {
   mode: "edit",
   /* Conversation open on screen, or null on the list. */
   open: null,
+  /* How the open conversation shows: "chat" (ia-chat.js) or "term", the raw
+     Claude Code terminal on the same session. */
+  view: localStorage.getItem("snapstudio.iaview") === "term" ? "term" : "chat",
   /* One emulator per conversation: leaving the tab must not erase anything.
      id -> { term, fit, el, dead } */
   terms: new Map(),
@@ -431,8 +434,13 @@ function iaFit(id) {
 async function iaHint(c) {
   const el = $("ia-hint");
   if (!c.started) {
-    el.innerHTML = tr("ia.hint.first");
-    el.classList.remove("hidden");
+    // Only the terminal asks whether to trust the folder; the chat never does.
+    if (IA.view === "term") {
+      el.innerHTML = tr("ia.hint.first");
+      el.classList.remove("hidden");
+    } else {
+      el.classList.add("hidden");
+    }
     return;
   }
   let resumable = true;
@@ -452,8 +460,18 @@ async function iaOpen(id) {
   if (!c) return;
   IA.open = id;
   iaRender();
+  $("ia-left").dataset.mode = IA.view;
+  document.querySelectorAll("#ia-views [data-iaview]").forEach((b) => b.classList.toggle("on", b.dataset.iaview === IA.view));
+  iaHint(c);
+  // The 3D pane and the folder watch live with the screen.
+  iaQueue(() => iaLoadPane(id));
+  if (IA.view === "chat") chatOpen(c);
+  else iaOpenTerminal(c);
+}
 
-
+/* The raw Claude Code terminal of the conversation. */
+function iaOpenTerminal(c) {
+  const id = c.id;
   const host = $("ia-term");
   const t = iaTerm(id);
   host.innerHTML = "";
@@ -463,10 +481,6 @@ async function iaOpen(id) {
     t.opened = true;
   }
   $("ia-dead").classList.toggle("hidden", !t.dead);
-  iaHint(c);
-
-  // The 3D pane and the folder watch live with the screen.
-  iaQueue(() => iaLoadPane(id));
 
   // Wait one frame: xterm measures the cell on the displayed element.
   requestAnimationFrame(async () => {
@@ -504,6 +518,7 @@ function iaSetVisible(on) {
 function iaBack() {
   iaUndock();
   IA.open = null;
+  chatLeave();
   // The element goes back in reserve: the terminal history is kept.
   const host = $("ia-term");
   if (host.firstChild) host.removeChild(host.firstChild);
@@ -551,7 +566,7 @@ $("ia-restart").addEventListener("click", iaRestart);
 
 $("ia-stop").addEventListener("click", async () => {
   if (!IA.open) return;
-  await invoke("pty_close", { id: IA.open });
+  await Promise.all([invoke("pty_close", { id: IA.open }), invoke("ia_chat_close", { id: IA.open })]);
 });
 
 $("ia-folder").addEventListener("click", async () => {
@@ -700,15 +715,44 @@ listen("ia-mesh", async (e) => {
   });
 });
 
-$("ia-versions").addEventListener("click", async (ev) => {
-  const btn = ev.target.closest("button[data-v]");
-  if (!btn || !IA.open) return;
+/* Conversation or terminal: the same Claude session, never both at once —
+   the process of one view ends before the other resumes the transcript. */
+async function iaSwitchView(view) {
+  if (view === IA.view) return;
+  const id = IA.open;
+  IA.view = view;
+  localStorage.setItem("snapstudio.iaview", view);
+  if (!id) return;
+  if (view === "term") {
+    chatLeave();
+    await invoke("ia_chat_close", { id }).catch(() => {});
+    // The terminal resumes the session at once, not through "Reopen".
+    const t = IA.terms.get(id);
+    if (t) t.dead = false;
+  } else {
+    await invoke("pty_close", { id }).catch(() => {});
+  }
+  if (IA.open === id) iaOpen(id);
+}
+
+$("ia-views").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-iaview]");
+  if (b) iaSwitchView(b.dataset.iaview);
+});
+
+/* Makes version `n` the current state again. */
+async function iaShowVersion(id, n) {
   try {
-    await invoke("ia_revert", { id: IA.open, n: +btn.dataset.v });
-    await iaQueue(() => iaLoadPane(IA.open));
+    await invoke("ia_revert", { id, n });
+    await iaQueue(() => iaLoadPane(id));
   } catch (e) {
     toast(String(e), true);
   }
+}
+
+$("ia-versions").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button[data-v]");
+  if (btn && IA.open) iaShowVersion(IA.open, +btn.dataset.v);
 });
 
 const iaStageObserver = new ResizeObserver(() => {

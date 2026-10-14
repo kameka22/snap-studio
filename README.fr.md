@@ -49,8 +49,14 @@ Fonctionne avec toute imprimante Klipper.
 onglets natifs, sessions conservées ; les téléchargements arrivent dans
 Fichiers ; favoris « à imprimer ».
 
-**IA** — conversations Claude Code pour créer ou modifier des modèles, avec
-terminal et aperçu du résultat.
+**IA** — conversations Claude Code pour créer ou modifier des modèles : une
+vue de discussion (réponses en direct, outils, cartes de permission et de
+question, mode plan, croquis et photos joints) ou le terminal brut de la même
+session, avec l'aperçu 3D en direct et l'historique des versions. Les
+résultats sont des 3MF multicolores — des pièces avec leurs couleurs et leurs
+têtes — prêts à découper. Réglages →
+IA → Compte Claude vérifie la connexion sur le Mac et dans le bac à sable,
+reconnecte, ou donne au bac à sable un jeton longue durée dédié.
 
 ## Installation
 
@@ -167,6 +173,10 @@ src-tauri/src/
   render.rs       vignettes 3D logicielles     thumbs.rs     cache des vignettes
   library.rs      Bibliothèque                 favorites.rs  favoris
   ia.rs pty.rs    conversations IA, terminal   slicers.rs    trancheurs installés
+  ia_tools/       ce que Claude reçoit dans chaque dossier : mf.py (3MF), export.py,
+                  measure.py, le skill export-3mf
+  chat.rs         vue de discussion IA : Claude Code en stream-json, journal, pièces jointes
+  auth.rs         connexion Claude : jeton du bac à sable (Trousseau), vérifications, terminal
   menu.rs         menus natifs                 migrate.rs    reprise de 3MF Studio
   update.rs       mises à jour (GitHub, signature, installation)
   discover.rs     recherche des imprimantes sur le réseau (mDNS)

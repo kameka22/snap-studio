@@ -6,7 +6,9 @@ lists below.
 
 ## In progress
 
-No plan in progress.
+| Plan | Subject | State |
+|---|---|---|
+| [ai-chat.md](ai-chat.md) | AI conversations as a real chat view (Claude Code stream-json), terminal kept as advanced view | Implemented, with the Claude sign-in window; container mode and macOS checks left (see the plan) |
 
 ## To validate on the real machine
 

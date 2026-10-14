@@ -45,8 +45,14 @@ any Klipper printer.
 **Library** — MakerWorld, Printables, Thingiverse and Cults3D in native tabs,
 sessions kept; downloads land in Files; "to print" favorites.
 
-**AI** — Claude Code conversations to create or modify models, with a
-terminal and a live preview of the result.
+**AI** — Claude Code conversations to create or modify models: a chat view
+(streamed answers, tool calls, permission and question cards, plan mode,
+sketches and photos attached) or the raw terminal of the same session, with
+a live 3D preview and the version history of the result. Results are
+multicolor 3MF files — parts with their colors and heads — that slice as
+they are. Settings → AI →
+Claude account checks the sign-in on the Mac and in the sandbox, signs in
+again, or gives the sandbox a long-lived token of its own.
 
 ## Installation
 
@@ -164,6 +170,10 @@ src-tauri/src/
   render.rs       software 3D thumbnails       thumbs.rs     thumbnail cache
   library.rs      Library                      favorites.rs  favorites
   ia.rs pty.rs    AI conversations, terminal   slicers.rs    installed slicers
+  ia_tools/       what Claude gets in each workspace: mf.py (3MF), export.py,
+                  measure.py, the export-3mf skill
+  chat.rs         AI chat view: Claude Code in stream-json mode, log, attachments
+  auth.rs         Claude sign-in: sandbox token (Keychain), checks, sign-in terminal
   menu.rs         native menus                 migrate.rs    3MF Studio carry-over
   update.rs       updates (GitHub, signature, installation)
   discover.rs     printer discovery on the network (mDNS)

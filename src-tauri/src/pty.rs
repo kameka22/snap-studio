@@ -129,11 +129,28 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
 /// user setting, and nothing else is touched — above all not the API
 /// credentials.
 fn purge_markers(cmd: &mut CommandBuilder, names: impl Iterator<Item = String>) {
-    for k in names {
-        if k.starts_with("CLAUDE") && k != "CLAUDE_CONFIG_DIR" {
-            cmd.env_remove(&k);
-        }
+    for k in inherited_markers(names) {
+        cmd.env_remove(&k);
     }
+}
+
+/// The inherited variables to remove (see [`purge_markers`]).
+pub fn inherited_markers(names: impl Iterator<Item = String>) -> Vec<String> {
+    names
+        .filter(|k| k.starts_with("CLAUDE") && k != "CLAUDE_CONFIG_DIR")
+        .collect()
+}
+
+/// `PATH` for Claude: launched from the Finder, the app does not inherit the
+/// terminal's, so the usual locations are added for Claude to find its tools.
+pub fn child_path() -> Option<std::ffi::OsString> {
+    let mut path: Vec<std::path::PathBuf> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect())
+        .unwrap_or_default();
+    if cfg!(unix) {
+        path.extend(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].map(Into::into));
+    }
+    std::env::join_paths(path).ok()
 }
 
 /// True if a terminal is already running for this conversation.
@@ -154,6 +171,8 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
     if !ws.is_dir() {
         return Err(anyhow!(crate::t!("err.no_workspace")));
     }
+    // One process per session: the chat view gives way.
+    crate::chat::close(&c.id);
 
     // Instructions, tools and previews brought up to date before Claude reads them.
     crate::ia::refresh_workspace(&c.id);
@@ -163,6 +182,37 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
     // if Claude wrote one.
     let argv = command_line(c, &tools, crate::ia::has_session(&c.id))?;
 
+    let envs = crate::auth::sandbox_env(&c.engine);
+    spawn_terminal(app, &c.id, &argv, &ws, &envs, cols, rows, None)?;
+
+    // The folder is watched while the terminal lives — not while the screen is
+    // shown: what Claude writes while one looks elsewhere must still be
+    // archived.
+    let _ = crate::ia::watch_start(app.clone(), &c.id);
+
+    // Once started, the session exists for Claude: the next opening must
+    // resume it rather than create it.
+    crate::ia::mark_started(&c.id);
+    Ok(())
+}
+
+/// Bytes read from a terminal, for a caller that watches its output.
+pub type Tap = Box<dyn FnMut(&[u8]) + Send>;
+
+/// Runs `argv` in a pseudo-terminal registered under `key`: its output goes
+/// to the UI as `ia-pty` events (and to `tap` when given), its end as
+/// `ia-exit`. Keystrokes come back through [`write`].
+#[allow(clippy::too_many_arguments)]
+pub fn spawn_terminal(
+    app: &AppHandle,
+    key: &str,
+    argv: &[String],
+    cwd: &std::path::Path,
+    envs: &[(String, String)],
+    cols: u16,
+    rows: u16,
+    mut tap: Option<Tap>,
+) -> Result<()> {
     let pair = native_pty_system().openpty(PtySize {
         rows: rows.max(4),
         cols: cols.max(20),
@@ -174,22 +224,16 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
     for a in &argv[1..] {
         cmd.arg(a);
     }
-    cmd.cwd(&ws);
+    cmd.cwd(cwd);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    // Launched from the Finder, the app does not inherit the terminal's `PATH`:
-    // it is completed so that Claude finds its tools.
-    let mut path: Vec<std::path::PathBuf> = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).collect())
-        .unwrap_or_default();
-    if cfg!(unix) {
-        path.extend(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].map(Into::into));
-    }
-    if let Ok(p) = std::env::join_paths(path) {
+    if let Some(p) = child_path() {
         cmd.env("PATH", p);
     }
-
     purge_markers(&mut cmd, std::env::vars().map(|(k, _)| k));
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
 
     let child = pair.slave.spawn_command(cmd)?;
     drop(pair.slave);
@@ -197,7 +241,7 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
     let writer = pair.master.take_writer()?;
 
     sessions().lock().unwrap().insert(
-        c.id.clone(),
+        key.to_string(),
         Session {
             master: pair.master,
             writer: Arc::new(Mutex::new(writer)),
@@ -205,16 +249,7 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
         },
     );
 
-    // The folder is watched while the terminal lives — not while the screen is
-    // shown: what Claude writes while one looks elsewhere must still be
-    // archived.
-    let _ = crate::ia::watch_start(app.clone(), &c.id);
-
-    // Once started, the session exists for Claude: the next opening must
-    // resume it rather than create it.
-    crate::ia::mark_started(&c.id);
-
-    let id = c.id.clone();
+    let id = key.to_string();
     let app = app.clone();
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
@@ -222,6 +257,9 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
+                    if let Some(t) = tap.as_mut() {
+                        t(&buf[..n]);
+                    }
                     let _ = app.emit(
                         "ia-pty",
                         Chunk {
@@ -235,7 +273,6 @@ pub fn open(app: &AppHandle, c: &Conversation, cols: u16, rows: u16) -> Result<(
         let code = close_and_wait(&id);
         let _ = app.emit("ia-exit", Exit { id, code });
     });
-
     Ok(())
 }
 

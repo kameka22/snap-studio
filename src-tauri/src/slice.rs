@@ -506,7 +506,35 @@ pub fn model_info(source: &Path) -> Result<ModelInfo> {
     if used.is_empty() {
         used.push(1);
     }
+    let filaments = if filaments.is_empty() { part_colors(&mut zip) } else { filaments };
     Ok(ModelInfo { filaments, used })
+}
+
+/// Colors of a model without project filaments — the AI tab's files, and
+/// other plain 3MF: for each head, the color most of its triangles carry.
+fn part_colors(zip: &mut crate::model3mf::Zip) -> Vec<crate::model3mf::ProjectFilament> {
+    let Ok(m) = crate::mesh::load_mesh(zip, 200_000) else {
+        return Vec::new();
+    };
+    let mut count: std::collections::BTreeMap<u8, std::collections::HashMap<[u8; 3], usize>> = Default::default();
+    for (i, t) in m.tris.iter().enumerate() {
+        if t.c == crate::render::DEFAULT_COLOR {
+            continue;
+        }
+        let head = m.extruders.get(i).copied().unwrap_or(1).max(1);
+        *count.entry(head).or_default().entry(t.c).or_default() += 1;
+    }
+    count
+        .into_iter()
+        .filter_map(|(head, colors)| {
+            let (c, _) = colors.into_iter().max_by_key(|(_, n)| *n)?;
+            Some(crate::model3mf::ProjectFilament {
+                index: head,
+                kind: String::new(),
+                color: Some(format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])),
+            })
+        })
+        .collect()
 }
 
 /// Starts a slice. Returns the job id.
