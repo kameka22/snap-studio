@@ -18,6 +18,13 @@
         <span class="lbl" data-i18n="nav.library">Library</span>
         <span class="count" id="count-library"></span>
       </button>
+      <div class="side-group side-sub">
+        <button id="side-favs" class="side-item">
+          <span class="glyph" style="color: #FFCC00"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></span>
+          <span class="lbl" data-i18n="library.favorites">Favorites</span>
+          <span class="count" id="count-favs"></span>
+        </button>
+      </div>
     </div>
     <div class="side-block">
       <button class="side-item" data-view="ia">
@@ -82,7 +89,7 @@
     <button id="ia-new" class="tb-btn labeled" title="Create an object" data-i18n-title="ia.new.button"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="ia.new_object">New Object</span></button>
   </div>
   <div class="tb-actions tb-add" data-for="library">
-    <button id="lib-add" class="tb-btn labeled" title="Open a site" data-i18n-title="library.open_site"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="library.add_site">Add Site</span></button>
+    <button id="lib-add" class="tb-btn labeled" title="Open a site" data-i18n-title="library.open_site"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="library.open">Open…</span></button>
   </div>
   <div class="tb-actions tb-add" data-for="prepare">
     <button id="p-add" class="tb-btn labeled" title="Add files to the plate" data-i18n-title="prepare.add.title"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="common.add">Add</span></button>
@@ -125,7 +132,7 @@
       <button id="lib-fwd" class="tb-btn" title="Forward" data-i18n-title="library.forward"><svg viewBox="0 0 24 24"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z"/></svg></button>
       <button id="lib-reload" class="tb-btn" title="Reload" data-i18n-title="library.reload"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
       <div id="lib-url" class="tb-url" title=""></div>
-      <button id="lib-fav" class="tb-btn" title="Add to your prints" data-i18n-title="library.fav"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></button>
+      <button id="lib-fav" class="tb-btn" title="Add to favorites" data-i18n-title="library.fav"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></button>
     </div>
   </div>
   <div class="tb-actions" data-for="prepare">
@@ -427,22 +434,31 @@
 
 <section id="view-library" class="view hidden">
   <div class="lib-tabs">
-    <button class="lib-tab on" data-tab="home">
+    <button class="lib-tab pin on" data-tab="home" title="Home" data-i18n-title="library.home">
       <svg viewBox="0 0 24 24"><path d="m12 3 9 8h-3v9h-5v-6h-2v6H6v-9H3z"/></svg>
-      <span data-i18n="library.my_prints">My prints</span>
+    </button>
+    <button class="lib-tab pin" data-tab="favs">
+      <svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg>
+      <span data-i18n="library.favorites">Favorites</span>
     </button>
     <div id="lib-tablist" class="lib-tablist"></div>
   </div>
 
   <div id="lib-frame" class="lib-frame">
     <div id="lib-home" class="lib-home">
+      <div class="lib-start">
+        <h1 data-i18n="library.start.title">Find models to print</h1>
+        <p data-i18n="library.start.text">Open a site, then star the models you want to print: they wait for you in Favorites.</p>
+        <div id="lib-sites" class="lib-sites"></div>
+      </div>
+    </div>
+    <div id="lib-favs" class="lib-home hidden">
       <div id="lib-empty" class="lib-empty">
         <div class="empty-art">
-          <svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg>
+          <svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg>
         </div>
-        <h1 data-i18n="library.empty.title">Your prints to do</h1>
-        <p data-i18n="library.empty.text">Open a site, then star the models you want to print.</p>
-        <div id="lib-sites" class="places"></div>
+        <h1 data-i18n="library.empty.title">No favorites yet</h1>
+        <p data-i18n="library.empty.text">While browsing a site, the ★ of the toolbar sets a model aside here.</p>
       </div>
       <div id="lib-grid" class="lib-grid hidden"></div>
     </div>

@@ -42,8 +42,10 @@ like Snapmaker Orca); live status over the Moonraker WebSocket: state,
 progress, temperatures of the four heads, loaded spools, camera. Works with
 any Klipper printer.
 
-**Library** — MakerWorld, Printables, Thingiverse and Cults3D in native tabs,
-sessions kept; downloads land in Files; "to print" favorites.
+**Library** — MakerWorld, Printables, Thingiverse and Cults3D in native tabs
+(a site may be open in several, each named after its page, reopened where it
+was), sessions kept; downloads land in Files; Favorites (saved links) in the
+sidebar.
 
 **AI** — Claude Code conversations to create or modify models: a chat view
 (streamed answers, tool calls, permission and question cards, plan mode,

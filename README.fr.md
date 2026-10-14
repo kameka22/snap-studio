@@ -46,8 +46,9 @@ progression, températures des quatre têtes, bobines chargées, caméra.
 Fonctionne avec toute imprimante Klipper.
 
 **Bibliothèque** — MakerWorld, Printables, Thingiverse et Cults3D dans des
-onglets natifs, sessions conservées ; les téléchargements arrivent dans
-Fichiers ; favoris « à imprimer ».
+onglets natifs (un site peut être ouvert dans plusieurs, chacun nommé d'après
+sa page et rouvert là où il était), sessions conservées ; les téléchargements
+arrivent dans Fichiers ; Favoris (liens enregistrés) dans la barre latérale.
 
 **IA** — conversations Claude Code pour créer ou modifier des modèles : une
 vue de discussion (réponses en direct, outils, cartes de permission et de

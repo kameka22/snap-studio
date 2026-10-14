@@ -60,8 +60,12 @@ fn tabs() -> &'static Mutex<Vec<String>> {
     T.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-/// Opens a tab, or brings it back to the front if it already exists.
+/// Opens a tab, or brings it back to the front if it already exists. `id`
+/// names the tab, not the site: a site may be open in several tabs.
 pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err(anyhow!("bad tab id: {id}"));
+    }
     let lbl = label(id);
     if app.get_webview(&lbl).is_some() {
         show_only(app, Some(id));
@@ -78,31 +82,32 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     let dl_app = handle.clone();
     let dl_id = tab_id.clone();
     let nw_app = handle.clone();
-    let nw_id = tab_id.clone();
     let nw_label = lbl.clone();
+    let title_app = handle.clone();
+    let title_id = tab_id.clone();
 
     let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::External(target))
         .user_agent(UA)
-        .on_navigation(move |url| {
-            let _ = handle.emit(
-                "lib-url",
-                serde_json::json!({ "id": nav_id, "url": url.to_string() }),
-            );
-            true
+        // The address shown is the page's: frames navigate too (ads,
+        // `about:blank`…), so it is taken when the main page loads, and
+        // when its title changes (sites that change pages without loading).
+        .on_page_load(move |webview, _payload| {
+            emit_url(&handle, &nav_id, &webview);
         })
         .on_download(move |_webview, event| download_hook(&dl_app, &dl_id, event))
         // Sites happily open a side window — third-party login, or starting a
         // download. It is brought back into the current tab rather than letting a
         // bare window pop up.
         .on_new_window(move |url, _features| {
-            let _ = nw_app.emit(
-                "lib-url",
-                serde_json::json!({ "id": nw_id, "url": url.to_string() }),
-            );
             if let Some(wv) = nw_app.get_webview(&nw_label) {
                 let _ = wv.navigate(url);
             }
             tauri::webview::NewWindowResponse::Deny
+        })
+        // The page title names the tab: several tabs of one site stay apart.
+        .on_document_title_changed(move |webview, title| {
+            let _ = title_app.emit("lib-title", serde_json::json!({ "id": title_id, "title": title }));
+            emit_url(&title_app, &title_id, &webview);
         });
 
     let r = *last_rect().lock().unwrap();
@@ -115,6 +120,20 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     tabs().lock().unwrap().push(id.to_string());
     show_only(app, Some(id));
     Ok(())
+}
+
+/// Tells the UI a tab's address, when it is a web page's.
+fn emit_url(app: &AppHandle, id: &str, webview: &tauri::Webview) {
+    let Ok(url) = webview.url() else { return };
+    if matches!(url.scheme(), "http" | "https") {
+        let _ = app.emit("lib-url", serde_json::json!({ "id": id, "url": url.to_string() }));
+    }
+}
+
+/// The address of a tab's page, when it is a web page's.
+pub fn page_url(app: &AppHandle, id: &str) -> Option<String> {
+    let url = app.get_webview(&label(id))?.url().ok()?;
+    matches!(url.scheme(), "http" | "https").then(|| url.to_string())
 }
 
 /// Forced download destination and notice to the UI.
@@ -295,17 +314,17 @@ fn registrable(host: &str) -> String {
     }
 }
 
-/// Logs a site out by deleting only its login cookies.
+/// Logs a site out by deleting only its login cookies, from one of its tabs.
 ///
 /// The cookie store is shared by all views: clearing it wholesale would log
 /// the other sites out too. So it is filtered by domain.
-pub fn logout(app: &AppHandle, id: &str) -> Result<usize> {
+pub fn logout(app: &AppHandle, tab: &str, site: &str) -> Result<usize> {
     let site = SITES
         .iter()
-        .find(|s| s.id == id)
+        .find(|s| s.id == site)
         .ok_or_else(|| anyhow!("unknown site"))?;
     let wv = app
-        .get_webview(&label(id))
+        .get_webview(&label(tab))
         .ok_or_else(|| anyhow!(crate::t!("err.tab_closed")))?;
     let host = url::Url::parse(site.url)?
         .host_str()
@@ -324,12 +343,6 @@ pub fn logout(app: &AppHandle, id: &str) -> Result<usize> {
     }
     let _ = wv.navigate(url::Url::parse(site.url)?);
     Ok(n)
-}
-
-pub fn current_url(app: &AppHandle, id: &str) -> Option<String> {
-    app.get_webview(&label(id))
-        .and_then(|w| w.url().ok())
-        .map(|u| u.to_string())
 }
 
 #[cfg(test)]

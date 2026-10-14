@@ -323,13 +323,14 @@ fn lib_command(app: tauri::AppHandle, id: String, what: String) -> Result<(), St
 
 /// Logs a site out: its cookies only, not the others'.
 #[tauri::command]
-async fn lib_logout(app: tauri::AppHandle, id: String) -> Result<usize, String> {
-    library::logout(&app, &id).map_err(|e| e.to_string())
+async fn lib_logout(app: tauri::AppHandle, id: String, site: String) -> Result<usize, String> {
+    library::logout(&app, &id, &site).map_err(|e| e.to_string())
 }
 
+/// The address of the page a tab shows (not of its frames).
 #[tauri::command]
 fn lib_url(app: tauri::AppHandle, id: String) -> Option<String> {
-    library::current_url(&app, &id)
+    library::page_url(&app, &id)
 }
 
 // ---------------------------------------------------------------- favorites
@@ -339,19 +340,15 @@ fn fav_list() -> Vec<favorites::Favorite> {
     favorites::list()
 }
 
+/// Saves the page shown as a favorite; `title` is the tab's.
 #[tauri::command]
-async fn fav_add(url: String) -> Result<Vec<favorites::Favorite>, String> {
-    favorites::add(&url).await.map_err(|e| e.to_string())
+fn fav_add(url: String, title: Option<String>) -> Result<Vec<favorites::Favorite>, String> {
+    favorites::add(&url, title.as_deref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn fav_remove(id: String) -> Result<Vec<favorites::Favorite>, String> {
     favorites::remove(&id).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn fav_done(id: String, done: bool) -> Result<Vec<favorites::Favorite>, String> {
-    favorites::set_done(&id, done).map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------- slicing
@@ -902,45 +899,6 @@ fn query_param(uri: &str, key: &str) -> Option<String> {
     None
 }
 
-/// A favorite's thumbnail, cached when it is added.
-fn handle_favimg(uri: &str) -> Response<Vec<u8>> {
-    let deny = || {
-        Response::builder()
-            .status(404)
-            .header("Access-Control-Allow-Origin", "*")
-            .body(Vec::new())
-            .unwrap()
-    };
-    let Some(name) = query_param(uri, "f") else {
-        return deny();
-    };
-    // The name comes from our own store, but any path is refused.
-    if name.contains('/') || name.contains("..") {
-        return deny();
-    }
-    match std::fs::read(favorites::images_dir().join(&name)) {
-        Ok(bytes) => {
-            let kind = if name.ends_with(".png") {
-                "image/png"
-            } else if name.ends_with(".webp") {
-                "image/webp"
-            } else if name.ends_with(".gif") {
-                "image/gif"
-            } else {
-                "image/jpeg"
-            };
-            Response::builder()
-                .status(200)
-                .header("Content-Type", kind)
-                .header("Cache-Control", "public, max-age=86400")
-                .header("Access-Control-Allow-Origin", "*")
-                .body(bytes)
-                .unwrap()
-        }
-        Err(_) => deny(),
-    }
-}
-
 /// A G-code's toolpaths for the viewer.
 fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
     let fail = |code: u16, msg: &str| {
@@ -1346,12 +1304,6 @@ pub fn run() {
                 responder.respond(handle_cam(uri).await);
             });
         })
-        .register_asynchronous_uri_scheme_protocol("favimg", |_app, request: Request<Vec<u8>>, responder| {
-            let uri = request.uri().to_string();
-            let _ = pool().send(Box::new(move || {
-                responder.respond(handle_favimg(&uri));
-            }));
-        })
         .register_asynchronous_uri_scheme_protocol("gcode", |_app, request: Request<Vec<u8>>, responder| {
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
@@ -1489,7 +1441,6 @@ pub fn run() {
             fav_list,
             fav_add,
             fav_remove,
-            fav_done,
             initial_dir,
             printers_list,
             printer_save,
