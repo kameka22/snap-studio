@@ -1,0 +1,53 @@
+name: Bug report
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! Please check the [open issues](https://github.com/kameka22/snap-studio/issues) first: the problem may already be known.
+        Reported from the app (Settings → About, or Help → Report a Bug), the version and system below are already filled in.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, and what went wrong. Screenshots welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: input
+    id: version
+    attributes:
+      label: Snap Studio version
+      placeholder: "0.5.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: System
+      placeholder: "macOS 26.0 (arm64)"
+    validations:
+      required: true
+  - type: input
+    id: printer
+    attributes:
+      label: Printer
+      description: Model and firmware, if the printer is involved.
+      placeholder: "Snapmaker U1, firmware …"
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Anything that helps — the 3MF file if a model is involved (attach it), the language, the AI mode…

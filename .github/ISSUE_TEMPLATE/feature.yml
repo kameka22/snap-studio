@@ -1,0 +1,26 @@
+name: Idea or need
+description: Something missing, or something that could work better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: The need
+      description: What you are trying to do, and what gets in the way. Describe the need rather than the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters
+      description: How often it comes up, what it would change for you.
+  - type: textarea
+    id: idea
+    attributes:
+      label: An idea of a solution
+      description: Optional.
+  - type: input
+    id: version
+    attributes:
+      label: Snap Studio version
+      placeholder: "0.5.0"

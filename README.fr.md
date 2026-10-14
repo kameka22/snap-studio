@@ -1,144 +1,170 @@
+<div align="center">
+
+<img src="src-tauri/icons/128x128@2x.png" width="128" alt="Icône de Snap Studio" />
+
 # Snap Studio
+
+**L'atelier de bureau de votre Snapmaker U1 — du fichier à l'impression.**
+
+[![Dernière version](https://img.shields.io/github/v/release/kameka22/snap-studio?label=version&color=0a84ff)](https://github.com/kameka22/snap-studio/releases/latest)
+[![Téléchargements](https://img.shields.io/github/downloads/kameka22/snap-studio/total?label=t%C3%A9l%C3%A9chargements&color=30d158)](https://github.com/kameka22/snap-studio/releases)
+[![Licence : GPL v3](https://img.shields.io/badge/licence-GPL--3.0-ffd60a)](LICENSE)
+![macOS · Windows · Linux](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-lightgrey)
+
+[**Télécharger**](https://github.com/kameka22/snap-studio/releases/latest) ·
+[Fonctions](#fonctions) · [IA](#concevoir-avec-lia) · [FAQ](#faq) ·
+[Contribuer](CONTRIBUTING.fr.md)
 
 [English](README.md) · **Français**
 
-Atelier de bureau pour la **Snapmaker U1** : explorer ses fichiers 3MF et G-code,
-préparer le plateau, découper avec le moteur de Snapmaker Orca et envoyer
-l'impression, sans quitter l'application.
+<img src="docs/screenshots/files.png" alt="Snap Studio — vos fichiers 3MF en un coup d'œil" />
 
-macOS en priorité (interface AppKit), Windows et Linux également — Rust +
-Tauri 2, interface web sans dépendance npm. Interface en anglais et en
-français.
+</div>
 
-![Snap Studio — vue Préparer](docs/screenshot.png)
+## Pourquoi Snap Studio
 
-## Fonctionnalités
+- **Tout le trajet dans une seule app** — trouver un modèle, préparer le
+  plateau, découper avec le moteur Snapmaker Orca, envoyer, suivre à la
+  caméra.
+- **Pensé pour les quatre têtes de la U1** — les bobines chargées sont lues
+  sur l'imprimante, les couleurs d'un modèle multicolore sont associées aux
+  têtes.
+- **Concevoir avec l'IA** — décrivez une modification ou une nouvelle
+  pièce ; Claude la modélise, vous la voyez prendre forme en 3D, version
+  après version.
 
-**Fichiers** — vignettes extraites des 3MF (Orca, Bambu, Prusa, MakerWorld) ou
-rendues en 3D quand il n'y en a pas ; métadonnées (durée, filament, bobines,
-plateaux) ; vignettes ou liste triable, recherche, sélection multiple, mise à la
-corbeille ; visualiseur 3D WebGL2 ; aperçu G-code couche par couche.
+## Fonctions
 
-**Préparer** — le plateau de la U1 avec son motif, comme dans Orca. Déplacer,
-tourner (anneaux de rotation), mettre à l'échelle, dupliquer, disposer
-automatiquement, poser sur une face, orienter automatiquement (règles d'Orca),
-annuler / rétablir, enregistrer le plateau en 3MF.
+**📁 Fichiers** — miniatures de vos fichiers 3MF (Orca, Bambu, Prusa,
+MakerWorld) ou rendu 3D quand il n'y en a pas ; durée, filament, plateaux ;
+visionneuse 3D et trajectoires G-code couche par couche.
 
-**Découpe** — le moteur de Snapmaker Orca tourne en arrière-plan. Les bobines
-montées sur l'imprimante sont lues pour choisir les filaments, tête par tête ;
-les couleurs d'un modèle multicolore sont associées aux têtes. Choix du
-plateau (PEI texturé, PEI lisse, effet graphique), qui fixe la température du
-plateau lue dans chaque filament. Détail de chaque profil (ⓘ) tel qu'il part
-au moteur, avec les onglets d'Orca dans la langue de l'interface. Aperçu des trajectoires avec
-durée, filament et coût, puis enregistrement du G-code ou envoi à
-l'imprimante (nivellement, calibration du débit, timelapse).
+<table>
+<tr>
+<td width="50%" valign="top">
 
-**Impressions** — impressions en cours et file d'attente dans la barre
-latérale. Une imprimante occupée ? La découpe part en file ; à la fin de
-l'impression, Snap Studio propose de lancer la suivante (jamais seul, plateau
-libéré confirmé) et envoie une notification. Fiche de chaque impression :
-vignette, progression, bilan de la découpe, profils, températures, caméra,
-pause / reprise / annulation ; historique des 20 dernières.
+### 🧩 Préparer
+Le plateau U1 comme dans Orca : déplacer, pivoter, mettre à l'échelle,
+dupliquer, poser sur une face, orienter et disposer automatiquement,
+annuler — puis découper.
 
-**Imprimantes** — recherche automatique des U1 sur le réseau local (mDNS,
-comme Snapmaker Orca) ; statut en direct par WebSocket Moonraker : état,
-progression, températures des quatre têtes, bobines chargées, caméra.
-Fonctionne avec toute imprimante Klipper.
+<img src="docs/screenshots/prepare.png" alt="Préparer" />
 
-**Bibliothèque** — MakerWorld, Printables, Thingiverse et Cults3D dans des
-onglets natifs (un site peut être ouvert dans plusieurs, chacun nommé d'après
-sa page et rouvert là où il était), sessions conservées ; les téléchargements
-arrivent dans Fichiers ; Favoris (liens enregistrés) dans la barre latérale.
+</td>
+<td width="50%" valign="top">
 
-**IA** — conversations Claude Code pour créer ou modifier des modèles : une
-vue de discussion (réponses en direct, outils, cartes de permission et de
-question, mode plan, croquis et photos joints) ou le terminal brut de la même
-session, avec l'aperçu 3D en direct et l'historique des versions. Les
-résultats sont des 3MF multicolores — des pièces avec leurs couleurs et leurs
-têtes — prêts à découper. Réglages →
-IA → Compte Claude vérifie la connexion sur le Mac et dans le bac à sable,
-reconnecte, ou donne au bac à sable un jeton longue durée dédié.
+### ✦ IA
+Claude modifie une pièce ou en crée une à partir d'une description, dans
+une discussion avec aperçu 3D en direct et chaque version gardée. Les
+résultats sont des 3MF multicolores, prêts à découper.
 
-## Installation
+<img src="docs/screenshots/ai-chat.png" alt="Une conversation IA" />
 
-Télécharger la dernière version dans les
-[Releases](https://github.com/kameka22/snap-studio/releases) :
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-| Système | Fichier |
+### 🖨 Imprimantes
+Trouvées seules sur le réseau ; état en direct, températures des quatre
+têtes, bobines chargées. Fonctionne avec toute imprimante Klipper.
+
+<img src="docs/screenshots/printer.png" alt="L'imprimante et ses bobines" />
+
+</td>
+<td valign="top">
+
+### 📷 Caméra
+La caméra de l'imprimante, en direct, depuis la page de l'imprimante et
+depuis chaque impression.
+
+<img src="docs/screenshots/printer-camera.png" alt="La caméra de l'imprimante" />
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### ⏱ Impressions
+Impressions en cours et file d'attente : quand l'une se termine, Snap
+Studio propose la suivante (jamais seul). Progression, résumé de découpe,
+températures, pause, annulation.
+
+<img src="docs/screenshots/print-job.png" alt="Une impression en cours" />
+
+</td>
+<td valign="top">
+
+### 📚 Bibliothèque
+MakerWorld, Printables, Thingiverse et Cults3D en onglets, sessions
+conservées ; les téléchargements arrivent dans Fichiers ; favoris dans la
+barre latérale.
+
+<img src="docs/screenshots/library.png" alt="Bibliothèque" />
+
+</td>
+</tr>
+</table>
+
+**Découpe** — le moteur Snapmaker Orca, téléchargé une fois (environ 30 Mo)
+et tenu à jour par l'app : inutile d'installer Snapmaker Orca. Choix de la
+surface du plateau (PEI texturé, PEI lisse…), détail de chaque profil tel
+que le moteur le reçoit, aperçu des trajectoires avec durée, filament et
+coût, puis envoi à l'imprimante ou enregistrement du G-code.
+
+## Télécharger
+
+| Système | Fichier, dans la [dernière version](https://github.com/kameka22/snap-studio/releases/latest) |
 |---|---|
-| macOS (Intel + Apple Silicon) | `…_macos-universal.dmg` |
-| Windows | `…_x64-setup.exe` |
-| Linux | `…_amd64.AppImage` (ou `.deb`) |
+| macOS (Intel et Apple Silicon) | `Snap-Studio_…_macos-universal.dmg` |
+| Windows | `Snap-Studio_…_x64-setup.exe` |
+| Linux | `Snap-Studio_…_amd64.AppImage` (ou `.deb`) |
 
-Les paquets ne sont pas signés chez Apple ni chez Microsoft. Au premier
-lancement : sur macOS, clic droit → Ouvrir (ou
-`xattr -dr com.apple.quarantine "/Applications/Snap Studio.app"`) ; sur
-Windows, « Informations complémentaires » → « Exécuter quand même ».
+Les paquets ne sont pas encore signés par Apple ou Microsoft. Premier
+lancement sur macOS : clic droit → Ouvrir (ou
+`xattr -dr com.apple.quarantine "/Applications/Snap Studio.app"`) ; sous
+Windows : « Informations complémentaires » → « Exécuter quand même ».
 
-Au premier lancement, un **assistant de bienvenue** fait choisir la langue
-(celle du système est proposée), le dossier de modèles, et trouve l'imprimante sur le réseau (ou sa saisie à la main) ; il
-reste accessible depuis Réglages → Application et le menu Aide. Sur macOS, la
-recherche réseau demande une fois l'accès au réseau local.
+Un **assistant de bienvenue** règle tout : langue, dossier de modèles,
+imprimante sur le réseau, moteur de découpe et IA. Ensuite, **l'app se met
+à jour toute seule** (sous Linux, l'AppImage).
 
-Ensuite, **l'application se met à jour seule** : au lancement, elle propose
-la nouvelle version, la télécharge, vérifie sa signature et redémarre
-(Réglages → Application ; menu Snap Studio → Rechercher les mises à jour). Sous
-Linux, seule l'AppImage se met à jour ; le `.deb` renvoie vers GitHub.
+## Concevoir avec l'IA
 
-**Moteur de découpe** : Snap Studio n'a pas besoin de Snapmaker Orca installé.
-Il télécharge au premier besoin (assistant de bienvenue ou première découpe)
-son propre moteur, environ 30 Mo : le binaire officiel de
-[Snapmaker Orca](https://github.com/Snapmaker/OrcaSlicer), allégé de ce qui ne
-sert pas à découper (profils des autres marques, interface, polices…) et
-éprouvé par une découpe réelle sur chaque plateforme. Il est rangé dans les
-données de Snap Studio (rien n'apparaît dans Applications) ; Réglages → Moteur
-de découpe pour le réinstaller ou le supprimer. Licence AGPL-3.0, code source
-lié depuis les Réglages. Les profils personnels de Snapmaker Orca, s'il est
-installé, restent proposés.
+L'IA utilise [Claude Code](https://docs.claude.com/en/docs/claude-code/setup)
+avec votre compte Claude, soit dans un bac à sable (un conteneur isolé),
+soit directement sur votre ordinateur. L'assistant de bienvenue et
+Réglages → IA vérifient ce dont votre choix a besoin et indiquent comment
+installer ce qui manque ; un mode s'ouvre dès que tout est prêt.
 
-## Développement
+| | Bac à sable | Cet ordinateur |
+|---|---|---|
+| Claude Code 2.1.286 ou plus récent, connecté | ✓ | ✓ |
+| [yolobox](https://github.com/finbarr/yolobox) | ✓ | |
+| Un moteur de conteneur démarré : Docker (ou OrbStack), Podman ou `container` d'Apple | ✓ | |
+| Python 3 avec `trimesh`, `manifold3d`, `numpy` | | ✓ |
 
-```sh
-cargo tauri dev                    # développement
-cargo tauri build --bundles app    # build local
-npx @tauri-apps/cli icon src-tauri/app-icon.svg -o src-tauri/icons   # icônes
-```
+## FAQ
 
-**Publier une version** : `scripts/release.sh` (CLI `gh` requise), sur `main`
-propre et à jour. Il affiche la version actuelle et celle à publier, demande
-confirmation, incrémente la version (`tauri.conf.json`, `Cargo.toml`), commite
-« Version x.y.z », pousse, puis lance `.github/workflows/build.yml`, qui
-construit macOS, Windows et Linux, signe les paquets et publie la release
-`vx.y.z` avec son `latest.json`. `--minor` / `--major` pour changer de niveau,
-`--version 1.2.3` pour une version exacte (plus récente que la dernière) ;
-une version pas encore publiée (build en échec) est réutilisée sans bump.
+**Faut-il Snapmaker Orca ?** Non. Snap Studio télécharge son propre moteur.
+Si Snapmaker Orca est installé, ses profils personnalisés sont proposés
+aussi.
 
-**Changer de version du moteur** : `scripts/engine.sh 2.5.0` lance le workflow
-« Moteur » (`.github/workflows/engine.yml`) : paquet officiel → liste autorisée
-(`engine/keep.txt`) → découpe de test → release `engine-orca-2.5.0`, puis met
-à jour `src-tauri/engine.json`. La release suivante de Snap Studio l'embarque ;
-`release.sh` refuse un moteur référencé introuvable.
+**Et avec une autre imprimante ?** L'état de l'imprimante et l'envoi
+fonctionnent avec toute imprimante Klipper (Moonraker) ; le plateau, les
+profils et les têtes sont ceux de la U1.
 
-La signature des mises à jour utilise la clé des secrets GitHub
-`TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ; sa clé
-publique est dans `tauri.conf.json`.
+**Qu'est-ce qui sort de mon ordinateur ?** Aucune télémétrie. Snap Studio
+échange avec GitHub (vérifier les mises à jour, télécharger le moteur), vos
+imprimantes sur le réseau local, les sites ouverts dans la Bibliothèque et,
+si vous utilisez l'IA, Anthropic par Claude Code.
 
-Plans de travail en cours et idées pour la suite : [`docs/plans/`](docs/plans/).
+**Pourquoi macOS m'avertit-il au premier lancement ?** L'app n'est pas
+encore signée avec un certificat de développeur Apple ; les commandes
+ci-dessus l'ouvrent quand même.
 
-### Langues
-
-L'anglais est la langue de référence ; le français est une traduction. Les
-textes vivent dans `ui/i18n/<langue>.json`, partagés entre l'interface et le
-Rust (menus, messages). Pour ajouter une langue :
-
-1. copier `ui/i18n/en.json` vers `ui/i18n/<code>.json` et le traduire ;
-2. la déclarer dans `src-tauri/src/i18n.rs` (`LANGS`, catalogue) et dans
-   `ui/i18n.js` (`LANG_NAMES`, `LOCALES`) ;
-3. l'ajouter à `LANGS` dans `scripts/gen-orca-settings.py` et relancer le
-   script (onglets d'Orca), puis à `CFBundleLocalizations` dans
-   `src-tauri/Info.plist` avec un `src-tauri/locales/<code>.lproj` ;
-4. `python3 scripts/check-i18n.py` signale les clés manquantes ou inutilisées
-   et le texte resté en dur.
+**J'utilisais 3MF Studio.** C'était l'ancien nom de Snap Studio : réglages,
+imprimantes, favoris et conversations sont repris au premier lancement.
 
 ## Raccourcis
 
@@ -152,40 +178,33 @@ Rust (menus, messages). Pour ajouter une langue :
 | ⌘⌫ | mettre à la corbeille |
 | ⌘, | Réglages |
 
-Dans Préparer : R rotation, F poser sur une face, Q orienter (⇧Q : tout),
+Dans Préparer : R pivoter, F poser sur une face, Q orienter (⇧Q : tout),
 A disposer, ⌘D dupliquer, flèches 1 mm (⇧ : 10 mm), ⌘Z / ⇧⌘Z.
 
-## Organisation
+## Feuille de route
 
-```
-ui/               interface HTML/CSS/JS, un fichier par vue
-  i18n/           textes de l'interface, un fichier par langue (en, fr)
-  i18n.js         traduction, formats de nombres et de dates, changement de langue
-  assets/orca-settings.<langue>.json   onglets et libellés d'Orca
-                  (générés par scripts/gen-orca-settings.py)
-  assets/bed/     plaque et logo de la U1 (profils Snapmaker Orca, AGPL-3.0)
-src-tauri/src/
-  lib.rs          commandes Tauri, protocoles mesh:// gcode:// thumb:// cam://
-  plate.rs        plateau, scène à découper    orient.rs     orientation auto
-  slice.rs        découpe en arrière-plan      presets.rs    préréglages Orca
-  printers.rs     Moonraker : statut, envoi    watch.rs      WebSocket temps réel
-  model3mf.rs     lecture 3MF                  write3mf.rs   écriture 3MF
-  mesh.rs stl.rs  géométrie                    gcode.rs      analyse G-code
-  render.rs       vignettes 3D logicielles     thumbs.rs     cache des vignettes
-  library.rs      Bibliothèque                 favorites.rs  favoris
-  ia.rs pty.rs    conversations IA, terminal   slicers.rs    trancheurs installés
-  ia_tools/       ce que Claude reçoit dans chaque dossier : mf.py (3MF), export.py,
-                  measure.py, le skill export-3mf
-  chat.rs         vue de discussion IA : Claude Code en stream-json, journal, pièces jointes
-  auth.rs         connexion Claude : jeton du bac à sable (Trousseau), vérifications, terminal
-  menu.rs         menus natifs                 migrate.rs    reprise de 3MF Studio
-  update.rs       mises à jour (GitHub, signature, installation)
-  discover.rs     recherche des imprimantes sur le réseau (mDNS)
-  jobs.rs         impressions : file d'attente, historique, suivi de fond
-  engine.rs       moteur de découpe embarqué : téléchargement, vérification
-  access.rs       premier accès aux dossiers protégés de macOS (une demande)
-  i18n.rs         langue de l'interface, catalogues partagés avec ui/i18n
-```
+Ce qui est en cours et ce qui arrive se trouve dans [`docs/plans/`](docs/plans/).
+Les idées sont bienvenues dans les [Discussions](https://github.com/kameka22/snap-studio/discussions).
 
-Snap Studio s'appelait auparavant 3MF Studio : ses données (réglages,
-imprimantes, favoris, conversations) sont reprises au premier lancement.
+## Contribuer
+
+Bugs, idées, code ou traductions : voir [CONTRIBUTING.fr.md](CONTRIBUTING.fr.md).
+Depuis l'app, **Réglages → À propos** (ou le menu **Aide**) ouvre un
+signalement de bug avec la version et le système déjà remplis. Compiler,
+publier, l'organisation du code : [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+(en anglais).
+
+## Licence et remerciements
+
+Snap Studio est un logiciel libre, sous [GNU General Public License v3](LICENSE)
+ou ultérieure. Construit avec [Tauri](https://tauri.app) et Rust.
+
+- Moteur de découpe : [Snapmaker Orca](https://github.com/Snapmaker/OrcaSlicer)
+  (AGPL-3.0), lui-même basé sur [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) ;
+  les éléments du plateau U1 viennent de ses profils (AGPL-3.0).
+- Bibliothèques de l'interface : [marked](https://github.com/markedjs/marked),
+  [DOMPurify](https://github.com/cure53/DOMPurify),
+  [xterm.js](https://github.com/xtermjs/xterm.js) — voir `ui/vendor/NOTICE.md`.
+
+Snap Studio est un projet indépendant, ni affilié ni approuvé par
+Snapmaker. Snapmaker et U1 sont des marques de leurs propriétaires.

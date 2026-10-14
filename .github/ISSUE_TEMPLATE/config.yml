@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and open discussions
+    url: https://github.com/kameka22/snap-studio/discussions
+    about: How do I…? Is it possible to…? Ideas to talk over before they become an issue.
