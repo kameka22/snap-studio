@@ -49,6 +49,11 @@ et les idées à discuter, il y a les [Discussions](https://github.com/kameka22/
 L'anglais est la référence, le français une traduction. Ajouter une langue
 est décrit dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#languages) (en anglais).
 
+## Sécurité
+
+Un problème de sécurité se signale en privé, pas dans une issue : voir
+[SECURITY.md](SECURITY.md) (en anglais).
+
 ## Code de conduite
 
 Toute participation — issues, discussions, pull requests — suit le

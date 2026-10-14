@@ -49,6 +49,11 @@ ideas to talk over, use the [Discussions](https://github.com/kameka22/snap-studi
 English is the reference, French a translation. Adding a language is
 described in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#languages).
 
+## Security
+
+A security problem is reported privately, not in an issue: see
+[SECURITY.md](SECURITY.md).
+
 ## Code of conduct
 
 Everyone taking part — issues, discussions, pull requests — follows the
