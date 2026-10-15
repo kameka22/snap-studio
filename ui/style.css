@@ -2913,7 +2913,7 @@ body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
 .prn-offline-hint { color: var(--text-secondary, var(--text-tertiary)); font-size: 13px; }
 .prn-offline-seen { color: var(--text-tertiary); font-size: 11px; }
 .prn-offline .btn { margin-top: 8px; }
-.prn-offline.connecting .prn-offline-ico { opacity: .5; }
+.prn-offline-spin { width: 28px; height: 28px; margin: 4px 0 8px; }
 .prn-offline-details { margin-top: 6px; font-size: 11px; color: var(--text-tertiary); max-width: 100%; }
 .prn-offline-details summary { cursor: pointer; }
 .prn-offline-details pre { text-align: left; white-space: pre-wrap; word-break: break-word; margin: 6px 0 0; font-size: 11px; }

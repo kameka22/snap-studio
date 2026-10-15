@@ -171,15 +171,20 @@ function setOffline(mode, st) {
   card.classList.toggle("hidden", !on);
   card.classList.toggle("connecting", mode === "connecting");
   for (const id of ["prn-hero", "prn-filaments", "prn-temps"]) $(id).classList.toggle("hidden", on);
-  if (!on) return;
+  if (!on) {
+    $("cam-toggle").disabled = false;
+    return;
+  }
   const connecting = mode === "connecting";
   $("prn-offline-title").textContent = tr(connecting ? "printers.offline.connecting" : "printers.offline.title");
   $("prn-offline-hint").classList.toggle("hidden", connecting);
   $("prn-offline-retry").classList.toggle("hidden", connecting);
-  const seen = P.seen.get(P.sel);
-  $("prn-offline-seen").textContent = !connecting && seen
-    ? tr("printers.offline.last_seen", { time: new Date(seen).toLocaleTimeString(locale()) })
-    : "";
+  $("prn-offline-ico").classList.toggle("hidden", connecting);
+  $("prn-offline-spin").classList.toggle("hidden", !connecting);
+  setOfflineSeen(connecting ? null : P.seen.get(P.sel));
+  // No camera without a connection: stop it and disable the button.
+  if (CAM.on) camStop();
+  $("cam-toggle").disabled = true;
   const err = (!connecting && st?.message) || "";
   $("prn-offline-err").textContent = err;
   $("prn-offline-details").classList.toggle("hidden", !err);
@@ -502,8 +507,17 @@ listen("printer-status", (e) => {
   if (id === P.sel) renderStatus(status);
 });
 
+/* Time of the last data: time only today, date and time otherwise
+   (an "at 21:36" after a night is ambiguous). */
+function fmtSeen(seen) {
+  const d = new Date(seen);
+  return d.toDateString() === new Date().toDateString()
+    ? d.toLocaleTimeString(locale())
+    : d.toLocaleString(locale(), { dateStyle: "short", timeStyle: "medium" });
+}
+
 function setOfflineSeen(seen) {
-  $("prn-offline-seen").textContent = tr("printers.offline.last_seen", { time: new Date(seen).toLocaleTimeString(locale()) });
+  $("prn-offline-seen").textContent = seen ? tr("printers.offline.last_seen", { time: fmtSeen(seen) }) : "";
 }
 
 function updateFreshness() {
@@ -512,9 +526,9 @@ function updateFreshness() {
   const box = $("prn-updated");
   const st = P.status.get(P.sel);
   // Offline: the card carries the last-connection time, no footer.
-  if (!st || !st.online || live === false) {
-    box.textContent = st && !st.online ? "" : live ? tr("printers.live.connecting") : "";
-    if (st && !st.online && seen) setOfflineSeen(seen);
+  if (st && !st.online) {
+    box.textContent = "";
+    setOfflineSeen(seen);
     return;
   }
   if (!seen) {
@@ -522,9 +536,10 @@ function updateFreshness() {
     return;
   }
   const age = Math.round((Date.now() - seen) / 1000);
+  // Printer answering HTTP but live feed down: the data may be stale.
   box.textContent = live
     ? tr("printers.live.age", { s: age })
-    : tr("printers.live.offline", { time: new Date(seen).toLocaleTimeString(locale()) });
+    : tr("printers.live.offline", { time: fmtSeen(seen) });
 }
 
 /* ------------------------------------------------------------ form */
