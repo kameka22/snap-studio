@@ -71,7 +71,8 @@ async function prnLoad(selectId) {
 }
 
 function ledClass(st, id) {
-  if (id != null && P.live.get(id) === false) return "err";
+  // Unreachable is not an error: neutral gray light (red only for real errors).
+  if (id != null && P.live.get(id) === false) return "";
   if (!st || !st.online) return "";
   if (st.state === "printing") return "busy";
   if (st.state === "error") return "err";
@@ -162,26 +163,51 @@ function prnRenderDetail() {
   renderStatus(P.status.get(p.id));
 }
 
+/* Single "not connected" card, shown instead of ring/job/filaments/temps.
+   mode: "connecting" (no status yet) | "offline". */
+function setOffline(mode, st) {
+  const card = $("prn-offline");
+  const on = !!mode;
+  card.classList.toggle("hidden", !on);
+  card.classList.toggle("connecting", mode === "connecting");
+  for (const id of ["prn-hero", "prn-filaments", "prn-temps"]) $(id).classList.toggle("hidden", on);
+  if (!on) return;
+  const connecting = mode === "connecting";
+  $("prn-offline-title").textContent = tr(connecting ? "printers.offline.connecting" : "printers.offline.title");
+  $("prn-offline-hint").classList.toggle("hidden", connecting);
+  $("prn-offline-retry").classList.toggle("hidden", connecting);
+  const seen = P.seen.get(P.sel);
+  $("prn-offline-seen").textContent = !connecting && seen
+    ? tr("printers.offline.last_seen", { time: new Date(seen).toLocaleTimeString(locale()) })
+    : "";
+  const err = (!connecting && st?.message) || "";
+  $("prn-offline-err").textContent = err;
+  $("prn-offline-details").classList.toggle("hidden", !err);
+}
+
 function renderStatus(st) {
   const pill = $("prn-pill");
+  const msg = $("prn-msg");
   if (!st) {
     pill.className = "pill";
     pill.textContent = tr("printers.querying");
+    msg.classList.add("hidden");
+    setOffline("connecting");
+    $("prn-info").innerHTML = "";
     paintPrinter({ online: false, state: "offline", nozzles: [] });
+    updateFreshness();
     return;
   }
   const s = st.online ? st.state : "offline";
-  pill.className = "pill " + (STATES[s]?.[1] ?? "");
+  // Offline keeps a neutral gray badge; red stays for real errors.
+  pill.className = "pill " + (s === "offline" ? "" : STATES[s]?.[1] ?? "");
   pill.textContent = stateLabel(s);
 
-  const msg = $("prn-msg");
-  const text = !st.online
-    ? tr("printers.unreachable") + " " + (st.message || "")
-    : st.state === "error"
-    ? st.message || tr("printers.klipper_error")
-    : "";
+  // The raw error of an unreachable printer only lives in the card's Details.
+  const text = st.online && st.state === "error" ? st.message || tr("printers.klipper_error") : "";
   msg.textContent = text;
   msg.classList.toggle("hidden", !text);
+  setOffline(st.online ? null : "offline", st);
 
   // Progress ring
   const printing = st.job && st.progress != null;
@@ -476,10 +502,21 @@ listen("printer-status", (e) => {
   if (id === P.sel) renderStatus(status);
 });
 
+function setOfflineSeen(seen) {
+  $("prn-offline-seen").textContent = tr("printers.offline.last_seen", { time: new Date(seen).toLocaleTimeString(locale()) });
+}
+
 function updateFreshness() {
   const seen = P.seen.get(P.sel);
   const live = P.live.get(P.sel);
   const box = $("prn-updated");
+  const st = P.status.get(P.sel);
+  // Offline: the card carries the last-connection time, no footer.
+  if (!st || !st.online || live === false) {
+    box.textContent = st && !st.online ? "" : live ? tr("printers.live.connecting") : "";
+    if (st && !st.online && seen) setOfflineSeen(seen);
+    return;
+  }
   if (!seen) {
     box.textContent = live ? tr("printers.live.connecting") : "";
     return;
@@ -760,6 +797,7 @@ $("prn-add3").addEventListener("click", () => openForm(null));
 $("prn-edit").addEventListener("click", () => openForm(current()));
 $("prn-del").addEventListener("click", () => askRemove());
 $("prn-refresh").addEventListener("click", () => { refreshSelected(); startLive(); });
+$("prn-offline-retry").addEventListener("click", () => { refreshSelected(); startLive(); });
 $("pf-cancel").addEventListener("click", closeForm);
 $("pf-probe").addEventListener("click", probeForm);
 $("pf-save").addEventListener("click", saveForm);

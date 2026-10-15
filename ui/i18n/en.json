@@ -352,7 +352,6 @@
   "printers.state.error": "Error",
   "printers.state.offline": "Offline",
   "printers.querying": "Querying…",
-  "printers.unreachable": "Printer unreachable.",
   "printers.klipper_error": "Error reported by Klipper.",
   "printers.printed": "printed",
   "printers.no_data": "No data",
@@ -1087,5 +1086,11 @@
   "about.licenses": "Licenses ↗",
   "menu.help.bug": "Report a Bug…",
   "menu.help.idea": "Suggest an Idea…",
-  "menu.help.github": "Snap Studio on GitHub"
+  "menu.help.github": "Snap Studio on GitHub",
+  "printers.offline.title": "Printer not connected",
+  "printers.offline.hint": "Check that it is switched on and on the same network.",
+  "printers.offline.retry": "Retry",
+  "printers.offline.details": "Details",
+  "printers.offline.last_seen": "Last connection at {time}",
+  "printers.offline.connecting": "Connecting…"
 }

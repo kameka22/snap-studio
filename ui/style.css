@@ -2905,3 +2905,15 @@ body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
 .about-ic svg { width: 16px; height: 16px; fill: currentColor; }
 .about-go { color: var(--text-tertiary); flex: none; }
 .about-note { margin: 12px 2px 0; font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+
+/* Single "printer not connected" card */
+.prn-offline { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 28px 20px; margin-bottom: 14px; border-radius: 12px; background: var(--fill, rgba(127,127,127,.08)); }
+.prn-offline-ico { width: 36px; height: 36px; fill: var(--text-tertiary); margin-bottom: 4px; }
+.prn-offline-title { font-size: 16px; font-weight: 600; }
+.prn-offline-hint { color: var(--text-secondary, var(--text-tertiary)); font-size: 13px; }
+.prn-offline-seen { color: var(--text-tertiary); font-size: 11px; }
+.prn-offline .btn { margin-top: 8px; }
+.prn-offline.connecting .prn-offline-ico { opacity: .5; }
+.prn-offline-details { margin-top: 6px; font-size: 11px; color: var(--text-tertiary); max-width: 100%; }
+.prn-offline-details summary { cursor: pointer; }
+.prn-offline-details pre { text-align: left; white-space: pre-wrap; word-break: break-word; margin: 6px 0 0; font-size: 11px; }
