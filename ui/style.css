@@ -2917,3 +2917,10 @@ body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
 .prn-offline-details { margin-top: 6px; font-size: 11px; color: var(--text-tertiary); max-width: 100%; }
 .prn-offline-details summary { cursor: pointer; }
 .prn-offline-details pre { text-align: left; white-space: pre-wrap; word-break: break-word; margin: 6px 0 0; font-size: 11px; }
+
+/* Plate already occupied */
+.occ-box { width: 440px; }
+.occ-list { max-height: 160px; overflow: auto; }
+.occ-list .grow-row .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.occ-dup { font-size: 11px; color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); border-radius: 6px; padding: 1px 6px; margin-left: auto; margin-right: 8px; white-space: nowrap; }
+.occ-noask { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); margin: 4px 0 2px; }

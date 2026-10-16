@@ -813,8 +813,7 @@ $("ia-save").addEventListener("click", () => iaSave());
 $("ia-slice").addEventListener("click", () =>
   iaSave(async (path) => {
     iaBack();
-    switchView("prepare");
-    await prepareAddFile(path);
+    await prepareModels([path]);
   })
 );
 

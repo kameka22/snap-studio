@@ -573,8 +573,9 @@
   <div class="settings">
   <nav id="set-menu" class="set-menu">
     <button class="set-cat" data-cat="app"><span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span><span class="lbl" data-i18n="settings.app">Application</span><i class="set-dot"></i></button>
-    <button class="set-cat" data-cat="nav3d"><span class="glyph" style="color: #5856D6"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span><span class="lbl" data-i18n="settings.nav3d">3D navigation</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="nav3d"><span class="glyph" style="color: #5AC8FA"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6"/><path fill-rule="evenodd" transform="rotate(-28 12 12)" d="M12 7C5.9 7 1.5 9.2 1.5 12s4.4 5 10.5 5 10.5-2.2 10.5-5-4.4-5-10.5-5m0 1.7c5 0 8.8 1.6 8.8 3.3s-3.8 3.3-8.8 3.3-8.8-1.6-8.8-3.3 3.8-3.3 8.8-3.3"/></svg></span><span class="lbl" data-i18n="settings.nav3d">3D navigation</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="files"><span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="lbl" data-i18n="nav.files">Files</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="prepare"><span class="glyph" style="color: #5856D6"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span><span class="lbl" data-i18n="nav.prepare">Prepare</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="ai"><span class="glyph" style="color: #AF52DE"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg></span><span class="lbl" data-i18n="nav.ia">AI</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="engine"><span class="glyph" style="color: #FF9500"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7m7.4-2.5a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5z"/></svg></span><span class="lbl" data-i18n="engine.title">Slicing engine</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="cache"><span class="glyph" style="color: #34C759"><svg viewBox="0 0 24 24"><path d="M4 5h16v4H4zm0 6h16v4H4zm0 6h16v2H4z"/></svg></span><span class="lbl" data-i18n="settings.cache">Thumbnail cache</span><i class="set-dot"></i></button>
@@ -674,6 +675,19 @@
           <option value="3" data-i18n="settings.thumb.render">3D render of the part</option>
         </select>
       </div>
+    </div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="prepare">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="nav.prepare">Prepare</h2>
+    <div class="group">
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.plate_ask">Warn when the plate is not empty</span>
+          <span class="sub" data-i18n="settings.plate_ask.sub">Asks whether to clear or keep the plate when preparing new models</span>
+        </span>
+        <input type="checkbox" id="set-plate-ask" class="sw" />
+      </label>
     </div>
       </div>
     </div>
@@ -968,6 +982,23 @@
 </div>
 
 <div id="toasts" class="toasts"></div>
+
+<div id="occmodal" class="modal hidden">
+  <div class="modal-box occ-box" role="alertdialog" aria-labelledby="occ-title">
+    <h3 id="occ-title"></h3>
+    <div class="det-sub" data-i18n="prepare.occupied.text">Clear the plate before preparing, or add the new models next to what is already there?</div>
+    <div class="set-section" data-i18n="prepare.occupied.on_plate">Already on the plate</div>
+    <div id="occ-on" class="group occ-list"></div>
+    <div class="set-section" data-i18n="prepare.occupied.incoming">To prepare</div>
+    <div id="occ-new" class="group occ-list"></div>
+    <label class="occ-noask"><input type="checkbox" id="occ-noask" /> <span data-i18n="prepare.occupied.noask">Don't ask again</span></label>
+    <div class="modal-actions">
+      <button id="occ-clear" class="btn left danger" data-i18n="prepare.occupied.clear">Clear and Prepare</button>
+      <button id="occ-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="occ-keep" class="btn primary" data-i18n="prepare.occupied.keep">Keep and Add</button>
+    </div>
+  </div>
+</div>
 
 <div id="sendmodal" class="modal hidden">
   <div class="modal-box">
