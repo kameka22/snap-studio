@@ -788,7 +788,7 @@ async function camStart() {
 
 function camNext() {
   if (!CAM.on) return;
-  $("cam-img").src = `cam://localhost/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`;
+  $("cam-img").src = schemeUrl("cam", `/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`);
 }
 
 function camStop() {

@@ -98,7 +98,7 @@ const bucket = (n) => SIZES.find((s) => s >= n) ?? SIZES[SIZES.length - 1];
 
 function thumbUrl(f, px) {
   const s = bucket(Math.round(px * Math.min(window.devicePixelRatio || 1, 2)));
-  return `thumb://localhost/t?p=${encodeURIComponent(f.path)}&s=${s}&k=${state.pref}&v=${f.modified}`;
+  return thumbSrc(f.path, s, state.pref, f.modified);
 }
 
 /* ------------------------------------------------------------------ theme */

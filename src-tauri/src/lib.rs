@@ -285,8 +285,12 @@ fn lib_sites() -> Vec<library::Site> {
     library::sites()
 }
 
+/// Async on purpose: a sync command runs on the main thread, and creating a
+/// web view from there deadlocks WebView2 on Windows (the app froze when the
+/// Library opened and restored its tabs). An async command runs off the main
+/// thread; the creation is dispatched to it.
 #[tauri::command]
-fn lib_open(app: tauri::AppHandle, id: String, url: String) -> Result<(), String> {
+async fn lib_open(app: tauri::AppHandle, id: String, url: String) -> Result<(), String> {
     library::open_tab(&app, &id, &url).map_err(|e| e.to_string())
 }
 
@@ -1497,6 +1501,24 @@ mod tests {
         assert_eq!(query_param(u, "s").as_deref(), Some("320"));
         assert_eq!(query_param(u, "k").as_deref(), Some("2"));
         assert_eq!(query_param(u, "zz"), None);
+    }
+
+    /// On Windows the UI calls `http://thumb.localhost/…` (WebView2) with a
+    /// Windows path: the same parameters come out.
+    #[test]
+    fn parse_query_windows_form_and_paths() {
+        let cases = [
+            ("http://thumb.localhost/t?p=C%3A%5CUsers%5CAna%5CMes%20mod%C3%A8les%5Cpi%C3%A8ce%20%231.3mf&s=46&k=0&v=3",
+             r"C:\Users\Ana\Mes modèles\pièce #1.3mf"),
+            ("http://thumb.localhost/t?p=%5C%5CNAS%5Cprints%5Ca%26b.3mf&s=320&k=0",
+             r"\\NAS\prints\a&b.3mf"),
+            ("http://thumb.localhost/t?p=%5C%5C%3F%5CC%3A%5Clong%5Cx.3mf&s=320&k=0",
+             r"\\?\C:\long\x.3mf"),
+        ];
+        for (u, want) in cases {
+            assert_eq!(query_param(u, "p").as_deref(), Some(want), "{u}");
+            assert!(query_param(u, "s").is_some());
+        }
     }
 
     /// Shows the metadata read from real files.

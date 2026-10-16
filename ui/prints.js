@@ -47,7 +47,7 @@ function pjJobOfLive(live) {
 }
 
 const pjThumb = (job, px = 320) =>
-  job?.file ? `thumb://localhost/t?p=${encodeURIComponent(job.file)}&s=${px}&k=0&v=${job.created}` : "";
+  job?.file ? thumbSrc(job.file, px, 0, job.created) : "";
 
 const pjName = (live) => (live.status.job || tr("prints.print")).replace(/\.gcode$/i, "");
 
@@ -472,7 +472,7 @@ function pjCamNext(again) {
     $("pj-cam-note").textContent = tr("printers.cam.retry");
     PJ.cam.timer = setTimeout(pjCamNext, 1000);
   };
-  img.src = again || `cam://localhost/f?id=${encodeURIComponent(PJ.cam.id)}&n=${++PJ.cam.n}`;
+  img.src = again || schemeUrl("cam", `/f?id=${encodeURIComponent(PJ.cam.id)}&n=${++PJ.cam.n}`);
 }
 
 function pjCamStop(rerender) {

@@ -279,17 +279,10 @@ async function prLoadMesh(o) {
   PR.meshes.set(key, entry);
   const q = `/b?p=${encodeURIComponent(o.path)}&i=${o.item}&b=400000`;
   let buf = null, err = null;
-  for (const base of ["mesh://localhost", "http://mesh.localhost"]) {
-    try {
-      const r = await fetch(base + q);
-      if (r.ok) {
-        buf = await r.arrayBuffer();
-        break;
-      }
-      err = new Error(r.headers.get("X-Error") || `erreur ${r.status}`);
-    } catch (e) {
-      err = e;
-    }
+  try {
+    buf = await fetchScheme("mesh", q);
+  } catch (e) {
+    err = e;
   }
   if (!buf) {
     PR.meshes.set(key, { failed: String(err?.message || err) });

@@ -77,7 +77,7 @@ async function openSlice() {
   if (first) {
     th.onload = () => th.classList.remove("hidden");
     th.onerror = () => th.classList.add("hidden");
-    th.src = `thumb://localhost/t?p=${encodeURIComponent(first)}&s=160&k=0`;
+    th.src = thumbSrc(first, 160, 0);
   }
   openSheet($("smodal"));
 

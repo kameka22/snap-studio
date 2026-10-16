@@ -79,8 +79,8 @@ const iaEmpty = (c) => !!c && iaIsCreation(c) && !c.version;
    version busting the cache. */
 const iaThumb = (c) =>
   iaIsCreation(c)
-    ? `thumb://localhost/ia?ia=${encodeURIComponent(c.id)}&v=${c.version}`
-    : `thumb://localhost/t?p=${encodeURIComponent(c.source)}&s=176&k=0&v=${c.created_at}`;
+    ? schemeUrl("thumb", `/ia?ia=${encodeURIComponent(c.id)}&v=${c.version}`)
+    : thumbSrc(c.source, 176, 0, c.created_at);
 
 /* "from support.3mf", or "new design · My models" for a new object. */
 function iaOrigin(c) {
