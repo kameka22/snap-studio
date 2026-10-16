@@ -49,6 +49,11 @@ pub struct Rect {
 }
 
 /// Last known rectangle: a view created later goes straight there.
+///
+/// Never hold it across a window or webview call: off the main thread
+/// (`lib_open` is async, for Windows), those calls wait for the main thread,
+/// which may itself be waiting for this lock in `lib_rect` — a deadlock that
+/// froze the app on macOS. Copy the rectangle out first.
 fn last_rect() -> &'static Mutex<Rect> {
     static R: OnceLock<Mutex<Rect>> = OnceLock::new();
     R.get_or_init(|| Mutex::new(Rect { x: 0.0, y: 0.0, w: 800.0, h: 600.0 }))
@@ -247,12 +252,14 @@ fn place(wv: &tauri::Webview, rect: Rect) {
 /// Shows a tab and hides the others; `None` hides them all.
 pub fn show_only(app: &AppHandle, id: Option<&str>) {
     let wanted = id.map(label);
+    // Copied out, the lock released: `place` waits for the main thread.
+    let rect = *last_rect().lock().unwrap();
     for (lbl, wv) in app.webviews() {
         if !lbl.starts_with("lib-") {
             continue;
         }
         if Some(&lbl) == wanted.as_ref() {
-            place(&wv, *last_rect().lock().unwrap());
+            place(&wv, rect);
             let _ = wv.show();
         } else {
             let _ = wv.hide();
