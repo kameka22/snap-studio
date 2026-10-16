@@ -244,6 +244,7 @@ async function onMachineChange(mem) {
     renderHeads(m.filaments || (m.filament ? [m.filament] : null), false);
     renderModelMap(false);
     await loadDefaults(m.simple);
+    advLoad(m.adv);
   } catch (e) {
     setSliceMessage(String(e), "err");
   }
@@ -432,6 +433,7 @@ function slSummary() {
     tr("slice.sum.walls", { v: $("s-walls-val").textContent }),
     $("s-supports").checked && tr("slice.sum.supports"),
     $("s-brim").checked && tr("slice.sum.brim"),
+    typeof advCount === "function" && advCount() && tr("slice.sum.adv", { n: advCount() }),
   ].filter(Boolean);
   $("s-summary").innerHTML = parts.map((p) => `<span>${esc(p)}</span>`).join("");
 }
@@ -520,7 +522,7 @@ async function startSlice() {
 
   const simple = currentSimple();
   const bed = $("s-bed").value;
-  remember(machine, { process, filaments, simple, bed });
+  remember(machine, { process, filaments, simple, bed, adv: SL.adv || {} });
   const printer = currentPrinter();
   rememberPrinter(printer?.id || "");
   if (printer) {
@@ -535,7 +537,7 @@ async function startSlice() {
     SL.job = await invoke("slice_start", {
       request: {
         source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
-        overrides: bed ? { curr_bed_type: bed } : {},
+        overrides: { ...advOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";
@@ -822,7 +824,7 @@ $("s-machine").addEventListener("change", () => onMachineChange(null));
 // adjustments the user already touched in this sheet.
 $("s-process").addEventListener("change", () => {
   const cur = currentSimple();
-  loadDefaults(Object.fromEntries([...(SL.touched || [])].map((k) => [k, cur[k]])));
+  loadDefaults(Object.fromEntries([...(SL.touched || [])].map((k) => [k, cur[k]]))).then(advRefreshDefaults);
 });
 $("s-go").addEventListener("click", startSlice);
 $("s-cancel").addEventListener("click", () => closeSheet($("smodal")));
@@ -833,6 +835,12 @@ document.addEventListener("keydown", (e) => {
   if ($("smodal").classList.contains("hidden")) return;
   // A profile's details, open on top, keep their keys.
   if (!$("pdmodal").classList.contains("hidden")) return;
+  if (!$("advsave").classList.contains("hidden")) return;
+  // The advanced sub-panel closes first; its fields keep Enter.
+  if (!$("s-adv").classList.contains("hidden")) {
+    if (e.key === "Escape") advClose();
+    return;
+  }
   if (e.key === "Escape" && !SL.job) closeSheet($("smodal"));
   if (e.key === "Enter" && !SL.job && e.target.tagName !== "SELECT") startSlice();
 });
