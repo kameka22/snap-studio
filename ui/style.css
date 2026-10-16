@@ -2946,3 +2946,10 @@ body.sl-dragging .sl-headcard:not(.is-empty) { border-style: dashed; }
 .adv-reset { border: 0; background: none; color: var(--text-tertiary); cursor: pointer; font-size: 14px; padding: 0 4px; }
 .adv-reset:hover { color: var(--accent); }
 .sl-adv-note { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--text-secondary); font-size: 12px; }
+
+/* Plate already occupied */
+.occ-box { width: 440px; }
+.occ-list { max-height: 160px; overflow: auto; }
+.occ-list .grow-row .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.occ-dup { font-size: 11px; color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); border-radius: 6px; padding: 1px 6px; margin-left: auto; margin-right: 8px; white-space: nowrap; }
+.occ-noask { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); margin: 4px 0 2px; }
