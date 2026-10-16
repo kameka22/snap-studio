@@ -1134,5 +1134,5 @@
   "menu.help.bug": "Signaler un bug…",
   "menu.help.idea": "Proposer une idée…",
   "menu.help.github": "Snap Studio sur GitHub",
-  "slice.adv.mm_sum": "Tour de purge : {v}"
+  "slice.adv.mm_sum": "Tour d'amorçage : {v}"
 }
