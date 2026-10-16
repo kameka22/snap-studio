@@ -278,12 +278,12 @@ async function hvRender() {
     const color = present && s.color ? s.color : null;
     const kind = present ? [s.kind, s.sub_type].filter(Boolean).join(" ") || "?" : s ? tr("slice.empty") : tr("slice.spool_unknown");
     const prof = headsProfile(pid, i, list);
-    return `<div class="hv-card${s && !present ? " is-empty" : ""}">
+    // Same component as the slice sheet's head card.
+    return `<div class="sl-headcard${s && !present ? " is-empty" : ""}">
       <div class="sl-spool${color ? "" : " none"}"${color ? ` style="--c:${esc(color)}"` : ""}></div>
-      <div class="hv-top"><b>T${i}</b><span>${esc(kind)}</span></div>
-      <small class="hv-sub">${esc(present ? [s.vendor, color ? colorName(color) + " " + color.toUpperCase() : ""].filter(Boolean).join(" · ") : "")}</small>
-      <div class="hv-label">${esc(tr("heads.profile"))}</div>
-      <button class="hv-prof" data-pick="${i}"${list ? "" : " disabled"}><span>${esc(prof.name || "—")}</span>${prof.auto ? "<em>auto</em>" : ""}<i>▾</i></button>
+      <div class="sl-hc-top"><b>T${i}</b><span>${esc(kind)}</span></div>
+      <small class="sl-hc-sub">${esc(present ? [s.vendor, color ? colorName(color) + " " + color.toUpperCase() : ""].filter(Boolean).join(" · ") : "")}</small>
+      <span class="sel-row"><button class="sl-hc-preset" data-pick="${i}"${list ? "" : " disabled"} title="${esc(tr("slice.change_filament"))}"><span>${esc(prof.name || "—")}</span>${prof.auto ? "<em>auto</em>" : ""}<i>▾</i></button></span>
     </div>`;
   }).join("");
   $("hv-msg").textContent = list ? "" : $("hv-msg").textContent;

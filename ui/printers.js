@@ -94,6 +94,7 @@ function prnRenderList() {
       el.querySelector(".led").className = "led " + ledClass(P.status.get(p.id), p.id);
       el.querySelector(".lbl").textContent = p.name || p.host;
     });
+    box.querySelectorAll("[data-heads] .lbl").forEach((l) => (l.textContent = tr("heads.title")));
     sideSync();
     return;
   }
@@ -122,7 +123,7 @@ function prnRenderList() {
     // "Heads and spools" sub-item, under each printer.
     const sub = document.createElement("div");
     sub.className = "side-group side-sub";
-    sub.innerHTML = `<button class="side-item" data-heads="${esc(p.id)}"><span class="glyph" style="color: #AF52DE">${SIDE_SPOOL}</span><span class="lbl">${esc(tr("heads.title"))}</span></button>`;
+    sub.innerHTML = `<button class="side-item" data-heads="${esc(p.id)}"><span class="glyph" style="color: #34C759">${SIDE_SPOOL}</span><span class="lbl">${esc(tr("heads.title"))}</span></button>`;
     sub.firstChild.onclick = () => headsShow(p.id);
     box.appendChild(sub);
   }
@@ -837,6 +838,7 @@ document.addEventListener("keydown", (e) => {
 
 window.addEventListener("langchange", () => {
   tbDefaults();
+  prnRenderList();
   prnRenderDetail();
   discRender();
   $("cam-toggle").textContent = tr(CAM.on ? "common.hide" : "common.show");

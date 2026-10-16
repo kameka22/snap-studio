@@ -1095,8 +1095,8 @@
   "heads.title": "Heads and spools",
   "heads.note": "Each head's filament profile. Color and material come from the spool loaded in the printer.",
   "heads.no_spools": "Spools not read yet: connect the printer, then refresh.",
-  "heads.profile": "Filament profile",
   "heads.refresh": "Read the spools again",
   "heads.edit_in_prepare": "Edit in Prepare",
-  "heads.configure": "Configure"
+  "heads.configure": "Configure",
+  "slice.head_unused": "unused"
 }
