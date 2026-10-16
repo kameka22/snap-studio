@@ -79,6 +79,7 @@ function ledClass(st, id) {
   return "ok";
 }
 
+const SIDE_SPOOL = '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6m0-4a7 7 0 0 1 6.9 6h-3a4 4 0 0 0-7.8 0h-3A7 7 0 0 1 12 5"/></svg>';
 const SIDE_PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/></svg>';
 
 /* Printers show in the sidebar, status light on the right. Statuses arrive
@@ -86,13 +87,14 @@ const SIDE_PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2
    without replacing the entries (a click in progress would be lost). */
 function prnRenderList() {
   const box = $("side-printers");
-  const items = [...box.children];
+  const items = [...box.querySelectorAll(":scope > .side-item[data-id]")];
   if (items.length === P.list.length && items.every((el, i) => el.dataset.id === P.list[i].id)) {
     items.forEach((el, i) => {
       const p = P.list[i];
       el.querySelector(".led").className = "led " + ledClass(P.status.get(p.id), p.id);
       el.querySelector(".lbl").textContent = p.name || p.host;
     });
+    box.querySelectorAll("[data-heads] .lbl").forEach((l) => (l.textContent = tr("heads.title")));
     sideSync();
     return;
   }
@@ -118,6 +120,12 @@ function prnRenderList() {
         { id: "prn:remove:" + p.id, label: tr("common.delete") },
       ], e.clientX, e.clientY);
     box.appendChild(el);
+    // "Heads and spools" sub-item, under each printer.
+    const sub = document.createElement("div");
+    sub.className = "side-group side-sub";
+    sub.innerHTML = `<button class="side-item" data-heads="${esc(p.id)}"><span class="glyph" style="color: #34C759">${SIDE_SPOOL}</span><span class="lbl">${esc(tr("heads.title"))}</span></button>`;
+    sub.firstChild.onclick = () => headsShow(p.id);
+    box.appendChild(sub);
   }
   sideSync();
 }
@@ -316,6 +324,10 @@ function renderFilaments(st) {
     return a.index - b.index;
   });
 
+  // Filament profile of each head, as set in "Heads and spools".
+  const prof = {};
+  if (P.sel && !HD.listsNow[P.sel]) headsLists(P.sel).catch(() => {});
+  if (P.sel) for (const f of fils) prof[f.index] = headsProfile(P.sel, f.index, HD.listsNow[P.sel] || null).name || "";
   const rows = sorted.map((f) => {
     const on = f.index === ai;
     const n = (st.nozzles || []).find((x) => x.index === f.index);
@@ -343,13 +355,13 @@ function renderFilaments(st) {
     return `<div class="frow${on ? " on" : ""}">
       <span class="fbar"></span>
       <span class="fsw" style="${sw}"></span>
-      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span></span>
+      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span>${prof[f.index] ? `<span class="fprof">${esc(prof[f.index])}</span>` : ""}</span>
       <span class="ftags">${tags.join("")}<span class="ftemp">${esc(temp)}</span></span>
     </div>`;
   });
 
   box.innerHTML =
-    `<div class="ghead">${esc(tr("printers.loaded"))}<span class="note">${esc(tr("printers.slots", { n: fils.length }))}</span></div>` +
+    `<div class="ghead">${esc(tr("printers.loaded"))}<span class="note">${esc(tr("printers.slots", { n: fils.length }))}</span><button class="btn small" data-heads-open>${esc(tr("heads.configure"))}</button></div>` +
     rows.join("");
 }
 
@@ -826,6 +838,7 @@ document.addEventListener("keydown", (e) => {
 
 window.addEventListener("langchange", () => {
   tbDefaults();
+  prnRenderList();
   prnRenderDetail();
   discRender();
   $("cam-toggle").textContent = tr(CAM.on ? "common.hide" : "common.show");
@@ -834,3 +847,10 @@ window.addEventListener("langchange", () => {
 });
 
 prnLoad();
+
+$("prn-filaments").addEventListener("click", (e) => {
+  if (e.target.closest("[data-heads-open]") && P.sel) headsShow(P.sel);
+});
+window.addEventListener("headschange", (e) => {
+  if (window.currentView === "printers" && P.sel && (!e.detail?.pid || e.detail.pid === P.sel) && P.status.get(P.sel)) renderStatus(P.status.get(P.sel));
+});

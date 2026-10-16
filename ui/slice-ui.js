@@ -263,7 +263,13 @@ function slHeadLabel(i) {
   if (!sel || !btn) return;
   const slot = SL.slots.find((s) => s.index === i);
   const auto = slot?.present ? bestFilament(slot, SL.lists?.filaments || []) : null;
-  btn.innerHTML = `<span>${esc(sel.value || "—")}</span>${sel.value && sel.value === auto ? '<em>auto</em>' : ""}<i>▾</i>`;
+  // A head known to be empty shows no profile: it prints nothing. (The engine
+  // still gets the select's value, as every extruder needs one.)
+  const empty = slot && !slot.present;
+  btn.disabled = !!empty;
+  btn.innerHTML = empty
+    ? `<span>${esc(tr("slice.head_unused"))}</span>`
+    : `<span>${esc(sel.value || "—")}</span>${sel.value && sel.value === auto ? '<em>auto</em>' : ""}<i>▾</i>`;
 }
 
 function slPickFilament(i, anchor, all = false) {
@@ -312,7 +318,7 @@ function slPickFilament(i, anchor, all = false) {
 $("s-heads").addEventListener("click", (e) => {
   if (e.target.closest("[data-info]")) return;
   const card = e.target.closest("[data-card]");
-  if (card) slPickFilament(+card.dataset.card, card.querySelector("[data-pick-head]") || card);
+  if (card && !card.classList.contains("is-empty")) slPickFilament(+card.dataset.card, card.querySelector("[data-pick-head]") || card);
 });
 
 /* ------------------------------------------------------------ colors → heads */
@@ -332,55 +338,11 @@ function slTokens() {
       const clash = slot?.present && fil?.kind && slot.kind && fil.kind.toUpperCase() !== slot.kind.toUpperCase();
       const color = slot?.present && slot.color ? slot.color : "";
       const title = `T${h}${slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : ""}${clash ? " · " + tr("slice.material_clash") : ""}`;
-      return `<button class="sl-token${+sel.value === h ? " on" : ""}${empty ? " is-empty" : ""}" data-token="${sel.dataset.key}" data-h="${h}"
-        title="${esc(title)}"${empty ? " disabled" : ""}><i style="${color ? `background:${esc(color)}` : ""}"></i>T${h}${clash ? "<em>⚠</em>" : ""}</button>`;
+      return `<span class="sl-token ro${+sel.value === h ? " on" : ""}${empty ? " is-empty" : ""}"
+        title="${esc(title)}"><i style="${color ? `background:${esc(color)}` : ""}"></i>T${h}${clash ? "<em>⚠</em>" : ""}</span>`;
     }).join("");
   });
 }
-
-function slAssign(key, h) {
-  const sel = document.querySelector(`#s-map select[data-key="${key}"]`);
-  if (!sel || sel.disabled) return;
-  setSelect(sel, String(h));
-}
-
-$("s-map").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-token]");
-  if (b && !b.disabled) slAssign(b.dataset.token, +b.dataset.h);
-});
-
-/* Drag a model color onto a spool card. Custom type: text dragged from
-   elsewhere is not accepted. */
-const SL_DRAG = "application/x-snapstudio-color";
-$("s-map").addEventListener("dragstart", (e) => {
-  const row = e.target.closest("[data-drag]");
-  if (!row) return;
-  e.dataTransfer.setData(SL_DRAG, row.dataset.drag);
-  e.dataTransfer.effectAllowed = "link";
-  document.body.classList.add("sl-dragging");
-});
-$("s-map").addEventListener("dragend", () => {
-  document.body.classList.remove("sl-dragging");
-  document.querySelectorAll("#s-heads .drop").forEach((c) => c.classList.remove("drop"));
-});
-$("s-heads").addEventListener("dragover", (e) => {
-  const card = e.target.closest("[data-card]");
-  if (!card || card.classList.contains("is-empty") || !e.dataTransfer.types.includes(SL_DRAG)) return;
-  e.preventDefault();
-  document.querySelectorAll("#s-heads .drop").forEach((c) => c.classList.toggle("drop", c === card));
-});
-$("s-heads").addEventListener("dragleave", (e) => {
-  const card = e.target.closest("[data-card]");
-  if (card && !card.contains(e.relatedTarget)) card.classList.remove("drop");
-});
-$("s-heads").addEventListener("drop", (e) => {
-  const card = e.target.closest("[data-card]");
-  if (!card) return;
-  e.preventDefault();
-  card.classList.remove("drop");
-  const key = e.dataTransfer.getData(SL_DRAG);
-  if (/^\d+:\d+$/.test(key)) slAssign(key, +card.dataset.card);
-});
 
 /* ------------------------------------------------------------ refreshes */
 
@@ -397,4 +359,33 @@ $("smodal").addEventListener("change", (e) => {
   if (e.target.id === "s-printer") slRenderPrinters();
   if (e.target.id === "s-machine") slRenderMachine();
   if (e.target.id === "s-process") slQuality();
+});
+
+/* ------------------------------------------------- heads and spools */
+
+/* A filament profile picked here is the printer's, everywhere. */
+$("s-heads").addEventListener("change", (e) => {
+  const i = e.target.dataset?.head;
+  const pid = currentPrinter()?.id;
+  if (i != null && pid) headsSetFilament(pid, +i, e.target.value, "slice");
+});
+
+/* The color -> head table is read-only here: edited in Prepare. */
+$("s-map-edit").addEventListener("click", () => {
+  // Every plate object of the files in the sheet gets selected.
+  const paths = new Set(SL.models.map((m) => m.path));
+  closeSheet($("smodal"));
+  switchView("prepare");
+  if (typeof PR !== "undefined") {
+    const ids = PR.objects.filter((o) => paths.has(o.path)).map((o) => o.id);
+    if (ids.length) prSelect(ids, false);
+  }
+});
+
+window.addEventListener("headschange", (e) => {
+  if (e.detail?.src === "slice" || $("smodal").classList.contains("hidden") || !SL.lists) return;
+  const pid = currentPrinter()?.id;
+  if (e.detail?.pid && e.detail.pid !== pid) return;
+  if (e.detail?.what === "filament") renderHeads(null, false);
+  if (e.detail?.what === "map" || e.detail?.what === "model") renderModelMap(false);
 });

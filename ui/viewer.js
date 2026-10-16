@@ -265,7 +265,15 @@ function decodeMesh(buf) {
       col[i * 9 + k * 3 + 2] = b;
     }
   }
-  return { n, min, max, pos, col, truncated };
+  // Version 2 (flag bit 1): the model extruder of each triangle follows,
+  // copied onto its vertices. A v1 buffer has none.
+  let ext = null;
+  if ((dv.getUint8(5) & 2) === 2 && buf.byteLength >= 36 + n * 40) {
+    const triExt = new Uint8Array(buf, 36 + n * 39, n);
+    ext = new Uint8Array(n * 3);
+    for (let i = 0; i < n; i++) ext[i * 3] = ext[i * 3 + 1] = ext[i * 3 + 2] = triExt[i];
+  }
+  return { n, min, max, pos, col, truncated, ext };
 }
 
 /* Decodes the buffer produced by `gcode::encode` (40-byte header). */

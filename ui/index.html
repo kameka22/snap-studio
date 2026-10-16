@@ -156,6 +156,9 @@
     </div>
     <button id="p-slice" class="btn primary" data-i18n="prepare.slice">Slice</button>
   </div>
+  <div class="tb-actions" data-for="heads">
+    <button id="hv-refresh" class="tb-btn" title="Read the spools again" data-i18n-title="heads.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+  </div>
   <div class="tb-actions" data-for="printers">
     <div id="prn-tools" class="tb-group hidden">
       <span id="prn-pill" class="pill">—</span>
@@ -249,6 +252,7 @@
   <div class="prep">
     <div class="prep-stage">
       <canvas id="p-canvas"></canvas>
+      <div id="p-strip" class="p-strip hidden"></div>
       <div id="p-empty" class="empty">
         <div class="empty-art"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></div>
         <h1 data-i18n="prepare.empty.title">Empty plate</h1>
@@ -444,6 +448,16 @@
         <div class="group" id="prn-info"></div>
         <div id="prn-updated" class="prn-updated"></div>
       </div>
+    </section>
+  </div>
+</section>
+
+<section id="view-heads" class="view hidden">
+  <div class="prn">
+    <section class="prn-main hv">
+      <p id="hv-note" class="hv-note"></p>
+      <div id="hv-grid" class="sl-heads hv-grid"></div>
+      <div id="hv-msg" class="pf-test"></div>
     </section>
   </div>
 </section>
@@ -892,7 +906,7 @@
         <div class="set-section"><span data-i18n="slice.heads">Heads and spools</span> <span id="s-heads-note" class="set-note"></span></div>
         <div id="s-heads" class="sl-heads"></div>
 
-        <div class="set-section" data-i18n="slice.model_colors">Model colors</div>
+        <div class="set-section"><span data-i18n="slice.model_colors">Model colors</span> <button id="s-map-edit" class="w-link set-note" data-i18n="heads.edit_in_prepare">Edit in Prepare</button></div>
         <div id="s-map" class="sl-map"></div>
 
       </div>
@@ -1350,6 +1364,7 @@
 <script src="slice-adv.js"></script>
 <script src="prints.js"></script>
 <script src="prepare.js"></script>
+<script src="heads.js"></script>
 <script src="library.js"></script>
 <script src="vendor/xterm.js"></script>
 <script src="vendor/marked.js"></script>
