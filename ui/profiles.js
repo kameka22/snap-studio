@@ -43,7 +43,7 @@ function pdContext(head) {
   return {
     machine: $("s-machine").value,
     simple: currentSimple(),
-    overrides: $("s-bed").value ? { curr_bed_type: $("s-bed").value } : {},
+    overrides: { ...(typeof advOverrides === "function" ? advOverrides() : {}), ...($("s-bed").value ? { curr_bed_type: $("s-bed").value } : {}) },
     color: slot?.present && slot.color ? slot.color : null,
   };
 }

@@ -975,7 +975,7 @@ function groupBox(list) {
 /* Adds a file's objects. The file's first plate keeps its layout; it is
    placed as is when the plate is empty and it fits, otherwise moved as a
    block to a free spot. The other plates follow, beside it. */
-async function prepareAddFile(path) {
+async function prepareAddFile(path, { remember = true } = {}) {
   let items;
   try {
     items = await invoke("plate_items", { path });
@@ -996,7 +996,7 @@ async function prepareAddFile(path) {
     plate: it.plate,
     extruders: it.extruders,
   }));
-  prRemember();
+  if (remember) prRemember();
   const first = added.filter((o) => o.plate === 1);
   const main = first.length ? first : added;
   const box = groupBox(main);
@@ -1488,6 +1488,11 @@ async function prClear() {
   if (!PR.objects.length) return;
   const ok = await confirmDelete(tr("prepare.clear.title"), tr("prepare.clear.text"), tr("prepare.clear.ok"));
   if (!ok) return;
+  prEmpty();
+}
+
+/* Empties the plate as one undo step and redraws. */
+function prEmpty() {
   prRemember();
   PR.objects = [];
   PR.sel.clear();
@@ -1503,6 +1508,87 @@ $("p-orient").addEventListener("click", (e) => prOrient(e.shiftKey));
 $("p-arrange").addEventListener("click", prArrange);
 $("p-slice").addEventListener("click", () => openSlice());
 
+/* ------------------------------------------------- plate already occupied */
+
+/* Preparing new models (Files, AI) while objects already sit on the plate
+   asks first: clear it, or keep it and add beside. Only objects on the bed
+   count (not those parked beside it), and the plate is looked at once,
+   before anything is added: the models being prepared together never
+   trigger it. The plate's own "Add" button never asks. */
+const OCC_KEY = "snapstudio.plate.noask";
+const occAsk = () => localStorage.getItem(OCC_KEY) !== "1";
+function occSetAsk(on) {
+  if (on) localStorage.removeItem(OCC_KEY);
+  else localStorage.setItem(OCC_KEY, "1");
+  $("set-plate-ask").checked = on;
+}
+
+function occRows(entries) {
+  return entries
+    .map(({ name, n, dup }) => `<div class="grow-row"><span class="k">${esc(name)}</span>${
+      dup ? `<span class="occ-dup">${esc(tr("prepare.occupied.dup"))}</span>` : ""
+    }${n > 1 ? `<span class="val">× ${n}</span>` : ""}</div>`)
+    .join("");
+}
+
+/* "keep" | "clear" | null (cancelled). */
+function occConfirm(paths) {
+  const on = PR.objects.filter((o) => bedState(o) !== "out");
+  if (!on.length || !occAsk()) return Promise.resolve("keep");
+  const byFile = new Map();
+  for (const o of on) byFile.set(o.path, (byFile.get(o.path) || 0) + 1);
+  $("occ-title").textContent = tr("prepare.occupied.title", { n: on.length });
+  $("occ-on").innerHTML = occRows([...byFile].map(([p, n]) => ({ name: baseName(p), n })));
+  $("occ-new").innerHTML = occRows(paths.map((p) => ({ name: baseName(p), n: 1, dup: byFile.has(p) })));
+  $("occ-noask").checked = false;
+  const modal = $("occmodal");
+  openSheet(modal);
+  requestAnimationFrame(() => $("occ-keep").focus());
+  return new Promise((resolve) => {
+    const done = (v) => {
+      if (v && $("occ-noask").checked) occSetAsk(false);
+      $("occ-keep").onclick = $("occ-clear").onclick = $("occ-cancel").onclick = modal.onkeydown = null;
+      closeSheet(modal);
+      resolve(v);
+    };
+    $("occ-keep").onclick = () => done("keep");
+    $("occ-clear").onclick = () => done("clear");
+    $("occ-cancel").onclick = () => done(null);
+    modal.onkeydown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        done(null);
+      }
+    };
+  });
+}
+
+/* Adds models to the plate after the occupied-plate check. */
+async function prepareModels(paths) {
+  if (!paths.length) return;
+  switchView("prepare");
+  const choice = await occConfirm(paths);
+  if (!choice) return;
+  let remember = true;
+  if (choice === "clear") {
+    // Clearing and adding make one undo step.
+    prEmpty();
+    remember = false;
+  }
+  const before = new Set(PR.objects.map((o) => o.id));
+  for (const p of paths) await prepareAddFile(p, { remember });
+  // The whole multi-selection being prepared ends up selected, not only its
+  // last file: it stands apart from what was already on the plate.
+  if (paths.length > 1) {
+    PR.sel = new Set(PR.objects.filter((o) => !before.has(o.id) && o.plate === 1).map((o) => o.id));
+    prRenderInspector();
+    prSchedule();
+  }
+}
+
+$("set-plate-ask").checked = occAsk();
+$("set-plate-ask").addEventListener("change", (e) => occSetAsk(e.target.checked));
+
 /* Files: "Prepare" adds the selected models to the plate and shows it.
    G-code files are already sliced: they are left out. */
 async function prepareFiles(paths) {
@@ -1513,8 +1599,7 @@ async function prepareFiles(paths) {
     if (paths.length) toast(tr("prepare.already_sliced"), true);
     return;
   }
-  switchView("prepare");
-  for (const f of models) await prepareAddFile(f.path);
+  await prepareModels(models.map((f) => f.path));
 }
 
 $("act-slice").addEventListener("click", () => prepareFiles([...state.sel].slice(0, 1)));

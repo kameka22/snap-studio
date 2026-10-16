@@ -17,10 +17,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{AppHandle, Emitter};
 
-/// Preset inventory, read again only when the application changes.
+static INDEX: OnceLock<Mutex<Option<(PathBuf, Arc<Index>)>>> = OnceLock::new();
+
+/// Preset inventory, read again only when the application changes (or a
+/// user preset is saved).
 fn index_for(app: &Path) -> Result<Arc<Index>> {
-    static CACHE: OnceLock<Mutex<Option<(PathBuf, Arc<Index>)>>> = OnceLock::new();
-    let cell = CACHE.get_or_init(|| Mutex::new(None));
+    let cell = INDEX.get_or_init(|| Mutex::new(None));
     let mut guard = cell.lock().unwrap();
     if let Some((p, idx)) = guard.as_ref() {
         if p == app {
@@ -105,6 +107,25 @@ pub fn details(
         _ => Map::new(),
     };
     idx.details(name, &extra).ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = name)))
+}
+
+/// Saves the effective settings (quick settings, then overrides) as a user
+/// process preset inheriting `base`; the inventory is read again.
+pub fn save_process(name: &str, base: &str, simple: Option<Simple>, overrides: &Map<String, Value>) -> Result<String> {
+    let app = engine().ok_or_else(|| anyhow!(crate::engine::missing()))?;
+    let idx = index_for(&app)?;
+    let mut values = simple.unwrap_or_default().to_overrides();
+    for (k, v) in overrides {
+        // The plate is chosen per slice, not part of a process preset.
+        if k != "curr_bed_type" {
+            values.insert(k.clone(), v.clone());
+        }
+    }
+    presets::save_user_process(&idx, name, base, &values)?;
+    if let Some(cell) = INDEX.get() {
+        *cell.lock().unwrap() = None;
+    }
+    Ok(name.trim().to_string())
 }
 
 /// Lists that can be offered, filtered for the requested machine.
@@ -1385,6 +1406,86 @@ mod tests {
         assert!(std::fs::metadata(&path).unwrap().len() > 10_000, "non-empty G-code");
         assert!(stats.tools.contains(&0) && stats.tools.contains(&1), "both heads are used");
         discard("smoke");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Advanced settings reach the engine: a real slice with the overrides the
+    /// slice sheet's sub-panels send, read back from the G-code's config block.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_advanced_overrides -- --ignored`.
+    #[test]
+    #[ignore]
+    fn engine_advanced_overrides() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-adv");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        // An overhanging "T": supports have something to do.
+        let bx = |x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32| -> Vec<Tri> {
+            let p = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let mut t = bx(8.0, 8.0, 0.0, 12.0, 12.0, 10.0);
+        t.extend(bx(0.0, 0.0, 10.0, 20.0, 20.0, 13.0));
+        let src = tmp.join("t.3mf");
+        crate::write3mf::write_scene(&src, &[
+            crate::write3mf::SceneObject { name: "t".into(), tris: t, transform: Mat::IDENTITY, extruder: None },
+        ]).unwrap();
+        let mut overrides = Map::new();
+        for (k, v) in [
+            ("seam_position", "back"), ("seam_gap", "12%"), ("staggered_inner_seams", "1"),
+            ("support_type", "tree(auto)"), ("support_style", "tree_slim"), ("support_interface_top_layers", "3"),
+            ("support_threshold_angle", "40"), ("tree_support_branch_angle", "35"),
+            ("brim_type", "brim_ears"), ("brim_width", "7"), ("brim_object_gap", "0.2"),
+            ("enable_prime_tower", "1"), ("prime_tower_width", "40"), ("flush_into_infill", "1"),
+            ("wall_filament", "2"), ("support_filament", "2"),
+        ] {
+            overrides.insert(k.into(), Value::String(v.into()));
+        }
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla.clone(), pla],
+                scene: vec![crate::plate::SceneItem {
+                    path: src.to_string_lossy().to_string(), item: 0, name: "t".into(),
+                    pos: [120.0, 120.0], rot: [0.0; 3], scale: [1.0; 3], extruder_map: vec![0],
+                }],
+                simple: Some(Simple { supports: Some(true), brim: Some(true), ..Default::default() }),
+                overrides,
+                name: Some("adv".into()),
+                ..Default::default()
+            },
+            "adv".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let got = seen.lock().unwrap();
+        let last = got.last().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        let gcode = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+        for (k, v) in [
+            ("seam_position", "back"), ("seam_gap", "12%"), ("enable_support", "1"), ("support_type", "tree(auto)"),
+            ("support_style", "tree_slim"), ("support_interface_top_layers", "3"), ("brim_type", "brim_ears"),
+            ("brim_width", "7"), ("enable_prime_tower", "1"), ("prime_tower_width", "40"), ("wall_filament", "2"),
+            ("support_filament", "2"),
+        ] {
+            let line = format!("; {k} = {v}");
+            assert!(gcode.contains(&line), "missing in G-code: {line}");
+        }
+        let stats = last.stats.clone().unwrap();
+        println!("heads used: {:?}", stats.tools);
+        assert!(stats.tools.contains(&1), "wall/support filament 2 extrudes on T1");
+        discard("adv");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
