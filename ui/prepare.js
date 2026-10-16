@@ -29,6 +29,13 @@ const PR = {
   framed: false,
 };
 
+/* Live colors: each vertex carries its model extruder (aExt); when that
+   extruder goes to a head holding a spool, the spool's color replaces the
+   file's. An empty or unknown head keeps the file's color. */
+const PREP_VS = MESH_VS.replace("in vec3 aCol;", "in vec3 aCol;\nin float aExt;\nuniform vec3 uHeadCol[17];\nuniform float uHeadOn[17];").replace(
+  "vCol = aCol;",
+  "int e = clamp(int(aExt + 0.5), 0, 16);\n  vCol = uHeadOn[e] > 0.5 ? uHeadCol[e] : aCol;"
+);
 const PREP_FS = MESH_FS.replace("out vec4 frag;", "uniform vec4 uTint;\nuniform float uAlpha;\nout vec4 frag;").replace(
   "frag = vec4(c, 1.0);",
   "c = mix(c, uTint.rgb, uTint.a);\n  frag = vec4(c, uAlpha);"
@@ -256,7 +263,7 @@ function prEnsureGL() {
     return false;
   }
   PR.gl = gl;
-  PR.prog = program(gl, MESH_VS, PREP_FS);
+  PR.prog = program(gl, PREP_VS, PREP_FS);
   PR.line = program(gl, LINE_VS, LINE_FS);
   PR.solid = program(gl, SOLID_VS, SOLID_FS);
   PR.grid = buildGrid(gl, PR.bed.w, PR.bed.d);
@@ -305,8 +312,16 @@ async function prLoadMesh(o) {
   const aCol = gl.getAttribLocation(PR.prog, "aCol");
   gl.enableVertexAttribArray(aCol);
   gl.vertexAttribPointer(aCol, 3, gl.UNSIGNED_BYTE, true, 0, 0);
+  const aExt = gl.getAttribLocation(PR.prog, "aExt");
+  if (data.ext && aExt >= 0) {
+    const eb = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, eb);
+    gl.bufferData(gl.ARRAY_BUFFER, data.ext, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(aExt);
+    gl.vertexAttribPointer(aExt, 1, gl.UNSIGNED_BYTE, false, 0, 0);
+  }
   gl.bindVertexArray(null);
-  Object.assign(entry, { loading: false, vao, count: data.n * 3, n: data.n, pos: data.pos });
+  Object.assign(entry, { loading: false, vao, count: data.n * 3, n: data.n, pos: data.pos, hasExt: !!data.ext });
   PR.meshes.set(key, entry);
   // Convex hull: exact resting, footprint, "lay on face".
   invoke("plate_hull", { path: o.path, item: o.item })
@@ -377,6 +392,7 @@ function prDraw() {
       : [0, 0, 0, 0];
     gl.uniform4fv(uTint, tint);
     gl.uniform1f(uAlpha, st === "out" ? 0.45 : 1);
+    prHeadColors(gl, o, mesh);
     gl.bindVertexArray(mesh.vao);
     gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
     if (selected) boxes.push(o);
@@ -839,6 +855,7 @@ function prStatus() {
 }
 
 function prRenderInspector() {
+  if (typeof headsActive === "function") prRenderStrip();
   const overlap = prOverlaps();
   $("p-list").innerHTML = PR.objects
     .map((o) => {
@@ -1553,3 +1570,79 @@ window.addEventListener("langchange", () => {
 
 prLoadState();
 prStatus();
+
+/* ---------------------------------------------------- heads and spools */
+
+/* Spool color of each model extruder of an object, for the shader. */
+function prHeadColors(gl, o, mesh) {
+  const col = new Float32Array(17 * 3), on = new Float32Array(17);
+  const pid = typeof headsActive === "function" ? headsActive() : "";
+  const model = pid ? headsModelNow(o.path) : null;
+  if (model) {
+    const slots = headsSlots(pid);
+    const map = headsResolve(pid, o.path, model, slots);
+    for (const [ext, { h }] of Object.entries(map)) {
+      const s = slots.find((x) => x.index === h);
+      const rgb = s?.present && s.color ? hexToRgb(s.color) : null;
+      if (!rgb || ext > 16) continue;
+      on[ext] = 1;
+      col.set(rgb.map((v) => v / 255), ext * 3);
+    }
+  }
+  gl.uniform3fv(gl.getUniformLocation(PR.prog, "uHeadCol"), col);
+  gl.uniform1fv(gl.getUniformLocation(PR.prog, "uHeadOn"), on);
+  const loc = gl.getAttribLocation(PR.prog, "aExt");
+  // No extruder per triangle (STL, older meshes): one-color objects follow
+  // their single extruder, others keep the file's colors.
+  if (loc >= 0 && !mesh.hasExt) gl.vertexAttrib1f(loc, (model?.used || o.extruders || [1]).length === 1 ? (model?.used || o.extruders || [1])[0] : 0);
+}
+
+/* D strip: colors of the active model and the head printing each one. */
+function prRenderStrip() {
+  const box = $("p-strip");
+  if (!box) return;
+  const ids = [...PR.sel];
+  const o = PR.objects.find((x) => x.id === ids[ids.length - 1]);
+  const pid = headsActive();
+  if (!o || !pid) {
+    box.classList.add("hidden");
+    return;
+  }
+  const model = headsModelNow(o.path);
+  if (!model) {
+    box.classList.add("hidden");
+    return;
+  }
+  const slots = headsSlots(pid);
+  const n = headsCount(pid);
+  const map = headsResolve(pid, o.path, model, slots, n);
+  const printers = typeof P !== "undefined" ? P.list : [];
+  const sel = printers.length > 1
+    ? `<select id="p-strip-printer" class="p-strip-prn">${printers.map((p) => `<option value="${esc(p.id)}"${p.id === pid ? " selected" : ""}>${esc(p.name || p.host)}</option>`).join("")}</select>`
+    : `<span class="p-strip-prn">${esc(printers[0]?.name || "")}</span>`;
+  const rows = (model.used || [1]).map((ext) => {
+    const f = model.filaments.find((x) => x.index === ext);
+    const tokens = Array.from({ length: n }, (_, h) => {
+      const s = slots.find((x) => x.index === h);
+      const c = s?.present && s.color ? s.color : null;
+      return `<button class="sl-token${map[ext]?.h === h ? " on" : ""}${c ? "" : " is-empty"}" data-ext="${ext}" data-h="${h}" title="${esc(s?.present ? [s.kind, s.color].filter(Boolean).join(" · ") : tr("heads.no_spools"))}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${h}</button>`;
+    }).join("");
+    return `<div class="p-strip-row">
+      <span class="p-strip-sw" style="background:${esc(f?.color || "#999")}"></span>
+      <span class="p-strip-lbl">${esc(tr("slice.color_n", { n: ext }))}${f?.kind ? " · " + esc(f.kind) : ""}</span>
+      <span class="p-strip-toks">${tokens}</span>
+    </div>`;
+  }).join("");
+  box.innerHTML = `<div class="p-strip-head"><b>${esc(o.name)}</b>${sel}</div>${rows}`;
+  box.classList.remove("hidden");
+  box.querySelectorAll("[data-ext]").forEach((b) => {
+    b.onclick = () => headsSetHead(pid, o.path, +b.dataset.ext, +b.dataset.h, "prepare");
+  });
+  const ps = $("p-strip-printer");
+  if (ps) ps.onchange = () => headsSetActive(ps.value, "prepare");
+}
+window.addEventListener("headschange", () => {
+  if (window.currentView !== "prepare") return;
+  prRenderStrip();
+  prSchedule();
+});

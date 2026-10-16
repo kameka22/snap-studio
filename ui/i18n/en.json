@@ -645,7 +645,6 @@
   "slice.spool_unknown": "spool unknown",
   "slice.change_filament": "Change filament profile",
   "slice.color_n": "Color {n}",
-  "slice.drag_hint": "Drag onto a spool to assign it",
   "slice.sum.spools": {
     "one": "{n} spool",
     "other": "{n} spools"
@@ -1092,5 +1091,12 @@
   "about.licenses": "Licenses ↗",
   "menu.help.bug": "Report a Bug…",
   "menu.help.idea": "Suggest an Idea…",
-  "menu.help.github": "Snap Studio on GitHub"
+  "menu.help.github": "Snap Studio on GitHub",
+  "heads.title": "Heads and spools",
+  "heads.note": "Each head's filament profile. Color and material come from the spool loaded in the printer.",
+  "heads.no_spools": "Spools not read yet: connect the printer, then refresh.",
+  "heads.profile": "Filament profile",
+  "heads.refresh": "Read the spools again",
+  "heads.edit_in_prepare": "Edit in Prepare",
+  "heads.configure": "Configure"
 }

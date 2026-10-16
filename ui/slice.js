@@ -174,6 +174,7 @@ async function onPrinterChange() {
       slPrinterState(st.online ? st.state : "offline", printer.id);
       if (currentPrinter() !== printer) return;
       SL.slots = st.filaments || [];
+      if (st.online) headsSetSlots(printer.id, SL.slots);
       $("s-heads-note").textContent = tr(!st.online
         ? "prints.unreachable"
         : SL.slots.length ? "slice.spools_read" : "slice.spools_hidden");
@@ -287,7 +288,10 @@ function renderHeads(saved, fromPrinter) {
   for (let i = 0; i < headCount(); i++) {
     const slot = SL.slots.find((s) => s.index === i);
     const auto = slot && slot.present ? bestFilament(slot, list) : null;
-    const chosen = (fromPrinter && auto) || saved?.[i] || prev[i] || auto || fallback;
+    // The profile set in "Heads and spools" for this printer wins.
+    const pid = currentPrinter()?.id;
+    const shared = pid ? headsFilaments(pid)[i] : null;
+    const chosen = (shared && list.some((p) => p.name === shared) && shared) || (fromPrinter && auto) || saved?.[i] || prev[i] || auto || fallback;
     // Spool card: real color as a flat fill, material, chosen preset.
     const present = slot?.present;
     const kind = present ? [slot.kind, slot.sub_type].filter(Boolean).join(" ") || "?" : slot ? tr("slice.empty") : "";
@@ -320,17 +324,19 @@ function renderModelMap(fromPrinter) {
   );
   const taken = new Set();
   const several = SL.models.length > 1;
+  // Read-only: the heads come from the shared state (set in Prepare).
+  const pid = currentPrinter()?.id;
   const rows = [];
   SL.models.forEach((m, fi) => {
     for (const e of m.used) {
       const key = `${fi}:${e}`;
       const fil = m.filaments.find((f) => f.index === e);
-      let head = fromPrinter ? null : prev[key];
+      let head = pid ? headsResolve(pid, m.path, m, SL.slots, n)[e]?.h : fromPrinter ? null : prev[key];
       if (head == null || head >= n) head = autoHead(fil, e, taken);
       taken.add(head);
       const color = m.used.length === 1 ? "" : tr("slice.color_n", { n: e });
       const label = several ? [m.stem, color].filter(Boolean).join(" · ") : color || tr("printers.form.model");
-      rows.push(`<div class="sl-maprow" draggable="true" data-drag="${key}" title="${esc(tr("slice.drag_hint"))}">
+      rows.push(`<div class="sl-maprow">
         ${swatch(fil?.color)}
         <span class="sl-map-label"><b>${esc(label)}</b>${fil?.kind ? `<small>${esc(fil.kind)}</small>` : ""}</span>
         <span class="sl-arrow">→</span>

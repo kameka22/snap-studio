@@ -332,8 +332,8 @@ function slTokens() {
       const clash = slot?.present && fil?.kind && slot.kind && fil.kind.toUpperCase() !== slot.kind.toUpperCase();
       const color = slot?.present && slot.color ? slot.color : "";
       const title = `T${h}${slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : ""}${clash ? " · " + tr("slice.material_clash") : ""}`;
-      return `<button class="sl-token${+sel.value === h ? " on" : ""}${empty ? " is-empty" : ""}" data-token="${sel.dataset.key}" data-h="${h}"
-        title="${esc(title)}"${empty ? " disabled" : ""}><i style="${color ? `background:${esc(color)}` : ""}"></i>T${h}${clash ? "<em>⚠</em>" : ""}</button>`;
+      return `<span class="sl-token ro${+sel.value === h ? " on" : ""}${empty ? " is-empty" : ""}"
+        title="${esc(title)}"><i style="${color ? `background:${esc(color)}` : ""}"></i>T${h}${clash ? "<em>⚠</em>" : ""}</span>`;
     }).join("");
   });
 }
@@ -397,4 +397,32 @@ $("smodal").addEventListener("change", (e) => {
   if (e.target.id === "s-printer") slRenderPrinters();
   if (e.target.id === "s-machine") slRenderMachine();
   if (e.target.id === "s-process") slQuality();
+});
+
+/* ------------------------------------------------- heads and spools */
+
+/* A filament profile picked here is the printer's, everywhere. */
+$("s-heads").addEventListener("change", (e) => {
+  const i = e.target.dataset?.head;
+  const pid = currentPrinter()?.id;
+  if (i != null && pid) headsSetFilament(pid, +i, e.target.value, "slice");
+});
+
+/* The color -> head table is read-only here: edited in Prepare. */
+$("s-map-edit").addEventListener("click", () => {
+  const path = SL.models[0]?.path;
+  closeSheet($("smodal"));
+  switchView("prepare");
+  if (path && typeof PR !== "undefined") {
+    const o = PR.objects.find((x) => x.path === path);
+    if (o) prSelect([o.id], false);
+  }
+});
+
+window.addEventListener("headschange", (e) => {
+  if (e.detail?.src === "slice" || $("smodal").classList.contains("hidden") || !SL.lists) return;
+  const pid = currentPrinter()?.id;
+  if (e.detail?.pid && e.detail.pid !== pid) return;
+  if (e.detail?.what === "filament") renderHeads(null, false);
+  if (e.detail?.what === "map" || e.detail?.what === "model") renderModelMap(false);
 });

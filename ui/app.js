@@ -215,6 +215,7 @@ function sideSync() {
   let target = null;
   if (v === "files" && state.dir) target = document.querySelector(`#side-recents [data-dir="${CSS.escape(state.dir)}"]`);
   if (v === "printers" && typeof P !== "undefined" && P.sel) target = document.querySelector(`#side-printers [data-id="${CSS.escape(P.sel)}"]`);
+  if (v === "heads" && typeof HV !== "undefined" && HV.pid) target = document.querySelector(`#side-printers [data-heads="${CSS.escape(HV.pid)}"]`);
   if (v === "ia" && typeof IA !== "undefined" && IA.open) target = document.querySelector(`#side-ia [data-conv="${CSS.escape(IA.open)}"]`);
   if (v === "prints" && typeof PJ !== "undefined" && PJ.sel) {
     target = document.querySelector(`#side-prints [data-pj="${CSS.escape(PJ.sel)}"]`);

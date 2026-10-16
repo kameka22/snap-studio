@@ -595,6 +595,15 @@ pub fn downsample(mesh: &mut MeshData, budget: usize) {
         i += 1;
         keep
     });
+    // Extruders follow their triangles.
+    if !mesh.extruders.is_empty() {
+        let mut i = 0usize;
+        mesh.extruders.retain(|_| {
+            let keep = i % step == 0;
+            i += 1;
+            keep
+        });
+    }
     mesh.truncated = true;
 }
 
@@ -605,12 +614,18 @@ pub fn downsample(mesh: &mut MeshData, budget: usize) {
 /// reserved u8×2 | triangle count u32 |
 /// min x,y,z f32 | max x,y,z f32 | positions (9 f32 per triangle) |
 /// colors (3 u8 per triangle).
+///
+/// Version 2 (only when every triangle's model extruder is known) appends
+/// the extruders (1 u8 per triangle) and sets flag bit 1. Everything before
+/// is laid out as in version 1, so a v1 reader still decodes it; without
+/// extruders the output is exactly version 1.
 pub fn encode(mesh: &MeshData) -> Vec<u8> {
     let n = mesh.tris.len();
-    let mut out = Vec::with_capacity(24 + n * (36 + 3));
+    let with_ext = n > 0 && mesh.extruders.len() == n;
+    let mut out = Vec::with_capacity(36 + n * (36 + 3 + with_ext as usize));
     out.extend_from_slice(b"3MFM");
-    out.push(1);
-    out.push(if mesh.truncated { 1 } else { 0 });
+    out.push(if with_ext { 2 } else { 1 });
+    out.push(if mesh.truncated { 1 } else { 0 } | if with_ext { 2 } else { 0 });
     out.extend_from_slice(&[0, 0]);
     out.extend_from_slice(&(n as u32).to_le_bytes());
     for v in mesh.min.iter().chain(mesh.max.iter()) {
@@ -625,6 +640,9 @@ pub fn encode(mesh: &MeshData) -> Vec<u8> {
     }
     for t in &mesh.tris {
         out.extend_from_slice(&t.c);
+    }
+    if with_ext {
+        out.extend_from_slice(&mesh.extruders);
     }
     out
 }
@@ -675,6 +693,47 @@ mod tests {
         assert_eq!(f32::from_le_bytes(b[off..off + 4].try_into().unwrap()), 1.0);
         // Colors at the end of the buffer.
         assert_eq!(&b[b.len() - 6..], &[10, 20, 30, 40, 50, 60]);
+    }
+
+    #[test]
+    fn encode_v2_appends_extruders_after_the_v1_layout() {
+        let tri = |c| Tri { v: [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]], c };
+        let mut m = MeshData {
+            extruders: vec![1, 3],
+            tris: vec![tri([10, 20, 30]), tri([40, 50, 60])],
+            min: [0.; 3],
+            max: [1.; 3],
+            truncated: false,
+        };
+        let b = encode(&m);
+        assert_eq!(b[4], 2, "version 2");
+        assert_eq!(b[5] & 2, 2, "extruder flag");
+        assert_eq!(b.len(), 36 + 2 * 36 + 2 * 3 + 2);
+        // v1 part unchanged: colors right after the positions.
+        let col = 36 + 2 * 36;
+        assert_eq!(&b[col..col + 6], &[10, 20, 30, 40, 50, 60]);
+        assert_eq!(&b[b.len() - 2..], &[1, 3]);
+        // Extruders not matching the triangles: plain version 1.
+        m.extruders = vec![1];
+        let b1 = encode(&m);
+        assert_eq!((b1[4], b1[5] & 2), (1, 0));
+        assert_eq!(b1.len(), 36 + 2 * 36 + 2 * 3);
+    }
+
+    #[test]
+    fn downsample_keeps_extruders_aligned() {
+        let tri = |c| Tri { v: [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]], c };
+        let mut m = MeshData {
+            extruders: (1..=10).collect(),
+            tris: (0..10).map(|i| tri([i, 0, 0])).collect(),
+            min: [0.; 3],
+            max: [1.; 3],
+            truncated: false,
+        };
+        downsample(&mut m, 5);
+        assert_eq!(m.tris.len(), m.extruders.len());
+        assert_eq!(m.extruders, vec![1, 3, 5, 7, 9]);
+        assert_eq!(m.tris[1].c[0], 2);
     }
 }
 
