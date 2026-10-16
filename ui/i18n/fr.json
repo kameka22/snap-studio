@@ -1133,5 +1133,6 @@
   "about.licenses": "Licences ↗",
   "menu.help.bug": "Signaler un bug…",
   "menu.help.idea": "Proposer une idée…",
-  "menu.help.github": "Snap Studio sur GitHub"
+  "menu.help.github": "Snap Studio sur GitHub",
+  "slice.adv.mm_sum": "Tour de purge : {v}"
 }

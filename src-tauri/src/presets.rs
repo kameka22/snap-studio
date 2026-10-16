@@ -126,6 +126,15 @@ pub fn datadir() -> PathBuf {
         .join("Snapmaker_Orca")
 }
 
+/// Snap Studio's own profiles (`<config>/fr.carlini.snapstudio/profiles/<kind>`):
+/// what the app saves never goes into Snapmaker Orca's folder.
+pub fn app_profiles_dir() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("fr.carlini.snapstudio")
+        .join("profiles")
+}
+
 /// Folder of the profiles shipped with the app.
 fn system_profiles(app: &Path) -> Option<PathBuf> {
     crate::slicers::resources(app).map(|r| r.join("profiles/Snapmaker"))
@@ -163,6 +172,11 @@ impl Index {
         let ud = datadir().join("user/default");
         for kind in [Kind::Machine, Kind::Process, Kind::Filament] {
             add(ud.join(kind.dir()), kind, true, &mut entries);
+        }
+        // Snap Studio's own presets, read last: they win over Orca's.
+        let own = app_profiles_dir();
+        for kind in [Kind::Machine, Kind::Process, Kind::Filament] {
+            add(own.join(kind.dir()), kind, true, &mut entries);
         }
 
         Ok(Index {
@@ -505,10 +519,11 @@ fn write_config(dir: &Path, kind: Kind, name: &str, mut cfg: Map<String, Value>,
 }
 
 /// Saves a user process preset: a differential over `base`, as Orca stores its
-/// own (`inherits` + the changed keys), in `<datadir>/user/default/process`.
+/// own (`inherits` + the changed keys), in Snap Studio's own
+/// `profiles/process` folder (never in Snapmaker Orca's).
 /// Refuses an empty or unsafe name, and the name of a system preset.
 pub fn save_user_process(index: &Index, name: &str, base: &str, values: &Map<String, Value>) -> Result<PathBuf> {
-    save_user_process_in(index, &datadir().join("user/default/process"), name, base, values)
+    save_user_process_in(index, &app_profiles_dir().join(Kind::Process.dir()), name, base, values)
 }
 
 fn save_user_process_in(index: &Index, dir: &Path, name: &str, base: &str, values: &Map<String, Value>) -> Result<PathBuf> {

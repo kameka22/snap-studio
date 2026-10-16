@@ -95,10 +95,19 @@ function advCatKeys(cat) {
     .flatMap((g) => (typeof g.keys === "function" ? g.keys() : g.keys));
 }
 
-/* Heads offered to the per-feature filament fields. Plug point for the
-   shared "Heads and spools" state (feature 2): today, the heads configured
-   in this sheet (renderHeads). */
+/* Heads offered to the per-feature filament fields: from the shared
+   "Heads and spools" state when heads.js is loaded, otherwise the heads
+   configured in this sheet (renderHeads). */
 function advHeadChoices() {
+  const pid = typeof headsCount === "function" ? currentPrinter()?.id : null;
+  if (pid) {
+    const slots = headsSlots(pid);
+    return Array.from({ length: headsCount(pid) }, (_, i) => {
+      const slot = slots.find((x) => x.index === i);
+      const name = headsProfile(pid, i, SL.lists?.filaments || null).name;
+      return { value: String(i + 1), label: `T${i}${name ? " · " + name : ""}`, color: slot?.present ? slot.color : null };
+    });
+  }
   return [...document.querySelectorAll("#s-heads select")].map((s, i) => {
     const slot = SL.slots.find((x) => x.index === i);
     return { value: String(i + 1), label: `T${i}${s.value ? " · " + s.value : ""}`, color: slot?.present ? slot.color : null };
@@ -106,10 +115,8 @@ function advHeadChoices() {
 }
 
 async function advSchema() {
-  if (ADV.schema?.lang !== LANG) {
-    ADV.schema = await fetch(`assets/orca-settings.${LANG}.json`).then((r) => r.json());
-    ADV.schema.lang = LANG;
-  }
+  // Same catalog as the profile details (profiles.js).
+  ADV.schema = await pdSchema();
   return ADV.schema;
 }
 
@@ -191,7 +198,7 @@ function advRenderRows() {
     support: $("s-supports").checked ? advLabel("support_type") : tr("slice.adv.off"),
     brim: $("s-brim").checked ? advLabel("brim_type", SL.adv.brim_type || "outer_only") : tr("slice.adv.off"),
     seam: advLabel("seam_position"),
-    mm: `${tr("slice.adv.g.tower")} : ${advLabel("enable_prime_tower")}`,
+    mm: tr("slice.adv.mm_sum", { v: advLabel("enable_prime_tower") }),
   };
   for (const cat of Object.keys(ADV_CATS)) {
     $("s-adv-sum-" + cat).textContent = sum[cat] || "";
@@ -208,16 +215,26 @@ function advRenderRows() {
 async function advOpen(cat) {
   await advSchema();
   ADV.cat = cat;
-  // Covers exactly the sheet's columns: header and footer stay.
-  const cols = document.querySelector("#smodal .sl-cols");
-  Object.assign($("s-adv").style, { top: cols.offsetTop + "px", height: cols.offsetHeight + "px" });
+  advFit();
+  // The sheet can change height while the panel is open (spools read,
+  // window resized): the panel follows.
+  ADV.ro ||= new ResizeObserver(() => ADV.cat && advFit());
+  ADV.ro.observe(document.querySelector("#smodal .sl-cols"));
+  ADV.ro.observe(document.querySelector("#smodal .sl-box"));
   $("s-adv").classList.remove("hidden");
   advRenderPanel();
   requestAnimationFrame(() => $("s-adv-back").focus());
 }
 
+/* Covers exactly the sheet's columns: header and footer stay. */
+function advFit() {
+  const cols = document.querySelector("#smodal .sl-cols");
+  Object.assign($("s-adv").style, { top: cols.offsetTop + "px", height: cols.offsetHeight + "px" });
+}
+
 function advClose() {
   ADV.cat = null;
+  ADV.ro?.disconnect();
   $("s-adv").classList.add("hidden");
   advRenderRows();
 }
@@ -368,4 +385,14 @@ $("advsave").addEventListener("keydown", (e) => {
     e.preventDefault();
     advSaveGo();
   }
+});
+
+/* The sub-panel closes with the sheet: it reopens on the main settings. */
+new MutationObserver(() => {
+  if (ADV.cat && $("smodal").classList.contains("hidden")) advClose();
+}).observe($("smodal"), { attributes: true, attributeFilter: ["class"] });
+
+/* Heads changed in "Heads and spools" (heads.js): the filament fields follow. */
+window.addEventListener("headschange", () => {
+  if (ADV.cat) advRenderPanel();
 });

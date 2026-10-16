@@ -1130,5 +1130,6 @@
   "about.licenses": "Licenses ↗",
   "menu.help.bug": "Report a Bug…",
   "menu.help.idea": "Suggest an Idea…",
-  "menu.help.github": "Snap Studio on GitHub"
+  "menu.help.github": "Snap Studio on GitHub",
+  "slice.adv.mm_sum": "Prime tower: {v}"
 }
