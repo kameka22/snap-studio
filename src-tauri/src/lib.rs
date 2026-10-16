@@ -393,6 +393,20 @@ async fn slice_details(
     .map_err(|e| e.to_string())
 }
 
+/// Saves the effective process settings as a user process preset.
+#[tauri::command]
+async fn slice_save_process(
+    name: String,
+    base: String,
+    simple: Option<slice::Simple>,
+    overrides: Option<serde_json::Map<String, serde_json::Value>>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || slice::save_process(&name, &base, simple, &overrides.unwrap_or_default()))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
 /// Presets that can be offered for the chosen machine.
 #[tauri::command]
 async fn slice_lists(machine: Option<String>) -> Result<slice::PresetLists, String> {
@@ -1379,6 +1393,7 @@ pub fn run() {
             engine_cancel,
             engine_remove,
             slice_defaults,
+            slice_save_process,
             slice_start,
             slice_cancel,
             slice_save,

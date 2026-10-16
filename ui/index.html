@@ -859,15 +859,32 @@
             <input type="range" id="s-walls" class="hidden" min="1" max="6" step="1" tabindex="-1" />
           </div>
         </div>
-        <div class="sl-toggles">
-          <label class="sl-toggle">
-            <input type="checkbox" id="s-supports" />
-            <span><svg viewBox="0 0 24 24"><path d="M4 3h16v4H4zm2 6h2v12H6zm5 0h2v12h-2zm5 0h2v12h-2z"/></svg><span data-i18n="slice.supports">Supports</span></span>
-          </label>
-          <label class="sl-toggle">
-            <input type="checkbox" id="s-brim" />
-            <span><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8zM3 3h18v18H3zm2 2v14h14V5z"/></svg><span data-i18n="slice.brim">Brim</span></span>
-          </label>
+        <div class="sl-card sl-adv">
+          <div class="sl-adv-row">
+            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16v4H4zm2 6h2v12H6zm5 0h2v12h-2zm5 0h2v12h-2z"/></svg></span>
+            <span class="k"><span data-i18n="slice.supports">Supports</span><small id="s-adv-sum-support" class="sub"></small></span>
+            <input type="checkbox" id="s-supports" class="sw" />
+            <button class="btn info-btn sl-adv-btn" data-adv="support" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+          </div>
+          <div class="sl-adv-row">
+            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8zM3 3h18v18H3zm2 2v14h14V5z"/></svg></span>
+            <span class="k"><span data-i18n="slice.brim">Brim</span><small id="s-adv-sum-brim" class="sub"></small></span>
+            <input type="checkbox" id="s-brim" class="sw" />
+            <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+          </div>
+          <div class="sl-adv-row">
+            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
+            <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
+            <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+          </div>
+          <div class="sl-adv-row" id="s-adv-mm-row">
+            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
+            <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
+            <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+          </div>
+        </div>
+        <div class="sl-line sl-save-line">
+          <button id="s-save-process" class="w-link" data-i18n="slice.adv.save">Save as Custom Profile…</button>
         </div>
       </div>
 
@@ -879,6 +896,15 @@
         <div id="s-map" class="sl-map"></div>
 
       </div>
+    </div>
+
+    <div id="s-adv" class="sl-adv-panel hidden" role="dialog" aria-labelledby="s-adv-title">
+      <div class="sl-adv-head">
+        <button id="s-adv-back" class="btn small" data-i18n="slice.adv.back">‹ Settings</button>
+        <b id="s-adv-title"></b>
+        <button id="s-adv-reset" class="w-link" data-i18n="slice.adv.reset_all">Reset</button>
+      </div>
+      <div id="s-adv-body" class="sl-adv-body"></div>
     </div>
 
     <div class="sl-foot">
@@ -893,6 +919,22 @@
     </div>
   </div>
 </div>
+<div id="advsave" class="modal hidden">
+  <div class="modal-box">
+    <h3 data-i18n="slice.adv.save.title">Save as Custom Profile</h3>
+    <div id="advsave-base" class="det-sub"></div>
+    <div class="form">
+      <label><span data-i18n="slice.adv.save.name">Profile name</span><input id="advsave-name" class="field" type="text" maxlength="120" /></label>
+    </div>
+    <div id="advsave-what" class="pf-test"></div>
+    <div id="advsave-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="advsave-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="advsave-go" class="btn primary" data-i18n="common.save">Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="iamodal" class="modal hidden">
   <div class="modal-box">
     <h3 id="ia-mtitle"></h3>
@@ -1305,6 +1347,7 @@
 <script src="slice-ui.js"></script>
 <script src="engine.js"></script>
 <script src="profiles.js"></script>
+<script src="slice-adv.js"></script>
 <script src="prints.js"></script>
 <script src="prepare.js"></script>
 <script src="library.js"></script>

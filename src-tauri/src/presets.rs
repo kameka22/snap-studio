@@ -126,6 +126,15 @@ pub fn datadir() -> PathBuf {
         .join("Snapmaker_Orca")
 }
 
+/// Snap Studio's own profiles (`<config>/fr.carlini.snapstudio/profiles/<kind>`):
+/// what the app saves never goes into Snapmaker Orca's folder.
+pub fn app_profiles_dir() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("fr.carlini.snapstudio")
+        .join("profiles")
+}
+
 /// Folder of the profiles shipped with the app.
 fn system_profiles(app: &Path) -> Option<PathBuf> {
     crate::slicers::resources(app).map(|r| r.join("profiles/Snapmaker"))
@@ -163,6 +172,11 @@ impl Index {
         let ud = datadir().join("user/default");
         for kind in [Kind::Machine, Kind::Process, Kind::Filament] {
             add(ud.join(kind.dir()), kind, true, &mut entries);
+        }
+        // Snap Studio's own presets, read last: they win over Orca's.
+        let own = app_profiles_dir();
+        for kind in [Kind::Machine, Kind::Process, Kind::Filament] {
+            add(own.join(kind.dir()), kind, true, &mut entries);
         }
 
         Ok(Index {
@@ -504,6 +518,59 @@ fn write_config(dir: &Path, kind: Kind, name: &str, mut cfg: Map<String, Value>,
     Ok(path)
 }
 
+/// Saves a user process preset: a differential over `base`, as Orca stores its
+/// own (`inherits` + the changed keys), in Snap Studio's own
+/// `profiles/process` folder (never in Snapmaker Orca's).
+/// Refuses an empty or unsafe name, and the name of a system preset.
+pub fn save_user_process(index: &Index, name: &str, base: &str, values: &Map<String, Value>) -> Result<PathBuf> {
+    save_user_process_in(index, &app_profiles_dir().join(Kind::Process.dir()), name, base, values)
+}
+
+fn save_user_process_in(index: &Index, dir: &Path, name: &str, base: &str, values: &Map<String, Value>) -> Result<PathBuf> {
+    let name = name.trim();
+    if name.is_empty() || name.len() > 120 || name.contains(['/', '\\', ':']) || name.starts_with('.') {
+        return Err(anyhow!(crate::t!("err.bad_preset_name")));
+    }
+    if index.entries.get(name).is_some_and(|e| !e.user) {
+        return Err(anyhow!(crate::t!("err.preset_exists", name = name)));
+    }
+    if index.kind_of(base) != Some(Kind::Process) {
+        return Err(anyhow!(crate::t!("err.unknown_process", name = base)));
+    }
+    // A user base is flattened into the new preset, which then inherits the
+    // base's own system parent: Orca only follows one level for user presets.
+    let (parent, mut cfg) = match index.entries.get(base) {
+        Some(e) if e.user => {
+            let mut own = e.json.as_object().cloned().unwrap_or_default();
+            let parent = own.get("inherits").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            for k in ["name", "inherits", "from", "type", "instantiation"] {
+                own.remove(k);
+            }
+            (parent, own)
+        }
+        _ => (base.to_string(), Map::new()),
+    };
+    for (k, v) in values {
+        let v = match v {
+            Value::String(_) => v.clone(),
+            Value::Bool(b) => Value::String(if *b { "1".into() } else { "0".into() }),
+            Value::Number(n) => Value::String(n.to_string()),
+            other => other.clone(),
+        };
+        cfg.insert(k.clone(), v);
+    }
+    cfg.insert("name".into(), Value::String(name.into()));
+    cfg.insert("inherits".into(), Value::String(parent));
+    cfg.insert("from".into(), Value::String("User".into()));
+    cfg.insert("type".into(), Value::String("process".into()));
+    cfg.insert("is_custom_defined".into(), Value::String("0".into()));
+    cfg.insert("print_settings_id".into(), Value::String(name.into()));
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(format!("{name}.json"));
+    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?)?;
+    Ok(path)
+}
+
 /// Writes the complete configurations into `dir`.
 ///
 /// `filaments` holds one preset per head; when some are missing, the first is
@@ -587,6 +654,27 @@ mod tests {
             return None;
         }
         Index::build(&app()).ok()
+    }
+
+    #[test]
+    fn save_user_process_writes_a_differential() {
+        let mut entries = HashMap::new();
+        entries.insert("0.20mm Standard".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "0.20mm Standard", "layer_height": "0.2"}), user: false });
+        let idx = Index { entries, selected: Default::default() };
+        let dir = std::env::temp_dir().join("snapstudio-save-process");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut v = Map::new();
+        v.insert("seam_position".into(), Value::String("back".into()));
+        v.insert("enable_prime_tower".into(), Value::Bool(true));
+        let p = save_user_process_in(&idx, &dir, "Mine", "0.20mm Standard", &v).unwrap();
+        let j: Value = serde_json::from_slice(&std::fs::read(&p).unwrap()).unwrap();
+        assert_eq!(j["inherits"], "0.20mm Standard");
+        assert_eq!(j["from"], "User");
+        assert_eq!(j["seam_position"], "back");
+        assert_eq!(j["enable_prime_tower"], "1");
+        assert!(save_user_process_in(&idx, &dir, "0.20mm Standard", "0.20mm Standard", &v).is_err(), "system name refused");
+        assert!(save_user_process_in(&idx, &dir, "a/b", "0.20mm Standard", &v).is_err(), "unsafe name refused");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
