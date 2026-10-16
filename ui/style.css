@@ -2646,6 +2646,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .sl-hc-preset span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sl-hc-preset em { font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 .sl-hc-preset i { font-style: normal; color: var(--text-tertiary); font-size: 10px; }
+.sl-hc-preset:disabled { opacity: 0.6; cursor: default; }
 
 /* Head chips */
 .sl-tokens { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }

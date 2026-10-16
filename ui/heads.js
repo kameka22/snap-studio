@@ -283,7 +283,10 @@ async function hvRender() {
       <div class="sl-spool${color ? "" : " none"}"${color ? ` style="--c:${esc(color)}"` : ""}></div>
       <div class="sl-hc-top"><b>T${i}</b><span>${esc(kind)}</span></div>
       <small class="sl-hc-sub">${esc(present ? [s.vendor, color ? colorName(color) + " " + color.toUpperCase() : ""].filter(Boolean).join(" · ") : "")}</small>
-      <span class="sel-row"><button class="sl-hc-preset" data-pick="${i}"${list ? "" : " disabled"} title="${esc(tr("slice.change_filament"))}"><span>${esc(prof.name || "—")}</span>${prof.auto ? "<em>auto</em>" : ""}<i>▾</i></button></span>
+      <span class="sel-row">${s && !present
+        // A head known to be empty prints nothing: same as the slice sheet.
+        ? `<button class="sl-hc-preset" disabled><span>${esc(tr("slice.head_unused"))}</span></button>`
+        : `<button class="sl-hc-preset" data-pick="${i}"${list ? "" : " disabled"} title="${esc(tr("slice.change_filament"))}"><span>${esc(prof.name || "—")}</span>${prof.auto ? "<em>auto</em>" : ""}<i>▾</i></button>`}</span>
     </div>`;
   }).join("");
   $("hv-msg").textContent = list ? "" : $("hv-msg").textContent;
