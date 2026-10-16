@@ -1471,6 +1471,11 @@ async function prClear() {
   if (!PR.objects.length) return;
   const ok = await confirmDelete(tr("prepare.clear.title"), tr("prepare.clear.text"), tr("prepare.clear.ok"));
   if (!ok) return;
+  prEmpty();
+}
+
+/* Empties the plate as one undo step and redraws. */
+function prEmpty() {
   prRemember();
   PR.objects = [];
   PR.sel.clear();
@@ -1550,10 +1555,7 @@ async function prepareModels(paths) {
   let remember = true;
   if (choice === "clear") {
     // Clearing and adding make one undo step.
-    prRemember();
-    PR.objects = [];
-    PR.sel.clear();
-    prSave();
+    prEmpty();
     remember = false;
   }
   const before = new Set(PR.objects.map((o) => o.id));
