@@ -130,7 +130,7 @@ function chatStatus() {
 
 /* An image of the conversation folder, served by the thumbnail protocol. */
 const chatAttachmentUrl = (name) =>
-  `thumb://localhost/ia?ia=${encodeURIComponent(CHAT.id)}&att=${encodeURIComponent(name)}`;
+  schemeUrl("thumb", `/ia?ia=${encodeURIComponent(CHAT.id)}&att=${encodeURIComponent(name)}`);
 
 /* A user message: images first, then the text. `images` are URLs. */
 function chatUserBubble(text, images = []) {

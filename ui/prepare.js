@@ -279,7 +279,7 @@ async function prLoadMesh(o) {
   PR.meshes.set(key, entry);
   const q = `/b?p=${encodeURIComponent(o.path)}&i=${o.item}&b=400000`;
   let buf = null, err = null;
-  for (const base of ["mesh://localhost", "http://mesh.localhost"]) {
+  for (const base of schemeBases("mesh")) {
     try {
       const r = await fetch(base + q);
       if (r.ok) {

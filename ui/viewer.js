@@ -864,12 +864,13 @@ async function fetchBinary(scheme, path, bust) {
   const q =
     `/b?p=${encodeURIComponent(path)}` + (bust ? `&v=${encodeURIComponent(bust)}` : "");
   let last;
-  for (const base of [`${scheme}://localhost`, `http://${scheme}.localhost`]) {
+  const bases = schemeBases(scheme);
+  for (const base of bases) {
     try {
       const r = await fetch(base + q);
       if (r.ok) return await r.arrayBuffer();
       last = new Error(r.headers.get("X-Error") || `erreur ${r.status}`);
-      if (r.status !== 404 || base.startsWith("http")) throw last;
+      if (r.status !== 404 || base === bases[bases.length - 1]) throw last;
     } catch (e) {
       last = e;
     }
