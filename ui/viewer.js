@@ -599,7 +599,7 @@ function bedFile(url, load) {
    (normal, three vertices, attribute). */
 async function loadStl(url) {
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`erreur ${r.status}`);
+  if (!r.ok) throw new Error(tr("err.http_status", { status: r.status }));
   const buf = await r.arrayBuffer();
   const dv = new DataView(buf);
   const n = dv.getUint32(80, true);
@@ -863,19 +863,7 @@ window.addEventListener("themechange", schedule);
 async function fetchBinary(scheme, path, bust) {
   const q =
     `/b?p=${encodeURIComponent(path)}` + (bust ? `&v=${encodeURIComponent(bust)}` : "");
-  let last;
-  const bases = schemeBases(scheme);
-  for (const base of bases) {
-    try {
-      const r = await fetch(base + q);
-      if (r.ok) return await r.arrayBuffer();
-      last = new Error(r.headers.get("X-Error") || `erreur ${r.status}`);
-      if (r.status !== 404 || base === bases[bases.length - 1]) throw last;
-    } catch (e) {
-      last = e;
-    }
-  }
-  throw last || new Error("protocol unavailable");
+  return fetchScheme(scheme, q);
 }
 
 /* ---------------------------------------------------------------- opening */

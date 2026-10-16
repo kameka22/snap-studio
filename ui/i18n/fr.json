@@ -1153,5 +1153,7 @@
   "heads.refresh": "Relire les bobines",
   "heads.edit_in_prepare": "Modifier dans Préparer",
   "heads.configure": "Configurer",
-  "slice.head_unused": "inutilisée"
+  "slice.head_unused": "inutilisée",
+  "err.http_status": "Erreur {status}",
+  "err.protocol_unavailable": "Protocole indisponible"
 }

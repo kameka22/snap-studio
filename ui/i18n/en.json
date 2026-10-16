@@ -1150,5 +1150,7 @@
   "heads.refresh": "Read the spools again",
   "heads.edit_in_prepare": "Edit in Prepare",
   "heads.configure": "Configure",
-  "slice.head_unused": "unused"
+  "slice.head_unused": "unused",
+  "err.http_status": "Error {status}",
+  "err.protocol_unavailable": "Protocol unavailable"
 }
