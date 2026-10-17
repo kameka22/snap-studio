@@ -68,6 +68,8 @@ async function prnLoad(selectId) {
   prnRenderList();
   prnRenderDetail();
   if (window.currentView === "printers") startLive();
+  // At launch, Prepare may show before the printers are known.
+  if (window.currentView === "prepare" && typeof prRefreshSpools === "function") prRefreshSpools();
 }
 
 function ledClass(st, id) {

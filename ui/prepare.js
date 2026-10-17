@@ -1452,6 +1452,7 @@ function prResetRotation() {
 /* Called when the view shows: graphics context, bed, meshes. */
 async function prepareShow() {
   prStatus();
+  prRefreshSpools();
   if (!prEnsureGL()) return;
   const bed = await invoke("plate_bed", { machine: SL.memory.last || null }).catch(() => null);
   if (bed && (bed.w !== PR.bed.w || bed.d !== PR.bed.d || bed.model !== PR.bed.model)) {
@@ -1776,7 +1777,20 @@ function prRenderPrinter() {
   const pid = headsActive();
   box.innerHTML = printers.map((p) => `<option value="${esc(p.id)}"${p.id === pid ? " selected" : ""}>${esc(p.name || p.host)}</option>`).join("");
 }
-$("p-printer")?.addEventListener("change", (e) => headsSetActive(e.target.value, "prepare"));
+$("p-printer")?.addEventListener("change", (e) => {
+  headsSetActive(e.target.value, "prepare");
+  prRefreshSpools();
+});
+
+/* The active printer's spools, asked when Prepare shows: otherwise they were
+   only known once the Printers tab, the heads view or the slice sheet had
+   asked, and the head buttons stayed gray. The list and the 3D view follow
+   when the answer changes them (headschange). */
+function prRefreshSpools() {
+  if (typeof headsActive !== "function") return;
+  const pid = headsActive();
+  if (pid) headsRefreshSlots(pid);
+}
 window.addEventListener("headschange", () => {
   if (window.currentView !== "prepare") return;
   prRenderInspector();
