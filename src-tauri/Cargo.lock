@@ -4067,6 +4067,7 @@ dependencies = [
  "anyhow",
  "dirs 7.0.0",
  "futures-util",
+ "gtk",
  "image",
  "libc",
  "mdns-sd",
@@ -4093,6 +4094,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "walkdir",
+ "webkit2gtk",
  "window-vibrancy",
  "zip 8.6.0",
 ]
