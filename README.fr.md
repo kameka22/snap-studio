@@ -46,7 +46,8 @@ visionneuse 3D et trajectoires G-code couche par couche.
 ### 🧩 Préparer
 Le plateau U1 comme dans Orca : déplacer, pivoter, mettre à l'échelle,
 dupliquer, poser sur une face, orienter et disposer automatiquement,
-annuler — puis découper.
+annuler — puis découper. Chaque objet liste ses couleurs, peintes
+comprises, et envoie chacune vers la tête de votre choix.
 
 <img src="docs/screenshots/prepare.png" alt="Préparer" />
 

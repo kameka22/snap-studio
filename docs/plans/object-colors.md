@@ -88,6 +88,29 @@ Splitting depends on the triangle's vertex order.
 6. **Docs and review** — i18n en/fr, harness screenshots (tree, slice
    sheet), README.
 
+## Done
+
+- Steps 1–6 implemented.
+- `paint.rs` (decoding, renumbering) and the reading in `mesh.rs` checked on
+  the dumpling file: Dumpling = colors 2, 3, 4, 5 (312, 1,458, 474 and
+  50,814 triangles), base and cap = 1.
+- Real slices with the bundled engine (Snapmaker Orca 2.4.0, opt-in
+  `engine_painted`): the painted Dumpling prints on the four heads chosen.
+- Found on the way: the engine counts filaments by `filament_colour` when it
+  splits a painted model and drops the states beyond. Filament profiles
+  without a spool color had none, so their painted areas were lost; they
+  now get a neutral color (`presets::prepare`).
+- UI checked in a browser harness fed with the real file's meshes, lists
+  and the engine's profiles: Prepare's tree, live colors, a per-object
+  choice (the cap alone on T1), Duplicate, undo, a plate saved by 0.7.3
+  read again, the slice sheet and the `extruder_map` sent per object.
+
+## To check on the Mac
+
+- The dumpling file in the app: tree, 3D colors following the spools, a
+  real print.
+- A PrusaSlicer painted file (`slic3rpe:mmu_segmentation`).
+
 ## Out of scope for now
 
 - Exact display of subdivided paint.
