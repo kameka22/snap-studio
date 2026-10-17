@@ -77,8 +77,10 @@ pub fn printer_discover_stop(state: State<'_, Discovery>) {
 /// Listens until the timeout or a stop request.
 fn run(daemon: &ServiceDaemon, stop: &AtomicBool, mut on_found: impl FnMut(Found)) {
     // The answer to the wake-up does not interest us: only the traffic it
-    // triggers matters.
-    let _wake = daemon.browse(WAKEUP);
+    // triggers matters. It must still be read: the daemon waits on a full
+    // listener (10 events), and a home network answers with dozens of service
+    // types — the search froze before the printers had answered.
+    let wake = daemon.browse(WAKEUP).ok();
     let receivers: Vec<_> = SERVICES
         .iter()
         .filter_map(|(ty, kind)| match daemon.browse(ty) {
@@ -92,6 +94,9 @@ fn run(daemon: &ServiceDaemon, stop: &AtomicBool, mut on_found: impl FnMut(Found
     let end = Instant::now() + LISTEN;
     while Instant::now() < end && !stop.load(Ordering::Relaxed) {
         let mut idle = true;
+        if let Some(rx) = &wake {
+            while rx.try_recv().is_ok() {}
+        }
         for (rx, kind) in &receivers {
             while let Ok(ev) = rx.try_recv() {
                 idle = false;
@@ -241,6 +246,46 @@ mod tests {
         let _ = t;
         println!("{hits:?}");
         assert!(hits.iter().any(|f| f.sn.as_deref() == Some("SNTEST") && f.name == "Test U1"));
+    }
+
+    /// The wake-up answers must not freeze the search: more service types
+    /// than a listener holds (10) announce themselves first, the U1 two
+    /// seconds later, as on a home network. Depends on the network: run by
+    /// hand.
+    #[test]
+    #[ignore]
+    fn busy_network_does_not_freeze_the_search() {
+        use mdns_sd::ServiceInfo;
+        let host = ServiceDaemon::new().unwrap();
+        let ip = local_ip();
+        for i in 0..15 {
+            let ty = format!("_busy{i}._tcp.local.");
+            let info = ServiceInfo::new(&ty, "busy", "busy-test.local.", ip.as_str(), 9000 + i, None::<HashMap<String, String>>).unwrap();
+            host.register(info).unwrap();
+        }
+
+        let daemon = ServiceDaemon::new().unwrap();
+        let stop = AtomicBool::new(false);
+        let mut hits = Vec::new();
+        std::thread::scope(|sc| {
+            sc.spawn(|| {
+                std::thread::sleep(Duration::from_secs(2));
+                let info = ServiceInfo::new(
+                    "_snapmaker._tcp.local.",
+                    "U1-BUSY",
+                    "u1-busy.local.",
+                    ip.as_str(),
+                    8883,
+                    &[("sn", "SNBUSY")][..],
+                )
+                .unwrap();
+                host.register(info).unwrap();
+                std::thread::sleep(Duration::from_secs(6));
+                stop.store(true, Ordering::Relaxed);
+            });
+            run(&daemon, &stop, |f| hits.push(f));
+        });
+        assert!(hits.iter().any(|f| f.sn.as_deref() == Some("SNBUSY")), "{hits:?}");
     }
 
     fn local_ip() -> String {
