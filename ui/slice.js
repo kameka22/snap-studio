@@ -456,14 +456,17 @@ function slSummary() {
   const bed = $("s-bed").selectedOptions[0]?.textContent || "";
   const temp = typeof PD !== "undefined" ? PD.bedTemps?.[$("s-bed").value] : null;
   const n = used.size || 1;
+  // Heads chosen for supports, walls or infill: discreetly, beside them.
+  const heads = typeof advHeadsSummary === "function" ? advHeadsSummary() : null;
   const parts = [
     tr("slice.sum.spools", { n }),
     bed && `${bed}${temp ? ` ${temp}` : ""}`,
     $("s-layer-val").textContent,
     tr("slice.sum.infill", { v: $("s-infill-val").textContent }),
     tr("slice.sum.walls", { v: $("s-walls-val").textContent }),
-    $("s-supports").checked && tr("slice.sum.supports"),
+    $("s-supports").checked && [tr("slice.sum.supports"), heads?.supports].filter(Boolean).join(" "),
     $("s-brim").checked && tr("slice.sum.brim"),
+    heads?.others,
     typeof advCount === "function" && advCount() && tr("slice.sum.adv", { n: advCount() }),
   ].filter(Boolean);
   $("s-summary").innerHTML = parts.map((p) => `<span>${esc(p)}</span>`).join("");
@@ -482,6 +485,8 @@ $("smodal").addEventListener("input", (e) => {
 $("smodal").addEventListener("change", (e) => {
   if (e.target.matches("#s-map select")) slUsedHeads();
   if (e.target.matches("#s-supports, #s-brim")) slSummary();
+  // Supports on or off change the heads counted for the plate.
+  if (e.target.matches("#s-supports")) pdBedLine();
 });
 
 function setRange(id, value, fmt) {

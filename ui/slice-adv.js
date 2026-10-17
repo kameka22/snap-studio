@@ -294,6 +294,45 @@ function advSet(k, v) {
   advRemember();
   advRenderPanel();
   advRenderRows();
+  // A head chosen for supports, walls or infill counts for the plate.
+  if (ADV_FILAMENT.has(k) && typeof pdBedLine === "function") pdBedLine();
+}
+
+/* Heads the advanced settings send elements to — supports (when on),
+   walls, infill — as the engine gets them: { key: head }. */
+function advHeads() {
+  const o = advOverrides();
+  const out = {};
+  for (const k of ADV_FILAMENT) {
+    const v = +o[k];
+    if (!(v > 0)) continue;
+    if (k.startsWith("support") && !$("s-supports").checked) continue;
+    out[k] = v - 1;
+  }
+  return out;
+}
+
+/* Those heads, short, for the summary: { supports: "T3", others: "walls T1" }. */
+function advHeadsSummary() {
+  const h = advHeads();
+  const list = (...keys) => [...new Set(keys.map((k) => h[k]).filter((x) => x != null))].map((x) => "T" + x).join("/");
+  const others = [
+    h.wall_filament != null && tr("slice.sum.h.walls", { t: list("wall_filament") }),
+    list("sparse_infill_filament", "solid_infill_filament") && tr("slice.sum.h.infill", { t: list("sparse_infill_filament", "solid_infill_filament") }),
+  ].filter(Boolean);
+  return { supports: list("support_filament", "support_interface_filament"), others: others.join(" · ") };
+}
+
+/* An emptied plate is a new print: the heads chosen for supports, walls
+   or infill are forgotten, in every machine's memory — the spools will
+   have changed, and a PETG support head once raised a PLA print's plate
+   to 80°. The other advanced settings stay. */
+function advForgetHeads() {
+  for (const k of ADV_FILAMENT) delete SL.adv[k];
+  for (const m of Object.values(SL.memory)) {
+    if (m && typeof m === "object" && m.adv) for (const k of ADV_FILAMENT) delete m.adv[k];
+  }
+  localStorage.setItem("snapstudio.slice", JSON.stringify(SL.memory));
 }
 
 $("s-adv-body").addEventListener("change", (e) => {

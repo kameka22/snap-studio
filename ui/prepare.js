@@ -1589,8 +1589,10 @@ async function prClear() {
   prEmpty();
 }
 
-/* Empties the plate as one undo step and redraws. */
+/* Empties the plate as one undo step and redraws. A new print starts:
+   the heads chosen for supports, walls or infill are forgotten. */
 function prEmpty() {
+  if (typeof advForgetHeads === "function") advForgetHeads();
   prRemember();
   PR.objects = [];
   PR.sel.clear();
