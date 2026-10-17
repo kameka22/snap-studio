@@ -479,6 +479,36 @@ fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32), extruder_map:
     Ok(dst)
 }
 
+/// Color of each head for the G-code's images: its spool's, otherwise its
+/// filament profile's (`filament_colour`, always set by `presets::prepare`).
+fn head_colors(spools: &[Option<String>], filaments: &[PathBuf]) -> Vec<Option<[u8; 3]>> {
+    filaments
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            spools.get(i).and_then(|c| c.as_deref()).and_then(crate::plate::hex_rgb).or_else(|| {
+                let v: serde_json::Value = serde_json::from_slice(&std::fs::read(f).ok()?).ok()?;
+                v["filament_colour"].get(0)?.as_str().and_then(crate::plate::hex_rgb)
+            })
+        })
+        .collect()
+}
+
+/// The plate as sent to the engine, each triangle in its head's color:
+/// written extruders are heads from 1, painting included.
+fn plate_mesh(input: &Path, heads: &[Option<[u8; 3]>]) -> Option<crate::mesh::MeshData> {
+    let mut zip = crate::model3mf::open(input).ok()?;
+    let mut m = crate::mesh::load_mesh(&mut zip, 400_000).ok()?;
+    if m.extruders.len() == m.tris.len() {
+        for (t, e) in m.tris.iter_mut().zip(&m.extruders) {
+            if let Some(Some(c)) = heads.get(e.saturating_sub(1) as usize) {
+                t.c = *c;
+            }
+        }
+    }
+    Some(m)
+}
+
 /// Filaments declared by a model, to associate them with heads.
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct ModelInfo {
@@ -762,6 +792,17 @@ pub fn run_job(
         let Some(first) = produced.first() else {
             return fail(engine_error(&logs));
         };
+
+        // The printer's screen shows the print from images in the G-code,
+        // which the engine's command line does not write (`gcode_thumbs`).
+        // Never a reason to fail the slice.
+        if let Some(mesh) = plate_mesh(&input, &head_colors(&req.colors, &prep.filaments)) {
+            for g in &produced {
+                if let Err(e) = crate::gcode_thumbs::embed(g, &mesh) {
+                    eprintln!("[slice] G-code images: {e}");
+                }
+            }
+        }
 
         // The G-code stays in the working folder: it is a preview, which the user
         // will save, send to the printer or discard.
@@ -1396,6 +1437,39 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// The G-code's images color each part with its head's spool, painting
+    /// included; a head without a known spool takes its profile's color.
+    #[test]
+    fn plate_images_take_the_heads_colors() {
+        let dir = std::env::temp_dir().join("snapstudio_plate_mesh");
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("cube.3mf");
+        // Volume on extruder 1, triangle 0 painted with filament 2.
+        crate::mesh::testkit::painted_cube(&src, &["8"], Some(1));
+        let scene = vec![crate::plate::SceneItem {
+            path: src.to_string_lossy().to_string(),
+            item: 0,
+            name: "cube".into(),
+            pos: [100.0, 100.0],
+            rot: [0.0; 3],
+            scale: [1.0; 3],
+            // Color 1 → T2, color 2 → T0.
+            extruder_map: vec![2, 0],
+        }];
+        let plate = dir.join("plate.3mf");
+        crate::plate::write_scene(&scene, (270.0, 270.0), &plate).unwrap();
+        let profile = dir.join("filament_0.json");
+        std::fs::write(&profile, r##"{"filament_colour":["#00FF00"]}"##).unwrap();
+        let other = dir.join("filament_1.json");
+        std::fs::write(&other, "{}").unwrap();
+        // T0: no spool color, its profile's green; T1: none at all; T2: a red spool.
+        let heads = head_colors(&[None, None, Some("#FF0000".into())], &[profile, other.clone(), other]);
+        assert_eq!(heads, vec![Some([0, 255, 0]), None, Some([255, 0, 0])]);
+        let m = plate_mesh(&plate, &heads).unwrap();
+        assert_eq!(m.tris[0].c, [0, 255, 0], "painted with color 2, on T0");
+        assert_eq!(m.tris[1].c, [255, 0, 0], "the volume's color 1, on T2");
+    }
+
     /// A painted model really prints in its colors: the engine must use one
     /// head per painted color, as the plate chose them — even when the
     /// spools' colors are unknown (the engine counts filaments by color).
@@ -1449,6 +1523,13 @@ mod tests {
         assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
         let stats = last.stats.clone().expect("stats");
         println!("heads used {:?}", stats.tools);
+        // The printer's screen gets the print's picture (`gcode_thumbs`).
+        let gcode = std::fs::read_to_string(last.gcode.as_ref().unwrap()).unwrap();
+        assert!(gcode.contains("; thumbnail begin 48x48") && gcode.contains("; thumbnail begin 300x300"), "images in the G-code");
+        if let Ok(dst) = std::env::var("PAINT_THUMB") {
+            let png = crate::gcode::embedded_thumbnail(gcode.as_bytes()).unwrap();
+            std::fs::write(dst, png).unwrap();
+        }
         let want: Vec<u8> = (0..colors.len().min(4) as u8).collect();
         assert!(want.iter().all(|h| stats.tools.contains(h)), "every color's head prints");
         discard("painted");
@@ -1607,3 +1688,4 @@ mod tests {
         assert!(n.ends_with(".gcode"));
     }
 }
+

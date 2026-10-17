@@ -7,6 +7,7 @@ mod discover;
 mod engine;
 mod favorites;
 mod gcode;
+mod gcode_thumbs;
 mod i18n;
 mod ia;
 mod jobs;
