@@ -61,6 +61,9 @@ const swatch = (color) =>
 
 /* Slicing works on the Prepare view's plate. */
 async function openSlice() {
+  // A plate from an older version may still be reading its colors: each one
+  // needs a head, or the engine gets it on T0.
+  if (typeof prRefreshColors === "function") await prRefreshColors();
   const scene = prepareScene();
   if (!scene) return;
   SL.source = scene;

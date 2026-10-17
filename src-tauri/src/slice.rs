@@ -484,7 +484,9 @@ fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32), extruder_map:
 pub struct ModelInfo {
     /// One per model extruder (material, color), when the project declares them.
     pub filaments: Vec<crate::model3mf::ProjectFilament>,
-    /// Extruders actually used by the model's objects (from 1).
+    /// Extruders the model's objects declare (from 1). Painted colors are
+    /// not read here — it would mean the whole mesh: each plate object lists
+    /// its own (`plate::items`).
     pub used: Vec<u8>,
 }
 
@@ -507,12 +509,6 @@ pub fn model_info(source: &Path) -> Result<ModelInfo> {
             }
         })
         .collect();
-    // Painted colors are only in the meshes: read them when there are some.
-    if crate::model3mf::has_paint(&mut zip) {
-        if let Ok(m) = crate::mesh::load_mesh(&mut zip, usize::MAX) {
-            used.extend(crate::mesh::colors_used(&m));
-        }
-    }
     used.sort_unstable();
     used.dedup();
     if used.is_empty() {

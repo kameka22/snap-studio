@@ -128,21 +128,32 @@ fn size_of(m: &MeshData) -> [f32; 3] {
 /// filament color the project associates with their extruder.
 pub fn display_mesh(path: &Path, index: usize, budget: usize) -> Result<MeshData> {
     let (mut m, _) = load(path, index, budget)?;
-    if !is_stl(path) && m.extruders.len() == m.tris.len() {
+    if !is_stl(path) {
         let mut zip = crate::model3mf::open(path)?;
-        let colors: Vec<Option<[u8; 3]>> = crate::model3mf::project_filaments(&mut zip)
-            .iter()
-            .map(|f| f.color.as_deref().and_then(hex_rgb))
-            .collect();
-        for (t, e) in m.tris.iter_mut().zip(&m.extruders) {
-            if t.c == crate::render::DEFAULT_COLOR {
-                if let Some(Some(c)) = colors.get(e.saturating_sub(1) as usize) {
-                    t.c = *c;
-                }
+        filament_colored(&mut zip, &mut m);
+    }
+    Ok(m)
+}
+
+/// Colors triangles without a color of their own with the project's
+/// filament for their model color (painting included) — what the slicer
+/// shows. Used by every view of a 3MF: Prepare, the Files viewer, rendered
+/// thumbnails, the AI's copy.
+pub fn filament_colored(zip: &mut crate::model3mf::Zip, m: &mut MeshData) {
+    if m.extruders.len() != m.tris.len() {
+        return;
+    }
+    let colors: Vec<Option<[u8; 3]>> = crate::model3mf::project_filaments(zip)
+        .iter()
+        .map(|f| f.color.as_deref().and_then(hex_rgb))
+        .collect();
+    for (t, e) in m.tris.iter_mut().zip(&m.extruders) {
+        if t.c == crate::render::DEFAULT_COLOR {
+            if let Some(Some(c)) = colors.get(e.saturating_sub(1) as usize) {
+                t.c = *c;
             }
         }
     }
-    Ok(m)
 }
 
 pub fn hex_rgb(s: &str) -> Option<[u8; 3]> {
@@ -303,10 +314,10 @@ pub fn parts_by_head(name: &str, m: MeshData, head_of: impl Fn(u8) -> u8, mirror
     let mut groups: std::collections::BTreeMap<u8, Group> = Default::default();
     if !m.paint.is_empty() {
         let paint_for_heads = |p: &str| -> Option<Box<str>> {
-            let whole;
-            let p = if mirrored && crate::paint::is_split(p) {
-                whole = crate::paint::whole(crate::paint::dominant(p)?);
-                whole.as_str()
+            let flat;
+            let p = if mirrored {
+                flat = crate::paint::reordered(p)?;
+                flat.as_str()
             } else {
                 p
             };

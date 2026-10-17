@@ -30,6 +30,12 @@ impl Mat {
         ]
     }
 
+    /// Determinant of the linear part: negative for a mirroring transform.
+    fn det(&self) -> f32 {
+        let m = &self.0;
+        m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6])
+    }
+
     /// `self` applied first, then `parent`.
     fn then(&self, parent: &Mat) -> Mat {
         let (c, p) = (&self.0, &parent.0);
@@ -420,6 +426,10 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
         // A painted mesh needs a model color for every triangle: extruder 1
         // stands for an undeclared volume, as in the slicers.
         let ext = ext.or(painted.then_some(1));
+        // A mirroring placement (an object mirrored in its slicer) turns the
+        // faces inside out: their winding is restored, and the slicer would
+        // otherwise flip them itself — moving split painting either way.
+        let mirrored = inst.xf.det() < 0.0;
         for (i, t) in obj.tris.iter().enumerate() {
             // On very dense meshes, sample instead of truncating: the silhouette stays
             // right.
@@ -430,11 +440,14 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
             if a >= obj.verts.len() || b >= obj.verts.len() || c >= obj.verts.len() {
                 continue;
             }
-            let v = [
+            let mut v = [
                 inst.xf.apply(obj.verts[a]),
                 inst.xf.apply(obj.verts[b]),
                 inst.xf.apply(obj.verts[c]),
             ];
+            if mirrored {
+                v.swap(1, 2);
+            }
             for p in &v {
                 for k in 0..3 {
                     min[k] = min[k].min(p[k]);
@@ -446,7 +459,13 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
                 c: obj.tri_colors[i].or(base).unwrap_or(crate::render::DEFAULT_COLOR),
             });
             if let Some(e) = ext {
-                let p = obj.paint.get(i).cloned().flatten();
+                let p = obj.paint.get(i).and_then(Option::as_deref).and_then(|p| {
+                    if mirrored {
+                        crate::paint::reordered(p).map(Into::into)
+                    } else {
+                        Some(p.into())
+                    }
+                });
                 // State 0 is the volume's own extruder.
                 let shown = p.as_deref().and_then(crate::paint::dominant).filter(|s| *s > 0).unwrap_or(e);
                 extruders.resize(tris.len() - 1, 1);
@@ -708,6 +727,12 @@ pub mod testkit {
     /// A 10 mm cube; `paint[i]` paints triangle `i` (`""`: none). The object
     /// is declared on `extruder` in `model_settings.config` when given.
     pub fn painted_cube(dst: &Path, paint: &[&str], extruder: Option<u8>) {
+        painted_cube_with(dst, paint, extruder, "1 0 0 0 1 0 0 0 1 50 50 0", &[]);
+    }
+
+    /// The same, placed by `transform` in the `<build>`, with the project's
+    /// filament colors (`project_settings.config`) when given.
+    pub fn painted_cube_with(dst: &Path, paint: &[&str], extruder: Option<u8>, transform: &str, filaments: &[&str]) {
         let p = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.], [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.]];
         let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
         let mut m = String::from(r#"<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices>"#);
@@ -719,7 +744,7 @@ pub mod testkit {
             let paint = paint.get(i).filter(|s| !s.is_empty()).map(|s| format!(r#" paint_color="{s}""#)).unwrap_or_default();
             m.push_str(&format!(r#"<triangle v1="{}" v2="{}" v3="{}"{paint}/>"#, t[0], t[1], t[2]));
         }
-        m.push_str(r#"</triangles></mesh></object></resources><build><item objectid="1" transform="1 0 0 0 1 0 0 0 1 50 50 0"/></build></model>"#);
+        m.push_str(&format!(r#"</triangles></mesh></object></resources><build><item objectid="1" transform="{transform}"/></build></model>"#));
         let mut z = zip::ZipWriter::new(std::fs::File::create(dst).unwrap());
         let o = zip::write::SimpleFileOptions::default();
         z.start_file("3D/3dmodel.model", o).unwrap();
@@ -728,6 +753,11 @@ pub mod testkit {
             z.start_file("Metadata/model_settings.config", o).unwrap();
             let cfg = format!(r#"<?xml version="1.0" encoding="UTF-8"?><config><object id="1"><metadata key="name" value="cube"/><metadata key="extruder" value="{e}"/></object></config>"#);
             z.write_all(cfg.as_bytes()).unwrap();
+        }
+        if !filaments.is_empty() {
+            z.start_file("Metadata/project_settings.config", o).unwrap();
+            let list = filaments.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(",");
+            z.write_all(format!(r#"{{"filament_colour":[{list}],"filament_type":[{}]}}"#, vec!["\"PLA\""; filaments.len()].join(",")).as_bytes()).unwrap();
         }
         z.finish().unwrap();
     }
@@ -879,7 +909,6 @@ mod stats_tests {
         assert_eq!(crate::paint::states(split), vec![3, 6]);
         testkit::painted_cube(&path, &["2C", "8", split, "0"], Some(4));
         let mut zip = crate::model3mf::open(&path).unwrap();
-        assert!(crate::model3mf::has_paint(&mut zip));
         let it = load_item(&mut zip, 0, usize::MAX).unwrap();
         let m = &it.mesh;
         assert_eq!(&m.extruders[..5], &[5, 2, 3, 4, 4]);
@@ -910,7 +939,6 @@ mod stats_tests {
         let path = dir.join("plain.3mf");
         testkit::painted_cube(&path, &[], None);
         let mut zip = crate::model3mf::open(&path).unwrap();
-        assert!(!crate::model3mf::has_paint(&mut zip));
         let m = load_mesh(&mut zip, usize::MAX).unwrap();
         assert!(m.extruders.is_empty() && m.volumes.is_empty() && m.paint.is_empty());
     }
@@ -931,5 +959,48 @@ mod stats_tests {
             }
             println!("item {i}: {} triangles, colors {:?}, shown {shown:?}", m.tris.len(), colors_used(&m));
         }
+    }
+
+    /// An object mirrored in its slicer (negative determinant in the build):
+    /// faces back outward, split painting flattened, whole painting kept.
+    #[test]
+    fn mirrored_placement_restores_the_winding() {
+        let dir = std::env::temp_dir().join("snapstudio_paint_read");
+        std::fs::create_dir_all(&dir).unwrap();
+        let signed_volume = |m: &MeshData| -> f32 {
+            m.tris.iter().map(|t| {
+                let [a, b, c] = t.v;
+                a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])
+            }).sum::<f32>() / 6.0
+        };
+        let paint = ["2C", "", "3C0C0C0C3"];
+        let plain = dir.join("plain-placed.3mf");
+        testkit::painted_cube(&plain, &paint, Some(1));
+        let mirror = dir.join("mirrored.3mf");
+        testkit::painted_cube_with(&mirror, &paint, Some(1), "-1 0 0 0 1 0 0 0 1 50 50 0", &[]);
+        let m = load_mesh(&mut crate::model3mf::open(&plain).unwrap(), usize::MAX).unwrap();
+        assert!(signed_volume(&m) > 0.0);
+        assert!(crate::paint::is_split(m.paint[2].as_deref().unwrap()));
+        let m = load_mesh(&mut crate::model3mf::open(&mirror).unwrap(), usize::MAX).unwrap();
+        assert!(signed_volume(&m) > 0.0, "faces outward after a mirror");
+        assert_eq!(m.paint[0].as_deref(), Some("2C"));
+        assert_eq!(m.paint[2].as_deref(), Some(crate::paint::whole(3).as_str()));
+    }
+
+    #[test]
+    fn downsample_keeps_painting_aligned() {
+        let dir = std::env::temp_dir().join("snapstudio_paint_read");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("sampled.3mf");
+        let paint: Vec<String> = (0..12).map(|i| crate::paint::whole(i as u8 + 1)).collect();
+        let refs: Vec<&str> = paint.iter().map(String::as_str).collect();
+        testkit::painted_cube(&path, &refs, Some(1));
+        let mut m = load_mesh(&mut crate::model3mf::open(&path).unwrap(), usize::MAX).unwrap();
+        downsample(&mut m, 4);
+        assert_eq!(m.tris.len(), 4);
+        assert_eq!((m.extruders.len(), m.volumes.len(), m.paint.len()), (4, 4, 4));
+        // Every third triangle kept: 1, 4, 7, 10.
+        assert_eq!(m.extruders, vec![1, 4, 7, 10]);
+        assert_eq!(m.paint[1].as_deref(), Some(crate::paint::whole(4).as_str()));
     }
 }

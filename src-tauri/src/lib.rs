@@ -1211,7 +1211,10 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
         })
     } else {
         match model3mf::open(Path::new(&path)) {
-            Ok(mut zip) => mesh::load_mesh(&mut zip, budget),
+            Ok(mut zip) => mesh::load_mesh(&mut zip, budget).map(|mut m| {
+                plate::filament_colored(&mut zip, &mut m);
+                m
+            }),
             Err(e) => return fail(404, &e.to_string()),
         }
     };

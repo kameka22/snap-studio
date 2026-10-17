@@ -52,9 +52,10 @@ Splitting depends on the triangle's vertex order.
   (as today), and each triangle's paint is written back as `paint_color`
   with its states renumbered to the destination heads. Splitting painted
   triangles into separate parts would make open meshes.
-- **Mirrored objects** (negative scale): we flip the winding by swapping two
-  vertices, which would move fine paint; split triangles are written with
-  their dominant state instead. Whole-triangle paint is exact.
+- **Mirrored objects** (negative scale in Prepare, or a mirroring placement
+  in the file): the winding is flipped by swapping two vertices, which
+  would move fine paint; split triangles get their dominant state instead.
+  Whole-triangle paint is exact.
 - **Display**: dominant color per triangle; fine paint inside a large
   triangle is printed but not drawn (exact subdivision display later).
 - **Per object**: each plate object keeps its own `heads` (`{ color: head }`),
@@ -104,6 +105,20 @@ Splitting depends on the triangle's vertex order.
   and the engine's profiles: Prepare's tree, live colors, a per-object
   choice (the cap alone on T1), Duplicate, undo, a plate saved by 0.7.3
   read again, the slice sheet and the `extruder_map` sent per object.
+
+- Review pass, fixed:
+  - the AI's copy of a painted file was split by painted color into open
+    surfaces; it now keeps one closed part per volume, triangles in their
+    filament colors;
+  - objects mirrored in their slicer (negative determinant in the build):
+    faces turned back outward, split painting flattened as for Prepare's
+    mirror (the slicer would flip them and move it);
+  - `slice_model` no longer reads whole painted meshes for a list nothing
+    uses any more;
+  - the Files viewer and rendered thumbnails show filament colors,
+    painting included (`plate::filament_colored`, shared);
+  - paint trees up to 64 levels; slicing waits for an older plate's colors;
+    tests for sampling a painted mesh and the AI import.
 
 ## To check on the Mac
 

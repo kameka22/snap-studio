@@ -26,8 +26,9 @@ fn nibbles(s: &str) -> Option<Vec<u8>> {
 }
 
 fn read(nibs: &[u8], i: &mut usize, out: &mut Vec<Node>, depth: u32) -> Option<()> {
-    // Orca never goes this deep; a corrupt string must not recurse forever.
-    if depth > 32 {
+    // Far deeper than a fine brush on a large triangle goes; a corrupt
+    // string must not recurse forever.
+    if depth > 64 {
         return None;
     }
     let code = *nibs.get(*i)?;
@@ -149,6 +150,18 @@ pub fn renumber(s: &str, f: impl Fn(u8) -> u8) -> Option<String> {
     Some(encode(&nodes))
 }
 
+/// The painting of a triangle whose vertices are about to be reordered:
+/// unchanged when whole, otherwise its dominant state over the whole
+/// triangle — the pieces of a split follow the vertex order. `None` for an
+/// unreadable string.
+pub fn reordered(s: &str) -> Option<String> {
+    if is_split(s) {
+        dominant(s).map(whole)
+    } else {
+        decode(s).map(|n| encode(&n))
+    }
+}
+
 /// A whole triangle painted with one state.
 pub fn whole(state: u8) -> String {
     encode(&[Node::Leaf(state)])
@@ -204,6 +217,14 @@ mod tests {
         let r = renumber(&s, |st| if st == 0 { 0 } else { st + 10 }).unwrap();
         assert_eq!(decode(&r).unwrap(), vec![Node::Split(0b0110), Node::Leaf(0), Node::Leaf(15), Node::Leaf(12)]);
         assert_eq!(renumber("2C", |_| 1).unwrap(), "4");
+    }
+
+    #[test]
+    fn reordering_flattens_splits_only() {
+        assert_eq!(reordered("2C").as_deref(), Some("2C"));
+        let split = encode(&[Node::Split(0b11), Node::Leaf(1), Node::Leaf(1), Node::Leaf(2), Node::Leaf(7)]);
+        assert_eq!(reordered(&split), Some(whole(1)));
+        assert_eq!(reordered("zz"), None);
     }
 
     #[test]
