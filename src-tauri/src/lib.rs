@@ -16,6 +16,7 @@ mod model3mf;
 mod presets;
 mod printers;
 mod orient;
+mod paint;
 mod plate;
 mod pty;
 mod render;

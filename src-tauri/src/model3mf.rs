@@ -466,6 +466,17 @@ pub fn object_settings(zip: &mut Zip) -> (HashMap<u32, String>, HashMap<u32, u32
     (names, plates)
 }
 
+/// True when a mesh of the container carries multicolor painting
+/// (`paint.rs`). Looks for the attribute without parsing the XML.
+pub fn has_paint(zip: &mut Zip) -> bool {
+    let models: Vec<String> = entry_names(zip).into_iter().filter(|n| n.ends_with(".model")).collect();
+    models.iter().any(|n| {
+        read_entry(zip, n).is_some_and(|d| {
+            d.windows(13).any(|w| w == b"paint_color=\"") || d.windows(18).any(|w| w == b"mmu_segmentation=\"")
+        })
+    })
+}
+
 /// A filament declared by the project (`project_settings.config`).
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct ProjectFilament {

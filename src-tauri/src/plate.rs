@@ -100,9 +100,7 @@ pub fn items(path: &Path) -> Result<Vec<PlateItem>> {
     let mut out = Vec::with_capacity(build.len());
     for (i, b) in build.iter().enumerate() {
         let it = crate::mesh::load_item(&mut zip, i, FULL_BUDGET)?;
-        let mut extruders: Vec<u8> = it.mesh.extruders.clone();
-        extruders.sort_unstable();
-        extruders.dedup();
+        let mut extruders = crate::mesh::colors_used(&it.mesh);
         if extruders.is_empty() {
             extruders.push(1);
         }

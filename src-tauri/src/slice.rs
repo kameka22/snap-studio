@@ -522,6 +522,12 @@ pub fn model_info(source: &Path) -> Result<ModelInfo> {
             }
         })
         .collect();
+    // Painted colors are only in the meshes: read them when there are some.
+    if crate::model3mf::has_paint(&mut zip) {
+        if let Ok(m) = crate::mesh::load_mesh(&mut zip, usize::MAX) {
+            used.extend(crate::mesh::colors_used(&m));
+        }
+    }
     used.sort_unstable();
     used.dedup();
     if used.is_empty() {

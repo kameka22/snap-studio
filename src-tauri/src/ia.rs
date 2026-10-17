@@ -766,6 +766,8 @@ mod tests {
             min: [0.0; 3],
             max: [1.0; 3],
             truncated: false,
+            volumes: Vec::new(),
+            paint: Vec::new(),
             extruders: vec![1; 12],
         };
         for e in &mut m.extruders[6..] {
