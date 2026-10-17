@@ -1453,6 +1453,7 @@ function prResetRotation() {
 async function prepareShow() {
   prStatus();
   prRefreshSpools();
+  prEnsureLists();
   if (!prEnsureGL()) return;
   const bed = await invoke("plate_bed", { machine: SL.memory.last || null }).catch(() => null);
   if (bed && (bed.w !== PR.bed.w || bed.d !== PR.bed.d || bed.model !== PR.bed.model)) {
@@ -1781,6 +1782,18 @@ $("p-printer")?.addEventListener("change", (e) => {
   headsSetActive(e.target.value, "prepare");
   prRefreshSpools();
 });
+
+/* The machine profile's head count, for a printer whose spools are not
+   known (yet): loaded here when the slice sheet has not been opened. */
+async function prEnsureLists() {
+  if (typeof SL === "undefined" || SL.lists) return;
+  const pid = typeof headsActive === "function" ? headsActive() : "";
+  const lists = await invoke("slice_lists", { machine: SL.memory["printer:" + pid] || SL.memory.last || null }).catch(() => null);
+  if (!lists || SL.lists) return;
+  SL.lists = lists;
+  prRenderInspector();
+  prSchedule();
+}
 
 /* The active printer's spools, asked when Prepare shows: otherwise they were
    only known once the Printers tab, the heads view or the slice sheet had

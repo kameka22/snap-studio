@@ -82,12 +82,15 @@ function headsSetHead(pid, path, ext, h, src) {
   hdEmit({ pid, what: "map", path, src });
 }
 
-/* Printer used by Prepare: the one last chosen there or in the slice sheet. */
+/* Printer used by Prepare: the one last chosen there or in the slice sheet,
+   otherwise the first one. A remembered "without printer" (a slice run
+   before any printer was added) only counts when there is none — as in the
+   slice sheet: it left Prepare with no spools and a single head (T0). */
 function headsActive() {
   const list = typeof P !== "undefined" ? P.list : [];
-  const ok = (id) => id === "" || list.some((p) => p.id === id);
-  const cand = [HD.data.active, typeof SL !== "undefined" ? SL.memory.printer : undefined, list[0]?.id || ""];
-  return cand.find((id) => id != null && ok(id)) ?? "";
+  const ok = (id) => id && list.some((p) => p.id === id);
+  const cand = [HD.data.active, typeof SL !== "undefined" ? SL.memory.printer : undefined];
+  return cand.find(ok) ?? list[0]?.id ?? "";
 }
 function headsSetActive(pid, src) {
   if (HD.data.active === pid) return;
@@ -122,9 +125,12 @@ listen("printer-status", (e) => {
   if (status?.online && status.filaments) headsSetSlots(id, status.filaments);
 });
 
-/* Number of heads: the spools reported, otherwise the profiles known. */
+/* Number of heads: the spools reported, otherwise the profiles known,
+   otherwise — nothing read from the printer yet (asleep, offline) — the
+   machine profile's, rather than a single head. */
 function headsCount(pid) {
-  return Math.max(1, headsSlots(pid).length, headsFilaments(pid).length, pid ? 0 : SL?.lists?.extruders || 0);
+  const known = Math.max(headsSlots(pid).length, headsFilaments(pid).length);
+  return Math.max(1, known || (typeof SL !== "undefined" ? SL.lists?.extruders || 0 : 0));
 }
 
 /* ------------------------------------------------------------ models */
