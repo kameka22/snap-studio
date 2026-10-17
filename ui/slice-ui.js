@@ -330,8 +330,8 @@ function slTokens() {
   document.querySelectorAll("#s-map select").forEach((sel) => {
     const box = document.querySelector(`#s-map [data-tokens="${sel.dataset.key}"]`);
     if (!box) return;
-    const [fi, ext] = sel.dataset.key.split(":").map(Number);
-    const fil = SL.models[fi]?.filaments.find((f) => f.index === ext);
+    const [gi, ext] = sel.dataset.key.split(":").map(Number);
+    const fil = SL.models.find((m) => m.path === SL.groups[gi]?.path)?.filaments.find((f) => f.index === ext);
     box.innerHTML = Array.from({ length: n }, (_, h) => {
       const slot = SL.slots.find((s) => s.index === h);
       const empty = slot && !slot.present;
@@ -372,13 +372,13 @@ $("s-heads").addEventListener("change", (e) => {
 
 /* The color -> head table is read-only here: edited in Prepare. */
 $("s-map-edit").addEventListener("click", () => {
-  // Every plate object of the files in the sheet gets selected.
-  const paths = new Set(SL.models.map((m) => m.path));
+  // The sheet's objects get selected in Prepare, where each one's colors are.
+  const ids = new Set(SL.source.items.map((it) => it.id));
   closeSheet($("smodal"));
   switchView("prepare");
   if (typeof PR !== "undefined") {
-    const ids = PR.objects.filter((o) => paths.has(o.path)).map((o) => o.id);
-    if (ids.length) prSelect(ids, false);
+    const sel = PR.objects.filter((o) => ids.has(o.id)).map((o) => o.id);
+    if (sel.length) prSelect(sel, false);
   }
 });
 

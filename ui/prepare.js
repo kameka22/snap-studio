@@ -27,6 +27,8 @@ const PR = {
   drag: null,
   raf: 0,
   framed: false,
+  /* Objects whose colors are folded in the list. */
+  fold: new Set(),
 };
 
 /* Live colors: each vertex carries its model extruder (aExt); when that
@@ -56,8 +58,8 @@ void main() { frag = uColor; }`;
 /* ------------------------------------------------------------ state */
 
 function prSave() {
-  const objects = PR.objects.map(({ id, name, path, item, pos, rot, scale, size, plate, extruders, free }) => ({
-    id, name, path, item, pos, rot, scale, size, plate, extruders, free,
+  const objects = PR.objects.map(({ id, name, path, item, pos, rot, scale, size, plate, extruders, heads, cv, free }) => ({
+    id, name, path, item, pos, rot, scale, size, plate, extruders, heads, cv, free,
   }));
   localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId }));
   prStatus();
@@ -848,8 +850,11 @@ function prStatus() {
 }
 
 function prRenderInspector() {
-  if (typeof headsActive === "function") prRenderStrip();
   const overlap = prOverlaps();
+  const live = typeof headsActive === "function";
+  const pid = live ? headsActive() : "";
+  const slots = live ? headsSlots(pid) : [];
+  const n = live ? headsCount(pid) : 0;
   $("p-list").innerHTML = PR.objects
     .map((o) => {
       const st = bedState(o);
@@ -858,10 +863,35 @@ function prRenderInspector() {
         : st === "out" ? `<span class="tag">${esc(o.plate > 1 ? tr("prepare.tag.plate", { n: o.plate }) : tr("prepare.tag.off"))}</span>`
         : overlap.has(o.id) ? `<span class="tag warn">${esc(tr("prepare.tag.overlap"))}</span>`
         : "";
-      return `<button class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}">
-        <span class="k">${esc(o.name)}</span>${tag}</button>`;
+      const open = !PR.fold.has(o.id);
+      const heads = live ? prHeads(o, pid, slots, n) : {};
+      const spool = (h) => slots.find((x) => x.index === h);
+      const dots = [...new Set(Object.values(heads).map((x) => x.h))]
+        .map((h) => spool(h)?.present && spool(h).color ? `<i style="background:${esc(spool(h).color)}"></i>` : "")
+        .join("");
+      const row = `<button class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}">
+        <span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>
+        <span class="k">${esc(o.name)}</span>${tag}<span class="p-dots">${dots}</span></button>`;
+      if (!open || !live) return row;
+      const model = headsModelNow(o.path);
+      return row + prColors(o).map((ext) => {
+        const f = model?.filaments?.find((x) => x.index === ext);
+        const tokens = Array.from({ length: n }, (_, h) => {
+          const s = spool(h);
+          const c = s?.present && s.color ? s.color : "";
+          const title = `T${h}${s ? (s.present ? ` · ${[s.kind, s.color].filter(Boolean).join(" · ")}` : " · " + tr("printers.empty_tag")) : ""}`;
+          return `<button class="sl-token${heads[ext]?.h === h ? " on" : ""}${s && !s.present ? " is-empty" : ""}" data-obj="${o.id}" data-ext="${ext}" data-h="${h}" title="${esc(title)}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${h}</button>`;
+        }).join("");
+        const label = tr("slice.color_n", { n: ext });
+        return `<div class="p-color" title="${esc([label, f?.kind, f?.color].filter(Boolean).join(" · "))}">
+          <span class="p-sw" style="background:${esc(f?.color || "#999")}"></span>
+          <span class="p-color-lbl">${esc(label)}</span>
+          <span class="p-toks">${tokens}</span>
+        </div>`;
+      }).join("");
     })
     .join("");
+  prRenderPrinter();
   prRenderProps();
   prStatus();
 }
@@ -947,6 +977,18 @@ prBindField("p-scale", (o, v) => {
 });
 
 $("p-list").addEventListener("click", (e) => {
+  const fold = e.target.closest("[data-fold]");
+  if (fold) {
+    const id = +fold.dataset.fold;
+    PR.fold.has(id) ? PR.fold.delete(id) : PR.fold.add(id);
+    prRenderInspector();
+    return;
+  }
+  const tok = e.target.closest("[data-h]");
+  if (tok) {
+    prSetHead(PR.objects.find((o) => o.id === +tok.dataset.obj), +tok.dataset.ext, +tok.dataset.h);
+    return;
+  }
   const row = e.target.closest(".p-obj");
   if (row) prSelect([+row.dataset.id], e.metaKey || e.ctrlKey);
 });
@@ -988,6 +1030,7 @@ async function prepareAddFile(path, { remember = true } = {}) {
     size: it.size,
     plate: it.plate,
     extruders: it.extruders,
+    cv: COLORS_VERSION,
   }));
   if (remember) prRemember();
   const first = added.filter((o) => o.plate === 1);
@@ -1365,7 +1408,7 @@ function prDuplicate() {
   prRemember();
   const copies = [];
   for (const o of sel) {
-    const c = { ...o, id: PR.nextId++, pos: [...o.pos], rot: [...o.rot], scale: [...o.scale] };
+    const c = { ...o, id: PR.nextId++, pos: [...o.pos], rot: [...o.rot], scale: [...o.scale], heads: { ...(o.heads || {}) } };
     const b = groupBox([c]);
     PR.objects.push(c);
     const spot = freeSpot(b.x1 - b.x0, b.y1 - b.y0, c.id);
@@ -1424,7 +1467,7 @@ async function prepareShow() {
   }
   prRenderInspector();
   prSchedule();
-  await Promise.all(PR.objects.map(prLoadMesh));
+  await Promise.all([...PR.objects.map(prLoadMesh), prRefreshColors()]);
   prRenderInspector();
   prSchedule();
 }
@@ -1447,7 +1490,7 @@ function prepareScene() {
     name,
     files,
     skipped: PR.objects.length - on.length,
-    items: on.map((o) => ({ path: o.path, item: o.item, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale })),
+    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: o.heads || {} })),
   };
 }
 
@@ -1651,15 +1694,62 @@ prStatus();
 
 /* ---------------------------------------------------- heads and spools */
 
-/* Spool color of each model extruder of an object, for the shader. */
+/* Colors of an object: those of its triangles and painting (plate_items). */
+const prColors = (o) => (o.extruders?.length ? o.extruders : [1]);
+
+/* Head printing each color of an object: the object's own choice,
+   otherwise the file's (slice sheet memory) or the closest spool.
+   { ext: { h, own } } */
+function prHeads(o, pid = headsActive(), slots = headsSlots(pid), n = headsCount(pid)) {
+  const colors = prColors(o);
+  const model = headsModelNow(o.path);
+  const base = headsResolve(pid, o.path, { filaments: model?.filaments || [], used: colors }, slots, n);
+  const out = {};
+  for (const ext of colors) {
+    const own = o.heads?.[ext];
+    out[ext] = own != null && own < n ? { h: own, own: true } : { h: base[ext].h, own: false };
+  }
+  return out;
+}
+
+/* A color of one object goes to head `h`; choosing the default forgets the
+   object's own choice. */
+function prSetHead(o, ext, h) {
+  if (!o) return;
+  prRemember();
+  const dflt = prHeads({ ...o, heads: {} })[ext]?.h;
+  o.heads = { ...(o.heads || {}) };
+  if (h === dflt) delete o.heads[ext];
+  else o.heads[ext] = h;
+  prSave();
+  prRenderInspector();
+  prSchedule();
+}
+
+/* Plates saved before painted colors were read: their colors are read again. */
+const COLORS_VERSION = 2;
+async function prRefreshColors() {
+  const old = PR.objects.filter((o) => o.cv !== COLORS_VERSION);
+  if (!old.length) return;
+  for (const path of new Set(old.map((o) => o.path))) {
+    const items = await invoke("plate_items", { path }).catch(() => null);
+    if (!items) continue;
+    for (const o of old.filter((x) => x.path === path)) {
+      const it = items.find((x) => x.index === o.item);
+      if (it) o.extruders = it.extruders;
+      o.cv = COLORS_VERSION;
+    }
+  }
+  prSave();
+}
+
+/* Spool color of each color of an object, for the shader. */
 function prHeadColors(gl, o, mesh) {
   const col = new Float32Array(17 * 3), on = new Float32Array(17);
   const pid = typeof headsActive === "function" ? headsActive() : "";
-  const model = pid ? headsModelNow(o.path) : null;
-  if (model) {
+  if (pid) {
     const slots = headsSlots(pid);
-    const map = headsResolve(pid, o.path, model, slots);
-    for (const [ext, { h }] of Object.entries(map)) {
+    for (const [ext, { h }] of Object.entries(prHeads(o, pid, slots))) {
       const s = slots.find((x) => x.index === h);
       const rgb = s?.present && s.color ? hexToRgb(s.color) : null;
       if (!rgb || ext > 16) continue;
@@ -1670,57 +1760,25 @@ function prHeadColors(gl, o, mesh) {
   gl.uniform3fv(gl.getUniformLocation(PR.prog, "uHeadCol"), col);
   gl.uniform1fv(gl.getUniformLocation(PR.prog, "uHeadOn"), on);
   const loc = gl.getAttribLocation(PR.prog, "aExt");
-  // No extruder per triangle (STL, older meshes): one-color objects follow
-  // their single extruder, others keep the file's colors.
-  if (loc >= 0 && !mesh.hasExt) gl.vertexAttrib1f(loc, (model?.used || o.extruders || [1]).length === 1 ? (model?.used || o.extruders || [1])[0] : 0);
+  // No color per triangle (STL, older meshes): one-color objects follow
+  // their single color, others keep the file's colors.
+  const colors = prColors(o);
+  if (loc >= 0 && !mesh.hasExt) gl.vertexAttrib1f(loc, colors.length === 1 ? colors[0] : 0);
 }
 
-/* D strip: colors of the active model and the head printing each one. */
-function prRenderStrip() {
-  const box = $("p-strip");
-  if (!box) return;
-  const ids = [...PR.sel];
-  const o = PR.objects.find((x) => x.id === ids[ids.length - 1]);
-  const pid = headsActive();
-  if (!o || !pid) {
-    box.classList.add("hidden");
-    return;
-  }
-  const model = headsModelNow(o.path);
-  if (!model) {
-    box.classList.add("hidden");
-    return;
-  }
-  const slots = headsSlots(pid);
-  const n = headsCount(pid);
-  const map = headsResolve(pid, o.path, model, slots, n);
+/* Printer whose spools color the list, when there are several. */
+function prRenderPrinter() {
+  const box = $("p-printer");
+  if (!box || typeof headsActive !== "function") return;
   const printers = typeof P !== "undefined" ? P.list : [];
-  const sel = printers.length > 1
-    ? `<select id="p-strip-printer" class="p-strip-prn">${printers.map((p) => `<option value="${esc(p.id)}"${p.id === pid ? " selected" : ""}>${esc(p.name || p.host)}</option>`).join("")}</select>`
-    : `<span class="p-strip-prn">${esc(printers[0]?.name || "")}</span>`;
-  const rows = (model.used || [1]).map((ext) => {
-    const f = model.filaments.find((x) => x.index === ext);
-    const tokens = Array.from({ length: n }, (_, h) => {
-      const s = slots.find((x) => x.index === h);
-      const c = s?.present && s.color ? s.color : null;
-      return `<button class="sl-token${map[ext]?.h === h ? " on" : ""}${c ? "" : " is-empty"}" data-ext="${ext}" data-h="${h}" title="${esc(s?.present ? [s.kind, s.color].filter(Boolean).join(" · ") : tr("heads.no_spools"))}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${h}</button>`;
-    }).join("");
-    return `<div class="p-strip-row">
-      <span class="p-strip-sw" style="background:${esc(f?.color || "#999")}"></span>
-      <span class="p-strip-lbl">${esc(tr("slice.color_n", { n: ext }))}${f?.kind ? " · " + esc(f.kind) : ""}</span>
-      <span class="p-strip-toks">${tokens}</span>
-    </div>`;
-  }).join("");
-  box.innerHTML = `<div class="p-strip-head"><b>${esc(o.name)}</b>${sel}</div>${rows}`;
-  box.classList.remove("hidden");
-  box.querySelectorAll("[data-ext]").forEach((b) => {
-    b.onclick = () => headsSetHead(pid, o.path, +b.dataset.ext, +b.dataset.h, "prepare");
-  });
-  const ps = $("p-strip-printer");
-  if (ps) ps.onchange = () => headsSetActive(ps.value, "prepare");
+  box.classList.toggle("hidden", printers.length < 2);
+  if (printers.length < 2) return;
+  const pid = headsActive();
+  box.innerHTML = printers.map((p) => `<option value="${esc(p.id)}"${p.id === pid ? " selected" : ""}>${esc(p.name || p.host)}</option>`).join("");
 }
+$("p-printer")?.addEventListener("change", (e) => headsSetActive(e.target.value, "prepare"));
 window.addEventListener("headschange", () => {
   if (window.currentView !== "prepare") return;
-  prRenderStrip();
+  prRenderInspector();
   prSchedule();
 });

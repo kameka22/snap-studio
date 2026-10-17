@@ -252,7 +252,6 @@
   <div class="prep">
     <div class="prep-stage">
       <canvas id="p-canvas"></canvas>
-      <div id="p-strip" class="p-strip hidden"></div>
       <div id="p-empty" class="empty">
         <div class="empty-art"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></div>
         <h1 data-i18n="prepare.empty.title">Empty plate</h1>
@@ -264,7 +263,7 @@
       <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
     </div>
     <aside class="prep-inspector">
-      <div class="vp-section" data-i18n="prepare.objects">Objects</div>
+      <div class="vp-section p-objects-head"><span data-i18n="prepare.objects">Objects</span><select id="p-printer" class="hidden"></select></div>
       <div id="p-list" class="group"></div>
       <div id="p-props" class="hidden">
         <div class="vp-section" data-i18n="prepare.placement">Placement</div>
