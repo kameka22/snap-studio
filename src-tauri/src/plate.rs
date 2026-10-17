@@ -45,34 +45,131 @@ fn is_stl(path: &Path) -> bool {
 }
 
 /// Mesh of an object, centered; also returns its center in the file.
-pub fn load(path: &Path, index: usize, budget: usize) -> Result<(MeshData, [f32; 3])> {
+/// `piece`: only that piece of the object (`pieces`), centered on itself.
+pub fn load(path: &Path, index: usize, piece: Option<usize>, budget: usize) -> Result<(MeshData, [f32; 3])> {
+    let Some(k) = piece else {
+        return load_whole(path, index, budget);
+    };
+    // Pieces are found on the whole mesh: a sampled one would cut them.
+    let (mut m, c) = load_whole(path, index, FULL_BUDGET)?;
+    let (of, count) = piece_of_triangles(&m.tris);
+    if k >= count {
+        return Err(anyhow!(crate::t!("err.no_object", index = index)));
+    }
+    crate::mesh::retain_tris(&mut m, |i| of[i] == k as u32);
+    let pc = crate::mesh::recenter(&mut m);
+    crate::mesh::downsample(&mut m, budget);
+    Ok((m, [c[0] + pc[0], c[1] + pc[1], c[2] + pc[2]]))
+}
+
+fn load_whole(path: &Path, index: usize, budget: usize) -> Result<(MeshData, [f32; 3])> {
     if is_stl(path) {
         if index != 0 {
             return Err(anyhow!("an STL holds a single object"));
         }
         let mut m = crate::stl::read(path)?;
         crate::mesh::downsample(&mut m, budget);
-        let c = [
-            (m.min[0] + m.max[0]) / 2.0,
-            (m.min[1] + m.max[1]) / 2.0,
-            (m.min[2] + m.max[2]) / 2.0,
-        ];
-        for t in &mut m.tris {
-            for v in &mut t.v {
-                for k in 0..3 {
-                    v[k] -= c[k];
-                }
-            }
-        }
-        for k in 0..3 {
-            m.min[k] -= c[k];
-            m.max[k] -= c[k];
-        }
+        let c = crate::mesh::recenter(&mut m);
         return Ok((m, c));
     }
     let mut zip = crate::model3mf::open(path)?;
     let it = crate::mesh::load_item(&mut zip, index, budget)?;
     Ok((it.mesh, it.center))
+}
+
+/// The pieces of an object, as Orca's "Split to objects" finds them:
+/// triangles connected through shared vertices, numbered in order of first
+/// appearance. Returns each triangle's piece and the count.
+fn piece_of_triangles(tris: &[Tri]) -> (Vec<u32>, usize) {
+    fn find(p: &mut [u32], mut x: u32) -> u32 {
+        while p[x as usize] != x {
+            p[x as usize] = p[p[x as usize] as usize];
+            x = p[x as usize];
+        }
+        x
+    }
+    let mut ids: std::collections::HashMap<[u32; 3], u32> = std::collections::HashMap::with_capacity(tris.len());
+    let mut parent: Vec<u32> = Vec::with_capacity(tris.len());
+    let mut first: Vec<u32> = Vec::with_capacity(tris.len());
+    for t in tris {
+        let mut vs = [0u32; 3];
+        for (k, v) in t.v.iter().enumerate() {
+            let key = [v[0].to_bits(), v[1].to_bits(), v[2].to_bits()];
+            vs[k] = *ids.entry(key).or_insert_with(|| {
+                parent.push(parent.len() as u32);
+                (parent.len() - 1) as u32
+            });
+        }
+        let r0 = find(&mut parent, vs[0]);
+        for &v in &vs[1..] {
+            let r = find(&mut parent, v);
+            if r != r0 {
+                parent[r as usize] = r0;
+            }
+        }
+        first.push(vs[0]);
+    }
+    let mut number: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+    let of: Vec<u32> = first
+        .iter()
+        .map(|&v| {
+            let r = find(&mut parent, v);
+            let n = number.len() as u32;
+            *number.entry(r).or_insert(n)
+        })
+        .collect();
+    (of, number.len())
+}
+
+/// A piece of an object, offered to split it.
+#[derive(Serialize, Clone, Debug)]
+pub struct Piece {
+    pub piece: usize,
+    /// Its center relative to the object's (object frame, as on the plate).
+    pub offset: [f32; 3],
+    pub size: [f32; 3],
+    pub triangles: usize,
+    /// Model colors it uses (from 1).
+    pub extruders: Vec<u8>,
+}
+
+/// The pieces of object `index` (or of piece `piece` of it, which has one);
+/// a single one means it cannot be split.
+pub fn pieces(path: &Path, index: usize, piece: Option<usize>) -> Result<Vec<Piece>> {
+    let (m, _) = load(path, index, piece, FULL_BUDGET)?;
+    let (of, count) = piece_of_triangles(&m.tris);
+    // One pass: each piece's box, triangles and colors.
+    let mut min = vec![[f32::MAX; 3]; count];
+    let mut max = vec![[f32::MIN; 3]; count];
+    let mut triangles = vec![0usize; count];
+    let mut colors: Vec<std::collections::BTreeSet<u8>> = vec![Default::default(); count];
+    for (i, t) in m.tris.iter().enumerate() {
+        let k = of[i] as usize;
+        triangles[k] += 1;
+        for v in &t.v {
+            for a in 0..3 {
+                min[k][a] = min[k][a].min(v[a]);
+                max[k][a] = max[k][a].max(v[a]);
+            }
+        }
+        if let Some(e) = m.extruders.get(i) {
+            colors[k].insert(*e);
+        }
+        if let (Some(Some(p)), Some(vol)) = (m.paint.get(i), m.volumes.get(i)) {
+            colors[k].extend(crate::paint::states(p).into_iter().map(|s| if s == 0 { *vol } else { s }));
+        }
+    }
+    let out = (0..count)
+        .map(|k| Piece {
+            // A piece split again is still that piece.
+            piece: if count == 1 { piece.unwrap_or(0) } else { k },
+            offset: [(min[k][0] + max[k][0]) / 2.0, (min[k][1] + max[k][1]) / 2.0, (min[k][2] + max[k][2]) / 2.0],
+            size: [max[k][0] - min[k][0], max[k][1] - min[k][1], max[k][2] - min[k][2]],
+            triangles: triangles[k],
+            extruders: if colors[k].is_empty() { vec![1] } else { colors[k].iter().copied().collect() },
+        })
+        .collect();
+    Ok(out)
 }
 
 /// A file's objects, ready to put on the plate.
@@ -82,7 +179,7 @@ pub fn items(path: &Path) -> Result<Vec<PlateItem>> {
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "object".into());
     if is_stl(path) {
-        let (m, c) = load(path, 0, FULL_BUDGET)?;
+        let (m, c) = load(path, 0, None, FULL_BUDGET)?;
         return Ok(vec![PlateItem {
             index: 0,
             name: stem,
@@ -126,8 +223,8 @@ fn size_of(m: &MeshData) -> [f32; 3] {
 
 /// Display mesh of an object. Triangles without their own color take the
 /// filament color the project associates with their extruder.
-pub fn display_mesh(path: &Path, index: usize, budget: usize) -> Result<MeshData> {
-    let (mut m, _) = load(path, index, budget)?;
+pub fn display_mesh(path: &Path, index: usize, piece: Option<usize>, budget: usize) -> Result<MeshData> {
+    let (mut m, _) = load(path, index, piece, budget)?;
     if !is_stl(path) {
         let mut zip = crate::model3mf::open(path)?;
         filament_colored(&mut zip, &mut m);
@@ -182,6 +279,9 @@ pub struct SceneItem {
     /// Head (0 to 3) of each model extruder, as for a single file.
     #[serde(default)]
     pub extruder_map: Vec<u8>,
+    /// A piece of the object, once split (`pieces`).
+    #[serde(default)]
+    pub piece: Option<usize>,
 }
 
 fn unit_scale() -> [f32; 3] {
@@ -256,7 +356,7 @@ fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Resu
     let mut written = Written::default();
     for it in scene {
         let path = Path::new(&it.path);
-        let (mut m, _) = load(path, it.item, FULL_BUDGET)?;
+        let (mut m, _) = load(path, it.item, it.piece, FULL_BUDGET)?;
         let name = if it.name.is_empty() { format!("object {}", objects.len() + 1) } else { it.name.clone() };
         if m.truncated {
             return Err(anyhow!(crate::t!("err.too_dense", name = name)));
@@ -350,8 +450,8 @@ pub fn parts_by_head(name: &str, m: MeshData, head_of: impl Fn(u8) -> u8, mirror
 
 /// Convex hull of an object, in its own frame (the display mesh's): used to
 /// rest it exactly and compute its footprint.
-pub fn hull(path: &Path, index: usize) -> Result<crate::orient::Hull> {
-    let (m, _) = load(path, index, 1_500_000)?;
+pub fn hull(path: &Path, index: usize, piece: Option<usize>) -> Result<crate::orient::Hull> {
+    let (m, _) = load(path, index, piece, 1_500_000)?;
     crate::orient::convex_hull(&crate::orient::unique_points(&m.tris))
 }
 
@@ -360,6 +460,9 @@ pub fn hull(path: &Path, index: usize) -> Result<crate::orient::Hull> {
 pub struct OrientItem {
     pub path: String,
     pub item: usize,
+    /// A piece of the object, once split (`pieces`).
+    #[serde(default)]
+    pub piece: Option<usize>,
     #[serde(default = "unit_scale")]
     pub scale: [f32; 3],
 }
@@ -367,7 +470,7 @@ pub struct OrientItem {
 /// Rotation (rows) bringing the object's best direction upwards, following
 /// Orca's rules (`orient.rs`), in the object's own frame.
 pub fn orient(it: &OrientItem, threshold_deg: f64) -> Result<[[f64; 3]; 3]> {
-    let (mut m, _) = load(Path::new(&it.path), it.item, 300_000)?;
+    let (mut m, _) = load(Path::new(&it.path), it.item, it.piece, 300_000)?;
     let s = it.scale;
     for t in &mut m.tris {
         for v in &mut t.v {
@@ -416,6 +519,7 @@ mod tests {
             rot: [0.0, 0.0, 45.0],
             scale: [2.0, 2.0, 2.0],
             extruder_map: vec![],
+            piece: None,
         };
         place(&mut t, &it);
         let zmin = t.iter().flat_map(|t| t.v).map(|v| v[2]).fold(f32::MAX, f32::min);
@@ -452,6 +556,7 @@ mod tests {
             rot: [0.0, 0.0, 30.0],
             scale: unit_scale(),
             extruder_map: vec![2],
+            piece: None,
         };
         let out = tmp.join("scene.3mf");
         let w = write_scene(&[item(0, 100.0), item(1, 600.0)], (270.0, 270.0), &out).unwrap();
@@ -490,6 +595,7 @@ mod tests {
                 scale,
                 // Colors 1…6 → T0 T1 T2 T3 T0 T1.
                 extruder_map: vec![0, 1, 2, 3, 0, 1],
+                piece: None,
             }]
         };
         let read_back = |dst: &Path| {
@@ -520,4 +626,70 @@ mod tests {
         assert_eq!(m.paint[2].as_deref(), Some(crate::paint::whole(3).as_str()));
         assert_eq!(m.paint[0].as_deref(), Some("4"));
     }
+
+    /// Two separate cubes in one object, the second painted with filament 2.
+    fn two_cubes(dst: &Path) {
+        let cube = |x: f32| -> Vec<Tri> {
+            let p = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.], [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.]];
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter()
+                .map(|t| Tri { v: [t[0], t[1], t[2]].map(|i: usize| { let v: [f32; 3] = p[i]; [v[0] + x, v[1], v[2]] }), c: [200, 200, 200] })
+                .collect()
+        };
+        let mut tris = cube(0.0);
+        tris.extend(cube(30.0));
+        let paint = (0..24).map(|i| (i >= 12).then(|| crate::paint::whole(2).into())).collect();
+        let part = crate::write3mf::Part { name: "two".into(), tris, extruder: 1, paint };
+        crate::write3mf::write_multipart(dst, "two", &[part], &crate::mesh::Mat::IDENTITY).unwrap();
+    }
+
+    #[test]
+    fn an_object_splits_into_its_pieces() {
+        let dir = std::env::temp_dir().join("snapstudio_pieces");
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("two.3mf");
+        two_cubes(&src);
+        let p = pieces(&src, 0, None).unwrap();
+        assert_eq!(p.len(), 2);
+        assert_eq!((p[0].piece, p[1].piece), (0, 1));
+        assert_eq!((p[0].triangles, p[1].triangles), (12, 12));
+        // The object is 40 mm wide: its pieces sit 15 mm either side.
+        assert!((p[0].offset[0] + 15.0).abs() < 1e-3 && (p[1].offset[0] - 15.0).abs() < 1e-3);
+        assert_eq!(p[0].size, [10.0, 10.0, 10.0]);
+        assert_eq!((p[0].extruders.clone(), p[1].extruders.clone()), (vec![1], vec![2]));
+
+        // One piece alone: centered on itself, its painting kept.
+        let (m, c) = load(&src, 0, Some(1), FULL_BUDGET).unwrap();
+        assert_eq!(m.tris.len(), 12);
+        assert_eq!((m.min, m.max), ([-5.0; 3], [5.0; 3]));
+        assert!((c[0] - 35.0).abs() < 1e-3, "center in the file: {c:?}");
+        assert!(m.paint.iter().all(|p| p.as_deref() == Some("8")));
+        // A piece split again is itself.
+        let again = pieces(&src, 0, Some(1)).unwrap();
+        assert_eq!((again.len(), again[0].piece), (1, 1));
+        assert!(load(&src, 0, Some(2), FULL_BUDGET).is_err());
+
+        // On the plate, then to the engine: two objects, painting with the second.
+        let item = |piece: usize, x: f32| SceneItem {
+            path: src.to_string_lossy().to_string(),
+            item: 0,
+            name: format!("two {piece}"),
+            pos: [x, 100.0],
+            rot: [0.0; 3],
+            scale: [1.0; 3],
+            extruder_map: vec![0, 1],
+            piece: Some(piece),
+        };
+        let dst = dir.join("scene.3mf");
+        write_scene(&[item(0, 60.0), item(1, 120.0)], (270.0, 270.0), &dst).unwrap();
+        let mut z = crate::model3mf::open(&dst).unwrap();
+        let built = crate::mesh::build_items(&mut z).unwrap();
+        assert_eq!(built.len(), 2);
+        let a = crate::mesh::load_item(&mut z, 0, usize::MAX).unwrap().mesh;
+        let b = crate::mesh::load_item(&mut z, 1, usize::MAX).unwrap().mesh;
+        assert_eq!((a.tris.len(), b.tris.len()), (12, 12));
+        assert!(a.paint.is_empty());
+        assert_eq!(b.extruders, vec![2; 12], "color 2 → T1, written 2");
+    }
 }
+

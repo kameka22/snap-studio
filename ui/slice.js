@@ -326,7 +326,7 @@ function renderHeads(saved, fromPrinter) {
 function slGroupObjects() {
   const groups = new Map();
   SL.source.items.forEach((it, i) => {
-    const key = `${it.path}#${it.item}#${JSON.stringify(it.heads || {})}`;
+    const key = `${it.path}#${it.item}#${it.piece ?? ""}#${JSON.stringify(it.heads || {})}`;
     const g = groups.get(key);
     if (g) g.items.push(i);
     else groups.set(key, { key, items: [i], name: it.name, path: it.path, colors: it.colors?.length ? it.colors : [1], obj: { ...it, extruders: it.colors } });

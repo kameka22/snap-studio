@@ -648,6 +648,51 @@ pub fn stats(m: &MeshData) -> Stats {
     }
 }
 
+/// Keeps the triangles `keep` accepts, their colors and painting with them;
+/// the bounding box follows.
+pub fn retain_tris(m: &mut MeshData, keep: impl Fn(usize) -> bool) {
+    fn filter<T>(v: &mut Vec<T>, keep: &impl Fn(usize) -> bool) {
+        let mut i = 0usize;
+        v.retain(|_| {
+            let k = keep(i);
+            i += 1;
+            k
+        });
+    }
+    filter(&mut m.tris, &keep);
+    filter(&mut m.extruders, &keep);
+    filter(&mut m.volumes, &keep);
+    filter(&mut m.paint, &keep);
+    m.min = [f32::MAX; 3];
+    m.max = [f32::MIN; 3];
+    for t in &m.tris {
+        for v in &t.v {
+            for k in 0..3 {
+                m.min[k] = m.min[k].min(v[k]);
+                m.max[k] = m.max[k].max(v[k]);
+            }
+        }
+    }
+}
+
+/// Moves a mesh so its bounding box is centered on the origin; returns the
+/// former center.
+pub fn recenter(m: &mut MeshData) -> [f32; 3] {
+    let c = [(m.min[0] + m.max[0]) / 2.0, (m.min[1] + m.max[1]) / 2.0, (m.min[2] + m.max[2]) / 2.0];
+    for t in &mut m.tris {
+        for v in &mut t.v {
+            for k in 0..3 {
+                v[k] -= c[k];
+            }
+        }
+    }
+    for k in 0..3 {
+        m.min[k] -= c[k];
+        m.max[k] -= c[k];
+    }
+    c
+}
+
 /// Reduces a mesh to the viewer's budget.
 ///
 /// The bounding box stays the full mesh's: the display is lightened, the object

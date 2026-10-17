@@ -731,6 +731,7 @@
   "pd.temps_differ": "Temperatures differ between filaments:",
   "prepare.menu.dup": "Duplicate",
   "prepare.menu.dup_many": "Duplicate {n} Objects",
+  "prepare.menu.split": "Split into Objects",
   "prepare.menu.center": "Center on Plate",
   "prepare.menu.reset_rot": "Reset Rotation",
   "prepare.menu.orient": "Auto-Orient",
@@ -1009,6 +1010,16 @@
   "prepare.orient.short": "Orient",
   "prepare.arrange.short": "Arrange",
   "prepare.duplicate.short": "Duplicate",
+  "prepare.split": "Split into objects: each part of the mesh that does not touch the others",
+  "prepare.split.short": "Split",
+  "prepare.split.single": {
+    "one": "This object is all in one piece",
+    "other": "These objects are each in one piece"
+  },
+  "prepare.split.done": {
+    "one": "Split into {n} object",
+    "other": "Split into {n} objects"
+  },
   "prepare.remove.short": "Remove",
   "prepare.clear.short": "Clear",
   "prepare.occupied.title": {

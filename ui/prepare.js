@@ -58,8 +58,8 @@ void main() { frag = uColor; }`;
 /* ------------------------------------------------------------ state */
 
 function prSave() {
-  const objects = PR.objects.map(({ id, name, path, item, pos, rot, scale, size, plate, extruders, heads, cv, free }) => ({
-    id, name, path, item, pos, rot, scale, size, plate, extruders, heads, cv, free,
+  const objects = PR.objects.map(({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free }) => ({
+    id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free,
   }));
   localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId }));
   prStatus();
@@ -103,7 +103,7 @@ function prRestore(from, to) {
 const prUndo = () => prRestore(HIST.undo, HIST.redo);
 const prRedo = () => prRestore(HIST.redo, HIST.undo);
 
-const meshKey = (o) => `${o.path}#${o.item}`;
+const meshKey = (o) => `${o.path}#${o.item}${o.piece != null ? "#" + o.piece : ""}`;
 const deg = (r) => (r * 180) / Math.PI;
 const rad = (d) => (d * Math.PI) / 180;
 
@@ -279,7 +279,7 @@ async function prLoadMesh(o) {
   if (PR.meshes.has(key)) return PR.meshes.get(key);
   const entry = { loading: true };
   PR.meshes.set(key, entry);
-  const q = `/b?p=${encodeURIComponent(o.path)}&i=${o.item}&b=400000`;
+  const q = `/b?p=${encodeURIComponent(o.path)}&i=${o.item}${o.piece != null ? "&c=" + o.piece : ""}&b=400000`;
   let buf = null, err = null;
   try {
     buf = await fetchScheme("mesh", q);
@@ -319,7 +319,7 @@ async function prLoadMesh(o) {
   Object.assign(entry, { loading: false, vao, count: data.n * 3, n: data.n, pos: data.pos, hasExt: !!data.ext });
   PR.meshes.set(key, entry);
   // Convex hull: exact resting, footprint, "lay on face".
-  invoke("plate_hull", { path: o.path, item: o.item })
+  invoke("plate_hull", { path: o.path, item: o.item, piece: o.piece ?? null })
     .then((h) => {
       entry.hullPts = h.points;
       entry.hullFaces = h.faces;
@@ -628,6 +628,7 @@ function prBindInteractions(canvas) {
     const many = PR.sel.size > 1;
     nativeMenu([
       { id: "prep:dup", label: many ? tr("prepare.menu.dup_many", { n: PR.sel.size }) : tr("prepare.menu.dup") },
+      { id: "prep:split", label: tr("prepare.menu.split") },
       { id: "prep:center", label: tr("prepare.menu.center") },
       { id: "prep:resetrot", label: tr("prepare.menu.reset_rot") },
       { id: "prep:orient", label: tr("prepare.menu.orient") },
@@ -843,6 +844,7 @@ function prStatus() {
   $("p-empty").classList.toggle("hidden", n > 0);
   $("p-del").disabled = PR.sel.size === 0;
   $("p-dup").disabled = PR.sel.size === 0;
+  $("p-split").disabled = PR.sel.size === 0 || !!PR.splitting;
   $("p-save").disabled = $("p-clear").disabled = n === 0;
   $("p-arrange").disabled = !PR.objects.some((o) => bedState(o) !== "out");
   $("p-orient").disabled = PR.orienting || !PR.objects.length;
@@ -1262,7 +1264,7 @@ async function prOrient(all) {
   try {
     const process = SL.memory[SL.memory.last]?.process || null;
     const mats = await invoke("plate_orient", {
-      items: targets.map((o) => ({ path: o.path, item: o.item, scale: o.scale })),
+      items: targets.map((o) => ({ path: o.path, item: o.item, piece: o.piece ?? null, scale: o.scale })),
       process,
     });
     prRemember(before);
@@ -1293,7 +1295,7 @@ async function prSavePlate() {
   const identity = Array.from({ length: 16 }, (_, i) => i);
   try {
     await invoke("plate_save", {
-      scene: PR.objects.map((o) => ({ path: o.path, item: o.item, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, extruder_map: identity })),
+      scene: PR.objects.map((o) => ({ path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, extruder_map: identity })),
       path: dest,
     });
     toast(tr("prepare.saved", { name: dest.split("/").pop() }));
@@ -1421,6 +1423,63 @@ function prDuplicate() {
   prSchedule();
 }
 
+/* Split: each selected object becomes its pieces — the parts of its mesh
+   that do not touch (Orca's "Split to objects") — in place, with its
+   rotation, scale and color choices. */
+async function prSplit() {
+  const sel = PR.objects.filter((o) => PR.sel.has(o.id));
+  if (!sel.length || PR.splitting) return;
+  PR.splitting = true;
+  $("p-split").disabled = true;
+  try {
+    const found = await Promise.all(
+      sel.map((o) => invoke("plate_pieces", { path: o.path, item: o.item, piece: o.piece ?? null }).catch((e) => (toast(String(e), true), null)))
+    );
+    const todo = sel.map((o, i) => [o, found[i]]).filter(([, p]) => p && p.length > 1);
+    if (!todo.length) {
+      toast(tr("prepare.split.single", { n: sel.length }));
+      return;
+    }
+    prRemember();
+    const added = [];
+    for (const [o, pieces] of todo) {
+      const r = rotation(o.rot);
+      const at = PR.objects.indexOf(o);
+      const made = pieces.map((p, k) => {
+        const d = applyRS(r, o.scale, p.offset);
+        return {
+          id: PR.nextId++,
+          name: `${o.name} ${k + 1}`,
+          path: o.path,
+          item: o.item,
+          piece: p.piece,
+          pos: [o.pos[0] + d[0], o.pos[1] + d[1]],
+          rot: [...o.rot],
+          scale: [...o.scale],
+          size: p.size,
+          plate: o.plate,
+          extruders: p.extruders,
+          heads: { ...(o.heads || {}) },
+          cv: COLORS_VERSION,
+          free: o.free,
+        };
+      });
+      PR.objects.splice(at, 1, ...made);
+      added.push(...made);
+    }
+    PR.sel = new Set(added.map((o) => o.id));
+    SHAPES.clear();
+    prSave();
+    prRenderInspector();
+    if (PR.gl) await Promise.all(added.map(prLoadMesh));
+    prSchedule();
+    toast(tr("prepare.split.done", { n: added.length }));
+  } finally {
+    PR.splitting = false;
+    prStatus();
+  }
+}
+
 /* Moves the selection, as a block. */
 function prMoveSelection(dx, dy, remember = true) {
   if (!PR.sel.size) return;
@@ -1492,7 +1551,7 @@ function prepareScene() {
     name,
     files,
     skipped: PR.objects.length - on.length,
-    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: o.heads || {} })),
+    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: o.heads || {} })),
   };
 }
 
@@ -1503,6 +1562,7 @@ $("p-save").addEventListener("click", prSavePlate);
 $("p-clear").addEventListener("click", prClear);
 onMenu("prep", async (what) => {
   if (what === "dup") prDuplicate();
+  if (what === "split") prSplit();
   if (what === "center") prCenterSelection();
   if (what === "resetrot") prResetRotation();
   if (what === "arrange") prArrange();
@@ -1540,6 +1600,7 @@ function prEmpty() {
 }
 $("p-del").addEventListener("click", prRemoveSelection);
 $("p-dup").addEventListener("click", prDuplicate);
+$("p-split").addEventListener("click", prSplit);
 $("p-rotate").addEventListener("click", () => prSetTool("rotate"));
 $("p-face").addEventListener("click", () => prSetTool("face"));
 $("p-orient").addEventListener("click", (e) => prOrient(e.shiftKey));
