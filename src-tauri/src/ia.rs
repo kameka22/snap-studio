@@ -243,29 +243,30 @@ pub fn read_mesh(path: &Path) -> Result<MeshData> {
 }
 
 /// The parts of an original 3MF: one per head when the file assigns heads,
-/// triangles without a color of their own taking their head's filament color
-/// — the colors the user sees in the slicer.
+/// triangles without a color of their own taking their filament's color —
+/// the colors the user sees in the slicer, painting included.
 pub fn parts_of_3mf(src: &Path) -> Result<Vec<Part>> {
     let mut zip = crate::model3mf::open(src)?;
-    let m = crate::mesh::load_mesh(&mut zip, usize::MAX)?;
-    let colors: Vec<Option<[u8; 3]>> = crate::model3mf::project_filaments(&mut zip)
-        .iter()
-        .map(|f| f.color.as_deref().and_then(crate::plate::hex_rgb))
-        .collect();
-    Ok(split_by_head(m, &colors))
+    let mut m = crate::mesh::load_mesh(&mut zip, usize::MAX)?;
+    crate::plate::filament_colored(&mut zip, &mut m);
+    Ok(split_by_head(m))
 }
 
-fn split_by_head(m: MeshData, filament_colors: &[Option<[u8; 3]>]) -> Vec<Part> {
-    let by_head = m.extruders.len() == m.tris.len();
+/// One part per volume head. A painted mesh is split by its volumes, never
+/// by painted color: painted areas are open surfaces, which the workspace's
+/// tools (trimesh booleans) cannot handle; their color stays on the
+/// triangles.
+fn split_by_head(m: MeshData) -> Vec<Part> {
+    let heads: Vec<u8> = if m.volumes.len() == m.tris.len() {
+        m.volumes
+    } else if m.extruders.len() == m.tris.len() {
+        m.extruders
+    } else {
+        vec![1; m.tris.len()]
+    };
     let mut groups: std::collections::BTreeMap<u8, Vec<crate::mesh::Tri>> = Default::default();
-    for (i, mut t) in m.tris.into_iter().enumerate() {
-        let head = if by_head { m.extruders[i].clamp(1, 16) } else { 1 };
-        if t.c == crate::render::DEFAULT_COLOR {
-            if let Some(Some(c)) = filament_colors.get(head as usize - 1) {
-                t.c = *c;
-            }
-        }
-        groups.entry(head).or_default().push(t);
+    for (t, head) in m.tris.into_iter().zip(heads) {
+        groups.entry(head.clamp(1, 16)).or_default().push(t);
     }
     groups
         .into_iter()
@@ -273,6 +274,7 @@ fn split_by_head(m: MeshData, filament_colors: &[Option<[u8; 3]>]) -> Vec<Part> 
             name: format!("part-{head}"),
             tris,
             extruder: head,
+            paint: Vec::new(),
         })
         .collect()
 }
@@ -285,6 +287,7 @@ pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
         name: "part-1".into(),
         tris: m.tris,
         extruder: 1,
+        paint: Vec::new(),
     };
     write_3mf(dst, name, &[part])?;
     Ok(n)
@@ -690,7 +693,7 @@ mod tests {
 
     /// Claude installs an object: what `tools/export.py` does.
     fn install(id: &str, tris: Vec<crate::mesh::Tri>) {
-        write_3mf(&current(id), "object", &[Part { name: "part-1".into(), tris, extruder: 1 }]).unwrap();
+        write_3mf(&current(id), "object", &[Part { name: "part-1".into(), tris, extruder: 1, paint: Vec::new() }]).unwrap();
     }
 
     #[test]
@@ -735,8 +738,8 @@ mod tests {
             crate::stl::tests_cube().into_iter().map(|mut t| { t.c = c; t }).collect()
         };
         let parts = [
-            Part { name: "body".into(), tris: paint([240, 240, 240]), extruder: 1 },
-            Part { name: "eyes".into(), tris: paint([20, 20, 20]), extruder: 2 },
+            Part { name: "body".into(), tris: paint([240, 240, 240]), extruder: 1, paint: Vec::new() },
+            Part { name: "eyes".into(), tris: paint([20, 20, 20]), extruder: 2, paint: Vec::new() },
         ];
         crate::write3mf::write_multipart(&src, "duo", &parts, &Mat::IDENTITY).unwrap();
 
@@ -758,23 +761,38 @@ mod tests {
         let _ = std::fs::remove_file(&src);
     }
 
-    /// The filament colors of an Orca project color the parts of its heads.
+    /// One part per head when the file assigns heads.
     #[test]
-    fn heads_take_their_filament_color() {
+    fn parts_follow_the_heads() {
         let mut m = crate::mesh::MeshData {
             tris: crate::stl::tests_cube(),
             min: [0.0; 3],
             max: [1.0; 3],
             truncated: false,
+            volumes: Vec::new(),
+            paint: Vec::new(),
             extruders: vec![1; 12],
         };
         for e in &mut m.extruders[6..] {
             *e = 3;
         }
-        let parts = split_by_head(m, &[Some([255, 0, 0]), None, Some([0, 0, 255])]);
-        assert_eq!(parts.len(), 2);
-        assert_eq!((parts[0].extruder, parts[0].tris[0].c), (1, [255, 0, 0]));
-        assert_eq!((parts[1].extruder, parts[1].tris[0].c), (3, [0, 0, 255]));
+        let parts = split_by_head(m);
+        assert_eq!(parts.iter().map(|p| (p.extruder, p.tris.len())).collect::<Vec<_>>(), vec![(1, 6), (3, 6)]);
+    }
+
+    /// A painted file reaches the AI in closed parts (per volume, never per
+    /// painted color), its triangles in their filament colors.
+    #[test]
+    fn painted_files_stay_in_closed_parts() {
+        let tmp = std::env::temp_dir().join("snapstudio-ia-test");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("painted.3mf");
+        crate::mesh::testkit::painted_cube_with(&src, &["8", "8"], Some(1), "1 0 0 0 1 0 0 0 1 50 50 0", &["#FF0000", "#0000FF"]);
+        let parts = parts_of_3mf(&src).unwrap();
+        assert_eq!(parts.len(), 1);
+        assert_eq!((parts[0].extruder, parts[0].tris.len()), (1, 12));
+        assert_eq!(parts[0].tris[0].c, [0, 0, 255], "painted with filament 2");
+        assert_eq!(parts[0].tris[5].c, [255, 0, 0], "the volume's filament 1");
     }
 
     /// A conversation from the STL days is brought to 3MF when opened; its

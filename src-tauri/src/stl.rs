@@ -116,6 +116,8 @@ pub fn read(path: &Path) -> Result<MeshData> {
         min,
         max,
         truncated: false,
+        volumes: Vec::new(),
+        paint: Vec::new(),
     })
 }
 

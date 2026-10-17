@@ -42,7 +42,8 @@ and layer-by-layer G-code toolpaths.
 
 ### 🧩 Prepare
 The U1 plate as in Orca: move, rotate, scale, duplicate, lay on face,
-auto-orient, auto-arrange, undo — then slice.
+auto-orient, auto-arrange, undo — then slice. Each object lists its
+colors, painted ones included, and sends each to the head you pick.
 
 <img src="docs/screenshots/prepare.png" alt="Prepare" />
 

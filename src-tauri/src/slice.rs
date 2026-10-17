@@ -466,7 +466,7 @@ fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32), extruder_map:
     let dst = work.join(format!("{name}.3mf"));
 
     // Destination heads: one part per head, grouping the model extruders sent
-    // to the same head.
+    // to the same head; painting kept.
     let head_of = |model_ext: u8| -> u8 {
         extruder_map
             .get(model_ext.saturating_sub(1) as usize)
@@ -474,22 +474,7 @@ fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32), extruder_map:
             .unwrap_or(0)
             .min(15)
     };
-    let mut groups: std::collections::BTreeMap<u8, Vec<crate::mesh::Tri>> = Default::default();
-    if m.extruders.len() == m.tris.len() {
-        for (tri, e) in m.tris.iter().zip(&m.extruders) {
-            groups.entry(head_of(*e)).or_default().push(*tri);
-        }
-    } else {
-        groups.insert(head_of(1), m.tris);
-    }
-    let parts: Vec<crate::write3mf::Part> = groups
-        .into_iter()
-        .map(|(head, tris)| crate::write3mf::Part {
-            name: format!("{name} — T{head}"),
-            tris,
-            extruder: head + 1,
-        })
-        .collect();
+    let parts = crate::plate::parts_by_head(&name, m, head_of, false);
     crate::write3mf::write_multipart(&dst, &name, &parts, &t)?;
     Ok(dst)
 }
@@ -499,7 +484,9 @@ fn rewrite_centered(source: &Path, work: &Path, plate: (f32, f32), extruder_map:
 pub struct ModelInfo {
     /// One per model extruder (material, color), when the project declares them.
     pub filaments: Vec<crate::model3mf::ProjectFilament>,
-    /// Extruders actually used by the model's objects (from 1).
+    /// Extruders the model's objects declare (from 1). Painted colors are
+    /// not read here — it would mean the whole mesh: each plate object lists
+    /// its own (`plate::items`).
     pub used: Vec<u8>,
 }
 
@@ -1250,8 +1237,8 @@ mod tests {
             &src,
             "two",
             &[
-                crate::write3mf::Part { name: "bas".into(), tris: vec![tri(0.)], extruder: 1 },
-                crate::write3mf::Part { name: "haut".into(), tris: vec![tri(20.)], extruder: 2 },
+                crate::write3mf::Part { name: "bas".into(), tris: vec![tri(0.)], extruder: 1, paint: Vec::new() },
+                crate::write3mf::Part { name: "haut".into(), tris: vec![tri(20.)], extruder: 2, paint: Vec::new() },
             ],
             &Mat::IDENTITY,
         )
@@ -1300,8 +1287,8 @@ mod tests {
             &src,
             "bicolore",
             &[
-                crate::write3mf::Part { name: "bas".into(), tris: cube(0.0), extruder: 1 },
-                crate::write3mf::Part { name: "haut".into(), tris: cube(10.0), extruder: 2 },
+                crate::write3mf::Part { name: "bas".into(), tris: cube(0.0), extruder: 1, paint: Vec::new() },
+                crate::write3mf::Part { name: "haut".into(), tris: cube(10.0), extruder: 2, paint: Vec::new() },
             ],
             &Mat::IDENTITY,
         )
@@ -1407,6 +1394,64 @@ mod tests {
         assert!(stats.tools.contains(&0) && stats.tools.contains(&1), "both heads are used");
         discard("smoke");
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// A painted model really prints in its colors: the engine must use one
+    /// head per painted color, as the plate chose them — even when the
+    /// spools' colors are unknown (the engine counts filaments by color).
+    /// `SNAPSTUDIO_ENGINE=… PAINT_3MF=… PAINT_ITEM=0 cargo test --lib engine_painted -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_painted() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let src = std::env::var("PAINT_3MF").expect("PAINT_3MF: a painted 3MF");
+        let index: usize = std::env::var("PAINT_ITEM").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles readable in the engine");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("a PLA filament").name.clone();
+        // The object's colors, spread over the heads in order.
+        let mut zip = crate::model3mf::open(Path::new(&src)).unwrap();
+        let mesh = crate::mesh::load_item(&mut zip, index, usize::MAX).unwrap().mesh;
+        let colors = crate::mesh::colors_used(&mesh);
+        let mut map = vec![0u8; *colors.iter().max().unwrap() as usize];
+        for (h, c) in colors.iter().enumerate() {
+            map[*c as usize - 1] = (h % 4) as u8;
+        }
+        println!("colors {colors:?} → heads {map:?}");
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla; 4],
+                // No spool colors: the hardest case (`presets::prepare`).
+                scene: vec![crate::plate::SceneItem {
+                    path: src.clone(),
+                    item: index,
+                    name: "painted".into(),
+                    pos: [135.0, 135.0],
+                    rot: [0.0, 0.0, 0.0],
+                    scale: [1.0, 1.0, 1.0],
+                    extruder_map: map,
+                }],
+                name: Some("painted".into()),
+                ..Default::default()
+            },
+            "painted".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let got = seen.lock().unwrap();
+        let last = got.last().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        let stats = last.stats.clone().expect("stats");
+        println!("heads used {:?}", stats.tools);
+        let want: Vec<u8> = (0..colors.len().min(4) as u8).collect();
+        assert!(want.iter().all(|h| stats.tools.contains(h)), "every color's head prints");
+        discard("painted");
     }
 
     /// Advanced settings reach the engine: a real slice with the overrides the

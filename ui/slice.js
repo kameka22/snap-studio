@@ -61,6 +61,9 @@ const swatch = (color) =>
 
 /* Slicing works on the Prepare view's plate. */
 async function openSlice() {
+  // A plate from an older version may still be reading its colors: each one
+  // needs a head, or the engine gets it on T0.
+  if (typeof prRefreshColors === "function") await prRefreshColors();
   const scene = prepareScene();
   if (!scene) return;
   SL.source = scene;
@@ -133,6 +136,7 @@ async function sliceLoad() {
         used: m?.used?.length ? m.used : [1],
       };
     });
+    slGroupObjects();
     const opts = [{ id: "", name: tr("slice.no_printer") }, ...printers];
     $("s-printer").innerHTML = opts
       .map((p) => `<option value="${esc(p.id)}">${esc(p.name || p.host)}</option>`)
@@ -317,32 +321,53 @@ function renderHeads(saved, fromPrinter) {
   pdBedLine();
 }
 
-/* Heads chosen for each extruder of each file on the plate. */
+/* The plate's objects, identical ones grouped (same file, object and own
+   choices): one block of colors each in the table. */
+function slGroupObjects() {
+  const groups = new Map();
+  SL.source.items.forEach((it, i) => {
+    const key = `${it.path}#${it.item}#${JSON.stringify(it.heads || {})}`;
+    const g = groups.get(key);
+    if (g) g.items.push(i);
+    else groups.set(key, { key, items: [i], name: it.name, path: it.path, colors: it.colors?.length ? it.colors : [1], obj: { ...it, extruders: it.colors } });
+  });
+  SL.groups = [...groups.values()];
+}
+
+/* Heads chosen for each color of each object on the plate, as Prepare
+   resolves them for the sheet's printer. */
 function renderModelMap(fromPrinter) {
   const n = headCount();
   const prev = Object.fromEntries(
     [...document.querySelectorAll("#s-map select")].map((s) => [s.dataset.key, +s.value])
   );
-  const taken = new Set();
-  const several = SL.models.length > 1;
-  // Read-only: the heads come from the shared state (set in Prepare).
+  const several = SL.groups.length > 1;
+  // Read-only: the heads come from Prepare's objects.
   const pid = currentPrinter()?.id;
   const rows = [];
-  SL.models.forEach((m, fi) => {
-    for (const e of m.used) {
-      const key = `${fi}:${e}`;
-      const fil = m.filaments.find((f) => f.index === e);
-      let head = pid ? headsResolve(pid, m.path, m, SL.slots, n)[e]?.h : fromPrinter ? null : prev[key];
+  SL.groups.forEach((g, gi) => {
+    const model = SL.models.find((m) => m.path === g.path);
+    const heads = typeof prHeads === "function" ? prHeads(g.obj, pid || "", SL.slots, n) : {};
+    const taken = new Set();
+    const name = g.items.length > 1 ? `${g.name} ×${g.items.length}` : g.name;
+    // Several colors: the object's name heads them, as in Prepare's list.
+    const nested = several && g.colors.length > 1;
+    if (nested) rows.push(`<div class="sl-mapobj">${esc(name)}</div>`);
+    for (const e of g.colors) {
+      const key = `${gi}:${e}`;
+      const fil = model?.filaments.find((f) => f.index === e);
+      let head = heads[e]?.h ?? (fromPrinter ? null : prev[key]);
       if (head == null || head >= n) head = autoHead(fil, e, taken);
       taken.add(head);
-      const color = m.used.length === 1 ? "" : tr("slice.color_n", { n: e });
-      const label = several ? [m.stem, color].filter(Boolean).join(" · ") : color || tr("printers.form.model");
-      rows.push(`<div class="sl-maprow">
+      const color = g.colors.length === 1 ? "" : tr("slice.color_n", { n: e });
+      const label = nested ? color : several ? name : color || name;
+      const sub = fil?.kind || "";
+      rows.push(`<div class="sl-maprow${nested ? " nested" : ""}">
         ${swatch(fil?.color)}
-        <span class="sl-map-label"><b>${esc(label)}</b>${fil?.kind ? `<small>${esc(fil.kind)}</small>` : ""}</span>
+        <span class="sl-map-label"><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span>
         <span class="sl-arrow">→</span>
         <span class="sl-tokens" data-tokens="${key}"></span>
-        <select class="hidden" tabindex="-1" data-key="${key}" data-file="${fi}" data-ext="${e}">${Array.from({ length: n }, (_, h) => {
+        <select class="hidden" tabindex="-1" data-key="${key}" data-group="${gi}" data-ext="${e}">${Array.from({ length: n }, (_, h) => {
           const slot = SL.slots.find((s) => s.index === h);
           const desc = slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : "";
           return `<option value="${h}"${h === head ? " selected" : ""}>T${h}${esc(desc)}</option>`;
@@ -510,11 +535,12 @@ async function startSlice() {
     setSliceMessage(tr("slice.need_profiles"), "err");
     return;
   }
-  // Model extruder → head, file by file; entry i is about extruder i + 1.
-  const maps = SL.models.map(() => []);
-  document.querySelectorAll("#s-map select").forEach((s) => (maps[+s.dataset.file][+s.dataset.ext - 1] = +s.value));
+  // Model color → head, object by object; entry i is about color i + 1.
+  const maps = SL.groups.map(() => []);
+  document.querySelectorAll("#s-map select").forEach((s) => (maps[+s.dataset.group][+s.dataset.ext - 1] = +s.value));
   for (const m of maps) for (let i = 0; i < m.length; i++) if (m[i] == null) m[i] = 0;
-  const scene = SL.source.items.map((it) => ({ ...it, extruder_map: maps[SL.models.findIndex((m) => m.path === it.path)] || [] }));
+  const groupOf = (i) => SL.groups.findIndex((g) => g.items.includes(i));
+  const scene = SL.source.items.map(({ id, colors, heads, ...it }, i) => ({ ...it, extruder_map: maps[groupOf(i)] || [] }));
   const heads = [...new Set(maps.flat())];
   const empty = heads.filter((h) => SL.slots.find((s) => s.index === h && !s.present));
   if (empty.length) {

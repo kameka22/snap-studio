@@ -86,6 +86,9 @@ pub fn process_extra(index: &Index, machine: &str, overrides: &Map<String, Value
 }
 
 /// What Snap Studio adds to a filament preset: the spool's real color.
+/// Color of a filament whose spool color is unknown.
+const NEUTRAL_COLOR: &str = "#C0C0C0";
+
 pub fn filament_extra(color: Option<&str>) -> Map<String, Value> {
     let mut out = Map::new();
     if let Some(c) = color.filter(|c| is_hex_color(c)) {
@@ -630,6 +633,13 @@ pub fn prepare(
         declare_compatible(&mut cfg, machine);
         for (k, v) in filament_extra(colors.get(i).and_then(|c| c.as_deref())) {
             cfg.insert(k, v);
+        }
+        // Every filament declares a color: the engine counts the filaments by
+        // `filament_colour` when it splits a painted model, and drops the
+        // painting of those beyond — a head without a known spool color lost
+        // its painted areas.
+        if !cfg.get("filament_colour").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
+            cfg.insert("filament_colour".into(), Value::Array(vec![Value::String(NEUTRAL_COLOR.into())]));
         }
         paths.push(write_config(dir, Kind::Filament, name, cfg, &format!("_{i}"))?);
     }

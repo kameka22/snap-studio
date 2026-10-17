@@ -204,7 +204,8 @@ fn generate(path: &Path, size: u32, pref: ThumbPref) -> Result<Thumb> {
     }
 
     let _guard = RenderGuard::acquire();
-    let mesh = crate::mesh::load_mesh(&mut zip, TRI_BUDGET)?;
+    let mut mesh = crate::mesh::load_mesh(&mut zip, TRI_BUDGET)?;
+    crate::plate::filament_colored(&mut zip, &mut mesh);
     let img = crate::render::render(&mesh, size);
     Ok(Thumb {
         png: to_png(&image::DynamicImage::ImageRgba8(img))?,
@@ -328,3 +329,4 @@ mod tests {
         }
     }
 }
+
