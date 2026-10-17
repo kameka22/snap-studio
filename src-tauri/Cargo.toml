@@ -44,6 +44,12 @@ portable-pty = "0.9.0"
 notify = "8.2.0"
 sys-locale = "0.3"
 
+# Library tabs on Linux: their views are placed over the main view in GTK
+# directly (`library::gtk_layer`). Same versions as Tauri's.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = "2.0"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 window-vibrancy = "0.8"
 
