@@ -273,6 +273,7 @@ fn split_by_head(m: MeshData, filament_colors: &[Option<[u8; 3]>]) -> Vec<Part> 
             name: format!("part-{head}"),
             tris,
             extruder: head,
+            paint: Vec::new(),
         })
         .collect()
 }
@@ -285,6 +286,7 @@ pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
         name: "part-1".into(),
         tris: m.tris,
         extruder: 1,
+        paint: Vec::new(),
     };
     write_3mf(dst, name, &[part])?;
     Ok(n)
@@ -690,7 +692,7 @@ mod tests {
 
     /// Claude installs an object: what `tools/export.py` does.
     fn install(id: &str, tris: Vec<crate::mesh::Tri>) {
-        write_3mf(&current(id), "object", &[Part { name: "part-1".into(), tris, extruder: 1 }]).unwrap();
+        write_3mf(&current(id), "object", &[Part { name: "part-1".into(), tris, extruder: 1, paint: Vec::new() }]).unwrap();
     }
 
     #[test]
@@ -735,8 +737,8 @@ mod tests {
             crate::stl::tests_cube().into_iter().map(|mut t| { t.c = c; t }).collect()
         };
         let parts = [
-            Part { name: "body".into(), tris: paint([240, 240, 240]), extruder: 1 },
-            Part { name: "eyes".into(), tris: paint([20, 20, 20]), extruder: 2 },
+            Part { name: "body".into(), tris: paint([240, 240, 240]), extruder: 1, paint: Vec::new() },
+            Part { name: "eyes".into(), tris: paint([20, 20, 20]), extruder: 2, paint: Vec::new() },
         ];
         crate::write3mf::write_multipart(&src, "duo", &parts, &Mat::IDENTITY).unwrap();
 

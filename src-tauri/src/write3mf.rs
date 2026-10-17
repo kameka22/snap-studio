@@ -71,11 +71,15 @@ fn mat_str(m: &Mat) -> String {
 const MAT_ID: u32 = 1;
 
 /// Writes a mesh as an `<object>` of the model, colors included.
+///
+/// `paint` (empty, or one entry per triangle) is written as `paint_color`,
+/// the multicolor painting Orca reads (`paint.rs`).
 fn write_mesh_object<W: Write>(
     w: &mut W,
     id: u32,
     name: &str,
     tris: &[Tri],
+    paint: &[Option<Box<str>>],
     color_id: &HashMap<[u8; 3], usize>,
 ) -> Result<()> {
     let (verts, faces) = weld(tris);
@@ -108,7 +112,7 @@ fn write_mesh_object<W: Write>(
     writeln!(w, "    </vertices>")?;
     writeln!(w, "    <triangles>")?;
     let mut fi = 0usize;
-    for t in tris {
+    for (ti, t) in tris.iter().enumerate() {
         // `weld` may have left out degenerate triangles: follow the same order.
         let (a, b, c) = (t.v[0], t.v[1], t.v[2]);
         let deg = a == b || b == c || a == c;
@@ -117,16 +121,20 @@ fn write_mesh_object<W: Write>(
         }
         let f = faces[fi];
         fi += 1;
+        let painted = match paint.get(ti) {
+            Some(Some(p)) => format!(r#" paint_color="{p}""#),
+            _ => String::new(),
+        };
         if single.is_some() {
             writeln!(
                 w,
-                r#"     <triangle v1="{}" v2="{}" v3="{}"/>"#,
+                r#"     <triangle v1="{}" v2="{}" v3="{}"{painted}/>"#,
                 f[0], f[1], f[2]
             )?;
         } else {
             writeln!(
                 w,
-                r#"     <triangle v1="{}" v2="{}" v3="{}" pid="{MAT_ID}" p1="{}"/>"#,
+                r#"     <triangle v1="{}" v2="{}" v3="{}" pid="{MAT_ID}" p1="{}"{painted}/>"#,
                 f[0], f[1], f[2], color_id[&t.c]
             )?;
         }
@@ -213,6 +221,9 @@ pub struct Part {
     pub name: String,
     pub tris: Vec<Tri>,
     pub extruder: u8,
+    /// Painting of each triangle, its states already heads (1 to 16); empty
+    /// for an unpainted part.
+    pub paint: Vec<Option<Box<str>>>,
 }
 
 /// Writes a single object made of several parts, each with its head.
@@ -252,7 +263,7 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
     for (_, parts, _) in objects {
         let mut ids = Vec::new();
         for p in parts.iter() {
-            write_mesh_object(&mut w, next, &p.name, &p.tris, &color_id)?;
+            write_mesh_object(&mut w, next, &p.name, &p.tris, &p.paint, &color_id)?;
             ids.push(next);
             next += 1;
         }
@@ -320,7 +331,7 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
 
     for (i, o) in objects.iter().enumerate() {
         // Id 1 is taken by the materials.
-        write_mesh_object(&mut w, i as u32 + 2, &o.name, &o.tris, &color_id)?;
+        write_mesh_object(&mut w, i as u32 + 2, &o.name, &o.tris, &[], &color_id)?;
     }
 
     writeln!(w, " </resources>")?;

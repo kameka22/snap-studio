@@ -276,18 +276,8 @@ fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Resu
         let head_of = |e: u8| -> u8 {
             it.extruder_map.get(e.saturating_sub(1) as usize).copied().unwrap_or(0).min(15)
         };
-        let mut groups: std::collections::BTreeMap<u8, Vec<Tri>> = Default::default();
-        if m.extruders.len() == m.tris.len() {
-            for (t, e) in m.tris.iter().zip(&m.extruders) {
-                groups.entry(head_of(*e)).or_default().push(*t);
-            }
-        } else {
-            groups.insert(head_of(1), m.tris);
-        }
-        let parts = groups
-            .into_iter()
-            .map(|(head, tris)| crate::write3mf::Part { name: format!("{name} — T{head}"), tris, extruder: head + 1 })
-            .collect();
+        let mirrored = it.scale[0] * it.scale[1] * it.scale[2] < 0.0;
+        let parts = parts_by_head(&name, m, head_of, mirrored);
         objects.push((name, parts));
     }
     if objects.is_empty() {
@@ -296,6 +286,53 @@ fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Resu
     written.kept = objects.len();
     crate::write3mf::write_objects(dst, &objects)?;
     Ok(written)
+}
+
+/// The parts sent to the engine: one per head, grouping the model's
+/// volumes by the head printing them (`head_of`: model color → head, 0 to
+/// 15).
+///
+/// A painted mesh keeps its geometry grouped by volume — splitting painted
+/// triangles into parts would leave open meshes — and its painting, the
+/// states renumbered to the heads (`paint_color` counts filaments from 1,
+/// 0 staying "the volume's"). On a `mirrored` object our writer reorders
+/// each triangle's vertices, which would move a split triangle's pieces:
+/// those get their dominant color instead.
+pub fn parts_by_head(name: &str, m: MeshData, head_of: impl Fn(u8) -> u8, mirrored: bool) -> Vec<crate::write3mf::Part> {
+    type Group = (Vec<Tri>, Vec<Option<Box<str>>>);
+    let mut groups: std::collections::BTreeMap<u8, Group> = Default::default();
+    if !m.paint.is_empty() {
+        let paint_for_heads = |p: &str| -> Option<Box<str>> {
+            let whole;
+            let p = if mirrored && crate::paint::is_split(p) {
+                whole = crate::paint::whole(crate::paint::dominant(p)?);
+                whole.as_str()
+            } else {
+                p
+            };
+            crate::paint::renumber(p, |s| if s == 0 { 0 } else { head_of(s) + 1 }).map(Into::into)
+        };
+        for ((t, vol), p) in m.tris.into_iter().zip(m.volumes).zip(m.paint) {
+            let g = groups.entry(head_of(vol)).or_default();
+            g.0.push(t);
+            g.1.push(p.as_deref().and_then(paint_for_heads));
+        }
+    } else if m.extruders.len() == m.tris.len() {
+        for (t, e) in m.tris.into_iter().zip(m.extruders) {
+            groups.entry(head_of(e)).or_default().0.push(t);
+        }
+    } else {
+        groups.insert(head_of(1), (m.tris, Vec::new()));
+    }
+    groups
+        .into_iter()
+        .map(|(head, (tris, paint))| crate::write3mf::Part {
+            name: format!("{name} — T{head}"),
+            tris,
+            extruder: head + 1,
+            paint: if paint.iter().any(Option::is_some) { paint } else { Vec::new() },
+        })
+        .collect()
 }
 
 // ------------------------------------------------------------ orientation
@@ -421,5 +458,55 @@ mod tests {
         let err = write_scene(&[item(0, 268.0)], (270.0, 270.0), &out).unwrap_err();
         assert!(err.to_string().contains("sticks out"), "{err}");
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// A painted object goes to the engine with its painting, states
+    /// renumbered to the heads chosen, geometry in one piece per volume.
+    #[test]
+    fn scene_keeps_painting_on_the_chosen_heads() {
+        let dir = std::env::temp_dir().join("snapstudio_paint_scene");
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("cube.3mf");
+        // Volume on extruder 4; painted 5, 2, split (3 3 3 6), and 0.
+        crate::mesh::testkit::painted_cube(&src, &["2C", "8", "3C0C0C0C3", "0"], Some(4));
+        let scene = |scale: [f32; 3]| {
+            vec![SceneItem {
+                path: src.to_string_lossy().to_string(),
+                item: 0,
+                name: "cube".into(),
+                pos: [100.0, 100.0],
+                rot: [0.0, 0.0, 0.0],
+                scale,
+                // Colors 1…6 → T0 T1 T2 T3 T0 T1.
+                extruder_map: vec![0, 1, 2, 3, 0, 1],
+            }]
+        };
+        let read_back = |dst: &Path| {
+            let mut z = crate::model3mf::open(dst).unwrap();
+            let settings = crate::model3mf::extruder_settings(&mut z);
+            let m = crate::mesh::load_mesh(&mut z, usize::MAX).unwrap();
+            (settings, m)
+        };
+
+        let dst = dir.join("scene.3mf");
+        write_scene(&scene([1.0; 3]), (270.0, 270.0), &dst).unwrap();
+        let (settings, m) = read_back(&dst);
+        // One part, on the head of extruder 4 (T3, written 4).
+        let parts: Vec<u8> = settings.values().flat_map(|(_, p)| p.values().copied()).collect();
+        assert_eq!(parts, vec![4]);
+        assert_eq!(m.tris.len(), 12);
+        // 5 → T0 (1), 2 → T1 (2), split 3 3 3 6 → 3 3 3 2, 0 stays.
+        assert_eq!(m.paint[0].as_deref(), Some("4"));
+        assert_eq!(m.paint[1].as_deref(), Some("8"));
+        assert_eq!(crate::paint::states(m.paint[2].as_deref().unwrap()), vec![2, 3]);
+        assert!(crate::paint::is_split(m.paint[2].as_deref().unwrap()));
+        assert_eq!(m.paint[3].as_deref(), Some("0"));
+        assert_eq!(&m.extruders[..5], &[1, 2, 3, 4, 4]);
+
+        // Mirrored: the split triangle becomes its dominant color.
+        write_scene(&scene([-1.0, 1.0, 1.0]), (270.0, 270.0), &dst).unwrap();
+        let (_, m) = read_back(&dst);
+        assert_eq!(m.paint[2].as_deref(), Some(crate::paint::whole(3).as_str()));
+        assert_eq!(m.paint[0].as_deref(), Some("4"));
     }
 }
