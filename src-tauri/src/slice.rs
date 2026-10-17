@@ -1407,6 +1407,7 @@ mod tests {
             rot: [0.0, 0.0, 0.0],
             scale: [1.0, 1.0, 1.0],
             extruder_map: vec![head],
+            piece: None,
         };
         let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
         let sink = seen.clone();
@@ -1455,6 +1456,7 @@ mod tests {
             scale: [1.0; 3],
             // Color 1 → T2, color 2 → T0.
             extruder_map: vec![2, 0],
+            piece: None,
         }];
         let plate = dir.join("plate.3mf");
         crate::plate::write_scene(&scene, (270.0, 270.0), &plate).unwrap();
@@ -1511,6 +1513,7 @@ mod tests {
                     rot: [0.0, 0.0, 0.0],
                     scale: [1.0, 1.0, 1.0],
                     extruder_map: map,
+                    piece: None,
                 }],
                 name: Some("painted".into()),
                 ..Default::default()
@@ -1586,6 +1589,7 @@ mod tests {
                 scene: vec![crate::plate::SceneItem {
                     path: src.to_string_lossy().to_string(), item: 0, name: "t".into(),
                     pos: [120.0, 120.0], rot: [0.0; 3], scale: [1.0; 3], extruder_map: vec![0],
+                    piece: None,
                 }],
                 simple: Some(Simple { supports: Some(true), brim: Some(true), ..Default::default() }),
                 overrides,
@@ -1642,6 +1646,7 @@ mod tests {
             rot: [0.0, 0.0, rz],
             scale: [1.0, 1.0, 1.0],
             extruder_map: vec![0],
+            piece: None,
         };
         let machine = l.selected.get("machine").cloned().unwrap_or_else(|| l.machines[0].name.clone());
         let fil = l.filaments.iter().find(|f| f.name.contains("PLA")).unwrap_or(&l.filaments[0]).name.clone();

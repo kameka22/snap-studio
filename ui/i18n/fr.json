@@ -734,6 +734,7 @@
   "pd.temps_differ": "Températures différentes selon les filaments :",
   "prepare.menu.dup": "Dupliquer",
   "prepare.menu.dup_many": "Dupliquer {n} objets",
+  "prepare.menu.split": "Séparer en objets",
   "prepare.menu.center": "Centrer sur le plateau",
   "prepare.menu.reset_rot": "Réinitialiser la rotation",
   "prepare.menu.orient": "Orienter automatiquement",
@@ -1012,6 +1013,16 @@
   "prepare.orient.short": "Orienter",
   "prepare.arrange.short": "Disposer",
   "prepare.duplicate.short": "Dupliquer",
+  "prepare.split": "Séparer en objets : chaque partie du maillage qui ne touche pas les autres",
+  "prepare.split.short": "Séparer",
+  "prepare.split.single": {
+    "one": "Cet objet est d'un seul tenant",
+    "other": "Ces objets sont chacun d'un seul tenant"
+  },
+  "prepare.split.done": {
+    "one": "Séparé en {n} objet",
+    "other": "Séparé en {n} objets"
+  },
   "prepare.remove.short": "Retirer",
   "prepare.clear.short": "Vider",
   "prepare.occupied.title": {

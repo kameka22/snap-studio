@@ -455,10 +455,20 @@ async fn plate_items(path: String) -> Result<Vec<plate::PlateItem>, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Convex hull of a plate object (own frame).
+/// Convex hull of a plate object, or of a piece of it (own frame).
 #[tauri::command]
-async fn plate_hull(path: String, item: usize) -> Result<orient::Hull, String> {
-    tauri::async_runtime::spawn_blocking(move || plate::hull(Path::new(&path), item))
+async fn plate_hull(path: String, item: usize, piece: Option<usize>) -> Result<orient::Hull, String> {
+    tauri::async_runtime::spawn_blocking(move || plate::hull(Path::new(&path), item, piece))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+/// The pieces of a plate object, to split it into several (Orca's "Split
+/// to objects").
+#[tauri::command]
+async fn plate_pieces(path: String, item: usize, piece: Option<usize>) -> Result<Vec<plate::Piece>, String> {
+    tauri::async_runtime::spawn_blocking(move || plate::pieces(Path::new(&path), item, piece))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())
@@ -1194,7 +1204,9 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
         .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
     // `i`: a single object of the file, in its own frame (Prepare view).
     if let Some(index) = query_param(uri, "i").and_then(|s| s.parse::<usize>().ok()) {
-        return match plate::display_mesh(Path::new(&path), index, budget) {
+        // `c`: one piece of it, once split.
+        let piece = query_param(uri, "c").and_then(|s| s.parse::<usize>().ok());
+        return match plate::display_mesh(Path::new(&path), index, piece, budget) {
             Ok(m) => Response::builder()
                 .status(200)
                 .header("Content-Type", "application/octet-stream")
@@ -1411,6 +1423,7 @@ pub fn run() {
             plate_items,
             plate_bed,
             plate_hull,
+            plate_pieces,
             plate_orient,
             plate_save,
             print_send,
