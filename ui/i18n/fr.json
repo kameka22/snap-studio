@@ -656,6 +656,8 @@
   "slice.sum.walls": "{v} parois",
   "slice.sum.supports": "supports",
   "slice.sum.brim": "bordure",
+  "slice.sum.h.walls": "parois {t}",
+  "slice.sum.h.infill": "remplissage {t}",
   "slice.need_profiles": "Choisissez une machine, un profil et un filament par tête.",
   "slice.head_empty": "La tête {heads} n'a pas de bobine.",
   "slice.preparing": "Préparation…",

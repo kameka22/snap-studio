@@ -653,6 +653,8 @@
   "slice.sum.walls": "{v} walls",
   "slice.sum.supports": "supports",
   "slice.sum.brim": "brim",
+  "slice.sum.h.walls": "walls {t}",
+  "slice.sum.h.infill": "infill {t}",
   "slice.need_profiles": "Choose a machine, a profile and a filament per head.",
   "slice.head_empty": "Head {heads} has no spool.",
   "slice.preparing": "Preparing…",

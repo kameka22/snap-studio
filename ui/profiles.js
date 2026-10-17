@@ -254,9 +254,12 @@ async function pdBedLine() {
     }
   }
   if (PD.want !== want) return;
-  // Heads used by the model; failing that, all of them.
+  // Heads used by the model; failing that, all of them. Plus those the
+  // advanced settings send supports, walls or infill to: the engine heats
+  // the plate for every filament the print may use.
   const mapped = [...slUsedSet()].filter((i) => i < heads.length);
-  const used = mapped.length ? mapped : heads.map((_, i) => i);
+  const extra = typeof advHeads === "function" ? Object.values(advHeads()).filter((i) => i < heads.length) : [];
+  const used = mapped.length ? [...new Set([...mapped, ...extra])] : heads.map((_, i) => i);
 
   heads.forEach((name, i) => {
     const el = document.querySelector(`#s-heads [data-temp="${i}"]`);
