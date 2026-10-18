@@ -12,6 +12,7 @@ mod i18n;
 mod ia;
 mod jobs;
 mod library;
+mod maintenance;
 mod mesh;
 mod model3mf;
 mod presets;
@@ -861,6 +862,30 @@ async fn printer_status(host: String, port: u16) -> printers::Status {
     printers::status(&host, port).await
 }
 
+/// What a printer counts (heads, hours, jobs), for its Maintenance view.
+#[tauri::command]
+async fn printer_maintenance(host: String, port: u16) -> Result<maintenance::Usage, String> {
+    maintenance::usage(&host, port).await.map_err(|e| e.to_string())
+}
+
+/// A printer's maintenance log.
+#[tauri::command]
+fn maintenance_log(printer_id: String) -> Vec<maintenance::Entry> {
+    maintenance::entries(&printer_id)
+}
+
+/// Logs a maintenance task done now, with the counters at that moment.
+#[tauri::command]
+fn maintenance_done(printer_id: String, task: String, print_hours: f64, swaps: Vec<u64>) -> Result<Vec<maintenance::Entry>, String> {
+    maintenance::done(&printer_id, &task, print_hours, swaps).map_err(|e| e.to_string())
+}
+
+/// Forgets a log entry made by mistake.
+#[tauri::command]
+fn maintenance_remove(printer_id: String, task: String, at: u64) -> Result<Vec<maintenance::Entry>, String> {
+    maintenance::remove(&printer_id, &task, at).map_err(|e| e.to_string())
+}
+
 /// Opens the live feeds (Printers tab shown).
 #[tauri::command]
 fn printers_watch_start(app: tauri::AppHandle) {
@@ -1488,6 +1513,10 @@ pub fn run() {
             printer_remove,
             printer_probe,
             printer_status,
+            printer_maintenance,
+            maintenance_log,
+            maintenance_done,
+            maintenance_remove,
             printers_watch_start,
             printers_watch_stop,
             cache_info,
