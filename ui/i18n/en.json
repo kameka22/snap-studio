@@ -1252,5 +1252,6 @@
   "maint.offline_hint": "Switch it on and check that it is on the same network: its counters will show here. What you logged stays below.",
   "maint.stale": "{name} does not answer · values read on {d}",
   "maint.connecting": "Reading the printer's counters…",
-  "prints.back": "All prints"
+  "prints.back": "All prints",
+  "update.badge": "A new version is available: install it"
 }

@@ -3060,3 +3060,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .mt-stale .spinner { width: 12px; height: 12px; }
 .mt-stale-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); flex: none; }
 .mt-offline { margin: 8px 0 14px; }
+
+/* Update waiting: beside Settings, an arrow and the version. */
+.side-update { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 5px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #1d1d1f; background: var(--warning); cursor: pointer; }
+.side-update svg { width: 11px; height: 11px; fill: currentColor; }
+.side-update:hover { filter: brightness(1.08); }
