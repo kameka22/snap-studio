@@ -160,6 +160,9 @@
   <div class="tb-actions" data-for="heads">
     <button id="hv-refresh" class="tb-btn" title="Read the spools again" data-i18n-title="heads.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
   </div>
+  <div class="tb-actions" data-for="maint">
+    <button id="mt-refresh" class="tb-btn" title="Read the counters again" data-i18n-title="maint.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+  </div>
   <div class="tb-actions" data-for="printers">
     <div id="prn-tools" class="tb-group hidden">
       <span id="prn-pill" class="pill">—</span>
@@ -452,6 +455,11 @@
   </div>
 </section>
 
+<section id="view-maint" class="view hidden">
+  <div class="prn">
+    <section class="prn-main hv mt" id="mt-body"></section>
+  </div>
+</section>
 <section id="view-heads" class="view hidden">
   <div class="prn">
     <section class="prn-main hv">
@@ -1366,6 +1374,7 @@
 <script src="prints.js"></script>
 <script src="prepare.js"></script>
 <script src="heads.js"></script>
+<script src="maint.js"></script>
 <script src="library.js"></script>
 <script src="vendor/xterm.js"></script>
 <script src="vendor/marked.js"></script>

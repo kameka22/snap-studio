@@ -64,7 +64,8 @@ that slice as they are.
 
 ### 🖨 Printers
 Found on the network on their own; live state, the four heads'
-temperatures, the spools loaded in each. Works with any Klipper printer.
+temperatures, the spools loaded in each, and a maintenance view: usage, each
+head's tool changes and errors, the tasks due. Works with any Klipper printer.
 
 <img src="docs/screenshots/printer.png" alt="Printer and its spools" />
 

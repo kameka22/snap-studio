@@ -68,7 +68,9 @@ résultats sont des 3MF multicolores, prêts à découper.
 
 ### 🖨 Imprimantes
 Trouvées seules sur le réseau ; état en direct, températures des quatre
-têtes, bobines chargées. Fonctionne avec toute imprimante Klipper.
+têtes, bobines chargées, et une vue maintenance : utilisation, changements
+et erreurs de chaque tête, entretiens à faire. Fonctionne avec toute
+imprimante Klipper.
 
 <img src="docs/screenshots/printer.png" alt="L'imprimante et ses bobines" />
 

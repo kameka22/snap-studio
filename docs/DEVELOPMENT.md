@@ -85,6 +85,7 @@ src-tauri/src/
   update.rs       updates (GitHub, signature, installation)
   discover.rs     printer discovery on the network (mDNS)
   jobs.rs         prints: queue, history, background tracking
+  maintenance.rs  printer counters (heads, hours) and maintenance log
   engine.rs       bundled slicing engine: download, verification
   access.rs       first access to macOS protected folders (one prompt)
   i18n.rs         interface language, catalogs shared with ui/i18n

@@ -70,6 +70,8 @@ async function prnLoad(selectId) {
   if (window.currentView === "printers") startLive();
   // At launch, Prepare may show before the printers are known.
   if (window.currentView === "prepare" && typeof prRefreshSpools === "function") prRefreshSpools();
+  // Maintenance due on each printer: the sidebar's dots.
+  if (typeof mtCheckAll === "function") mtCheckAll();
 }
 
 function ledClass(st, id) {
@@ -81,6 +83,7 @@ function ledClass(st, id) {
   return "ok";
 }
 
+const SIDE_WRENCH = '<svg viewBox="0 0 24 24"><path d="M21.7 6.3a5.5 5.5 0 0 1-7.4 6.7L6.7 20.6a2 2 0 0 1-2.8-2.8L11.5 10.2a5.5 5.5 0 0 1 6.7-7.4l-3.4 3.4.7 2.8 2.8.7z"/></svg>';
 const SIDE_SPOOL = '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6m0-4a7 7 0 0 1 6.9 6h-3a4 4 0 0 0-7.8 0h-3A7 7 0 0 1 12 5"/></svg>';
 const SIDE_PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/></svg>';
 
@@ -97,6 +100,7 @@ function prnRenderList() {
       el.querySelector(".lbl").textContent = p.name || p.host;
     });
     box.querySelectorAll("[data-heads] .lbl").forEach((l) => (l.textContent = tr("heads.title")));
+    box.querySelectorAll("[data-maint] .lbl").forEach((l) => (l.textContent = tr("maint.title")));
     sideSync();
     return;
   }
@@ -125,10 +129,13 @@ function prnRenderList() {
     // "Heads and spools" sub-item, under each printer.
     const sub = document.createElement("div");
     sub.className = "side-group side-sub";
-    sub.innerHTML = `<button class="side-item" data-heads="${esc(p.id)}"><span class="glyph" style="color: #34C759">${SIDE_SPOOL}</span><span class="lbl">${esc(tr("heads.title"))}</span></button>`;
-    sub.firstChild.onclick = () => headsShow(p.id);
+    sub.innerHTML = `<button class="side-item" data-heads="${esc(p.id)}"><span class="glyph" style="color: #34C759">${SIDE_SPOOL}</span><span class="lbl">${esc(tr("heads.title"))}</span></button>` +
+      `<button class="side-item" data-maint="${esc(p.id)}"><span class="glyph" style="color: #8E8E93">${SIDE_WRENCH}</span><span class="lbl">${esc(tr("maint.title"))}</span><span class="mt-dot hidden"></span></button>`;
+    sub.children[0].onclick = () => headsShow(p.id);
+    sub.children[1].onclick = () => maintShow(p.id);
     box.appendChild(sub);
   }
+  if (typeof mtSideDots === "function") mtSideDots();
   sideSync();
 }
 
