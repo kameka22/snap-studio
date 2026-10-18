@@ -297,9 +297,28 @@ pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
 /// at once: the watch must never read a half-written file.
 fn write_3mf(dst: &Path, name: &str, parts: &[Part]) -> Result<()> {
     let tmp = dst.with_file_name(format!(".writing-{}", dst.file_name().unwrap_or_default().to_string_lossy()));
-    crate::write3mf::write_multipart(&tmp, name, parts, &Mat::IDENTITY)?;
+    crate::write3mf::write_multipart(&tmp, name, parts, &on_plate(parts))?;
     std::fs::rename(&tmp, dst)?;
     Ok(())
+}
+
+/// The placement that centers the parts on the U1 plate and rests them on
+/// it: objects are modeled around the origin, the plate's corner.
+fn on_plate(parts: &[Part]) -> Mat {
+    let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+    for v in parts.iter().flat_map(|p| p.tris.iter()).flat_map(|t| t.v) {
+        for k in 0..3 {
+            lo[k] = lo[k].min(v[k]);
+            hi[k] = hi[k].max(v[k]);
+        }
+    }
+    let mut m = Mat::IDENTITY;
+    if lo[0] <= hi[0] {
+        m.0[9] = 135.0 - (lo[0] + hi[0]) / 2.0;
+        m.0[10] = 135.0 - (lo[1] + hi[1]) / 2.0;
+        m.0[11] = -lo[2];
+    }
+    m
 }
 
 /// Copies a file over another at once (same reason).
