@@ -120,6 +120,7 @@ coût, puis envoi à l'imprimante ou enregistrement du G-code.
 | macOS (Intel et Apple Silicon) | `Snap-Studio_…_macos-universal.dmg` |
 | Windows | `Snap-Studio_…_x64-setup.exe` |
 | Linux | `Snap-Studio_…_amd64.AppImage` (ou `.deb`) |
+| Linux ARM (Raspberry Pi 4/5…) | `Snap-Studio_…_arm64.AppImage` (ou `.deb`) — pas encore de moteur de découpe pour ARM |
 
 Les paquets ne sont pas encore signés par Apple ou Microsoft. Premier
 lancement sur macOS : clic droit → Ouvrir (ou
