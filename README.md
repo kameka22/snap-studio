@@ -64,8 +64,8 @@ that slice as they are.
 
 ### 🖨 Printers
 Found on the network on their own; live state, the four heads'
-temperatures, the spools loaded in each, and a maintenance view: usage, each
-head's tool changes and errors, the tasks due. Works with any Klipper printer.
+temperatures, the spools loaded in each, and their [maintenance](#-maintenance).
+Works with any Klipper printer.
 
 <img src="docs/screenshots/printer.png" alt="Printer and its spools" />
 
@@ -100,6 +100,29 @@ downloads land in Files; favorites in the sidebar.
 </td>
 </tr>
 </table>
+
+### 🔧 Maintenance
+
+Each printer has its maintenance view, from what the printer counts and
+Snapmaker's maintenance guide:
+
+- **Usage**: print time, prints, filament used, longest print.
+- **Heads** (U1): tool changes, how far each is from the contacts' cleaning
+  (every 100,000 tool changes), pick errors and retries — a head with errors
+  is flagged — and its hotend (standard or high flow).
+- **Tasks** sorted by urgency — head contacts, docking balls and pins, linear
+  shafts and X rods, Z lead screws, nozzles, build plate — due "in 80 h" or
+  "overdue by 296 h". Each one unfolds into its steps, the chapter of
+  Snapmaker's video and the guide; **Done** logs it with the counters of the
+  moment, and the next due date counts from there (undo from the
+  notification).
+- A dot in the sidebar when a task is due. Nothing is written to the printer.
+
+Contacts follow Snapmaker's figure; the other intervals are prudent
+defaults, Snapmaker gives none. On another Klipper printer, the view keeps
+usage and the hour-based tasks.
+
+<img src="docs/screenshots/maintenance.png" alt="The maintenance view" />
 
 **Slicing** — the Snapmaker Orca engine, downloaded once (about 30 MB) and
 kept up to date by the app: you do not need Snapmaker Orca installed.

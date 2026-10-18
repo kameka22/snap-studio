@@ -53,6 +53,18 @@ guide and the video.
 2. UI: the view (usage, heads, tasks, log), sidebar entry and dot, i18n.
 3. Checks: harness with the real answers, docs.
 
+## Done
+
+- Steps 1–3 implemented. `maintenance.rs` read on a real U1 (376 prints,
+  546 h, the four heads; T3 reports `high_flow`), opt-in `real_printer` test.
+- UX pass: summary banner ("All done today" when nothing was ever logged),
+  usage on one line, tasks sorted by urgency with "in / overdue by", one
+  line each with Done only when due or soon; unfolding shows the steps, the
+  video (in-app thumbnail, chapter's time, nothing fetched until opened) and
+  the guide as cards; lighter head cards; undo from the toast.
+- Harness checks with the U1's counters; README (Maintenance section and
+  screenshot) and DEVELOPMENT updated.
+
 ## Later
 
 - Per-head usage estimated from the history (filament index ≠ head).
