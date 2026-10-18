@@ -281,18 +281,31 @@ const TOAST_OK = '<svg class="ok" viewBox="0 0 24 24"><path d="M9.5 16.2 5.3 12l
 const TOAST_KO = '<svg class="ko" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>';
 
 /* Capsule at the bottom of the window, never a button; 2.6 s, 5 s for an error. */
-function toast(msg, err = false) {
+/* `action`: { label, run } — a button in the toast (Undo…), which then
+   stays longer. */
+function toast(msg, err = false, action = null) {
   const el = document.createElement("div");
   el.className = "toast" + (err ? " err" : "");
   el.innerHTML = err ? TOAST_KO : TOAST_OK;
   const span = document.createElement("span");
   span.textContent = msg;
   el.appendChild(span);
-  $("toasts").appendChild(el);
-  setTimeout(() => {
+  const close = () => {
     el.classList.add("out");
     setTimeout(() => el.remove(), 180);
-  }, err ? 5000 : 2600);
+  };
+  if (action) {
+    const b = document.createElement("button");
+    b.className = "toast-act";
+    b.textContent = action.label;
+    b.onclick = () => {
+      close();
+      action.run();
+    };
+    el.appendChild(b);
+  }
+  $("toasts").appendChild(el);
+  setTimeout(close, err || action ? 5000 : 2600);
 }
 
 /* ----------------------------------------------------------------- folder */
