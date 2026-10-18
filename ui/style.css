@@ -3055,3 +3055,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .mt-err { color: var(--danger); font-size: 12px; }
 .toasts .toast { pointer-events: auto; }
 .toast-act { margin-left: 6px; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0 2px; }
+.mt-stale { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 7px 10px 7px 12px; border-radius: 8px; background: var(--control-bg); border: 1px solid var(--separator); color: var(--text-secondary); font-size: 12px; }
+.mt-stale > span:not(.spinner):not(.mt-stale-dot) { flex: 1; }
+.mt-stale .spinner { width: 12px; height: 12px; }
+.mt-stale-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); flex: none; }
+.mt-offline { margin: 8px 0 14px; }

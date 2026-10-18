@@ -1172,7 +1172,6 @@
   "maint.title": "Maintenance",
   "maint.refresh": "Relire les compteurs",
   "maint.loading": "Lecture des compteurs de l'imprimante…",
-  "maint.unreachable": "L'imprimante ne répond pas : ses compteurs ne peuvent pas être lus.",
   "maint.heads": "Têtes",
   "maint.tasks": "Entretiens",
   "maint.log.empty": "Rien de noté pour l'instant.",
@@ -1252,5 +1251,8 @@
   "maint.t.nozzles.s3": "Essuyer avec un chiffon et un peu d'alcool.",
   "maint.t.plate.s1": "Retirer le plateau magnétique.",
   "maint.t.plate.s2": "Laver à l'eau chaude et au liquide vaisselle.",
-  "maint.t.plate.s3": "Sécher avec un chiffon non pelucheux, sans toucher la surface."
+  "maint.t.plate.s3": "Sécher avec un chiffon non pelucheux, sans toucher la surface.",
+  "maint.offline_hint": "Allumez-la et vérifiez qu'elle est sur le même réseau : ses compteurs s'afficheront ici. Ce que vous avez noté reste ci-dessous.",
+  "maint.stale": "{name} ne répond pas · valeurs relevées le {d}",
+  "maint.connecting": "Lecture des compteurs de l'imprimante…"
 }

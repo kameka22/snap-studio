@@ -7,7 +7,18 @@
    counters at that moment, and "since" counts from there. Read only:
    nothing is written to the printer. */
 
-const MT = { pid: null, usage: null, log: [], err: null, due: new Map(), open: new Set(), histOpen: false };
+const MT = { pid: null, usage: null, log: [], stale: null, loading: false, due: new Map(), open: new Set(), histOpen: false };
+
+/* The last counters read, per printer: a printer switched off still shows
+   its maintenance, from them. */
+const mtCacheKey = (pid) => `snapstudio.maint.${pid}`;
+function mtCached(pid) {
+  try {
+    return JSON.parse(localStorage.getItem(mtCacheKey(pid)) || "null");
+  } catch {
+    return null;
+  }
+}
 
 const MT_GUIDE = "https://wiki.snapmaker.com/en/snapmaker_u1/troubleshooting/Core_Components_Maintenance_Guide";
 const MT_VIDEO = "https://www.youtube.com/watch?v=EGfoaHfxalA";
@@ -64,16 +75,24 @@ function mtDueCount(usage, log) {
   return MT_TASKS.map((t) => mtProgress(t, usage, log)).filter((p) => p && p.ratio >= 1).length;
 }
 
+/* A printer's counters and log. Unreachable: its last counters, with the
+   time they were read (`stale`); never read: `usage` null. The log is the
+   app's, always there. */
 async function mtLoad(pid) {
   const p = P.list.find((x) => x.id === pid);
   if (!p) return null;
-  const [usage, log] = await Promise.all([
-    invoke("printer_maintenance", { host: p.host, port: p.port }),
-    invoke("maintenance_log", { printerId: pid }).catch(() => []),
-  ]);
-  MT.due.set(pid, mtDueCount(usage, log));
+  const log = await invoke("maintenance_log", { printerId: pid }).catch(() => []);
+  let usage = null, stale = null;
+  try {
+    usage = await invoke("printer_maintenance", { host: p.host, port: p.port });
+    localStorage.setItem(mtCacheKey(pid), JSON.stringify({ usage, at: Date.now() }));
+  } catch {
+    const c = mtCached(pid);
+    if (c?.usage) ({ usage } = c), (stale = c.at);
+  }
+  if (usage) MT.due.set(pid, mtDueCount(usage, log));
   mtSideDots();
-  return { usage, log };
+  return { usage, log, stale };
 }
 
 /* Every printer's due tasks, quietly: at launch, then hourly. */
@@ -90,19 +109,23 @@ function mtSideDots() {
 }
 
 async function maintShow(pid) {
+  const fresh = MT.pid !== pid;
   MT.pid = pid;
   P.sel = pid;
   switchView("maint");
-  MT.err = null;
-  mtRender();
-  try {
-    const r = await mtLoad(pid);
-    if (MT.pid !== pid || !r) return;
-    MT.usage = r.usage;
-    MT.log = r.log;
-  } catch (e) {
-    MT.err = String(e);
+  // What is known shows at once; the printer's answer follows.
+  if (fresh) {
+    const c = mtCached(pid);
+    MT.usage = c?.usage || null;
+    MT.stale = c?.at || null;
+    MT.log = [];
   }
+  MT.loading = true;
+  mtRender();
+  const r = await mtLoad(pid).catch(() => null);
+  if (MT.pid !== pid) return;
+  MT.loading = false;
+  if (r) ({ usage: MT.usage, log: MT.log, stale: MT.stale } = r);
   mtRender();
 }
 
@@ -111,13 +134,17 @@ function mtRender() {
   if (!p) return;
   tbSet("maint", tr("maint.title"), p.name || p.host);
   const box = $("mt-body");
-  if (MT.err) {
-    box.innerHTML = `<p class="hv-note">${esc(tr("maint.unreachable"))}</p><p class="mt-err">${esc(MT.err)}</p>`;
-    return;
-  }
   const u = MT.usage;
   if (!u) {
-    box.innerHTML = `<p class="hv-note">${esc(tr("maint.loading"))}</p>`;
+    // Never read: the printer page's offline block, and the log, which is ours.
+    box.innerHTML = MT.loading
+      ? `<p class="hv-note">${esc(tr("maint.loading"))}</p>`
+      : `<div class="prn-offline mt-offline" role="status">
+          <svg class="prn-offline-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-3.4-3.4H6.5A4.5 4.5 0 0 1 5 10.2a6.9 6.9 0 0 1 1.2-2.6zM12 4a7 7 0 0 1 6.7 5A4.5 4.5 0 0 1 21 17.2l-1.5-1.5A2.5 2.5 0 0 0 18 11h-1l-.3-1A5 5 0 0 0 9.4 6.6L8 5.2A7 7 0 0 1 12 4"/></svg>
+          <div class="prn-offline-title">${esc(tr("printers.offline.title"))}</div>
+          <div class="prn-offline-hint">${esc(tr("maint.offline_hint"))}</div>
+          <button class="btn" data-mt-retry>${esc(tr("printers.offline.retry"))}</button>
+        </div>${mtHistory()}`;
     return;
   }
   const order = { due: 0, soon: 1, ok: 2 };
@@ -191,18 +218,28 @@ function mtRender() {
     </div>`;
   }).join("");
 
-  const log = [...MT.log].sort((a, b) => b.at - a.at).map((e) => `<div class="mt-hrow"><span>${esc(tr(`maint.t.${e.task}`))}</span><small>${esc(mtDate(e.at))} · ${esc(tr("maint.at_hours", { n: fmtNum(Math.round(e.print_hours)) }))}</small></div>`).join("");
-
-  box.innerHTML = `${banner}
+  const notice = MT.loading && MT.stale
+    ? `<div class="mt-stale"><span class="spinner"></span>${esc(tr("maint.connecting"))}</div>`
+    : MT.stale
+      ? `<div class="mt-stale"><span class="mt-stale-dot"></span><span>${esc(tr("maint.stale", { name: p.name || p.host, d: mtDateTime(MT.stale) }))}</span><button class="btn small" data-mt-retry>${esc(tr("printers.offline.retry"))}</button></div>`
+      : "";
+  box.innerHTML = `${notice}${banner}
     <div class="mt-strip">${strip}</div>
     <div class="vp-section">${esc(tr("maint.tasks"))} <span class="mt-info" title="${esc(tr("maint.note"))}">i</span></div>
     <div class="group mt-tasks">${rows}</div>
     ${heads ? `<div class="vp-section">${esc(tr("maint.heads"))}</div><div class="mt-heads">${heads}</div>` : ""}
-    <details class="mt-hist"${MT.histOpen ? " open" : ""}><summary>${esc(tr("maint.log_n", { n: MT.log.length }))}</summary>
-      <div class="group">${log || `<div class="mt-hrow"><span class="mt-empty">${esc(tr("maint.log.empty"))}</span></div>`}</div></details>`;
-  box.querySelector(".mt-hist").addEventListener("toggle", (e) => (MT.histOpen = e.target.open));
+    ${mtHistory()}`;
+  box.querySelector(".mt-hist")?.addEventListener("toggle", (e) => (MT.histOpen = e.target.open));
 }
 
+/* The log, collapsed: the app's own record, shown even printer off. */
+function mtHistory() {
+  const log = [...MT.log].sort((a, b) => b.at - a.at).map((e) => `<div class="mt-hrow"><span>${esc(tr(`maint.t.${e.task}`))}</span><small>${esc(mtDate(e.at))} · ${esc(tr("maint.at_hours", { n: fmtNum(Math.round(e.print_hours)) }))}</small></div>`).join("");
+  return `<details class="mt-hist"${MT.histOpen ? " open" : ""}><summary>${esc(tr("maint.log_n", { n: MT.log.length }))}</summary>
+    <div class="group">${log || `<div class="mt-hrow"><span class="mt-empty">${esc(tr("maint.log.empty"))}</span></div>`}</div></details>`;
+}
+
+const mtDateTime = (ms) => new Date(ms).toLocaleString(document.documentElement.lang || undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const mtDate = (at) => new Date(at * 1000).toLocaleDateString(document.documentElement.lang || undefined, { day: "numeric", month: "short", year: "numeric" });
 
 /* Logs tasks as done now; the toast offers to undo. */
@@ -245,6 +282,10 @@ $("mt-body").addEventListener("click", (e) => {
   const link = e.target.closest("[data-mt-link]");
   if (link) {
     invoke("plugin:opener|open_url", { url: link.dataset.mtLink }).catch((err) => toast(String(err), true));
+    return;
+  }
+  if (e.target.closest("[data-mt-retry]")) {
+    maintShow(MT.pid);
     return;
   }
   const done = e.target.closest("[data-mt-done]");
