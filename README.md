@@ -113,6 +113,7 @@ and cost, then send to the printer or save the G-code.
 | macOS (Intel and Apple Silicon) | `Snap-Studio_…_macos-universal.dmg` |
 | Windows | `Snap-Studio_…_x64-setup.exe` |
 | Linux | `Snap-Studio_…_amd64.AppImage` (or `.deb`) |
+| Linux ARM (Raspberry Pi 4/5…) | `Snap-Studio_…_arm64.AppImage` (or `.deb`) — no slicing engine for ARM yet |
 
 The packages are not signed by Apple or Microsoft yet. First launch on
 macOS: right-click → Open (or

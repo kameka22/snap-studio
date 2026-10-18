@@ -117,11 +117,14 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
 
     let r = *last_rect().lock().unwrap();
     let dy = title_offset(&window);
-    window.add_child(
+    let _view = window.add_child(
         builder,
         LogicalPosition::new(r.x, r.y + dy),
         LogicalSize::new(r.w.max(1.0), r.h.max(1.0)),
     )?;
+    // Linux: Tauri stacked the view under ours; it goes over the main view.
+    #[cfg(target_os = "linux")]
+    gtk_layer::adopt(app, &_view);
     tabs().lock().unwrap().push(id.to_string());
     show_only(app, Some(id));
     Ok(())
@@ -223,8 +226,19 @@ fn viewport_h() -> &'static Mutex<f64> {
     V.get_or_init(|| Mutex::new(0.0))
 }
 
-/// Places a view in the requested rectangle, corrected for the title bar.
+/// Places a view in the requested rectangle.
 fn place(wv: &tauri::Webview, rect: Rect) {
+    // Linux: placed by GTK over the main view, in its own coordinates — no
+    // title bar or menu bar to account for.
+    #[cfg(target_os = "linux")]
+    gtk_layer::place(wv, rect);
+    #[cfg(not(target_os = "linux"))]
+    place_in_window(wv, rect);
+}
+
+/// Places a view in the window, corrected for the title bar.
+#[cfg(not(target_os = "linux"))]
+fn place_in_window(wv: &tauri::Webview, rect: Rect) {
     let w = wv.window();
     let dy = title_offset(&w);
     if std::env::var("SNAPSTUDIO_LIBDEBUG").is_ok() {
@@ -246,6 +260,79 @@ fn place(wv: &tauri::Webview, rect: Rect) {
             "[lib] view position after {:?}",
             wv.position().map(|p| p.to_logical::<f64>(scale).y).ok()
         );
+    }
+}
+
+/// Linux: Tauri packs a child view into the window's vertical box, where GTK
+/// ignores positions — the page landed under our interface, out of its frame
+/// (tauri-apps/tauri#10420, still open in 2.12). The tabs' views are moved
+/// into a `gtk::Overlay` put in the main view's place, as layers over it,
+/// positioned by their margins: each takes input only on its own area. GTK
+/// work happens on the main thread, through `with_webview`, in the order the
+/// calls were made.
+#[cfg(target_os = "linux")]
+mod gtk_layer {
+    use super::Rect;
+    use gtk::prelude::*;
+    use std::cell::RefCell;
+    use tauri::Manager;
+
+    thread_local! {
+        /// The overlay now holding the main view (main thread only).
+        static OVERLAY: RefCell<Option<gtk::Overlay>> = const { RefCell::new(None) };
+    }
+
+    /// Puts the main view into an overlay, at its place in the window's box.
+    fn overlay_around(main: &webkit2gtk::WebView) -> Option<gtk::Overlay> {
+        OVERLAY.with(|o| {
+            if let Some(ov) = o.borrow().as_ref() {
+                return Some(ov.clone());
+            }
+            let main_w: &gtk::Widget = main.upcast_ref();
+            let vbox = main_w.parent()?.downcast::<gtk::Box>().ok()?;
+            // After the menu bar, where the main view was.
+            let at = vbox.children().iter().position(|c| c == main_w)? as i32;
+            let overlay = gtk::Overlay::new();
+            vbox.remove(main_w);
+            overlay.add(main_w);
+            vbox.pack_start(&overlay, true, true, 0);
+            vbox.reorder_child(&overlay, at);
+            overlay.show();
+            *o.borrow_mut() = Some(overlay.clone());
+            Some(overlay)
+        })
+    }
+
+    /// Moves a tab's view from the window's box to a layer over the main view.
+    pub fn adopt(app: &tauri::AppHandle, view: &tauri::Webview) {
+        if let Some(main) = app.get_webview("main") {
+            let _ = main.with_webview(|pw| {
+                overlay_around(&pw.inner());
+            });
+        }
+        let _ = view.with_webview(|pw| {
+            let w: gtk::Widget = pw.inner().upcast();
+            let Some(overlay) = OVERLAY.with(|o| o.borrow().clone()) else { return };
+            if let Some(parent) = w.parent() {
+                if let Ok(c) = parent.downcast::<gtk::Container>() {
+                    c.remove(&w);
+                }
+            }
+            w.set_halign(gtk::Align::Start);
+            w.set_valign(gtk::Align::Start);
+            overlay.add_overlay(&w);
+        });
+    }
+
+    /// Puts a tab's view on the rectangle, in the main view's coordinates.
+    pub fn place(view: &tauri::Webview, rect: Rect) {
+        let _ = view.with_webview(move |pw| {
+            let w = pw.inner();
+            w.set_margin_start(rect.x.max(0.0).round() as i32);
+            w.set_margin_top(rect.y.max(0.0).round() as i32);
+            w.set_size_request(rect.w.max(1.0).round() as i32, rect.h.max(1.0).round() as i32);
+            w.queue_resize();
+        });
     }
 }
 
