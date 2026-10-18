@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snap Studio: prepare your Snapmaker prints, simply</title>
+  <meta name="description" content="Snap Studio is a free desktop app for the Snapmaker U1: browse your 3MF files, prepare the plate, slice with the Snapmaker Orca engine, and follow your prints live.">
+  <meta property="og:title" content="Snap Studio">
+  <meta property="og:description" content="Prepare your Snapmaker prints, simply.">
+  <meta property="og:image" content="assets/prepare.webp">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="./"><img src="assets/icon.png" alt="" width="28" height="28"><span>Snap Studio</span></a>
+    <nav class="nav">
+      <a href="#features" data-i18n="nav.features">Features</a>
+      <a href="#screens" data-i18n="nav.screens">Screenshots</a>
+      <a href="#download" data-i18n="nav.download">Download</a>
+      <div class="lang" role="group" aria-label="Language" data-i18n-aria="lang.label">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="fr" aria-pressed="false">FR</button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img class="hero-icon" src="assets/icon.png" alt="Snap Studio icon" data-i18n-alt="hero.icon_alt" width="128" height="128">
+      <h1>Snap Studio</h1>
+      <p class="tagline" data-i18n="hero.tagline">Prepare your Snapmaker prints, simply</p>
+      <p class="lede" data-i18n="hero.lede">The desktop workshop for your Snapmaker U1: from the file to the print, in one free app.</p>
+      <div class="cta">
+        <a id="hero-dl" class="btn primary" href="https://github.com/kameka22/snap-studio/releases"><span id="hero-dl-label" data-i18n="dl.button">Download</span></a>
+        <a class="btn ghost" href="https://github.com/kameka22/snap-studio" data-i18n="hero.source">View on GitHub</a>
+      </div>
+      <p id="hero-dl-note" class="note"></p>
+      <img class="hero-shot" src="assets/prepare.webp" alt="The Prepare view: a model on the Snapmaker U1 plate in 3D" data-i18n-alt="shots.prepare_alt" width="1400" height="824">
+    </section>
+
+    <section id="features" class="features">
+      <h2 data-i18n="features.title">What it does</h2>
+      <div class="grid">
+        <article class="feature">
+          <span class="ico" aria-hidden="true">🖨</span>
+          <h3 data-i18n="f.u1.title">Made for the Snapmaker U1</h3>
+          <p data-i18n="f.u1.text">The U1 plate, profiles and four heads are built in. Printers are found on your network. Status and sending also work with any Klipper (Moonraker) printer.</p>
+        </article>
+        <article class="feature">
+          <span class="ico" aria-hidden="true">✂️</span>
+          <h3 data-i18n="f.slice.title">Orca-style slicing</h3>
+          <p data-i18n="f.slice.text">The Snapmaker Orca engine is downloaded once and kept up to date: no need to install Orca. Quality, infill and walls, plus advanced settings for supports, brim, seam and multi-material, which you can save as your own profiles.</p>
+        </article>
+        <article class="feature">
+          <span class="ico" aria-hidden="true">🎨</span>
+          <h3 data-i18n="f.heads.title">Multi-color, head by head</h3>
+          <p data-i18n="f.heads.text">The spools loaded on the printer are read. Each color of a model, painted ones included, goes to the head you pick, and the 3D view shows the real spool colors.</p>
+        </article>
+        <article class="feature">
+          <span class="ico" aria-hidden="true">📡</span>
+          <h3 data-i18n="f.live.title">Live printer monitoring</h3>
+          <p data-i18n="f.live.text">Progress, layers, temperatures of the four heads and the plate, the live camera, pause and cancel, and a print queue. A maintenance view tracks what needs servicing.</p>
+        </article>
+        <article class="feature">
+          <span class="ico" aria-hidden="true">✦</span>
+          <h3 data-i18n="f.ai.title">AI assistant</h3>
+          <p data-i18n="f.ai.text">Describe a change or a new part: Claude models it through Claude Code with your own account, with a live 3D preview and every version kept. The results are multicolor 3MF files ready to slice.</p>
+        </article>
+        <article class="feature">
+          <span class="ico" aria-hidden="true">📁</span>
+          <h3 data-i18n="f.files.title">Your files and model sites</h3>
+          <p data-i18n="f.files.text">Thumbnails of your 3MF files (Orca, Bambu, Prusa, MakerWorld) and layer-by-layer G-code previews. MakerWorld, Printables, Thingiverse and Cults3D open in tabs, and downloads land in Files.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="screens" class="screens">
+      <h2 data-i18n="screens.title">A look inside</h2>
+      <div class="shots">
+        <figure>
+          <img src="assets/prepare.webp" alt="The Prepare view: a model on the Snapmaker U1 plate in 3D" data-i18n-alt="shots.prepare_alt" width="1400" height="824" loading="lazy">
+          <figcaption data-i18n="shots.prepare">3D view: place, rotate, orient and arrange on the U1 plate</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/slicing.webp" alt="The slice sheet with plate, quality, heads and spools" data-i18n-alt="shots.slicing_alt" width="1200" height="1105" loading="lazy">
+          <figcaption data-i18n="shots.slicing">Slice settings, with heads and spools read from the printer</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/printer.webp" alt="A printer page with the four loaded spools" data-i18n-alt="shots.printer_alt" width="1400" height="824" loading="lazy">
+          <figcaption data-i18n="shots.printer">Printer status and the spools loaded in each head</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/print-job.webp" alt="A print in progress with temperatures and progress" data-i18n-alt="shots.job_alt" width="1400" height="824" loading="lazy">
+          <figcaption data-i18n="shots.job">A print in progress, followed live</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="download" class="download">
+      <h2 data-i18n="dl.title">Download</h2>
+      <p id="dl-version" class="note" data-i18n="dl.loading">Looking for the latest release…</p>
+      <div class="dl-grid">
+        <a class="dl" id="dl-macos" data-os="macos" href="https://github.com/kameka22/snap-studio/releases">
+          <b>macOS</b><span data-i18n="dl.macos">Intel and Apple Silicon (.dmg)</span>
+        </a>
+        <a class="dl" id="dl-windows" data-os="windows" href="https://github.com/kameka22/snap-studio/releases">
+          <b>Windows</b><span data-i18n="dl.windows">64-bit installer (.exe)</span>
+        </a>
+        <a class="dl" id="dl-linux" data-os="linux" href="https://github.com/kameka22/snap-studio/releases">
+          <b>Linux</b><span data-i18n="dl.linux">x86-64 AppImage</span>
+        </a>
+      </div>
+      <p class="note"><a href="https://github.com/kameka22/snap-studio/releases" data-i18n="dl.all">All releases and files (.deb, ARM64…)</a></p>
+
+      <h3 data-i18n="req.title">System requirements</h3>
+      <ul class="req">
+        <li data-i18n="req.macos">macOS on Intel or Apple Silicon (one universal app).</li>
+        <li data-i18n="req.windows">Windows 10 or 11, 64-bit (x64), with the Microsoft Edge WebView2 runtime. The installer sets it up if it's missing.</li>
+        <li data-i18n="req.linux">Linux x86-64 (AppImage or .deb). ARM64 builds exist too, but without the slicing engine yet.</li>
+        <li data-i18n="req.engine">An internet connection the first time, to download the slicing engine (about 30 MB).</li>
+        <li data-i18n="req.printer">A Snapmaker U1 on your local network. Any Klipper (Moonraker) printer works for status and sending.</li>
+      </ul>
+      <p class="note" data-i18n="req.unsigned">The packages aren't signed by Apple or Microsoft yet. On first launch on macOS, right-click the app and choose Open; on Windows, click "More info" → "Run anyway".</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="https://github.com/kameka22/snap-studio" data-i18n="foot.repo">Source code on GitHub</a>
+    <a href="https://github.com/kameka22/snap-studio/blob/main/LICENSE" data-i18n="foot.license">License: GPL-3.0</a>
+    <a href="https://github.com/kameka22/snap-studio/issues/new" data-i18n="foot.bug">Report a bug</a>
+    <p class="fine" data-i18n="foot.trademark">Snap Studio is an independent project, not affiliated with or endorsed by Snapmaker. Snapmaker and U1 are trademarks of their owners.</p>
+  </footer>
+
+  <script src="i18n.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
