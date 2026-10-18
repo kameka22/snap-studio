@@ -1259,5 +1259,7 @@
   "update.badge": "Une nouvelle version est disponible : l’installer",
   "chat.model.title": "Modèle Claude de cette conversation",
   "chat.model.default": "Par défaut",
-  "chat.model.changed": "Modèle : {model}"
+  "chat.model.changed": "Modèle : {model}",
+  "printers.cam.enlarge": "Agrandir",
+  "printers.cam.shrink": "Réduire"
 }

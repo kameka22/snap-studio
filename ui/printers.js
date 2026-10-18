@@ -823,7 +823,13 @@ $("cam-img").addEventListener("error", () => {
 });
 $("cam-toggle").addEventListener("click", () => (CAM.on ? camStop() : camStart()));
 // Double-click: the image takes the full width of the printer pane.
-$("cam-box").addEventListener("dblclick", () => $("cam-box").classList.toggle("big"));
+/* Enlarge the camera: its button (shown on hover) or a double-click. */
+function camToggleSize() {
+  const big = $("cam-box").classList.toggle("big");
+  $("cam-size").title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
+}
+$("cam-box").addEventListener("dblclick", (e) => !e.target.closest(".cam-bar") && camToggleSize());
+$("cam-size").addEventListener("click", camToggleSize);
 
 /* ------------------------------------------------------------ events */
 
