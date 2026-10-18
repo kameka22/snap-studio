@@ -1256,5 +1256,8 @@
   "maint.stale": "{name} ne répond pas · valeurs relevées le {d}",
   "maint.connecting": "Lecture des compteurs de l'imprimante…",
   "prints.back": "Toutes les impressions",
-  "update.badge": "Une nouvelle version est disponible : l’installer"
+  "update.badge": "Une nouvelle version est disponible : l’installer",
+  "chat.model.title": "Modèle Claude de cette conversation",
+  "chat.model.default": "Par défaut",
+  "chat.model.changed": "Modèle : {model}"
 }

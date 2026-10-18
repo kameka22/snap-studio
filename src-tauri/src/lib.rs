@@ -1055,6 +1055,12 @@ fn ia_chat_mode(id: String, mode: String) -> Result<(), String> {
     chat::set_mode(&id, &mode).map_err(|e| e.to_string())
 }
 
+/// Claude model of the conversation; none: the account's default.
+#[tauri::command]
+fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
+    chat::set_model(&id, model.as_deref()).map_err(|e| e.to_string())
+}
+
 /// True while Claude runs for this conversation in chat mode.
 #[tauri::command]
 fn ia_chat_running(id: String) -> bool {
@@ -1491,6 +1497,7 @@ pub fn run() {
             ia_chat_stop,
             ia_chat_answer,
             ia_chat_mode,
+            ia_chat_model,
             ia_chat_running,
             ia_chat_close,
             auth_status,

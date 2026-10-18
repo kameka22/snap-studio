@@ -1253,5 +1253,8 @@
   "maint.stale": "{name} does not answer · values read on {d}",
   "maint.connecting": "Reading the printer's counters…",
   "prints.back": "All prints",
-  "update.badge": "A new version is available: install it"
+  "update.badge": "A new version is available: install it",
+  "chat.model.title": "Claude model for this conversation",
+  "chat.model.default": "Default",
+  "chat.model.changed": "Model: {model}"
 }

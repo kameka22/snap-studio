@@ -69,6 +69,10 @@ pub struct Conversation {
     /// Maximum size asked for a created object, in millimeters.
     #[serde(default)]
     pub bounds: Option<[f32; 3]>,
+    /// Claude model chosen for this conversation (`chat::MODELS`); none:
+    /// the account's default.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 impl Conversation {
@@ -391,6 +395,7 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
         kind: String::new(),
         dest_dir: None,
         bounds: None,
+        model: None,
     };
     save(&c)?;
     Ok(c)
@@ -435,6 +440,7 @@ pub fn create_blank(
         kind: "create".into(),
         dest_dir: Some(dest_dir.to_string_lossy().to_string()),
         bounds,
+        model: None,
     };
     save(&c)?;
     Ok(c)
@@ -689,6 +695,7 @@ pub fn tests_conversation() -> Conversation {
         kind: String::new(),
         dest_dir: None,
         bounds: None,
+        model: None,
     }
 }
 

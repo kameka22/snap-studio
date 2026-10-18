@@ -380,6 +380,7 @@ mod tests {
             kind: String::new(),
             dest_dir: None,
             bounds: None,
+            model: None,
         }
     }
 

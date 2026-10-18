@@ -3065,3 +3065,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .side-update { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 5px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #1d1d1f; background: var(--warning); cursor: pointer; }
 .side-update svg { width: 11px; height: 11px; fill: currentColor; }
 .side-update:hover { filter: brightness(1.08); }
+
+/* Model of the conversation, beside the paperclip: a quiet pill. */
+.chat-model { flex: none; align-self: center; max-width: 120px; height: 26px; padding: 0 22px 0 9px; border-radius: 999px; border: 1px solid var(--separator); background-color: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.chat-model:hover { color: var(--text); border-color: var(--control-border); }
