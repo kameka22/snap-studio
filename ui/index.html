@@ -74,11 +74,15 @@
     <button class="side-item" data-view="settings">
       <span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span>
       <span class="lbl" data-i18n="nav.settings">Settings</span>
+      <span id="side-update" class="side-update hidden" role="button" title="A new version is available" data-i18n-title="update.badge"><svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg><b></b></span>
     </button>
   </div>
 </aside>
 <main id="content" class="content">
 <header class="toolbar" data-tauri-drag-region>
+  <div class="tb-actions tb-lead" data-for="prints">
+    <button id="pj-back" class="tb-btn hidden" title="All prints" data-i18n-title="prints.back"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
+  </div>
   <div class="tb-actions tb-lead" data-for="ia">
     <button id="ia-back" class="tb-btn hidden" title="Conversations" data-i18n-title="ia.conversations"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
   </div>
@@ -444,7 +448,11 @@
           <div class="ghead"><span data-i18n="printers.camera">Camera</span><span id="cam-note" class="note"></span>
             <button id="cam-toggle" class="btn small" data-i18n="common.show">Show</button>
           </div>
-          <div id="cam-box" class="cam-box hidden"><img id="cam-img" alt="Printer camera" data-i18n-alt="printers.camera_alt" /></div>
+          <div id="cam-box" class="cam-box hidden"><img id="cam-img" alt="Printer camera" data-i18n-alt="printers.camera_alt" />
+            <div class="cam-bar"><button id="cam-size" class="cam-btn" title="Enlarge" data-i18n-title="printers.cam.enlarge">
+              <svg class="grow" viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>
+              <svg class="shrink" viewBox="0 0 24 24"><path d="M8 4h2v6H4V8h4zm6 0h2v4h4v2h-6zM4 14h6v6H8v-4H4zm10 0h6v2h-4v4h-2z"/></svg>
+            </button></div></div>
         </div>
         <div class="group" id="prn-filaments"></div>
         <div class="group" id="prn-temps"></div>
@@ -523,6 +531,7 @@
               <button id="chat-add" class="chat-icon" title="Attach an image" data-i18n-title="chat.attach">
                 <svg viewBox="0 0 24 24"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10z"/></svg>
               </button>
+              <select id="chat-model" class="chat-model" title="Claude model for this conversation" data-i18n-title="chat.model.title"></select>
               <textarea id="chat-input" rows="1" placeholder="Message Claude…" data-i18n-placeholder="chat.placeholder"></textarea>
               <button id="chat-send" class="chat-send" title="Send" data-i18n-title="chat.send" disabled>
                 <svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>

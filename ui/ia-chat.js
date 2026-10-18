@@ -117,7 +117,7 @@ function chatSetBusy(on) {
 
 /* A conversation whose mode is not ready: its history only. */
 function chatSetLocked(on) {
-  for (const id of ["chat-input", "chat-send", "chat-add", "chat-mode"]) $(id).disabled = on;
+  for (const id of ["chat-input", "chat-send", "chat-add", "chat-mode", "chat-model"]) $(id).disabled = on;
   $("chat-input").placeholder = tr(on ? "chat.placeholder_locked" : "chat.placeholder");
 }
 
@@ -125,7 +125,7 @@ function chatStatus() {
   const cost = CHAT.cost
     ? fmtNum(CHAT.cost, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : "";
-  $("chat-status").textContent = [CHAT.model, cost].filter(Boolean).join(" · ");
+  $("chat-status").textContent = [chatModelName(CHAT.model), cost].filter(Boolean).join(" · ");
 }
 
 /* An image of the conversation folder, served by the thumbnail protocol. */
@@ -566,6 +566,30 @@ function chatModeFill(c) {
   sel.value = modes[0];
 }
 
+/* Models a conversation may choose (chat.rs `MODELS`), with their names;
+   "" is the account's default. */
+const CHAT_MODELS = [
+  ["claude-opus-5-5", "Opus 5.5"],
+  ["claude-sonnet-5-5", "Sonnet 5.5"],
+  ["claude-haiku-4-5-20251001", "Haiku 4.5"],
+];
+const chatModelName = (id) => CHAT_MODELS.find(([m]) => id && id.startsWith(m.replace(/-\d{8}$/, "")))?.[1] || id || "";
+
+function chatModelFill(c) {
+  const sel = $("chat-model");
+  sel.innerHTML = [["", tr("chat.model.default")], ...CHAT_MODELS].map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join("");
+  sel.value = CHAT_MODELS.some(([m]) => m === c.model) ? c.model : "";
+}
+
+$("chat-model").addEventListener("change", (e) => {
+  if (!CHAT.id) return;
+  const model = e.target.value || null;
+  if (CHAT.conv) CHAT.conv.model = model;
+  invoke("ia_chat_model", { id: CHAT.id, model })
+    .then(() => toast(tr("chat.model.changed", { model: model ? chatModelName(model) : tr("chat.model.default") })))
+    .catch((err) => toast(String(err), true));
+});
+
 /* The mode Claude reports — after our change, or when it leaves plan mode. */
 function chatModeShow(mode) {
   const sel = $("chat-mode");
@@ -593,9 +617,11 @@ function chatReset() {
    request as the first message. */
 async function chatOpen(c) {
   CHAT.id = c.id;
+  CHAT.conv = c;
   chatReset();
   chatClearAttachments();
   chatModeFill(c);
+  chatModelFill(c);
   let past = [];
   try {
     past = (await invoke("ia_chat_history", { id: c.id })) || [];

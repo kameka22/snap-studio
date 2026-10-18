@@ -134,11 +134,18 @@ Klipper, la vue garde l'utilisation et les entretiens à l'heure.
 
 <img src="docs/screenshots/maintenance.png" alt="La vue maintenance" />
 
-**Découpe** — le moteur Snapmaker Orca, téléchargé une fois (environ 30 Mo)
-et tenu à jour par l'app : inutile d'installer Snapmaker Orca. Choix de la
-surface du plateau (PEI texturé, PEI lisse…), détail de chaque profil tel
-que le moteur le reçoit, aperçu des trajectoires avec durée, filament et
-coût, puis envoi à l'imprimante ou enregistrement du G-code.
+### ✂️ Découpe
+
+Le moteur Snapmaker Orca, téléchargé une fois (environ 30 Mo) et tenu à
+jour par l'app : inutile d'installer Snapmaker Orca. Les quatre têtes de la
+U1 avec les bobines lues sur l'imprimante, chaque couleur de chaque objet
+envoyée vers sa tête, la surface du plateau (PEI texturé, PEI lisse…) et sa
+température, la qualité et les réglages, le détail de chaque profil tel que
+le moteur le reçoit ; puis un aperçu des trajectoires avec durée, filament
+et coût, envoyé à l'imprimante — avec son image sur l'écran de l'imprimante —
+ou enregistré en G-code.
+
+<img src="docs/screenshots/slicing.png" alt="La fenêtre de découpe" />
 
 ## Télécharger
 

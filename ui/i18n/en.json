@@ -87,7 +87,7 @@
   "files.analyze": "Analyze Geometry",
   "prepare.empty.title": "Empty plate",
   "prepare.empty.text": "Choose a model in Files, then “Prepare” — or add it with +.",
-  "prepare.hint": "drag: move · ⌥ drag: rotate · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo",
+  "prepare.hint": "drag: move · ⌥ drag: rotate · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo",
   "prepare.objects": "Objects",
   "prepare.placement": "Placement",
   "prepare.pos_x": "Position X",
@@ -201,7 +201,7 @@
   "viewer.save_gcode": "Save G-code",
   "viewer.edit_settings": "Edit Settings",
   "viewer.loading_mesh": "Reading the mesh…",
-  "viewer.hint": "drag: orbit · ⇧ drag or right-click: pan · pinch: zoom",
+  "viewer.hint": "drag: orbit · ⇧ or right drag, ⇧ scroll: pan · pinch: zoom",
   "send.title": "Send to Printer",
   "send.before": "Before printing",
   "send.leveling": "Automatic bed leveling",
@@ -1251,5 +1251,12 @@
   "maint.t.plate.s3": "Dry with a lint-free cloth, without touching the surface.",
   "maint.offline_hint": "Switch it on and check that it is on the same network: its counters will show here. What you logged stays below.",
   "maint.stale": "{name} does not answer · values read on {d}",
-  "maint.connecting": "Reading the printer's counters…"
+  "maint.connecting": "Reading the printer's counters…",
+  "prints.back": "All prints",
+  "update.badge": "A new version is available: install it",
+  "chat.model.title": "Claude model for this conversation",
+  "chat.model.default": "Default",
+  "chat.model.changed": "Model: {model}",
+  "printers.cam.enlarge": "Enlarge",
+  "printers.cam.shrink": "Reduce"
 }

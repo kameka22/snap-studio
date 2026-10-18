@@ -50,6 +50,9 @@ const RESULT_CAP: usize = 20_000;
 /// is where yolobox starts.
 pub const MODES: [&str; 4] = ["acceptEdits", "default", "plan", "bypassPermissions"];
 
+/// Models a conversation may choose; none is the account's default.
+pub const MODELS: [&str; 3] = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001"];
+
 /// The mode chosen for each conversation, kept for its next start.
 fn chosen_modes() -> &'static Mutex<HashMap<String, String>> {
     static M: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
@@ -73,6 +76,10 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
     let mut inner: Vec<String> = CLI_ARGS.iter().map(|s| s.to_string()).collect();
     inner.push(if resume { "--resume" } else { "--session-id" }.into());
     inner.push(c.id.clone());
+    if let Some(m) = c.model.as_deref().filter(|m| MODELS.contains(m)) {
+        inner.push("--model".into());
+        inner.push(m.to_string());
+    }
 
     if c.engine == "container" {
         let yolobox = tools
@@ -734,6 +741,34 @@ pub fn set_mode(id: &str, mode: &str) -> Result<()> {
     Ok(())
 }
 
+/// Switches the conversation's model: kept for its next starts, and applied
+/// at once to a running session (`set_model`, as the Agent SDK does).
+/// `None`: back to the account's default.
+pub fn set_model(id: &str, model: Option<&str>) -> Result<()> {
+    if let Some(m) = model {
+        if !MODELS.contains(&m) {
+            return Err(anyhow!("unknown model: {m}"));
+        }
+    }
+    let mut c = crate::ia::get(id)?;
+    c.model = model.map(String::from);
+    crate::ia::save(&c)?;
+    if is_open(id) {
+        let rid = {
+            let mut s = sessions().lock().unwrap();
+            let sess = s.get_mut(id).ok_or_else(|| anyhow!(crate::t!("err.terminal_closed")))?;
+            sess.next += 1;
+            format!("model-{}", sess.next)
+        };
+        let mut request = json!({ "subtype": "set_model" });
+        if let Some(m) = model {
+            request["model"] = json!(m);
+        }
+        write_line(id, &json!({ "type": "control_request", "request_id": rid, "request": request }))?;
+    }
+    Ok(())
+}
+
 /// Something of ours in the log, such as a new version of the object.
 pub fn note(id: &str, event: Value) {
     let ws = crate::ia::workspace(id);
@@ -828,6 +863,19 @@ mod tests {
         let resumed = command_line(&conv("local"), &tools(), true).unwrap();
         assert!(resumed.windows(2).any(|w| w[0] == "--resume"));
         assert!(!resumed.iter().any(|a| a == "--session-id"));
+    }
+
+    #[test]
+    fn the_chosen_model_is_passed() {
+        let mut c = conv("local");
+        assert!(!command_line(&c, &tools(), false).unwrap().contains(&"--model".to_string()));
+        c.model = Some("claude-sonnet-5-5".into());
+        let argv = command_line(&c, &tools(), true).unwrap();
+        let at = argv.iter().position(|a| a == "--model").expect("--model");
+        assert_eq!(argv[at + 1], "claude-sonnet-5-5");
+        // Only known models reach the command line.
+        c.model = Some("--dangerously-skip-permissions".into());
+        assert!(!command_line(&c, &tools(), false).unwrap().contains(&"--model".to_string()));
     }
 
     #[test]

@@ -112,6 +112,7 @@ function pjRender() {
   const detail = !!key && pjResolve(key);
   $("pj-overview").classList.toggle("hidden", !!detail);
   $("pj-detail").classList.toggle("hidden", !detail);
+  $("pj-back").classList.toggle("hidden", !detail);
   if (!detail) {
     PJ.sel = null;
     pjCamStop();
@@ -602,3 +603,12 @@ window.addEventListener("langchange", () => {
   // free at launch) can be asked.
   invoke("queue_check").catch(() => {});
 })();
+
+/* Back to every print: the toolbar's arrow, or Esc when nothing else
+   (sheet, field) takes it. */
+$("pj-back").addEventListener("click", () => pjShow(null));
+addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || window.currentView !== "prints" || !PJ.sel) return;
+  if (document.querySelector(".modal:not(.hidden)") || e.target.closest?.("input, textarea, select")) return;
+  pjShow(null);
+});

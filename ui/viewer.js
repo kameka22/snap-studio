@@ -1170,7 +1170,8 @@ function bindInteractions(canvas) {
       // A trackpad pinch arrives as a wheel event with ctrl: always a zoom, and
       // never inverted, otherwise the gesture becomes counter-intuitive.
       const pinch = e.ctrlKey;
-      const action = pinch ? "zoom" : state.wheelAction || "zoom";
+      // ⇧ + scroll moves the view (a trackpad's ⇧ + two fingers).
+      const action = pinch ? "zoom" : e.shiftKey ? "pan" : state.wheelAction || "zoom";
 
       if (action === "zoom") {
         const s = pinch ? 1 : dir;

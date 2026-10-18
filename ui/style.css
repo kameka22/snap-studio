@@ -2988,7 +2988,6 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 /* ------------------------------------------------- printer maintenance */
 
 .mt-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); margin-left: auto; flex: none; }
-.mt > * { max-width: 860px; }
 .mt .vp-section { margin: 18px 0 8px; display: flex; align-items: center; gap: 6px; }
 .mt-banner { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 10px; background: color-mix(in srgb, var(--warning) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
 .mt-banner.ok { background: color-mix(in srgb, #30d158 10%, transparent); border-color: color-mix(in srgb, #30d158 35%, transparent); }
@@ -3035,7 +3034,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .mt-card-text small { display: block; font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mt-ext { color: var(--text-tertiary); font-size: 12px; }
 .mt-note-done { margin-top: 10px; }
-.mt-heads { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.mt-heads { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
 .mt-head { background: var(--control-bg); border: 1px solid var(--separator); border-radius: 10px; padding: 10px 12px; }
 .mt-head-top { display: flex; justify-content: space-between; align-items: center; }
 .mt-chip { font-size: 10.5px; color: var(--text-secondary); border: 1px solid var(--separator); border-radius: 999px; padding: 1px 7px; }
@@ -3060,3 +3059,22 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .mt-stale .spinner { width: 12px; height: 12px; }
 .mt-stale-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); flex: none; }
 .mt-offline { margin: 8px 0 14px; }
+
+/* Update waiting: beside Settings, an arrow and the version. */
+.side-update { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 5px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #1d1d1f; background: var(--warning); cursor: pointer; }
+.side-update svg { width: 11px; height: 11px; fill: currentColor; }
+.side-update:hover { filter: brightness(1.08); }
+
+/* Model of the conversation, beside the paperclip: a quiet pill. */
+.chat-model { flex: none; align-self: center; max-width: 120px; height: 26px; padding: 0 22px 0 9px; border-radius: 999px; border: 1px solid var(--separator); background-color: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.chat-model:hover { color: var(--text); border-color: var(--control-border); }
+
+/* Camera controls, as on a video player: shown on hover, the enlarge
+   button on the right (a double-click still works). */
+.cam-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; padding: 18px 8px 6px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); opacity: 0; transition: opacity 150ms ease; pointer-events: none; }
+.cam-box:hover .cam-bar, .cam-bar:focus-within { opacity: 1; pointer-events: auto; }
+.cam-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: #fff; cursor: pointer; }
+.cam-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.cam-btn svg { width: 20px; height: 20px; fill: currentColor; }
+.cam-btn .shrink, .cam-box.big .cam-btn .grow { display: none; }
+.cam-box.big .cam-btn .shrink { display: block; }
