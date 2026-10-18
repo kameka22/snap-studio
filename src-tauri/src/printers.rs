@@ -124,7 +124,7 @@ fn client() -> &'static reqwest::Client {
     })
 }
 
-fn base(host: &str, port: u16) -> String {
+pub(crate) fn base(host: &str, port: u16) -> String {
     let h = host.trim().trim_end_matches('/');
     if h.starts_with("http://") || h.starts_with("https://") {
         h.to_string()
@@ -133,7 +133,7 @@ fn base(host: &str, port: u16) -> String {
     }
 }
 
-async fn get_json(url: &str) -> Result<Value> {
+pub(crate) async fn get_json(url: &str) -> Result<Value> {
     let r = client().get(url).send().await?;
     if !r.status().is_success() {
         return Err(anyhow!("HTTP {}", r.status().as_u16()));

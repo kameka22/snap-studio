@@ -68,7 +68,8 @@ résultats sont des 3MF multicolores, prêts à découper.
 
 ### 🖨 Imprimantes
 Trouvées seules sur le réseau ; état en direct, températures des quatre
-têtes, bobines chargées. Fonctionne avec toute imprimante Klipper.
+têtes, bobines chargées, et leur [maintenance](#-maintenance). Fonctionne
+avec toute imprimante Klipper.
 
 <img src="docs/screenshots/printer.png" alt="L'imprimante et ses bobines" />
 
@@ -106,6 +107,32 @@ barre latérale.
 </td>
 </tr>
 </table>
+
+### 🔧 Maintenance
+
+Chaque imprimante a sa vue maintenance, construite à partir de ce que
+l'imprimante compte et du guide de maintenance Snapmaker :
+
+- **Utilisation** : temps d'impression, nombre d'impressions, filament
+  consommé, plus longue impression.
+- **Têtes** (U1) : changements de tête, avancement vers le nettoyage des
+  contacts (tous les 100 000 changements), erreurs de prise et nouvelles
+  tentatives — une tête en erreur est signalée — et son hotend (standard ou
+  haut débit).
+- **Entretiens** triés par urgence — contacts des têtes, billes et tiges
+  d'accrochage, tiges linéaires et axe X, vis de l'axe Z, buses, plateau —
+  avec leur échéance, « dans 80 h » ou « en retard de 296 h ». Chacun se
+  déplie sur ses étapes, le passage de la vidéo Snapmaker et le guide ;
+  **Fait** le note avec les compteurs du moment, et la prochaine échéance
+  part de là (annulable depuis la notification).
+- Une pastille dans la barre latérale quand un entretien est à faire. Rien
+  n'est écrit dans l'imprimante.
+
+Les contacts suivent le chiffre de Snapmaker ; les autres intervalles sont
+des valeurs prudentes, Snapmaker n'en donne pas. Sur une autre imprimante
+Klipper, la vue garde l'utilisation et les entretiens à l'heure.
+
+<img src="docs/screenshots/maintenance.png" alt="La vue maintenance" />
 
 **Découpe** — le moteur Snapmaker Orca, téléchargé une fois (environ 30 Mo)
 et tenu à jour par l'app : inutile d'installer Snapmaker Orca. Choix de la
