@@ -2603,7 +2603,6 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .sl-summary { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; }
 .sl-summary span { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--control-bg); border: 1px solid var(--separator); color: var(--text-secondary); white-space: nowrap; }
 .sl-summary span:nth-child(2) { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
-.sl-foot .btn.primary { min-width: 120px; }
 
 @media (max-width: 900px) {
   .sl-cols { grid-template-columns: 1fr; }
