@@ -10,7 +10,7 @@ let release = { state: "loading", version: null };
 
 function t(key, vars) {
   let s = (STRINGS[lang] && STRINGS[lang][key]) ?? STRINGS.en[key] ?? key;
-  for (const [k, v] of Object.entries(vars || {})) s = s.replace(`{${k}}`, v);
+  for (const [k, v] of Object.entries(vars || {})) s = s.split(`{${k}}`).join(v);
   return s;
 }
 
@@ -30,7 +30,9 @@ function applyLang(next, persist) {
   document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = t(el.dataset.i18n)));
   document.querySelectorAll("[data-i18n-alt]").forEach((el) => (el.alt = t(el.dataset.i18nAlt)));
   document.querySelectorAll("[data-i18n-aria]").forEach((el) => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
+  document.querySelectorAll("[data-i18n-roledesc]").forEach((el) => el.setAttribute("aria-roledescription", t(el.dataset.i18nRoledesc)));
   document.querySelectorAll(".lang [data-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  if (typeof galleryRelabel === "function") galleryRelabel();
   if (persist) {
     try {
       localStorage.setItem(LANG_KEY, lang);
