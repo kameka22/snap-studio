@@ -1254,5 +1254,6 @@
   "maint.t.plate.s3": "Sécher avec un chiffon non pelucheux, sans toucher la surface.",
   "maint.offline_hint": "Allumez-la et vérifiez qu'elle est sur le même réseau : ses compteurs s'afficheront ici. Ce que vous avez noté reste ci-dessous.",
   "maint.stale": "{name} ne répond pas · valeurs relevées le {d}",
-  "maint.connecting": "Lecture des compteurs de l'imprimante…"
+  "maint.connecting": "Lecture des compteurs de l'imprimante…",
+  "prints.back": "Toutes les impressions"
 }
