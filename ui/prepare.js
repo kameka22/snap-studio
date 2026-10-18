@@ -622,23 +622,16 @@ function prSelect(ids, toggle) {
 function prBindInteractions(canvas) {
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
-    const hit = prPick(e);
-    if (!hit) return;
-    if (!PR.sel.has(hit.id)) prSelect([hit.id], false);
-    const many = PR.sel.size > 1;
-    nativeMenu([
-      { id: "prep:dup", label: many ? tr("prepare.menu.dup_many", { n: PR.sel.size }) : tr("prepare.menu.dup") },
-      { id: "prep:split", label: tr("prepare.menu.split") },
-      { id: "prep:center", label: tr("prepare.menu.center") },
-      { id: "prep:resetrot", label: tr("prepare.menu.reset_rot") },
-      { id: "prep:orient", label: tr("prepare.menu.orient") },
-      { id: "prep:facetool", label: tr("prepare.menu.face") },
-      {},
-      { id: "prep:arrange", label: tr("prepare.menu.arrange") },
-      {},
-      { id: "prep:del", label: many ? tr("prepare.menu.del_many", { n: PR.sel.size }) : tr("prepare.menu.del") },
-    ], e.clientX, e.clientY);
+    // macOS fires it on the press: wait for the release, the user may drag.
+    if (PR.drag?.mode === "pan") {
+      PR.drag.menu = { clientX: e.clientX, clientY: e.clientY };
+      return;
+    }
+    // Elsewhere it comes after the release: not after a drag of the view.
+    if (PR.lastPan && Date.now() - PR.lastPan.at < 400 && PR.lastPan.moved) return;
+    prObjectMenu(e);
   });
+
   canvas.addEventListener("mousedown", (e) => {
     e.preventDefault();
     // A click in the scene gives the keyboard back to the view (arrows, A,
@@ -646,8 +639,8 @@ function prBindInteractions(canvas) {
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     const pan = e.shiftKey || e.button === 1 || e.button === 2;
     const base = { x: e.clientX, y: e.clientY, moved: false };
-    // Right click on an object: context menu ("contextmenu" event).
-    if (e.button === 2 && prPick(e)) return;
+    // A right click on an object opens its menu only if the mouse does not
+    // move: right or ⇧ drag moves the view everywhere, as in Orca.
     if (!pan && PR.tool === "rotate") {
       const rh = ringHit(e);
       if (rh) {
@@ -768,6 +761,11 @@ function prBindInteractions(canvas) {
     const d = PR.drag;
     PR.drag = null;
     if (!d || window.currentView !== "prepare") return;
+    if (d.mode === "pan") {
+      PR.lastPan = { at: Date.now(), moved: d.moved };
+      if (d.menu && !d.moved) prObjectMenu(d.menu);
+      return;
+    }
     if (d.mode === "orbit" && !d.moved && d.clear) prSelect([], false);
     $("p-angle").classList.add("hidden");
     if ((d.mode === "move" || d.mode === "rotate" || d.mode === "ring") && d.moved) {
@@ -784,7 +782,8 @@ function prBindInteractions(canvas) {
       const dir = state.invertWheel ? -1 : 1;
       const speed = state.wheelSpeed || 1;
       const pinch = e.ctrlKey;
-      const action = pinch ? "zoom" : state.wheelAction || "zoom";
+      // ⇧ + scroll moves the view (a trackpad's ⇧ + two fingers).
+      const action = pinch ? "zoom" : e.shiftKey ? "pan" : state.wheelAction || "zoom";
       if (action === "zoom") {
         PR.cam.dist = clamp(PR.cam.dist * Math.exp(e.deltaY * 0.0012 * (pinch ? 1 : dir) * speed), 20, 4000);
       } else if (action === "pan") {
@@ -821,6 +820,26 @@ const normDeg = (a) => {
   if (x > 180) x -= 360;
   return Math.round(x * 100) / 100;
 };
+
+/* The context menu of the object under the pointer, if any. */
+function prObjectMenu(e) {
+  const hit = prPick(e);
+  if (!hit) return;
+  if (!PR.sel.has(hit.id)) prSelect([hit.id], false);
+  const many = PR.sel.size > 1;
+  nativeMenu([
+    { id: "prep:dup", label: many ? tr("prepare.menu.dup_many", { n: PR.sel.size }) : tr("prepare.menu.dup") },
+    { id: "prep:split", label: tr("prepare.menu.split") },
+    { id: "prep:center", label: tr("prepare.menu.center") },
+    { id: "prep:resetrot", label: tr("prepare.menu.reset_rot") },
+    { id: "prep:orient", label: tr("prepare.menu.orient") },
+    { id: "prep:facetool", label: tr("prepare.menu.face") },
+    {},
+    { id: "prep:arrange", label: tr("prepare.menu.arrange") },
+    {},
+    { id: "prep:del", label: many ? tr("prepare.menu.del_many", { n: PR.sel.size }) : tr("prepare.menu.del") },
+  ], e.clientX, e.clientY);
+}
 
 function prPan(dx, dy) {
   const c = PR.cam;
