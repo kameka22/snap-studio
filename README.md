@@ -124,11 +124,17 @@ usage and the hour-based tasks.
 
 <img src="docs/screenshots/maintenance.png" alt="The maintenance view" />
 
-**Slicing** — the Snapmaker Orca engine, downloaded once (about 30 MB) and
-kept up to date by the app: you do not need Snapmaker Orca installed.
-Choice of plate surface (textured PEI, smooth PEI…), each profile's
-details as the engine gets them, toolpath preview with duration, filament
-and cost, then send to the printer or save the G-code.
+### ✂️ Slicing
+
+The Snapmaker Orca engine, downloaded once (about 30 MB) and kept up to
+date by the app: you do not need Snapmaker Orca installed. The U1's four
+heads with the spools read from the printer, each color of each object sent
+to its head, the plate surface (textured PEI, smooth PEI…) and its
+temperature, quality and adjustments, each profile's details as the engine
+gets them; then a toolpath preview with duration, filament and cost, sent to
+the printer — with its picture on the printer's screen — or saved as G-code.
+
+<img src="docs/screenshots/slicing.png" alt="The slice sheet" />
 
 ## Download
 
