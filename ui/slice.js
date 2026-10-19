@@ -740,11 +740,13 @@ async function checkSendPrinter() {
   // G-code heads with no spool on this machine: to flag before sending.
   const tools = SL.preview?.stats?.tools || [];
   const missing = tools.filter((t) => (st.filaments || []).some((f) => f.index === t && !f.present));
+  SL.sendSlots = st.filaments || [];
   el.className = "pf-test" + (missing.length ? " err" : " ok");
   el.textContent = missing.length
     ? tr("send.missing", { heads: missing.map((t) => "T" + t).join(", "), name: p.name })
     : tr("send.ready", { name: p.name });
-  $("snd-go").disabled = missing.length > 0;
+  // With the spool check, another loaded spool can stand in for an empty head.
+  $("snd-go").disabled = missing.length > 0 && !spEnabled();
   setSendMode("launch");
 }
 
@@ -770,17 +772,30 @@ function setSendBusy(busy) {
 async function sendPrint(queue = SL.sendMode === "queue") {
   const pv = SL.preview, p = sendPrinter();
   if (!pv || !p || (!queue && $("snd-go").disabled)) return;
+  const r = SL.request || {};
+  const tools = pv.stats.tools?.length ? pv.stats.tools : [0];
+  // Spools checked when the print starts now; a queued job is checked when
+  // it starts from the queue.
+  let map = [];
+  if (!queue) {
+    if (SL.checking) return;
+    SL.checking = true;
+    const slots = (await headsRefreshSlots(p.id)).length ? headsSlots(p.id) : SL.sendSlots || [];
+    const ok = await spoolCheck({ pid: p.id, tools, profile: r, stats: pv.stats, slots }).finally(() => (SL.checking = false));
+    if (!ok) return;
+    map = ok.map;
+  }
   setSendBusy(true);
   setSendProgress(queue ? null : 0);
   setSendMessage(tr(queue ? "send.queueing" : "send.preparing"), "busy");
-  const r = SL.request || {};
   try {
     const id = await invoke("print_send", {
       request: {
         printer_id: p.id,
         job: pv.job,
         queue,
-        tools: pv.stats.tools?.length ? pv.stats.tools : [0],
+        tools,
+        map,
         options: {
           bed_leveling: $("snd-level").checked,
           flow_calibration: $("snd-flow").checked,
@@ -888,5 +903,7 @@ $("snd-cancel").addEventListener("click", () => closeSheet($("sendmodal")));
 $("snd-queue").addEventListener("click", () => sendPrint(true));
 document.addEventListener("keydown", (e) => {
   if ($("sendmodal").classList.contains("hidden") || SL.sending) return;
+  // The spool sheet, open on top, keeps its keys.
+  if (!$("spmodal").classList.contains("hidden")) return;
   if (e.key === "Escape") closeSheet($("sendmodal"));
 });

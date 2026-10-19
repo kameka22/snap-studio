@@ -1137,6 +1137,8 @@
   "settings.about": "About",
   "settings.plate_ask": "Warn when the plate is not empty",
   "settings.plate_ask.sub": "Asks whether to clear or keep the plate when preparing new models",
+  "settings.spool_check": "Check spools before sending",
+  "settings.spool_check.sub": "Warns when a head used by the print holds another material or color than at slicing, and offers another loaded spool",
   "about.version": "Version {version} · {system}",
   "about.text": "Snap Studio is free software, developed in the open on GitHub. A bug, an idea, a printer that misbehaves? Say so: that is what moves the app forward.",
   "about.bug": "Report a Bug",
@@ -1258,5 +1260,27 @@
   "chat.model.default": "Default",
   "chat.model.changed": "Model: {model}",
   "printers.cam.enlarge": "Enlarge",
-  "printers.cam.shrink": "Reduce"
+  "printers.cam.shrink": "Reduce",
+  "spool.title": {
+    "one": "{n} head does not hold the spool it was sliced for",
+    "other": "{n} heads do not hold the spools they were sliced for"
+  },
+  "spool.text": "The spools loaded now are not those the print was sliced for. Send it anyway, or pick another loaded spool for a head.",
+  "spool.noask": "Don't check again",
+  "spool.anyway": "Send Anyway",
+  "spool.send_sub": "Send with Substitution",
+  "spool.anyway_blocked": "An empty head cannot print: pick a loaded spool for it",
+  "spool.line": "{head}: {expected}, {loaded}",
+  "spool.expected": "{what} expected",
+  "spool.loaded": "{what} loaded",
+  "spool.loaded_empty": "no spool loaded",
+  "spool.loaded_unknown": "spool unknown",
+  "spool.unknown": "unknown",
+  "spool.desc": "{color} {mat}",
+  "spool.use": "Print with",
+  "spool.keep": "as sliced",
+  "spool.pick": "Spool for {head}",
+  "spool.head_busy": "Already prints another color of this file",
+  "spool.sub_ok": "{tool} will print from head {head}",
+  "spool.sub_still": "Head {head} still differs from the sliced spool"
 }

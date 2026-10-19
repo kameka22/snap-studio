@@ -545,14 +545,26 @@ $("q-later").addEventListener("click", () => {
 });
 $("q-go").addEventListener("click", async () => {
   const ev = PJ.next;
-  if (!ev || !$("q-free").checked || PJ.launching) return;
+  if (!ev || !$("q-free").checked || PJ.launching || PJ.checking) return;
+  // Spools loaded now against those of the slice.
+  const j = ev.next;
+  const pid = j.printer_id || ev.printer_id;
+  PJ.checking = true;
+  let ok;
+  try {
+    const slots = await headsRefreshSlots(pid);
+    ok = await spoolCheck({ pid, tools: j.tools, profile: j.profile || {}, stats: j.stats || {}, slots });
+  } finally {
+    PJ.checking = false;
+  }
+  if (!ok || PJ.next !== ev) return;
   PJ.launching = true;
   $("q-go").disabled = true;
   $("q-later").disabled = true;
   $("q-msg").className = "pf-test busy";
   $("q-msg").textContent = tr("send.preparing");
   try {
-    await invoke("job_launch", { id: ev.next.id });
+    await invoke("job_launch", { id: ev.next.id, map: ok.map });
     PJ.launching = false;
     closeSheet($("qmodal"));
     toast(tr("queue.launched", { name: ev.next.name, printer: ev.printer_name }));

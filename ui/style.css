@@ -2969,6 +2969,26 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .occ-list { max-height: 160px; overflow: auto; }
 .occ-list .grow-row .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .occ-dup { font-size: 11px; color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); border-radius: 6px; padding: 1px 6px; margin-left: auto; margin-right: 8px; white-space: nowrap; }
+.sp-box { width: 520px; }
+.sp-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 8px; max-height: 50vh; overflow: auto; }
+.sp-row { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.sp-line { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+.sp-line .sp-sw { box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 55%, transparent); }
+.sp-sw { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--c); border: 1px solid rgba(0, 0, 0, 0.18); }
+.sp-sw.none { background: repeating-linear-gradient(45deg, transparent 0 3px, var(--separator) 3px 5px); }
+.sp-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sp-pick-k { font-size: 11px; color: var(--text-secondary); margin-right: 2px; }
+.sp-opt { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12px; padding: 4px 9px 4px 6px; border-radius: 999px; border: 1px solid var(--control-border); background: var(--control-bg); color: inherit; cursor: pointer; transition: background 0.12s, border-color 0.12s, box-shadow 0.12s; }
+.sp-opt:hover:not(:disabled) { background: var(--control-bg-hover); }
+.sp-opt b { font-weight: 600; }
+.sp-opt span { color: var(--text-secondary); }
+.sp-opt em { font-style: normal; font-size: 10px; color: var(--text-secondary); border: 1px solid var(--separator); border-radius: 6px; padding: 0 4px; }
+.sp-opt.fits b::after { content: " ✓"; color: #34c759; }
+.sp-opt.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.sp-opt.on span { color: inherit; }
+.sp-opt:disabled { opacity: 0.4; cursor: default; }
+.sp-note { font-size: 11px; color: #248a3d; }
+.sp-note.warn { color: var(--warning); }
 .occ-noask { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); margin: 4px 0 2px; }
 
 /* ------------------------------------------------- heads and spools */

@@ -1140,6 +1140,8 @@
   "settings.about": "À propos",
   "settings.plate_ask": "Avertir si le plateau n'est pas vide",
   "settings.plate_ask.sub": "Demande s'il faut vider ou conserver le plateau à la préparation de nouveaux modèles",
+  "settings.spool_check": "Vérifier les bobines avant d'envoyer",
+  "settings.spool_check.sub": "Avertit quand une tête utilisée par l'impression porte une autre matière ou couleur qu'au tranchage, et propose une autre bobine chargée",
   "about.version": "Version {version} · {system}",
   "about.text": "Snap Studio est un logiciel libre, développé ouvertement sur GitHub. Un bug, une idée, une imprimante qui se comporte mal ? Dites-le : c'est ce qui fait avancer l'app.",
   "about.bug": "Signaler un bug",
@@ -1261,5 +1263,27 @@
   "chat.model.default": "Par défaut",
   "chat.model.changed": "Modèle : {model}",
   "printers.cam.enlarge": "Agrandir",
-  "printers.cam.shrink": "Réduire"
+  "printers.cam.shrink": "Réduire",
+  "spool.title": {
+    "one": "{n} tête ne porte pas la bobine du tranchage",
+    "other": "{n} têtes ne portent pas les bobines du tranchage"
+  },
+  "spool.text": "Les bobines chargées ne sont pas celles pour lesquelles l'impression a été tranchée. Envoyez-la quand même, ou choisissez une autre bobine chargée pour une tête.",
+  "spool.noask": "Ne plus vérifier",
+  "spool.anyway": "Envoyer quand même",
+  "spool.send_sub": "Envoyer avec substitution",
+  "spool.anyway_blocked": "Une tête vide ne peut pas imprimer : choisissez une bobine chargée",
+  "spool.line": "{head} : {expected}, {loaded}",
+  "spool.expected": "{what} attendu",
+  "spool.loaded": "{what} chargé",
+  "spool.loaded_empty": "aucune bobine chargée",
+  "spool.loaded_unknown": "bobine inconnue",
+  "spool.unknown": "inconnu",
+  "spool.desc": "{mat} {color}",
+  "spool.use": "Imprimer avec",
+  "spool.keep": "comme tranché",
+  "spool.pick": "Bobine pour {head}",
+  "spool.head_busy": "Imprime déjà une autre couleur de ce fichier",
+  "spool.sub_ok": "{tool} sera imprimé par la tête {head}",
+  "spool.sub_still": "La tête {head} diffère encore de la bobine du tranchage"
 }
