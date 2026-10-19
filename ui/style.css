@@ -2969,7 +2969,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .occ-list { max-height: 160px; overflow: auto; }
 .occ-list .grow-row .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .occ-dup { font-size: 11px; color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); border-radius: 6px; padding: 1px 6px; margin-left: auto; margin-right: 8px; white-space: nowrap; }
-.sp-box { width: 520px; }
+.sp-box { width: 700px; max-width: calc(100vw - 40px); }
+.sp-box .modal-actions { flex-wrap: wrap; row-gap: 8px; }
+.sp-box .modal-actions .btn { white-space: nowrap; }
+.sp-hint { font-size: 12px; color: var(--text-secondary); margin: 0 0 4px; }
+.sp-hint:empty { display: none; }
+.sp-box .modal-actions .btn:disabled { opacity: 0.45; }
 .sp-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 8px; max-height: 50vh; overflow: auto; }
 .sp-row { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .sp-line { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }

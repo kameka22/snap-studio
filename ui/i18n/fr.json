@@ -1285,5 +1285,13 @@
   "spool.pick": "Bobine pour {head}",
   "spool.head_busy": "Imprime déjà une autre couleur de ce fichier",
   "spool.sub_ok": "{tool} sera imprimé par la tête {head}",
-  "spool.sub_still": "La tête {head} diffère encore de la bobine du tranchage"
+  "spool.sub_still": "La tête {head} diffère encore de la bobine du tranchage",
+  "spool.reslice": "Retrancher avec ces bobines",
+  "spool.reslice_tip": "Retranche le même plateau avec ces bobines (profils, températures, couleurs, purge), puis l'envoie",
+  "spool.reslice_none": "Le projet d'origine n'est pas disponible pour cette impression : seul son G-code a été gardé",
+  "spool.reslice_empty": "Une tête reste vide ou inconnue : choisissez d'abord une bobine chargée",
+  "spool.hint_material": "Autre matière : retrancher est recommandé pour que températures, débit et purge suivent la bobine.",
+  "spool.hint_reslice": "Le retranchage utilise les bobines chargées, couleurs et purge comprises.",
+  "spool.reslicing": "Retranchage avec les bobines chargées…",
+  "spool.generic_used": "Aucun profil ne correspond, profil générique utilisé : {list}"
 }

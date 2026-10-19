@@ -39,6 +39,10 @@ pub struct Profile {
     /// Plate label as shown when slicing.
     pub bed_label: Option<String>,
     pub colors: Vec<Option<String>>,
+    /// The slice request itself (plate, profiles, overrides): lets the spool
+    /// check slice the same plate again with other spools. None for G-code
+    /// sent as is and for records older than it.
+    pub slice: Option<serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -494,6 +498,20 @@ fn notify(app: &AppHandle, title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_keeps_the_slice_request() {
+        let p: Profile = serde_json::from_str(
+            r#"{"machine":"U1","filaments":["PLA"],"slice":{"scene":[{"path":"/m/a.3mf","item":0,"pos":[1,2],"extruder_map":[0,3]}],"machine":"U1"}}"#,
+        )
+        .unwrap();
+        assert_eq!(p.slice.as_ref().unwrap()["scene"][0]["extruder_map"][1], 3);
+        let back: Profile = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(back.slice, p.slice);
+        // Records written before: no slice, nothing to re-slice.
+        let old: Profile = serde_json::from_str(r#"{"machine":"U1"}"#).unwrap();
+        assert!(old.slice.is_none());
+    }
 
     #[test]
     fn prune_keeps_recent_history_and_queue() {

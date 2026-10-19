@@ -571,14 +571,14 @@ async function startSlice() {
   setSliceMessage(tr("slice.preparing"), "busy");
   setSliceProgress(0);
   try {
-    SL.job = await invoke("slice_start", {
-      request: {
-        source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
-        overrides: { ...advOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
-      },
-    });
+    // Kept whole: the spool check can slice the same plate again.
+    const slice = {
+      source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
+      overrides: { ...advOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
+    };
+    SL.job = await invoke("slice_start", { request: slice });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";
-    SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel };
+    SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel, slice };
   } catch (e) {
     showSliceBusy(false);
     setSliceProgress(null);
@@ -770,10 +770,11 @@ function setSendBusy(busy) {
 }
 
 async function sendPrint(queue = SL.sendMode === "queue") {
-  const pv = SL.preview, p = sendPrinter();
+  let pv = SL.preview;
+  const p = sendPrinter();
   if (!pv || !p || (!queue && $("snd-go").disabled)) return;
-  const r = SL.request || {};
-  const tools = pv.stats.tools?.length ? pv.stats.tools : [0];
+  let r = SL.request || {};
+  let tools = pv.stats.tools?.length ? pv.stats.tools : [0];
   // Spools checked when the print starts now; a queued job is checked when
   // it starts from the queue.
   let map = [];
@@ -781,9 +782,17 @@ async function sendPrint(queue = SL.sendMode === "queue") {
     if (SL.checking) return;
     SL.checking = true;
     const slots = (await headsRefreshSlots(p.id)).length ? headsSlots(p.id) : SL.sendSlots || [];
-    const ok = await spoolCheck({ pid: p.id, tools, profile: r, stats: pv.stats, slots }).finally(() => (SL.checking = false));
+    // Re-slicing needs the plate it came from, on the same machine profile.
+    const canReslice = !!(r.slice && SL.lists?.filaments?.length && r.slice.machine === r.machine);
+    const ok = await spoolCheck({ pid: p.id, tools, profile: r, stats: pv.stats, slots, canReslice }).finally(() => (SL.checking = false));
     if (!ok) return;
     map = ok.map;
+    if (ok.reslice) {
+      const next = await resliceForSend(pv, r, tools, ok, slots);
+      if (!next) return;
+      ({ pv, r, tools } = next);
+      map = [];
+    }
   }
   setSendBusy(true);
   setSendProgress(queue ? null : 0);
@@ -808,6 +817,7 @@ async function sendPrint(queue = SL.sendMode === "queue") {
           bed: r.bed || null,
           bed_label: r.bedLabel || null,
           colors: r.colors || [],
+          slice: r.slice || null,
         },
       },
     });
@@ -849,6 +859,43 @@ listen("print-send", (e) => {
     closeViewer();
   }
 });
+
+/* Spool check's "Re-slice with these spools": the same plate sliced again
+   with the substitutes (or the spools loaded now) as filaments, progress in
+   the send sheet; the new slice replaces the preview and is the one sent.
+   → { pv, r, tools }, or null (failed: the sheet says why). */
+async function resliceForSend(pv, r, used, ok, slots) {
+  let built;
+  try {
+    built = spResliceRequest(r.slice, { used, picks: ok.picks, tools: ok.tools, slots, list: SL.lists.filaments, best: bestFilament });
+  } catch (e) {
+    setSendMessage(String(e.message || e), "err");
+    return null;
+  }
+  setSendBusy(true);
+  setSendProgress(0);
+  const note = spGenericNote(built.heads);
+  try {
+    const res = await spSlice(built.request, (text, pct) => {
+      setSendMessage(note ? `${text} — ${note}` : text, "busy");
+      setSendProgress(pct ?? 0);
+    });
+    // The first preview gives way to the new one.
+    invoke("slice_discard", { id: pv.job }).catch(() => {});
+    const req = built.request;
+    const nr = { ...r, filaments: req.filaments, colors: req.colors, slice: req };
+    const npv = { ...pv, job: res.id, gcode: res.gcode, stats: res.stats || {}, saved: null };
+    SL.request = nr;
+    SL.preview = npv;
+    if (note) toast(note);
+    return { pv: npv, r: nr, tools: npv.stats.tools?.length ? npv.stats.tools : [0] };
+  } catch (e) {
+    setSendBusy(false);
+    setSendProgress(null);
+    setSendMessage(String(e.message || e), "err");
+    return null;
+  }
+}
 
 /* ------------------------------------------------------------ events */
 

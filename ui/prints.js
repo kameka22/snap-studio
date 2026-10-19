@@ -550,14 +550,17 @@ $("q-go").addEventListener("click", async () => {
   const j = ev.next;
   const pid = j.printer_id || ev.printer_id;
   PJ.checking = true;
-  let ok;
+  let ok, slots;
   try {
-    const slots = await headsRefreshSlots(pid);
-    ok = await spoolCheck({ pid, tools: j.tools, profile: j.profile || {}, stats: j.stats || {}, slots });
+    slots = await headsRefreshSlots(pid);
+    // Re-slicing: only for jobs that kept their slice (plate and profiles);
+    // a G-code sent as is, or an older record, has nothing to slice again.
+    ok = await spoolCheck({ pid, tools: j.tools, profile: j.profile || {}, stats: j.stats || {}, slots, canReslice: !!j.profile?.slice });
   } finally {
     PJ.checking = false;
   }
   if (!ok || PJ.next !== ev) return;
+  if (ok.reslice) return pjResliceLaunch(ev, ok, slots);
   PJ.launching = true;
   $("q-go").disabled = true;
   $("q-later").disabled = true;
@@ -580,6 +583,62 @@ $("q-go").addEventListener("click", async () => {
     $("q-msg").textContent = String(e);
   }
 });
+/* Queue start after "Re-slice with these spools": the job's plate sliced
+   again with the spools chosen, the new G-code started (a new record), the
+   queued one removed. Progress in the queue sheet. */
+async function pjResliceLaunch(ev, ok, slots) {
+  const j = ev.next;
+  const msg = (text, cls = "busy") => {
+    $("q-msg").className = "pf-test " + cls;
+    $("q-msg").textContent = text;
+  };
+  const bar = (pct) => {
+    $("q-progress").classList.toggle("hidden", pct == null);
+    if (pct != null) $("q-progress").firstElementChild.style.width = Math.max(2, pct) + "%";
+  };
+  PJ.launching = true;
+  $("q-go").disabled = $("q-later").disabled = true;
+  try {
+    const used = j.tools?.length ? j.tools : [0];
+    const list = (await invoke("slice_lists", { machine: j.profile.slice.machine || j.profile.machine })).filaments || [];
+    const built = spResliceRequest(j.profile.slice, { used, picks: ok.picks, tools: ok.tools, slots, list, best: bestFilament });
+    const note = spGenericNote(built.heads);
+    const res = await spSlice(built.request, (text, pct) => {
+      msg(note ? `${text} — ${note}` : text);
+      bar(pct ?? 0);
+    });
+    const req = built.request;
+    const stats = res.stats || {};
+    msg(tr("send.preparing"));
+    bar(null);
+    const id = await invoke("print_send", {
+      request: {
+        printer_id: j.printer_id,
+        job: res.id,
+        queue: false,
+        tools: stats.tools?.length ? stats.tools : [0],
+        map: [],
+        options: j.options || {},
+        profile: { ...j.profile, filaments: req.filaments, colors: req.colors, slice: req },
+      },
+    });
+    await invoke("job_remove", { id: j.id }).catch(() => {});
+    PJ.launching = false;
+    closeSheet($("qmodal"));
+    toast(tr("queue.launched", { name: j.name, printer: ev.printer_name }));
+    if (note) toast(note);
+    await pjLoad();
+    pjShow(id ? "job:" + id : null);
+    pjQueueClosed();
+  } catch (e) {
+    PJ.launching = false;
+    $("q-later").disabled = false;
+    $("q-go").disabled = !$("q-free").checked;
+    bar(null);
+    msg(String(e.message || e), "err");
+  }
+}
+
 listen("print-send", (e) => {
   if (!PJ.launching) return;
   const s = e.payload;

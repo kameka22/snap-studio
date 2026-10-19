@@ -1282,5 +1282,13 @@
   "spool.pick": "Spool for {head}",
   "spool.head_busy": "Already prints another color of this file",
   "spool.sub_ok": "{tool} will print from head {head}",
-  "spool.sub_still": "Head {head} still differs from the sliced spool"
+  "spool.sub_still": "Head {head} still differs from the sliced spool",
+  "spool.reslice": "Re-slice with These Spools",
+  "spool.reslice_tip": "Slices the same plate again with these spools (presets, temperatures, colors, purge), then sends it",
+  "spool.reslice_none": "The original project is not available for this print: only its G-code was kept",
+  "spool.reslice_empty": "A head left empty or unknown: pick a loaded spool for it first",
+  "spool.hint_material": "Another material: re-slicing is recommended so temperatures, flow and purge follow the spool.",
+  "spool.hint_reslice": "Re-slicing uses the spools loaded now, colors and purge included.",
+  "spool.reslicing": "Re-slicing with the loaded spools…",
+  "spool.generic_used": "No preset fits, generic one used: {list}"
 }
