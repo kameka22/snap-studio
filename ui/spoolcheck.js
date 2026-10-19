@@ -5,10 +5,13 @@
    queue), each head the G-code uses is compared with the spool loaded on
    it now. Expected: the material and color recorded at slice time (the
    slice's head profiles and spool colors), otherwise the G-code's own
-   `filament_type` / `filament_colour`. Heads the print does not use are
-   ignored. A different material family, a clearly different color, or an
-   empty or unknown spool opens a sheet listing each head; the user cancels,
-   sends anyway, or picks another loaded spool for that head.
+   `filament_type`. The G-code's `filament_colour` only counts for a print
+   with no slice record: a slice made without a printer has no spool color,
+   and its presets' default colors are not a choice. Heads the print does
+   not use are ignored. A different material family, a clearly different
+   color, or an empty or unknown spool opens a sheet listing each head; the
+   user cancels, sends anyway, picks another loaded spool for that head, or
+   goes back to Prepare to slice the plate again with the spools loaded.
 
    Material: compared by family, case-insensitive. "PLA", "PLA+", "PLA Matte",
    "PLA Silk", "PLA-CF" are all PLA; "PETG" and "PET" differ, as do "PC" and
@@ -82,7 +85,7 @@ function spExpected({ tools, profile = {}, stats = {}, ftypeOf = () => "" }) {
   return [...new Set(list)].map((t) => {
     const prof = profile.filaments?.[t] || "";
     const material = spMaterialFamily(stats.filament_types?.[t]) || spMaterialFamily(ftypeOf(prof)) || spMaterialFromName(prof);
-    const color = spHex(profile.colors?.[t]) || spHex(stats.filament_colors?.[t]);
+    const color = profile.colors?.length ? spHex(profile.colors[t]) : spHex(stats.filament_colors?.[t]);
     return { tool: t, material, color };
   });
 }
@@ -149,75 +152,16 @@ function spSuggest(exp, slots, taken) {
   return best;
 }
 
-/* ------------------------------------------------------------ re-slicing */
-
-/* Which action the sheet recommends: re-slicing when a head would print
-   another material family than sliced (temperatures, flow and purge must
-   follow), the substitution when it fixes everything or only colors differ. */
-function spPrimary(bad, slots, map) {
-  const fam = bad.some((m) => {
-    const l = spLoaded(slots, spHeadOf(m.tool, map));
-    return m.material && l.material && l.material !== m.material;
-  });
-  if (fam) return "reslice";
-  return map.length ? "substitute" : "reslice";
-}
-
-/* Generic preset of a material family, when no preset fits the spool:
-   "Generic …" first, then a system preset, then any. */
-function spGenericPreset(family, list) {
-  const same = (list || []).filter((p) => spMaterialFamily(p.ftype || spMaterialFromName(p.name)) === family);
-  return (
-    same.find((p) => /generic|générique/i.test(p.name) && !p.user) ||
-    same.find((p) => !p.user) ||
-    same[0] ||
-    null
-  )?.name || null;
-}
-
-/* Slice request for the same plate with the spools now chosen.
-   `req`: the request of the first slice. `used`: its G-code tools (= heads
-   at slice time). `picks`: { tool: head } chosen in the sheet. `tools`:
-   the mismatched tools, whose head takes the spool loaded on it (the
-   substitute, otherwise the one there now). `best(slot, list)`: preset of
-   a spool, as when slicing from the printer's spools.
-   → { request, heads: [{ tool, head, preset, generic }] }; throws when a
-   head has no usable spool or no preset of its material. */
-function spResliceRequest(req, { used, picks = {}, tools, slots, list, best }) {
-  if (!req) throw new Error("no project");
-  const map = spRemap(used, picks);
-  const route = (h) => (used.includes(h) ? spHeadOf(h, map) : h);
-  // An empty map sends the model to head 0: it only changes if T0 moves.
-  const remapList = (m) => (m?.length ? m.map(route) : route(0) !== 0 ? [route(0)] : m || []);
-  const out = JSON.parse(JSON.stringify(req));
-  out.scene = (out.scene || []).map((it) => ({ ...it, extruder_map: remapList(it.extruder_map) }));
-  if (!out.scene.length) out.extruder_map = remapList(out.extruder_map);
-  out.filaments = [...(out.filaments || [])];
-  out.colors = [...(out.colors || [])];
-  const heads = [];
-  for (const t of tools) {
-    const h = spHeadOf(t, map);
-    const slot = (slots || []).find((s) => s.index === h);
-    if (!slot?.present) throw new Error(`T${h}: no spool`);
-    let preset = best ? best(slot, list || []) : null;
-    let generic = false;
-    if (!preset) {
-      preset = spGenericPreset(spMaterialFamily(slot.kind), list);
-      generic = true;
-    }
-    if (!preset) throw new Error(`T${h}: no ${slot.kind || "?"} preset`);
-    // Heads in between keep a preset: the engine needs one per head.
-    for (let i = out.filaments.length; i < h; i++) out.filaments[i] = out.filaments[0] || preset;
-    out.filaments[h] = preset;
-    for (let i = out.colors.length; i < h; i++) out.colors[i] = null;
-    out.colors[h] = spHex(slot.color) || null;
-    heads.push({ tool: t, head: h, preset, generic });
-  }
-  return { request: out, heads };
+/* Which action the sheet leads with: the substitution when it leaves no
+   difference, otherwise slicing again in Prepare (when the plate is known):
+   another material needs its own temperatures and flow. */
+function spPrimary(after, map, canEdit) {
+  if (map.length && !after.length) return "substitute";
+  return canEdit ? "edit" : "substitute";
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { SP_COLOR_TOL, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spPrimary, spGenericPreset, spResliceRequest };
+  module.exports = { SP_COLOR_TOL, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spPrimary };
 }
 
 /* ------------------------------------------------------------ the sheet */
@@ -262,9 +206,11 @@ function spLineText(m) {
 
 const spSwatch = (c) => `<i class="sp-sw${c ? "" : " none"}"${c ? ` style="--c:${esc(c)}"` : ""}></i>`;
 
-/* Asks when the loaded spools differ from the slice's.
-   → { map: [[tool, head]…] } to send (map empty: as sliced), or null. */
-function spoolCheck({ pid, tools, profile, stats, slots, canReslice = false }) {
+/* Asks when the loaded spools differ from the slice's. `canEdit`: the
+   plate can go back to Prepare.
+   → { map: [[tool, head]…] } to send (map empty: as sliced), { edit: true }
+   to slice again in Prepare, or null. */
+function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false }) {
   const used = [...new Set(tools?.length ? tools : [0])];
   const expected = spExpected({ tools: used, profile, stats, ftypeOf: spFtypeOf(pid) });
   const bad = spMismatches(expected, slots);
@@ -318,16 +264,18 @@ function spoolCheck({ pid, tools, profile, stats, slots, canReslice = false }) {
     $("sp-sub").disabled = !map.length || blocked;
     $("sp-anyway").disabled = blocked;
     $("sp-anyway").title = $("sp-sub").title = blocked ? tr("spool.anyway_blocked") : "";
-    // Re-slicing: the substitutes, or the spools loaded now, become the
-    // filaments of the slice. Only with the plate it came from.
-    const emptyKept = bad.some((m) => spLoaded(slots, spHeadOf(m.tool, map)).state !== "ok");
-    const rs = $("sp-reslice");
-    rs.disabled = !canReslice || emptyKept;
-    rs.title = !canReslice ? tr("spool.reslice_none") : emptyKept ? tr("spool.reslice_empty") : tr("spool.reslice_tip");
-    const primary = rs.disabled ? "substitute" : spPrimary(bad, slots, map);
-    rs.classList.toggle("primary", primary === "reslice");
+    // Back to Prepare: the Slice sheet reads the spools loaded now.
+    const ed = $("sp-edit");
+    ed.disabled = !canEdit;
+    ed.title = canEdit ? tr("spool.edit_tip") : tr("spool.edit_none");
+    const primary = spPrimary(after, map, canEdit);
+    ed.classList.toggle("primary", primary === "edit");
     $("sp-sub").classList.toggle("primary", primary === "substitute");
-    $("sp-hint").textContent = !canReslice ? tr("spool.reslice_none") : rs.disabled || primary !== "reslice" ? "" : tr(bad.some((m) => spReasons(m, spLoaded(slots, spHeadOf(m.tool, map))).includes("material")) ? "spool.hint_material" : "spool.hint_reslice");
+    $("sp-hint").textContent = !canEdit
+      ? tr("spool.edit_none")
+      : primary !== "edit"
+        ? ""
+        : tr(after.some((m) => m.reasons.includes("material")) ? "spool.hint_material" : "spool.hint_edit");
   };
   render();
   $("sp-noask").checked = false;
@@ -336,7 +284,7 @@ function spoolCheck({ pid, tools, profile, stats, slots, canReslice = false }) {
   return new Promise((resolve) => {
     const done = (v) => {
       if (v && $("sp-noask").checked) spSetEnabled(false);
-      $("sp-sub").onclick = $("sp-reslice").onclick = $("sp-anyway").onclick = $("sp-cancel").onclick = $("sp-list").onclick = modal.onkeydown = null;
+      $("sp-sub").onclick = $("sp-edit").onclick = $("sp-anyway").onclick = $("sp-cancel").onclick = $("sp-list").onclick = modal.onkeydown = null;
       closeSheet(modal);
       resolve(v);
     };
@@ -355,13 +303,7 @@ function spoolCheck({ pid, tools, profile, stats, slots, canReslice = false }) {
         toast(String(e.message || e), true);
       }
     };
-    $("sp-reslice").onclick = () => {
-      try {
-        done({ reslice: true, picks: { ...picks }, tools: bad.map((m) => m.tool), map: spRemap(used, picks) });
-      } catch (e) {
-        toast(String(e.message || e), true);
-      }
-    };
+    $("sp-edit").onclick = () => done({ edit: true });
     $("sp-anyway").onclick = () => done({ map: [] });
     $("sp-cancel").onclick = () => done(null);
     modal.onkeydown = (e) => {
@@ -372,53 +314,6 @@ function spoolCheck({ pid, tools, profile, stats, slots, canReslice = false }) {
       }
     };
   });
-}
-
-/* Runs a slice through the usual engine pipeline, without the slice sheet:
-   progress goes to `onProgress(text, percent)`. → the "preview" payload
-   ({ id, gcode, stats }). */
-const SP_RUNS = new Map(); // job id -> { events: [], cb }
-let spWaiting = 0;
-if (typeof listen === "function") {
-  listen("slice-progress", (e) => {
-    const p = e.payload || {};
-    if (!p.id || (typeof SL !== "undefined" && SL.job === p.id)) return;
-    // Before slice_start answers, events are kept only while one is awaited.
-    if (!SP_RUNS.has(p.id) && !spWaiting) return;
-    const r = SP_RUNS.get(p.id) || SP_RUNS.set(p.id, { events: [] }).get(p.id);
-    if (r.cb) r.cb(p);
-    else r.events.push(p);
-  });
-}
-async function spSlice(request, onProgress) {
-  onProgress(tr("slice.preparing"), null);
-  spWaiting++;
-  let id;
-  try {
-    id = await invoke("slice_start", { request });
-  } finally {
-    spWaiting--;
-  }
-  return new Promise((resolve, reject) => {
-    const r = SP_RUNS.get(id) || SP_RUNS.set(id, { events: [] }).get(id);
-    r.cb = (p) => {
-      if (p.phase === "preparation") onProgress(tr("slice.preparing_model"), null);
-      else if (p.phase === "slicing") onProgress(p.percent != null ? `${tr("spool.reslicing")} ${Math.round(p.percent)} %` : tr("spool.reslicing"), p.percent ?? null);
-      else {
-        SP_RUNS.delete(id);
-        if (p.phase === "preview") resolve({ ...p, id });
-        else if (p.phase === "cancelled") reject(new Error(tr("slice.stopped")));
-        else reject(new Error(p.message || tr("slice.engine_silent")));
-      }
-    };
-    r.events.splice(0).forEach(r.cb);
-  });
-}
-
-/* Notes for presets taken by default ("T3: Generic PETG, no preset fits"). */
-function spGenericNote(heads) {
-  const g = heads.filter((h) => h.generic);
-  return g.length ? tr("spool.generic_used", { list: g.map((h) => `T${h.head} → ${h.preset.replace(/\s*@.*$/, "")}`).join(", ") }) : "";
 }
 
 if (typeof document !== "undefined" && document.getElementById("set-spool-check")) {

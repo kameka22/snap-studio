@@ -1265,7 +1265,7 @@
     "one": "{n} head does not hold the spool it was sliced for",
     "other": "{n} heads do not hold the spools they were sliced for"
   },
-  "spool.text": "The spools loaded now are not those the print was sliced for. Send it anyway, or pick another loaded spool for a head.",
+  "spool.text": "The spools loaded now are not those the print was sliced for. Send it anyway, pick another loaded spool for a head, or slice the plate again in Prepare.",
   "spool.noask": "Don't check again",
   "spool.anyway": "Send Anyway",
   "spool.send_sub": "Send with Substitution",
@@ -1283,12 +1283,12 @@
   "spool.head_busy": "Already prints another color of this file",
   "spool.sub_ok": "{tool} will print from head {head}",
   "spool.sub_still": "Head {head} still differs from the sliced spool",
-  "spool.reslice": "Re-slice with These Spools",
-  "spool.reslice_tip": "Slices the same plate again with these spools (presets, temperatures, colors, purge), then sends it",
-  "spool.reslice_none": "The original project is not available for this print: only its G-code was kept",
-  "spool.reslice_empty": "A head left empty or unknown: pick a loaded spool for it first",
-  "spool.hint_material": "Another material: re-slicing is recommended so temperatures, flow and purge follow the spool.",
-  "spool.hint_reslice": "Re-slicing uses the spools loaded now, colors and purge included.",
-  "spool.reslicing": "Re-slicing with the loaded spools…",
-  "spool.generic_used": "No preset fits, generic one used: {list}"
+  "spool.edit": "Edit in Prepare",
+  "spool.edit_tip": "Opens the plate in Prepare to slice it again with the spools loaded now (presets, temperatures, colors)",
+  "spool.edit_none": "The plate of this print is not available: only its G-code was kept",
+  "spool.hint_edit": "Slicing again in Prepare takes the spools loaded now, colors included.",
+  "spool.replace.title": "Replace the Plate?",
+  "spool.replace.text": "The Prepare plate holds other objects. Put this print's plate in their place? This can be undone.",
+  "spool.replace.ok": "Replace",
+  "spool.hint_material": "Another material: slicing again is recommended so temperatures and flow follow the spool."
 }

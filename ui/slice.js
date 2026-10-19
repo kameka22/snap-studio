@@ -59,8 +59,9 @@ const swatch = (color) =>
 
 /* ------------------------------------------------------------ opening */
 
-/* Slicing works on the Prepare view's plate. */
-async function openSlice() {
+/* Slicing works on the Prepare view's plate. `replaces`: a queued print
+   brought back to Prepare, removed from the queue once this slice is sent. */
+async function openSlice({ replaces = null } = {}) {
   // A plate from an older version may still be reading its colors: each one
   // needs a head, or the engine gets it on T0.
   if (typeof prRefreshColors === "function") await prRefreshColors();
@@ -68,6 +69,7 @@ async function openSlice() {
   if (!scene) return;
   SL.source = scene;
   SL.job = null;
+  SL.replaces = replaces;
   SL.touched = new Set();
   slFileLine();
   setSliceMessage("");
@@ -571,14 +573,17 @@ async function startSlice() {
   setSliceMessage(tr("slice.preparing"), "busy");
   setSliceProgress(0);
   try {
-    // Kept whole: the spool check can slice the same plate again.
-    const slice = {
-      source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
-      overrides: { ...advOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
-    };
-    SL.job = await invoke("slice_start", { request: slice });
+    SL.job = await invoke("slice_start", {
+      request: {
+        source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
+        overrides: { ...advOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
+      },
+    });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";
-    SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel, slice };
+    // The plate's objects go with the print: the spool check can bring a
+    // queued print back to Prepare.
+    const plate = typeof prPlateOf === "function" ? prPlateOf(SL.source.items.map((it) => it.id)) : [];
+    SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel, plate };
   } catch (e) {
     showSliceBusy(false);
     setSliceProgress(null);
@@ -640,7 +645,7 @@ function stopElapsed() {
 
 function showPreview(job, p) {
   const req = SL.request || { filaments: [], colors: [] };
-  SL.preview = { job, source: SL.source, gcode: p.gcode, stats: p.stats || {}, printer: req.printer, saved: null };
+  SL.preview = { job, source: SL.source, gcode: p.gcode, stats: p.stats || {}, printer: req.printer, saved: null, replaces: SL.replaces };
   const toolColors = req.filaments.map((_, i) => hexToRgb(req.colors[i]));
   const toolNames = req.filaments.map((name) => name.replace(/\s*@.*$/, ""));
   openPreview({
@@ -651,17 +656,23 @@ function showPreview(job, p) {
     toolNames,
     onSend: openSend,
     onSave: savePreview,
-    onEdit: () => {
-      closeViewer();
-      switchView("prepare");
-      openSlice();
-    },
+    onEdit: () => editInPrepare(),
     // Closing the preview deletes it: what was saved stays.
     onClose: () => {
       if (SL.preview) invoke("slice_discard", { id: SL.preview.job }).catch(() => {});
       SL.preview = null;
     },
   });
+}
+
+/* Back to the plate this preview was sliced from, Slice sheet open. A
+   printer given: its spools are those read for the slice. */
+function editInPrepare(printerId) {
+  const replaces = SL.preview?.replaces || null;
+  closeViewer();
+  switchView("prepare");
+  if (printerId) rememberPrinter(printerId);
+  openSlice({ replaces });
 }
 
 async function savePreview() {
@@ -770,11 +781,10 @@ function setSendBusy(busy) {
 }
 
 async function sendPrint(queue = SL.sendMode === "queue") {
-  let pv = SL.preview;
-  const p = sendPrinter();
+  const pv = SL.preview, p = sendPrinter();
   if (!pv || !p || (!queue && $("snd-go").disabled)) return;
-  let r = SL.request || {};
-  let tools = pv.stats.tools?.length ? pv.stats.tools : [0];
+  const r = SL.request || {};
+  const tools = pv.stats.tools?.length ? pv.stats.tools : [0];
   // Spools checked when the print starts now; a queued job is checked when
   // it starts from the queue.
   let map = [];
@@ -782,17 +792,15 @@ async function sendPrint(queue = SL.sendMode === "queue") {
     if (SL.checking) return;
     SL.checking = true;
     const slots = (await headsRefreshSlots(p.id)).length ? headsSlots(p.id) : SL.sendSlots || [];
-    // Re-slicing needs the plate it came from, on the same machine profile.
-    const canReslice = !!(r.slice && SL.lists?.filaments?.length && r.slice.machine === r.machine);
-    const ok = await spoolCheck({ pid: p.id, tools, profile: r, stats: pv.stats, slots, canReslice }).finally(() => (SL.checking = false));
+    // The plate is still the one in Prepare: it can be sliced again there.
+    const ok = await spoolCheck({ pid: p.id, tools, profile: r, stats: pv.stats, slots, canEdit: true }).finally(() => (SL.checking = false));
     if (!ok) return;
-    map = ok.map;
-    if (ok.reslice) {
-      const next = await resliceForSend(pv, r, tools, ok, slots);
-      if (!next) return;
-      ({ pv, r, tools } = next);
-      map = [];
+    if (ok.edit) {
+      closeSheet($("sendmodal"));
+      editInPrepare(p.id);
+      return;
     }
+    map = ok.map;
   }
   setSendBusy(true);
   setSendProgress(queue ? null : 0);
@@ -817,10 +825,16 @@ async function sendPrint(queue = SL.sendMode === "queue") {
           bed: r.bed || null,
           bed_label: r.bedLabel || null,
           colors: r.colors || [],
-          slice: r.slice || null,
+          plate: r.plate?.length ? r.plate : null,
         },
       },
     });
+    // A queued print sliced again: the new one takes its place, if it is
+    // still waiting.
+    if (pv.replaces) {
+      await pjLoad();
+      if (pjQueue().some((j) => j.id === pv.replaces)) await invoke("job_remove", { id: pv.replaces }).catch(() => {});
+    }
     if (!queue) {
       // The printers snapshot may still say "free": the record is designated by
       // the job, not by the printer.
@@ -859,43 +873,6 @@ listen("print-send", (e) => {
     closeViewer();
   }
 });
-
-/* Spool check's "Re-slice with these spools": the same plate sliced again
-   with the substitutes (or the spools loaded now) as filaments, progress in
-   the send sheet; the new slice replaces the preview and is the one sent.
-   → { pv, r, tools }, or null (failed: the sheet says why). */
-async function resliceForSend(pv, r, used, ok, slots) {
-  let built;
-  try {
-    built = spResliceRequest(r.slice, { used, picks: ok.picks, tools: ok.tools, slots, list: SL.lists.filaments, best: bestFilament });
-  } catch (e) {
-    setSendMessage(String(e.message || e), "err");
-    return null;
-  }
-  setSendBusy(true);
-  setSendProgress(0);
-  const note = spGenericNote(built.heads);
-  try {
-    const res = await spSlice(built.request, (text, pct) => {
-      setSendMessage(note ? `${text} — ${note}` : text, "busy");
-      setSendProgress(pct ?? 0);
-    });
-    // The first preview gives way to the new one.
-    invoke("slice_discard", { id: pv.job }).catch(() => {});
-    const req = built.request;
-    const nr = { ...r, filaments: req.filaments, colors: req.colors, slice: req };
-    const npv = { ...pv, job: res.id, gcode: res.gcode, stats: res.stats || {}, saved: null };
-    SL.request = nr;
-    SL.preview = npv;
-    if (note) toast(note);
-    return { pv: npv, r: nr, tools: npv.stats.tools?.length ? npv.stats.tools : [0] };
-  } catch (e) {
-    setSendBusy(false);
-    setSendProgress(null);
-    setSendMessage(String(e.message || e), "err");
-    return null;
-  }
-}
 
 /* ------------------------------------------------------------ events */
 

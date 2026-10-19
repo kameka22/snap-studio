@@ -1268,7 +1268,7 @@
     "one": "{n} tête ne porte pas la bobine du tranchage",
     "other": "{n} têtes ne portent pas les bobines du tranchage"
   },
-  "spool.text": "Les bobines chargées ne sont pas celles pour lesquelles l'impression a été tranchée. Envoyez-la quand même, ou choisissez une autre bobine chargée pour une tête.",
+  "spool.text": "Les bobines chargées ne sont pas celles pour lesquelles l'impression a été tranchée. Envoyez-la quand même, choisissez une autre bobine chargée pour une tête, ou retranchez le plateau dans Préparer.",
   "spool.noask": "Ne plus vérifier",
   "spool.anyway": "Envoyer quand même",
   "spool.send_sub": "Envoyer avec substitution",
@@ -1286,12 +1286,12 @@
   "spool.head_busy": "Imprime déjà une autre couleur de ce fichier",
   "spool.sub_ok": "{tool} sera imprimé par la tête {head}",
   "spool.sub_still": "La tête {head} diffère encore de la bobine du tranchage",
-  "spool.reslice": "Retrancher avec ces bobines",
-  "spool.reslice_tip": "Retranche le même plateau avec ces bobines (profils, températures, couleurs, purge), puis l'envoie",
-  "spool.reslice_none": "Le projet d'origine n'est pas disponible pour cette impression : seul son G-code a été gardé",
-  "spool.reslice_empty": "Une tête reste vide ou inconnue : choisissez d'abord une bobine chargée",
-  "spool.hint_material": "Autre matière : retrancher est recommandé pour que températures, débit et purge suivent la bobine.",
-  "spool.hint_reslice": "Le retranchage utilise les bobines chargées, couleurs et purge comprises.",
-  "spool.reslicing": "Retranchage avec les bobines chargées…",
-  "spool.generic_used": "Aucun profil ne correspond, profil générique utilisé : {list}"
+  "spool.edit": "Modifier dans Préparer",
+  "spool.edit_tip": "Ouvre le plateau dans Préparer pour le retrancher avec les bobines chargées (profils, températures, couleurs)",
+  "spool.edit_none": "Le plateau de cette impression n'est pas disponible : seul son G-code a été gardé",
+  "spool.hint_edit": "Retrancher dans Préparer prend les bobines chargées, couleurs comprises.",
+  "spool.replace.title": "Remplacer le plateau ?",
+  "spool.replace.text": "Le plateau de Préparer contient d'autres objets. Les remplacer par le plateau de cette impression ? Vous pourrez revenir en arrière.",
+  "spool.replace.ok": "Remplacer",
+  "spool.hint_material": "Autre matière : retrancher est recommandé pour que températures et débit suivent la bobine."
 }
