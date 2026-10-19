@@ -527,6 +527,9 @@ struct SendRequest {
     /// True: queue instead of starting.
     #[serde(default)]
     queue: bool,
+    /// Substitutes chosen at the spool check: (G-code tool, head).
+    #[serde(default)]
+    map: Vec<(u8, u8)>,
 }
 
 #[derive(Serialize, Clone)]
@@ -554,7 +557,9 @@ async fn launch(
     name: &str,
     options: &printers::StartOptions,
     tools: &[u8],
+    map: &[(u8, u8)],
 ) -> Result<Option<String>, String> {
+    printers::check_map(tools, map).map_err(|e| e.to_string())?;
     send_progress(app, "check", None, None);
     let st = printers::status(&p.host, p.port).await;
     if !st.online {
@@ -565,23 +570,25 @@ async fn launch(
     }
     // A head used without a spool: refused, even for a job queued before it
     // was emptied.
+    // Physical heads, after substitution.
     let empty: Vec<String> = tools
         .iter()
-        .filter(|t| st.filaments.iter().any(|f| f.index == **t && !f.present))
-        .map(|t| format!("T{t}"))
+        .map(|t| printers::head_of(*t, map))
+        .filter(|h| st.filaments.iter().any(|f| f.index == *h && !f.present))
+        .map(|h| format!("T{h}"))
         .collect();
     if !empty.is_empty() {
         return Err(t!("err.head_empty", name = p.name, heads = empty.join(", ")));
     }
 
     send_progress(app, "prepare", None, None);
-    let script = printers::preprint_script(options, tools, false);
+    let script = printers::preprint_script(options, tools, map, false);
     if let Err(e) = printers::gcode_script(&p.host, p.port, &script).await {
         // Firmware older than 1.3.0: a single macro for the options.
         if !printers::is_unknown_command(&e) {
             return Err(t!("err.prepare_refused", err = e));
         }
-        let legacy = printers::preprint_script(options, tools, true);
+        let legacy = printers::preprint_script(options, tools, map, true);
         printers::gcode_script(&p.host, p.port, &legacy)
             .await
             .map_err(|e| t!("err.prepare_refused", err = e))?;
@@ -636,7 +643,7 @@ async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<Strin
         emit_jobs(&app);
         return Ok(job.id);
     }
-    let warning = launch(&app, &p, &gcode, &remote, &request.options, &request.tools).await?;
+    let warning = launch(&app, &p, &gcode, &remote, &request.options, &request.tools, &request.map).await?;
     // The print's record keeps the G-code and its summary. The print has left:
     // a failure here must not make it look failed.
     let id = match add(gcode, new, "printing", remote).await.map_err(|e| anyhow::anyhow!("{e}")).and_then(|r| r) {
@@ -670,7 +677,7 @@ fn prints_status() -> Vec<jobs::Live> {
 
 /// Starts a queued job (the user confirmed the bed is clear).
 #[tauri::command]
-async fn job_launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
+async fn job_launch(app: tauri::AppHandle, id: String, map: Option<Vec<(u8, u8)>>) -> Result<(), String> {
     let job = jobs::get(&id).ok_or_else(|| t!("err.job_unknown"))?;
     if job.state != "queued" {
         return Err(t!("err.not_queued"));
@@ -679,7 +686,7 @@ async fn job_launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
     // A name of its own for each job: two prints of the same model do not
     // overwrite each other on the printer.
     let remote = jobs::remote_name(&job.name, &job.id);
-    let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools).await?;
+    let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools, &map.unwrap_or_default()).await?;
     if let Err(e) = jobs::mark_started(&id, &remote) {
         eprintln!("[jobs] launch not recorded: {e}");
     }
