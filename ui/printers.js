@@ -30,6 +30,8 @@ function switchView(v) {
     stopLive();
     camStop();
   }
+  // Leaving a printer's files stops its video.
+  if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
   if (v === "prints") pjRender();
   else if (typeof pjCamStop === "function") pjCamStop();
   // The Library's native views must only live in its tab.
@@ -106,6 +108,8 @@ function prnRenderList() {
     });
     box.querySelectorAll("[data-heads] .lbl").forEach((l) => (l.textContent = tr("heads.title")));
     box.querySelectorAll("[data-maint] .lbl").forEach((l) => (l.textContent = tr("maint.title")));
+    box.querySelectorAll("[data-pfiles] .lbl").forEach((l) => (l.textContent = tr("pfiles.title")));
+    if (typeof pflSideCounts === "function") pflSideCounts();
     sideSync();
     return;
   }
@@ -135,12 +139,15 @@ function prnRenderList() {
     const sub = document.createElement("div");
     sub.className = "side-group side-sub";
     sub.innerHTML = `<button class="side-item" data-heads="${esc(p.id)}"><span class="glyph" style="color: #34C759">${SIDE_SPOOL}</span><span class="lbl">${esc(tr("heads.title"))}</span></button>` +
-      `<button class="side-item" data-maint="${esc(p.id)}"><span class="glyph" style="color: #8E8E93">${SIDE_WRENCH}</span><span class="lbl">${esc(tr("maint.title"))}</span><span class="mt-dot hidden"></span></button>`;
+      `<button class="side-item" data-maint="${esc(p.id)}"><span class="glyph" style="color: #8E8E93">${SIDE_WRENCH}</span><span class="lbl">${esc(tr("maint.title"))}</span><span class="mt-dot hidden"></span></button>` +
+      `<button class="side-item" data-pfiles="${esc(p.id)}"><span class="glyph" style="color: #1E8CFF">${SIDE_FOLDER}</span><span class="lbl">${esc(tr("pfiles.title"))}</span><span class="count"></span></button>`;
     sub.children[0].onclick = () => headsShow(p.id);
     sub.children[1].onclick = () => maintShow(p.id);
+    sub.children[2].onclick = () => pflShow(p.id);
     box.appendChild(sub);
   }
   if (typeof mtSideDots === "function") mtSideDots();
+  if (typeof pflSideCounts === "function") pflSideCounts();
   sideSync();
 }
 
