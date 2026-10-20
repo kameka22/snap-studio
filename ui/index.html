@@ -1219,8 +1219,9 @@
   <div class="modal-box">
     <h3 data-i18n="send.title">Send to Printer</h3>
     <div id="snd-file" class="det-sub"></div>
-    <div class="form">
-      <label><span data-i18n="slice.printer">Printer</span><select id="snd-printer"></select></label>
+    <div class="snd-for">
+      <span id="snd-for-label" data-i18n="slice.printer">Printer</span>
+      <div id="snd-printer" class="pj-printers" role="radiogroup" aria-labelledby="snd-for-label"></div>
     </div>
     <div id="snd-state" class="pf-test"></div>
 

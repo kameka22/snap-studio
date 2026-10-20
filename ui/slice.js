@@ -700,10 +700,8 @@ async function openSend() {
     return;
   }
   $("snd-file").textContent = pv.source.name + (pv.stats.print_time_s ? " · " + fmtDuration(pv.stats.print_time_s) : "");
-  $("snd-printer").innerHTML = SL.printers
-    .map((p) => `<option value="${esc(p.id)}">${esc(p.name || p.host)}</option>`)
-    .join("");
-  $("snd-printer").value = SL.printers.some((p) => p.id === pv.printer) ? pv.printer : SL.printers[0].id;
+  SL.sendPid = SL.printers.some((p) => p.id === pv.printer) ? pv.printer : SL.printers[0].id;
+  renderSendPrinters();
   // Options always unticked on opening, as requested.
   ["snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).checked = false));
   setSendBusy(false);
@@ -713,14 +711,17 @@ async function openSend() {
   checkSendPrinter();
 }
 
-/* The same sheet for a file already on a printer (its Files view): that
-   printer only, nothing to upload, no queue. `file`: a RemoteFile. */
+/* The same sheet for a file already on a printer (its Files view). Start
+   it there, queue it, or print it on another printer: `printer` holds the
+   file, chosen by default. `file`: a RemoteFile. */
 async function openSendRemote(printer, file, thumb) {
+  SL.printers = await invoke("printers_list").catch(() => SL.printers);
+  if (!SL.printers.some((p) => p.id === printer.id)) SL.printers = [printer, ...SL.printers];
   SL.remote = { printer, file, thumb, stats: pflSendStats(file.meta) };
   const st = SL.remote.stats;
   $("snd-file").textContent = pflName(file.path) + (st.print_time_s ? " · " + fmtDuration(st.print_time_s) : "");
-  $("snd-printer").innerHTML = `<option value="${esc(printer.id)}">${esc(printer.name || printer.host)}</option>`;
-  $("snd-printer").value = printer.id;
+  SL.sendPid = printer.id;
+  renderSendPrinters();
   ["snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).checked = false));
   setSendBusy(false);
   setSendMessage("");
@@ -729,14 +730,25 @@ async function openSendRemote(printer, file, thumb) {
   checkSendPrinter();
 }
 
-const sendPrinter = () => (SL.remote ? SL.remote.printer : SL.printers.find((p) => p.id === $("snd-printer").value));
+const sendPrinter = () => SL.printers.find((p) => p.id === SL.sendPid);
+
+/* The printer picker: the print queue's chips. */
+function renderSendPrinters() {
+  $("snd-printer").innerHTML = printerChips(SL.printers, SL.sendPid, !!SL.sending);
+}
+function setSendPrinter(id) {
+  if (!id || id === SL.sendPid || SL.sending) return;
+  SL.sendPid = id;
+  renderSendPrinters();
+  checkSendPrinter();
+}
 const sendStats = () => (SL.remote ? SL.remote.stats : SL.preview?.stats);
 
 /* Printer free: start, or queue. Busy or unreachable: only the queue. */
 function setSendMode(mode) {
   SL.sendMode = mode;
   $("snd-go").textContent = tr(mode === "queue" ? "send.add_queue" : "send.go");
-  $("snd-queue").classList.toggle("hidden", mode !== "launch" || !!SL.remote);
+  $("snd-queue").classList.toggle("hidden", mode !== "launch");
 }
 
 /* State of the target printer: only start on an idle machine. */
@@ -751,11 +763,12 @@ async function checkSendPrinter() {
   el.textContent = tr("send.querying");
   const st = await invoke("printer_status", { host: p.host, port: p.port }).catch(() => null);
   if (sendPrinter() !== p) return;
+  // The chip shows the state just read.
+  SL.pstate = { ...(SL.pstate || {}), [p.id]: st?.online ? st.state : "offline" };
+  renderSendPrinters();
   if (!st || !st.online) {
     el.className = "pf-test err";
     el.textContent = tr("send.no_answer", { name: p.name });
-    // A file on the printer cannot wait in the queue: it starts or nothing.
-    if (SL.remote) return;
     setSendMode("queue");
     $("snd-go").disabled = false;
     return;
@@ -764,7 +777,6 @@ async function checkSendPrinter() {
     const end = st.remaining_s ? " — " + tr("send.ends_at", { time: fmtClock(Date.now() + st.remaining_s * 1000) }) : "";
     el.className = "pf-test warn";
     el.textContent = tr("send.busy", { name: p.name, job: (st.job || "").replace(/\.gcode$/, ""), end });
-    if (SL.remote) return;
     setSendMode("queue");
     $("snd-go").disabled = false;
     return;
@@ -797,12 +809,12 @@ function setSendBusy(busy) {
   if (busy) $("snd-queue").classList.add("hidden");
   else if (SL.sendMode) setSendMode(SL.sendMode);
   $("snd-cancel").classList.toggle("hidden", busy);
-  ["snd-printer", "snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).disabled = busy));
-  if (SL.remote) $("snd-printer").disabled = true;
+  ["snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).disabled = busy));
+  renderSendPrinters();
 }
 
 async function sendPrint(queue = SL.sendMode === "queue") {
-  if (SL.remote) return sendRemote();
+  if (SL.remote) return sendRemote(queue);
   const pv = SL.preview, p = sendPrinter();
   if (!pv || !p || (!queue && $("snd-go").disabled)) return;
   const r = SL.request || {};
@@ -886,31 +898,39 @@ async function sendPrint(queue = SL.sendMode === "queue") {
   }
 }
 
-/* Starts a file already on the printer, after the same spool check. */
-async function sendRemote() {
-  const { printer: p, file, stats, thumb } = SL.remote;
-  if ($("snd-go").disabled || SL.checking) return;
-  SL.checking = true;
-  let ok;
-  try {
-    ok = await spCheckBeforeStart(p, { tools: stats.tools, profile: {}, stats, canEdit: false, print: { thumb, name: pflName(file.path), printer: p.name || p.host } });
-  } catch (e) {
-    setSendMessage(String(e.message || e), "err");
-    return;
-  } finally {
-    SL.checking = false;
+/* A file already on a printer: started (after the same spool check),
+   queued, or sent to another printer, as after a slice. */
+async function sendRemote(queue) {
+  const { printer: src, file, stats, thumb } = SL.remote;
+  const p = sendPrinter();
+  if (!p || (!queue && $("snd-go").disabled) || SL.checking) return;
+  let map = [];
+  if (!queue) {
+    SL.checking = true;
+    let ok;
+    try {
+      ok = await spCheckBeforeStart(p, { tools: stats.tools, profile: {}, stats, canEdit: false, print: { thumb, name: pflName(file.path), printer: p.name || p.host } });
+    } catch (e) {
+      setSendMessage(String(e.message || e), "err");
+      return;
+    } finally {
+      SL.checking = false;
+    }
+    if (!ok) return;
+    map = ok.map || [];
   }
-  if (!ok) return;
   setSendBusy(true);
   setSendProgress(null);
-  setSendMessage(tr("send.preparing"), "busy");
+  setSendMessage(tr(queue ? "send.queueing" : "send.preparing"), "busy");
   try {
-    await invoke("pf_print", {
+    const id = await invoke("pf_print", {
       request: {
-        printer_id: p.id,
+        source_id: src.id,
         path: file.path,
+        printer_id: p.id,
+        queue,
         tools: stats.tools,
-        map: ok.map || [],
+        map,
         options: {
           bed_leveling: $("snd-level").checked,
           flow_calibration: $("snd-flow").checked,
@@ -918,9 +938,18 @@ async function sendRemote() {
         },
       },
     });
-    pjShow("live:" + p.id);
+    await pjLoad();
+    if (!queue) pjShow(id ? "job:" + id : "live:" + p.id);
+    else {
+      setSendBusy(false);
+      closeSheet($("sendmodal"));
+      const pos = pjQueue().findIndex((j) => j.id === id) + 1;
+      toast(tr("send.queued", { name: p.name }) + (pos ? ` (${tr("prints.position", { n: pos })})` : ""));
+      pjShow("job:" + id);
+    }
   } catch (e) {
     setSendBusy(false);
+    setSendProgress(null);
     setSendMessage(String(e), "err");
   }
 }
@@ -929,6 +958,7 @@ listen("print-send", (e) => {
   if (!SL.sending) return;
   const s = e.payload;
   if (s.phase === "check") setSendMessage(tr("send.checking"), "busy");
+  else if (s.phase === "fetch") setSendMessage(tr("send.fetching"), "busy");
   else if (s.phase === "prepare") setSendMessage(tr("send.preparing"), "busy");
   else if (s.phase === "upload") {
     setSendProgress(s.percent);
@@ -991,7 +1021,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !SL.job && e.target.tagName !== "SELECT") startSlice();
 });
 
-$("snd-printer").addEventListener("change", checkSendPrinter);
+$("snd-printer").addEventListener("click", (e) => setSendPrinter(e.target.closest("[data-printer]")?.dataset.printer));
 $("snd-go").addEventListener("click", () => sendPrint());
 $("snd-cancel").addEventListener("click", () => closeSheet($("sendmodal")));
 $("snd-queue").addEventListener("click", () => sendPrint(true));

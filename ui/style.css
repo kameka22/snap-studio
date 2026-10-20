@@ -3665,3 +3665,12 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .pfl-time { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-secondary); min-width: 38px; text-align: center; }
 .pfl-ctrls select { width: auto; }
 #view-pfiles.playing .pfl-detail { display: none; }
+
+/* Multi-select (both tabs) and the send sheet's printer picker. */
+.pfl-th { position: relative; }
+.pfl-row.picked { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.pfl-row .pfl-check { top: 3px; left: 3px; width: 15px; height: 15px; }
+.pfl-ph svg { stroke-width: 1.4; }
+.snd-for { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+.snd-for .pj-printers { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.pj-printers .sl-pchip:disabled { cursor: default; opacity: 0.6; transform: none; }

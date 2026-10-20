@@ -47,14 +47,16 @@ const PFL_LAST = {
   interrupted: ["pfiles.last.interrupted", "err"],
   in_progress: ["pfiles.last.in_progress", "busy"],
 };
-const PFL_ICON_FILE = '<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7zm0 2.3L18.7 8 12 11.7 5.3 8zM5 9.7l6 3.3v6.7l-6-3.3zm8 10V13l6-3.3v6.7z"/></svg>';
-const PFL_ICON_FILM = '<svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1m1 2v2h2V7zm12 0v2h2V7zM5 11v2h2v-2zm12 0v2h2v-2zM5 15v2h2v-2zm12 0v2h2v-2zM9 7v10h6V7z"/></svg>';
+/* Placeholders when a file has no picture (or it does not load). */
+const PFL_ICON_FILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M6 2.75h8.25L19 7.5v12.25a1.5 1.5 0 0 1-1.5 1.5h-11.5a1.5 1.5 0 0 1-1.5-1.5V4.25A1.5 1.5 0 0 1 6 2.75z"/><path d="M14 2.75V7.5h5"/><path d="M12 10.5l-3.75 2.1v4.2L12 18.9l3.75-2.1v-4.2zM8.25 12.6 12 14.7l3.75-2.1M12 14.7v4.2"/></svg>';
+const PFL_ICON_FILM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 4.5v15M17 4.5v15M3 8.5h4M3 12h4M3 15.5h4M17 8.5h4M17 12h4M17 15.5h4"/><path d="M10.5 9.75v4.5l3.75-2.25z" fill="currentColor"/></svg>';
+const PFL_PH = { file: PFL_ICON_FILE, film: PFL_ICON_FILM };
 const PFL_ICON_OFF = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const PFL_ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
 const PFL_ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M7 5h4v14H7zm6 0h4v14h-4z"/></svg>';
 
 const pflPrinter = () => (typeof P !== "undefined" ? P.list.find((p) => p.id === PFL.pid) : null) || null;
-const pflUrl = (root, path) => schemeUrl("prn", "/f?" + new URLSearchParams({ id: PFL.pid, root, p: path }));
+const pflUrl = (root, path) => schemeUrl("prn", pflPrnQuery(PFL.pid, root, path));
 const pflList = () => (PFL.data ? (PFL.tab === "files" ? PFL.data.files : PFL.data.videos) : []);
 const pflFind = (key) => (PFL.data ? [...PFL.data.files, ...PFL.data.videos].find((f) => pflKey(f) === key) : null) || null;
 const pflShown = () => pflSort(pflList().filter((f) => pflMatches(f, PFL.q)), PFL.sort, PFL.desc, PFL.durations);
@@ -62,7 +64,7 @@ const pflThumb = (f) => {
   const t = f.meta ? f.meta.thumb : f.thumb;
   return t ? pflUrl(f.root, t) : null;
 };
-const pflWhy = (reason) => (reason === "printing" ? tr("pfiles.why.printing") : reason === "readonly" ? tr("pfiles.why.readonly") : "");
+const pflWhy = (reason) => (reason === "printing" ? tr("pfiles.why.printing") : "");
 const pflOpen = () => !$("view-pfiles").classList.contains("hidden");
 
 /* ------------------------------------------------------------ entry */
@@ -153,7 +155,7 @@ function pflHeader() {
     b.setAttribute("aria-pressed", String(b.dataset.layout === PFL.view));
   });
   $("pfl-layout").classList.toggle("hidden", PFL.tab !== "files");
-  $("pfl-select").classList.toggle("hidden", PFL.tab !== "videos" || !PFL.data?.videos.length);
+  $("pfl-select").classList.toggle("hidden", !pflList().length);
   $("pfl-select").classList.toggle("on", PFL.selMode);
   $("pfl-select").setAttribute("aria-pressed", String(PFL.selMode));
 }
@@ -191,7 +193,6 @@ function pflRender() {
   } else if (PFL.tab === "files") {
     html += PFL.view === "grid" ? pflFilesGrid(shown) : pflFilesList(shown);
   } else {
-    if (all.some((v) => !v.writable)) html += `<div class="pfl-note">${esc(tr("pfiles.videos_readonly"))}</div>`;
     html += pflVideosGrid(shown);
   }
   main.innerHTML = html;
@@ -206,21 +207,28 @@ function pflDots(meta) {
     .join("");
 }
 const pflGrams = (meta) => fmtWeight(meta?.filament_weight_total ?? null) || "";
-const pflImg = (f, icon) => {
+/* The picture, or the placeholder; a picture that fails to load is
+   replaced by it too (listener below: no inline handler under the CSP). */
+const pflPh = (kind) => `<span class="pfl-ph" data-ph="${kind}">${PFL_PH[kind]}</span>`;
+const pflImg = (f, kind, lazy = true) => {
   const src = pflThumb(f);
-  return src ? `<img src="${esc(src)}" alt="" loading="lazy" draggable="false" />` : `<span class="pfl-ph">${icon}</span>`;
+  return src ? `<img src="${esc(src)}" alt="" ${lazy ? 'loading="lazy" ' : ""}draggable="false" data-ph="${kind}" />` : pflPh(kind);
 };
+const pflCheck = (k) =>
+  PFL.selMode ? `<input type="checkbox" class="pfl-check" tabindex="-1" aria-label="${esc(tr("pfiles.pick"))}"${PFL.picked.has(k) ? " checked" : ""} />` : "";
+const pflItemCls = (k) => (PFL.selMode ? (PFL.picked.has(k) ? " picked" : "") : PFL.sel === k ? " on" : "");
+const pflItemSel = (k) => (PFL.selMode ? PFL.picked.has(k) : PFL.sel === k);
 const pflPrintingTag = (f) => (PFL.data.printing && pflCanChange(f, PFL.data.printing).reason === "printing" ? `<span class="pfl-tag busy">${esc(tr("pfiles.printing"))}</span>` : "");
 
 function pflFilesList(list) {
   const head = (k, label) => `<span class="sortable${PFL.sort === k ? " on" : ""}" data-sort="${k}">${esc(label)}${PFL.sort === k ? (PFL.desc ? " ↓" : " ↑") : ""}</span>`;
-  return `<div class="pfl-list" role="listbox" aria-label="${esc(tr("pfiles.tab.files"))}">
+  return `<div class="pfl-list${PFL.selMode ? " picking" : ""}" role="listbox" aria-multiselectable="${PFL.selMode}" aria-label="${esc(tr("pfiles.tab.files"))}">
     <div class="pfl-lhead"><span></span>${head("name", tr("pfiles.col.name"))}${head("date", tr("pfiles.col.sent"))}${head("duration", tr("pfiles.col.duration"))}<span>${esc(tr("pfiles.col.filament"))}</span>${head("size", tr("pfiles.col.size"))}</div>
     ${list
       .map((f) => {
         const k = pflKey(f);
-        return `<div class="pfl-row${PFL.sel === k ? " on" : ""}" data-k="${esc(k)}" role="option" aria-selected="${PFL.sel === k}" tabindex="-1">
-          <span class="pfl-th">${pflImg(f, PFL_ICON_FILE)}</span>
+        return `<div class="pfl-row${pflItemCls(k)}" data-k="${esc(k)}" role="option" aria-selected="${pflItemSel(k)}" tabindex="-1">
+          <span class="pfl-th">${pflImg(f, "file")}${pflCheck(k)}</span>
           <span class="pfl-name"><b title="${esc(f.path)}">${esc(pflName(f.path))}</b>${pflPrintingTag(f)}</span>
           <span class="pfl-c">${esc(fmtDate(f.modified))}</span>
           <span class="pfl-c">${esc(fmtDuration(f.meta?.estimated_time ?? null) || "—")}</span>
@@ -233,12 +241,12 @@ function pflFilesList(list) {
 }
 
 function pflFilesGrid(list) {
-  return `<div class="pfl-grid" role="listbox" aria-label="${esc(tr("pfiles.tab.files"))}">${list
+  return `<div class="pfl-grid${PFL.selMode ? " picking" : ""}" role="listbox" aria-multiselectable="${PFL.selMode}" aria-label="${esc(tr("pfiles.tab.files"))}">${list
     .map((f) => {
       const k = pflKey(f);
       const line = [fmtDuration(f.meta?.estimated_time ?? null), pflGrams(f.meta)].filter(Boolean).join(" · ");
-      return `<div class="pfl-card${PFL.sel === k ? " on" : ""}" data-k="${esc(k)}" role="option" aria-selected="${PFL.sel === k}" tabindex="-1">
-        <div class="pfl-cth">${pflImg(f, PFL_ICON_FILE)}${pflPrintingTag(f)}</div>
+      return `<div class="pfl-card${pflItemCls(k)}" data-k="${esc(k)}" role="option" aria-selected="${pflItemSel(k)}" tabindex="-1">
+        <div class="pfl-cth">${pflImg(f, "file")}${pflPrintingTag(f)}${pflCheck(k)}</div>
         <div class="pfl-cname" title="${esc(f.path)}">${esc(pflName(f.path))}</div>
         <div class="pfl-csub"><span class="pfl-fil">${pflDots(f.meta)}</span><span>${esc(line || fmtSize(f.size))}</span></div>
       </div>`;
@@ -253,8 +261,8 @@ function pflVideosGrid(list) {
       const d = PFL.durations.get(k);
       const picked = PFL.picked.has(k);
       return `<div class="pfl-card video${picked ? " picked" : ""}" data-k="${esc(k)}" role="option" aria-selected="${picked}" tabindex="-1">
-        <div class="pfl-cth">${pflImg(v, PFL_ICON_FILM)}<span class="pfl-dur${d ? "" : " hidden"}">${d ? pflClock(d) : ""}</span>${
-          PFL.selMode ? `<input type="checkbox" class="pfl-check" tabindex="-1" aria-label="${esc(tr("pfiles.pick"))}"${picked ? " checked" : ""} />` : `<span class="pfl-playmark">${PFL_ICON_PLAY}</span>`
+        <div class="pfl-cth">${pflImg(v, "film")}<span class="pfl-dur${d ? "" : " hidden"}">${d ? pflClock(d) : ""}</span>${
+          PFL.selMode ? pflCheck(k) : `<span class="pfl-playmark">${PFL_ICON_PLAY}</span>`
         }</div>
         <div class="pfl-cname" title="${esc(v.path)}">${esc(pflVideoTitle(v))}</div>
         <div class="pfl-csub"><span>${esc(fmtDate(pflVideoDate(v)))}</span><span>${esc(fmtSize(v.size))}</span></div>
@@ -285,7 +293,7 @@ function pflRenderDetail() {
   const thumb = pflThumb(f);
   aside.innerHTML = `
     <div class="pfl-dhead"><button class="tb-btn" data-act="close-detail" title="${esc(tr("common.close"))}" aria-label="${esc(tr("common.close"))}"><svg viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6 10.6 12 5 6.4z"/></svg></button></div>
-    <div class="det-preview">${thumb ? `<img src="${esc(thumb)}" alt="" draggable="false" />` : `<span class="pfl-ph">${PFL_ICON_FILE}</span>`}</div>
+    <div class="det-preview">${thumb ? `<img src="${esc(thumb)}" alt="" draggable="false" data-ph="file" />` : pflPh("file")}</div>
     <h2>${esc(pflName(f.path))}</h2>
     <div class="det-sub" title="${esc(f.path)}">${esc(f.path)}</div>
     <div class="det-actions">
@@ -310,21 +318,25 @@ function pflRenderDetail() {
 
 function pflRenderSelbar() {
   const bar = $("pfl-selbar");
-  const on = PFL.selMode && PFL.tab === "videos" && !!PFL.data && !PFL.player;
+  const on = PFL.selMode && !!PFL.data && !PFL.player;
   bar.classList.toggle("hidden", !on);
   if (!on) return;
   const picked = pflPicked();
   $("pfl-selcount").textContent = tr("pfiles.picked", { n: picked.length });
   $("pfl-seldl").disabled = !picked.length || PFL.busy;
-  const ro = picked.some((v) => !v.writable);
-  $("pfl-seldel").disabled = !picked.length || ro;
-  $("pfl-seldel").title = ro ? tr("pfiles.why.readonly") : "";
+  // Only the file being printed is kept; read-only videos are tried anyway
+  // (the printer's camera service can delete them, printer_files.rs).
+  const busy = picked.find((f) => !pflCanChange(f, PFL.data.printing).ok);
+  $("pfl-seldel").disabled = !picked.length || !!busy;
+  $("pfl-seldel").title = busy ? pflWhy("printing") : "";
 }
-const pflPicked = () => (PFL.data ? PFL.data.videos.filter((v) => PFL.picked.has(pflKey(v))) : []);
+const pflPicked = () => pflList().filter((f) => PFL.picked.has(pflKey(f)));
 
 function pflSetSelMode(on) {
   PFL.selMode = on;
   if (!on) PFL.picked = new Set();
+  // Picking several replaces the single selection and its panel.
+  if (on) PFL.detail = false;
   pflRender();
 }
 
@@ -409,14 +421,16 @@ async function pflDelete(files) {
   }
   const one = files.length === 1;
   const name = one ? (files[0].meta || files[0].root === "gcodes" ? pflName(files[0].path) : pflVideoTitle(files[0])) : "";
-  const title = one ? tr("pfiles.del.title_one", { name }) : tr("pfiles.del.title_many", { n: files.length });
+  const many = files[0].root === "gcodes" ? "pfiles.del.title_files" : "pfiles.del.title_videos";
+  const title = one ? tr("pfiles.del.title_one", { name }) : tr(many, { n: files.length });
   if (!(await confirmDelete(title, tr("pfiles.del.text")))) return;
   // A video's picture goes with it.
   const paths = files.flatMap((f) => [f.path, ...(f.thumb ? [f.thumb] : [])]);
   try {
     const errs = await invoke("pf_delete", { printerId: PFL.pid, root: files[0].root, paths });
     const failed = files.map((f) => errs[paths.indexOf(f.path)]).filter(Boolean);
-    if (failed.length) toast(failed[0], true);
+    if (failed.length === 1) toast(failed[0], true);
+    else if (failed.length) toast(tr("pfiles.del.failed", { n: failed.length, err: failed[0] }), true);
   } catch (e) {
     toast(String(e), true);
   }
@@ -473,8 +487,7 @@ function pflPlay(key) {
   $("pfl-pcount").textContent = tr("pfiles.player.pos", { i: i + 1, n: shown.length });
   $("pfl-pprev").disabled = pflNeighbor(i, shown.length, -1) < 0;
   $("pfl-pnext").disabled = pflNeighbor(i, shown.length, 1) < 0;
-  $("pfl-pdel").disabled = !v.writable;
-  $("pfl-pdel").title = v.writable ? tr("common.delete") : tr("pfiles.why.readonly");
+  $("pfl-pdel").title = tr("common.delete");
   $("pfl-perr").classList.add("hidden");
   $("pfl-seek").value = 0;
   $("pfl-cur").textContent = pflClock(0);
@@ -588,22 +601,21 @@ $("pfl-main").addEventListener("click", (e) => {
   const item = e.target.closest("[data-k]");
   if (!item) return;
   const k = item.dataset.k;
-  if (PFL.tab === "videos") {
-    if (PFL.selMode) {
-      PFL.picked = pflToggle(PFL.picked, k);
-      item.classList.toggle("picked", PFL.picked.has(k));
-      item.setAttribute("aria-selected", String(PFL.picked.has(k)));
-      const box = item.querySelector(".pfl-check");
-      if (box) box.checked = PFL.picked.has(k);
-      pflRenderSelbar();
-    } else pflPlay(k);
+  if (PFL.selMode) {
+    PFL.picked = pflToggle(PFL.picked, k);
+    item.classList.toggle("picked", PFL.picked.has(k));
+    item.setAttribute("aria-selected", String(PFL.picked.has(k)));
+    const box = item.querySelector(".pfl-check");
+    if (box) box.checked = PFL.picked.has(k);
+    pflRenderSelbar();
     return;
   }
-  pflSelect(k);
+  if (PFL.tab === "videos") pflPlay(k);
+  else pflSelect(k);
 });
 $("pfl-main").addEventListener("dblclick", (e) => {
   const item = e.target.closest("[data-k]");
-  if (item && PFL.tab === "files") pflSelect(item.dataset.k, true);
+  if (item && PFL.tab === "files" && !PFL.selMode) pflSelect(item.dataset.k, true);
 });
 $("pfl-main").addEventListener("contextmenu", (e) => {
   const item = e.target.closest("[data-k]");
@@ -757,3 +769,15 @@ listen("print-send", (e) => {
   if (pflOpen()) pflLoad();
 });
 pflPlayIcon();
+
+/* A picture that does not load: its placeholder instead ("error" does not
+   bubble, hence the capture). */
+$("view-pfiles").addEventListener(
+  "error",
+  (e) => {
+    const img = e.target;
+    if (img?.tagName !== "IMG" || !img.dataset.ph) return;
+    img.outerHTML = pflPh(img.dataset.ph);
+  },
+  true
+);

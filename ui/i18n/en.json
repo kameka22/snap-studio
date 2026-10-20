@@ -1390,7 +1390,7 @@
   "pfiles.layout.grid": "Thumbnails",
   "pfiles.layout.list": "List",
   "pfiles.select": "Select",
-  "pfiles.select.title": "Select several videos",
+  "pfiles.select.title": "Select several items",
   "pfiles.select_all": "Select All",
   "pfiles.select_done": "Done",
   "pfiles.refresh": "Read the printer again",
@@ -1417,7 +1417,7 @@
   "pfiles.print": "Print",
   "pfiles.rename": "Rename",
   "pfiles.play": "Play",
-  "pfiles.pick": "Select this video",
+  "pfiles.pick": "Select",
   "pfiles.picked": {
     "one": "{n} selected",
     "other": "{n} selected"
@@ -1425,8 +1425,6 @@
   "pfiles.rename_title": "Rename on the Printer",
   "pfiles.rename_name": "New name",
   "pfiles.why.printing": "This file is printing: it cannot be changed or deleted until the print ends.",
-  "pfiles.why.readonly": "The printer only lets these files be read and downloaded.",
-  "pfiles.videos_readonly": "On this printer the timelapses are read-only: they can be watched and downloaded, but only the printer can delete them.",
   "pfiles.offline.title": "{name} does not answer",
   "pfiles.empty.files": "No print files on the printer",
   "pfiles.empty.files_hint": "Prints sent from Snap Studio or another slicer appear here.",
@@ -1454,10 +1452,6 @@
   "pfiles.last.in_progress": "In progress",
   "pfiles.last.unknown": "Unknown",
   "pfiles.del.title_one": "Delete “{name}” from the printer?",
-  "pfiles.del.title_many": {
-    "one": "Delete {n} video from the printer?",
-    "other": "Delete {n} videos from the printer?"
-  },
   "pfiles.del.text": "The file is deleted from the printer itself. This cannot be undone.",
   "pfiles.downloading": {
     "one": "Downloading…",
@@ -1482,5 +1476,21 @@
   "pfiles.err.bad_name": "This name cannot be used on the printer.",
   "pfiles.err.no_folder": "The destination folder cannot be found.",
   "pfiles.err.start": "The printer did not start the print: {err}",
-  "pfiles.offline.hint": "Check that it is switched on and on the same network, then try again."
+  "pfiles.offline.hint": "Check that it is switched on and on the same network, then try again.",
+  "pfiles.del.title_files": {
+    "one": "Delete {n} file from the printer?",
+    "other": "Delete {n} files from the printer?"
+  },
+  "pfiles.del.title_videos": {
+    "one": "Delete {n} video from the printer?",
+    "other": "Delete {n} videos from the printer?"
+  },
+  "pfiles.del.failed": {
+    "one": "{n} file was not deleted: {err}",
+    "other": "{n} files were not deleted: {err}"
+  },
+  "pfiles.err.video_delete": "The printer refused to delete this video: {err}",
+  "pfiles.err.video_kept": "The printer accepted, but the video is still listed. Refresh in a moment; if it is still there, delete it from the printer's screen.",
+  "pfiles.err.fetch": "The file could not be copied from the printer: {err}",
+  "send.fetching": "Copying the file from the printer…"
 }

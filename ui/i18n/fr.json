@@ -1393,7 +1393,7 @@
   "pfiles.layout.grid": "Vignettes",
   "pfiles.layout.list": "Liste",
   "pfiles.select": "Sélectionner",
-  "pfiles.select.title": "Sélectionner plusieurs vidéos",
+  "pfiles.select.title": "Sélectionner plusieurs éléments",
   "pfiles.select_all": "Tout sélectionner",
   "pfiles.select_done": "Terminé",
   "pfiles.refresh": "Relire l'imprimante",
@@ -1420,16 +1420,14 @@
   "pfiles.print": "Imprimer",
   "pfiles.rename": "Renommer",
   "pfiles.play": "Lire",
-  "pfiles.pick": "Sélectionner cette vidéo",
+  "pfiles.pick": "Sélectionner",
   "pfiles.picked": {
-    "one": "{n} sélectionnée",
-    "other": "{n} sélectionnées"
+    "one": "{n} sélectionné",
+    "other": "{n} sélectionnés"
   },
   "pfiles.rename_title": "Renommer sur l'imprimante",
   "pfiles.rename_name": "Nouveau nom",
   "pfiles.why.printing": "Ce fichier est en cours d'impression : il ne peut être modifié ni supprimé avant la fin.",
-  "pfiles.why.readonly": "L'imprimante ne permet que de lire et télécharger ces fichiers.",
-  "pfiles.videos_readonly": "Sur cette imprimante, les timelapses sont en lecture seule : on peut les regarder et les télécharger, seule l'imprimante peut les supprimer.",
   "pfiles.offline.title": "{name} ne répond pas",
   "pfiles.empty.files": "Aucun fichier d'impression sur l'imprimante",
   "pfiles.empty.files_hint": "Les impressions envoyées depuis Snap Studio ou un autre trancheur apparaissent ici.",
@@ -1457,10 +1455,6 @@
   "pfiles.last.in_progress": "En cours",
   "pfiles.last.unknown": "Inconnu",
   "pfiles.del.title_one": "Supprimer « {name} » de l'imprimante ?",
-  "pfiles.del.title_many": {
-    "one": "Supprimer {n} vidéo de l'imprimante ?",
-    "other": "Supprimer {n} vidéos de l'imprimante ?"
-  },
   "pfiles.del.text": "Le fichier est supprimé de l'imprimante elle-même. Cette action est irréversible.",
   "pfiles.downloading": {
     "one": "Téléchargement…",
@@ -1485,5 +1479,21 @@
   "pfiles.err.bad_name": "Ce nom ne peut pas être utilisé sur l'imprimante.",
   "pfiles.err.no_folder": "Le dossier de destination est introuvable.",
   "pfiles.err.start": "L'imprimante n'a pas lancé l'impression : {err}",
-  "pfiles.offline.hint": "Vérifiez qu'elle est allumée et sur le même réseau, puis réessayez."
+  "pfiles.offline.hint": "Vérifiez qu'elle est allumée et sur le même réseau, puis réessayez.",
+  "pfiles.del.title_files": {
+    "one": "Supprimer {n} fichier de l'imprimante ?",
+    "other": "Supprimer {n} fichiers de l'imprimante ?"
+  },
+  "pfiles.del.title_videos": {
+    "one": "Supprimer {n} vidéo de l'imprimante ?",
+    "other": "Supprimer {n} vidéos de l'imprimante ?"
+  },
+  "pfiles.del.failed": {
+    "one": "{n} fichier n'a pas été supprimé : {err}",
+    "other": "{n} fichiers n'ont pas été supprimés : {err}"
+  },
+  "pfiles.err.video_delete": "L'imprimante a refusé de supprimer cette vidéo : {err}",
+  "pfiles.err.video_kept": "L'imprimante a accepté, mais la vidéo est toujours listée. Actualisez dans un instant ; si elle y est encore, supprimez-la depuis l'écran de l'imprimante.",
+  "pfiles.err.fetch": "Le fichier n'a pas pu être copié depuis l'imprimante : {err}",
+  "send.fetching": "Copie du fichier depuis l'imprimante…"
 }

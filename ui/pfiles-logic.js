@@ -105,13 +105,19 @@ function pflSendStats(meta) {
   };
 }
 
-/* Whether a file can be deleted (or renamed): not while it prints, not in a
-   read-only root. → { ok, reason } */
+/* Whether a file can be deleted (or renamed): not while it prints. A root
+   Moonraker lists read-only is no reason: a U1's timelapses are deleted
+   through its camera service, and the printer says so if it refuses.
+   → { ok, reason } */
 function pflCanChange(f, printing) {
   if (f.root === "gcodes" && printing && printing.replace(/^\//, "") === f.path.replace(/^\//, "")) return { ok: false, reason: "printing" };
-  if (f.writable === false) return { ok: false, reason: "readonly" };
   return { ok: true, reason: null };
 }
+
+/* Query of a prn: address. encodeURIComponent, not URLSearchParams: its "+"
+   for a space is not decoded on the Rust side, and a name with a space
+   would not load. */
+const pflPrnQuery = (id, root, path) => `/f?id=${encodeURIComponent(id)}&root=${encodeURIComponent(root)}&p=${encodeURIComponent(path)}`;
 
 /* The neighbour of `i` in a list of `n`, or -1 past either end. */
 const pflNeighbor = (i, n, delta) => (i + delta >= 0 && i + delta < n ? i + delta : -1);
@@ -138,4 +144,4 @@ function pflToggle(set, key, on = !set.has(key)) {
 }
 
 if (typeof module !== "undefined")
-  module.exports = { PFL_SORTS, PFL_SPEEDS, pflFold, pflKey, pflName, pflVideoDate, pflVideoTitle, pflDuration, pflDate, pflTitle, pflMatches, pflSort, pflSummary, pflFilaments, pflSendStats, pflCanChange, pflNeighbor, pflNextSpeed, pflClock, pflToggle };
+  module.exports = { pflPrnQuery, PFL_SORTS, PFL_SPEEDS, pflFold, pflKey, pflName, pflVideoDate, pflVideoTitle, pflDuration, pflDate, pflTitle, pflMatches, pflSort, pflSummary, pflFilaments, pflSendStats, pflCanChange, pflNeighbor, pflNextSpeed, pflClock, pflToggle };

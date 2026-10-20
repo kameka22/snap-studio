@@ -77,7 +77,8 @@ assert.deepEqual(L.pflCanChange(files[0], "Support écran-1a2b3c.gcode"), { ok: 
 assert.deepEqual(L.pflCanChange(files[0], "/Support écran-1a2b3c.gcode"), { ok: false, reason: "printing" });
 assert.deepEqual(L.pflCanChange(files[1], "Support écran-1a2b3c.gcode"), { ok: true, reason: null });
 assert.deepEqual(L.pflCanChange(files[1], null), { ok: true, reason: null });
-assert.deepEqual(L.pflCanChange({ root: "camera", path: "a.mp4", writable: false }, null), { ok: false, reason: "readonly" });
+// A read-only root does not hide the delete: the printer is asked anyway.
+assert.deepEqual(L.pflCanChange({ root: "camera", path: "a.mp4", writable: false }, null), { ok: true, reason: null });
 assert.deepEqual(L.pflCanChange({ root: "camera", path: "Support écran-1a2b3c.gcode", writable: true }, "Support écran-1a2b3c.gcode"), { ok: true, reason: null });
 
 // Player: neighbours, speeds, clock.
@@ -97,5 +98,8 @@ s = L.pflToggle(s, "b");
 s = L.pflToggle(s, "a");
 assert.deepEqual([...s], ["b"]);
 assert.deepEqual([...L.pflToggle(s, "b", true)], ["b"]);
+
+// prn: addresses: a space is %20 (Rust decodes it; a "+" would stay "+").
+assert.equal(L.pflPrnQuery("p 1", "gcodes", ".thumbs/Support écran+1.png"), "/f?id=p%201&root=gcodes&p=.thumbs%2FSupport%20%C3%A9cran%2B1.png");
 
 console.log("pfiles: ok");
