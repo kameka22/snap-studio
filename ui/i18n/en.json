@@ -1362,7 +1362,11 @@
   },
   "ia.details_all": "All details",
   "ia.stats.mass_short": "≈ {g} g",
-  "ia.details_status": "Status",
-  "ia.saved_short": "Saved",
-  "ia.save_short": "Save to Files"
+  "ia.save_short": "Save to Files",
+  "ia.save_done": "Saved",
+  "ia.save_done_title": "Version {v} is saved as {name}. Click to show it in the Finder.",
+  "ia.save_done_aria": "Version {v} saved, show it in the Finder",
+  "ia.save_title": "Save version {v} to your files, as 3MF",
+  "ia.save_nothing": "Nothing to save yet",
+  "ia.chat_failed": "The last turn ended in an error: see the conversation"
 }

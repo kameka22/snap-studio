@@ -56,6 +56,10 @@ pub struct Conversation {
     /// Path of the 3MF exported into your files, once the work is done.
     #[serde(default)]
     pub saved: Option<String>,
+    /// Files written by Save, per version: number → path. The same version
+    /// is not written twice while its file is still there.
+    #[serde(default)]
+    pub saved_versions: std::collections::BTreeMap<u32, String>,
     /// True as soon as the Claude session was created: it is resumed afterwards.
     #[serde(default)]
     pub started: bool,
@@ -419,6 +423,7 @@ pub fn duplicate(id: &str) -> Result<Conversation> {
         created_at: now(),
         updated_at: now(),
         saved: None,
+        saved_versions: Default::default(),
         started: false,
         ..c
     };
@@ -625,6 +630,7 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
         updated_at: now(),
         version: 1,
         saved: None,
+        saved_versions: Default::default(),
         started: false,
         kind: String::new(),
         dest_dir: None,
@@ -670,6 +676,7 @@ pub fn create_blank(
         updated_at: now(),
         version: 0,
         saved: None,
+        saved_versions: Default::default(),
         started: false,
         kind: "create".into(),
         dest_dir: Some(dest_dir.to_string_lossy().to_string()),
@@ -925,6 +932,7 @@ pub fn tests_conversation() -> Conversation {
         updated_at: 0,
         version: 1,
         saved: None,
+        saved_versions: Default::default(),
         started: false,
         kind: String::new(),
         dest_dir: None,
@@ -1867,6 +1875,12 @@ pub fn save_to_files(id: &str) -> Result<String> {
     if !current(id).is_file() {
         return Err(anyhow!(crate::t!("err.nothing_to_save")));
     }
+    // This version is already in your files: no second copy of it.
+    if let Some(p) = c.saved_versions.get(&c.version) {
+        if Path::new(p).is_file() {
+            return Ok(p.clone());
+        }
+    }
     let (home, stem) = if c.is_creation() {
         (c.dest_dir.clone().map(PathBuf::from), slug(&c.title))
     } else {
@@ -1886,6 +1900,7 @@ pub fn save_to_files(id: &str) -> Result<String> {
 
     let mut c = c;
     c.saved = Some(dst.to_string_lossy().to_string());
+    c.saved_versions.insert(c.version, dst.to_string_lossy().to_string());
     c.updated_at = now();
     save(&c)?;
     Ok(dst.to_string_lossy().to_string())
@@ -2281,10 +2296,25 @@ mod sortie_tests {
         assert_eq!(get(&c.id).unwrap().saved.as_deref(), Some(first.as_str()));
         assert_eq!(mesh_of_3mf(Path::new(&first)).unwrap().tris.len(), 12);
 
-        // A second save must not overwrite the first.
+        // The same version again: the file already written, no copy.
+        assert_eq!(save_to_files(&c.id).unwrap(), first);
+        assert_eq!(std::fs::read_dir(&tmp).unwrap().count(), 2, "source and one copy");
+
+        // Another version must not overwrite the first.
+        let mut c2 = get(&c.id).unwrap();
+        c2.version = 2;
+        save(&c2).unwrap();
         let second = save_to_files(&c.id).unwrap();
         assert_eq!(Path::new(&second).file_name().unwrap(), "support-ai-2.3mf");
         assert!(Path::new(&first).is_file(), "the first is still there");
+        let saved = get(&c.id).unwrap().saved_versions;
+        assert_eq!(saved.get(&1), Some(&first));
+        assert_eq!(saved.get(&2), Some(&second));
+
+        // The file of a version removed from the Finder: written again.
+        std::fs::remove_file(&second).unwrap();
+        let again = save_to_files(&c.id).unwrap();
+        assert!(Path::new(&again).is_file());
 
         remove(&c.id).unwrap();
         let _ = std::fs::remove_dir_all(&tmp);

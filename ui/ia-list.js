@@ -114,5 +114,9 @@ function iaMove(i, n, key) {
    same rule as ia::rename). Empty means "keep the old one". */
 const iaCleanTitle = (s) => [...String(s || "").split(/\s+/).filter(Boolean).join(" ")].slice(0, 120).join("");
 
+/* The file Save wrote for the version shown, or null: Save is per
+   version, and going back to a saved one finds its file again. */
+const iaSavedPath = (c) => (c && c.saved_versions && c.saved_versions[c.version]) || null;
+
 if (typeof module !== "undefined")
-  module.exports = { IA_SORTS, IA_FILTERS, iaFold, iaMatches, iaSortList, iaGroupOf, iaGroupList, iaStatusOf, iaMove, iaCleanTitle };
+  module.exports = { IA_SORTS, IA_FILTERS, iaFold, iaMatches, iaSortList, iaGroupOf, iaGroupList, iaStatusOf, iaMove, iaCleanTitle, iaSavedPath };

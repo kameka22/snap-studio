@@ -168,22 +168,36 @@ function iaGroups() {
   return top.length ? [{ key: "pinned", items: top }, ...groups] : groups;
 }
 
-/* Status shown in the details pane of the open conversation. */
-function iaDetailBadge() {
+/* What the list's status badge says, put where it belongs in the open
+   conversation: "saved" / "not saved" on the Save button (a draft has
+   nothing to save, the button is off), an error as a red dot on the
+   Conversation tab, whose log holds the message; "answering" is already
+   the chat's own status line with its Stop button. */
+function iaDetailState() {
   const c = IA.open && IA.list.find((x) => x.id === IA.open);
-  const el = $("ia-badge");
-  if (!c) return el.classList.add("hidden");
-  const k = iaStatusKey(c);
-  el.className = `ia-st ${k}`;
-  // The toolbar says it short ("Saved"); the tooltip and "All details" in full.
-  el.textContent = tr(k === "saved" ? "ia.saved_short" : IA_STATUS_LABEL[k]);
-  el.title = tr(IA_STATUS_LABEL[k]);
+  if (!c) return;
+  const btn = $("ia-save");
+  const path = iaSavedPath(c);
+  const waiting = !$("ia-wait").classList.contains("hidden");
+  btn.classList.toggle("done", !!path && !waiting);
+  $("ia-save-label").textContent = tr(path && !waiting ? "ia.save_done" : "ia.save_short");
+  btn.title = waiting
+    ? tr("ia.save_nothing")
+    : path
+      ? tr("ia.save_done_title", { v: c.version, name: path.split(/[\\/]/).pop() })
+      : tr("ia.save_title", { v: c.version });
+  btn.setAttribute("aria-label", path && !waiting ? tr("ia.save_done_aria", { v: c.version }) : tr("ia.save"));
+  const tab = document.querySelector('#ia-views [data-iaview="chat"]');
+  const failed = IA.failed.has(c.id);
+  tab.classList.toggle("alert", failed);
+  if (failed) tab.title = tr("ia.chat_failed");
+  else tab.removeAttribute("title");
   iaFitDock();
 }
 
 /* Something changed a status (a turn started, ended, failed). */
 function iaStatusChanged() {
-  if (IA.open) iaDetailBadge();
+  if (IA.open) iaDetailState();
   else if (!IA.renaming && !$("view-ia").classList.contains("hidden")) iaRenderList();
 }
 
@@ -228,7 +242,7 @@ function iaRender() {
   if (detail) {
     $("ia-list").classList.add("hidden");
     $("ia-nomatch").classList.add("hidden");
-    iaDetailBadge();
+    iaDetailState();
     return;
   }
   iaRenderList();
@@ -720,7 +734,7 @@ onMenu("ia", async (arg) => {
     try {
       const path = await invoke("ia_save", { id });
       const c = IA.list.find((x) => x.id === id);
-      if (c) c.saved = path;
+      iaMarkSaved(c, path);
       await refresh();
       toast(tr("ia.saved_toast", { name: path.split(/[\\/]/).pop() }));
       if (!IA.open) iaRenderList();
@@ -1142,10 +1156,9 @@ function iaRenderStats(s) {
 }
 
 /* The toolbar under the preview stays on one line: when it runs out of
-   room, the chips go one by one (last first) behind "…", then the status
-   shrinks to its dot (its text in the tooltip and the popover). Only when
-   even that does not fit do the buttons take a second line, which frees
-   the first one again for the status and as many chips as fit. */
+   room, the chips go one by one (last first) behind "…". Only when even
+   that does not fit do the buttons take a second line, which frees the
+   first one again for as many chips as fit. */
 function iaFitDock() {
   const dock = $("ia-dock");
   if (!dock || !dock.offsetWidth) return;
@@ -1157,7 +1170,7 @@ function iaFitDock() {
   const tight = (el) => el.scrollWidth > el.clientWidth + 0.5;
   const over = () => tight(dock) || tight(zone) || tight(stats);
   const fitChips = () => {
-    dock.classList.remove("fit-dot", "fit-none");
+    dock.classList.remove("fit-none");
     chips.forEach((c) => c.classList.remove("off"));
     more.classList.add("hidden");
     for (let i = chips.length - 1; i >= 0 && over(); i--) {
@@ -1165,7 +1178,6 @@ function iaFitDock() {
       if (canMore) more.classList.remove("hidden");
     }
     if (chips.length && chips.every((c) => c.classList.contains("off"))) dock.classList.add("fit-none");
-    if (over()) dock.classList.add("fit-dot");
   };
   dock.classList.remove("fit-wrap");
   fitChips();
@@ -1176,13 +1188,9 @@ function iaFitDock() {
   if (!$("ia-pop").classList.contains("hidden")) iaFillPop();
 }
 
-/* "All details": every measurement in full, and the status. */
+/* "All details": every measurement in full. */
 function iaFillPop() {
-  const badge = $("ia-badge");
-  const rows = [
-    ...(badge.classList.contains("hidden") ? [] : [[tr("ia.details_status"), badge.title]]),
-    ...(IA.statRows || []).map((r) => [r[1], r[2]]),
-  ];
+  const rows = (IA.statRows || []).map((r) => [r[1], r[2]]);
   $("ia-pop").innerHTML = `<dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
 }
 function iaPop(open) {
@@ -1220,7 +1228,9 @@ async function iaRenderVersions(id, current) {
   } catch {}
   // Up to six versions: a segmented control; beyond, a menu, newest first.
   const box = $("ia-versions");
-  if (list.length <= 6) {
+  if (!list.length) {
+    box.innerHTML = "";
+  } else if (list.length <= 6) {
     box.innerHTML = `<div class="seg">${list
       .map(
         (v) =>
@@ -1244,6 +1254,7 @@ function iaWaiting(on) {
   $("ia-save").disabled = on;
   $("ia-slice").disabled = on;
   if (on) iaUndock();
+  iaDetailState();
 }
 
 /* Reloads the object shown. The stamp busts the cache: the address never
@@ -1278,10 +1289,11 @@ async function iaLoadPane(id) {
     const c = await invoke("ia_get", { id });
     version = c.version;
     const known = IA.list.find((x) => x.id === id);
-    if (known) known.version = version;
+    if (known) Object.assign(known, { version, saved: c.saved, saved_versions: c.saved_versions });
   } catch {}
   await iaShowCurrent(id);
   await iaRenderVersions(id, version);
+  iaDetailState();
   try {
     iaRenderStats(await invoke("ia_stats", { id }));
   } catch {
@@ -1297,8 +1309,8 @@ listen("ia-mesh", async (e) => {
   const c = IA.list.find((x) => x.id === id);
   if (c) c.version = version;
   if (IA.open !== id) return;
-  // A draft becomes an object: its badge follows.
-  iaDetailBadge();
+  // A new version is not saved yet: the Save button says so.
+  iaDetailState();
   iaQueue(async () => {
     await iaShowCurrent(id);
     await iaRenderVersions(id, version);
@@ -1363,25 +1375,48 @@ iaStageObserver.observe($("ia-stage"));
 
 /* Saves the current state into your files and returns its path. The 3MF
    joins the original object's folder (or the chosen one), under a free name. */
+/* Notes the file Save wrote for the version shown. */
+function iaMarkSaved(c, path) {
+  if (!c) return;
+  c.saved = path;
+  c.saved_versions = { ...(c.saved_versions || {}), [c.version]: path };
+}
+
+/* Save writes the version shown as 3MF into your files, once: the backend
+   hands back the file already written for it while that file exists. */
 async function iaSave(then) {
   if (!IA.open) return;
+  const c = IA.list.find((x) => x.id === IA.open);
+  const before = iaSavedPath(c);
   const btns = [$("ia-save"), $("ia-slice")];
   btns.forEach((b) => (b.disabled = true));
   try {
     const path = await invoke("ia_save", { id: IA.open });
-    const c = IA.list.find((x) => x.id === IA.open);
-    if (c) c.saved = path;
-    await refresh();
-    toast(tr("ia.saved_toast", { name: path.split("/").pop() }));
+    iaMarkSaved(c, path);
+    if (path !== before) {
+      await refresh();
+      toast(tr("ia.saved_toast", { name: path.split("/").pop() }));
+    }
     if (then) await then(path);
   } catch (e) {
     toast(String(e), true);
   } finally {
     btns.forEach((b) => (b.disabled = false));
+    iaDetailState();
   }
 }
 
-$("ia-save").addEventListener("click", () => iaSave());
+/* Saved already: the button shows the file in the Finder rather than
+   write the same version twice. If the file has gone, it is written again. */
+$("ia-save").addEventListener("click", async () => {
+  const path = iaSavedPath(IA.open && IA.list.find((x) => x.id === IA.open));
+  if (!path) return iaSave();
+  try {
+    await invoke("reveal", { path });
+  } catch {
+    await iaSave();
+  }
+});
 
 /* Slice goes on to the plate, the freshly written file being a file like
    any other — even stored outside the folder shown, as a created object may
@@ -1407,6 +1442,7 @@ window.addEventListener("langchange", () => {
     if (c) iaHint(c);
     if (IA.stats) iaRenderStats(IA.stats);
     iaRenderVersions(IA.open, c?.version || 0);
+    iaDetailState();
   }
   if (!$("iamodal").classList.contains("hidden")) {
     const create = IA.mode === "create";

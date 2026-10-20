@@ -1365,7 +1365,11 @@
   },
   "ia.details_all": "Tous les détails",
   "ia.stats.mass_short": "≈ {g} g",
-  "ia.details_status": "État",
-  "ia.saved_short": "Enregistré",
-  "ia.save_short": "Enregistrer"
+  "ia.save_short": "Enregistrer",
+  "ia.save_done": "Enregistré",
+  "ia.save_done_title": "La version {v} est enregistrée sous {name}. Cliquez pour l’afficher dans le Finder.",
+  "ia.save_done_aria": "Version {v} enregistrée, l’afficher dans le Finder",
+  "ia.save_title": "Enregistrer la version {v} dans vos fichiers, en 3MF",
+  "ia.save_nothing": "Rien à enregistrer pour l’instant",
+  "ia.chat_failed": "Le dernier échange s’est terminé par une erreur : voir la conversation"
 }

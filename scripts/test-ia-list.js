@@ -85,4 +85,13 @@ assert.equal(L.iaCleanTitle("  Mon   support \n v2 "), "Mon support v2");
 assert.equal(L.iaCleanTitle("   "), "");
 assert.equal([...L.iaCleanTitle("é".repeat(200))].length, 120);
 
+// Save is per version: the file of the version shown, none for the others.
+// (JSON gives the version numbers as strings; indexing by number finds them.)
+const sv = { version: 3, saved_versions: JSON.parse('{"1": "/f/a.3mf", "3": "/f/a-2.3mf"}') };
+assert.equal(L.iaSavedPath(sv), "/f/a-2.3mf");
+assert.equal(L.iaSavedPath({ ...sv, version: 2 }), null);
+assert.equal(L.iaSavedPath({ ...sv, version: 1 }), "/f/a.3mf");
+assert.equal(L.iaSavedPath({ version: 1, saved: "/old.3mf" }), null, "saved before versions were tracked: not known");
+assert.equal(L.iaSavedPath(null), null);
+
 console.log("ia-list: ok");
