@@ -1270,7 +1270,7 @@
   "spool.send": "Envoyer",
   "spool.choose": "Choisir une bobine…",
   "spool.choose_first": "Choisissez une bobine pour chaque couleur",
-  "spool.used_for": "utilisée pour {what}",
+  "spool.swap": "utilisée pour {what} : elles s'échangent",
   "spool.other_material": "{got} au lieu de {want} : imprimé avec les réglages du {want}",
   "spool.loaded_unknown": "bobine inconnue",
   "spool.desc": "{mat} {color}",

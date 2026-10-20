@@ -231,7 +231,8 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
   if (!spMismatches(expected, slots).length || !spEnabled()) return Promise.resolve({ map: [] });
 
   const picks = spDefaults(expected, slots);
-  const loaded = (slots || []).filter((s) => s.present).sort((a, b) => a.index - b.index);
+  // Every head of the printer, empty ones too (shown, not choosable).
+  const heads = [...new Set([0, 1, 2, 3, ...(slots || []).map((x) => x.index)])].sort((a, b) => a - b);
   const what = (e) => spDescribe(e.material, e.color, "T" + e.tool);
 
   // Header: what is being sent.
@@ -257,27 +258,32 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
       .map((e) => {
         const h = picks[e.tool];
         const l = h != null ? spLoaded(slots, h) : null;
-        const opts = loaded
-          .map((s) => {
-            const sl = spLoaded(slots, s.index);
-            const label = spDescribe(sl.label || sl.material, sl.color, tr("spool.loaded_unknown"));
-            // A head another color already prints from.
-            const other = expected.find((o) => o.tool !== e.tool && picks[o.tool] === s.index);
-            const fits = !spReasons(e, sl).length;
-            const text = `T${s.index} · ${label}${fits ? "  ✓" : ""}${other ? " — " + tr("spool.used_for", { what: what(other) }) : ""}`;
-            return `<option value="${s.index}"${s.index === h ? " selected" : ""}${other ? " disabled" : ""}>${esc(text)}</option>`;
+        // One token per head, as in Prepare: the spool's color and number.
+        const toks = heads
+          .map((hd) => {
+            const slot = (slots || []).find((x) => x.index === hd);
+            const sl = spLoaded(slots, hd);
+            const label = slot?.present ? spDescribe(sl.label || sl.material, sl.color, tr("spool.loaded_unknown")) : tr("printers.empty_tag");
+            // A head another color prints from: taking it swaps the two.
+            const other = expected.find((o) => o.tool !== e.tool && picks[o.tool] === hd);
+            const fits = slot?.present && !spReasons(e, sl).length;
+            const title = `T${hd} · ${label}${other ? " — " + tr("spool.swap", { what: what(other) }) : ""}`;
+            return `<button type="button" class="sl-token${hd === h ? " on" : ""}${slot?.present ? "" : " is-empty"}${other ? " busy" : ""}" data-tool="${e.tool}" data-head="${hd}"${slot?.present ? "" : " disabled"} role="radio" aria-checked="${hd === h}" title="${esc(title)}"><i${sl.color ? ` style="background:${esc(sl.color)}"` : ""}></i>T${hd}${fits ? '<em class="ok">✓</em>' : ""}</button>`;
           })
           .join("");
-        const none = h == null ? `<option value="" selected disabled>${esc(tr("spool.choose"))}</option>` : "";
         // Only another material is worth a word: the G-code keeps the
         // temperatures it was sliced with.
         const note = l && e.material && l.material && l.material !== e.material
           ? `<small class="sp-note warn">${esc(tr("spool.other_material", { got: l.material, want: e.material }))}</small>`
           : "";
+        const chosen = l ? spDescribe(l.label || l.material, l.color, tr("spool.loaded_unknown")) : tr("spool.choose");
         return `<div class="sp-row">
           <span class="sp-exp">${spSwatch(e.color)}<span>${esc(what(e))}</span></span>
           <span class="sp-arrow" aria-hidden="true">→</span>
-          <span class="sp-choice${h == null ? " missing" : ""}">${spSwatch(l?.color)}<select data-tool="${e.tool}" aria-label="${esc(tr("spool.use") + " " + what(e))}">${none}${opts}</select></span>
+          <span class="sp-choice${h == null ? " missing" : ""}">
+            <span class="sp-toks" role="radiogroup" aria-label="${esc(tr("spool.use") + " " + what(e))}">${toks}</span>
+            <small class="sp-chosen">${esc(chosen)}</small>
+          </span>
           ${note}
         </div>`;
       })
@@ -296,16 +302,20 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
   return new Promise((resolve) => {
     const done = (v) => {
       if (v && $("sp-noask").checked) spSetEnabled(false);
-      $("sp-go").onclick = $("sp-edit").onclick = $("sp-cancel").onclick = $("sp-list").onchange = modal.onkeydown = null;
+      $("sp-go").onclick = $("sp-edit").onclick = $("sp-cancel").onclick = $("sp-list").onclick = modal.onkeydown = null;
       closeSheet(modal);
       resolve(v);
     };
-    $("sp-list").onchange = (e) => {
-      const sel = e.target.closest("select[data-tool]");
-      if (!sel || sel.value === "") return;
-      picks[+sel.dataset.tool] = +sel.value;
+    $("sp-list").onclick = (e) => {
+      const b = e.target.closest(".sl-token[data-head]");
+      if (!b || b.disabled) return;
+      const t = +b.dataset.tool, hd = +b.dataset.head;
+      // Already printing another color: that color takes this one's spool.
+      const other = expected.find((o) => o.tool !== t && picks[o.tool] === hd);
+      if (other) picks[other.tool] = picks[t] ?? null;
+      picks[t] = hd;
       render();
-      $("sp-list").querySelector(`select[data-tool="${sel.dataset.tool}"]`)?.focus();
+      $("sp-list").querySelector(`.sl-token[data-tool="${b.dataset.tool}"][data-head="${b.dataset.head}"]`)?.focus();
     };
     $("sp-go").onclick = () => {
       try {
