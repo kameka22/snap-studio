@@ -285,7 +285,7 @@ function slHeadLabel(i) {
   btn.disabled = !!empty;
   btn.innerHTML = empty
     ? `<span>${esc(tr("slice.head_unused"))}</span>`
-    : `<span>${esc(sel.value || "—")}</span>${sel.value && sel.value === auto ? '<em>auto</em>' : ""}<i>▾</i>`;
+    : `<span title="${esc(sel.value)}">${esc(sel.value || "—")}</span>${sel.value && sel.value === auto ? '<em>auto</em>' : ""}<i>▾</i>`;
 }
 
 function slPickFilament(i, anchor, all = false) {
