@@ -2724,6 +2724,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .sl-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-top: 1px solid var(--separator); }
 .sl-area { display: flex; flex-direction: column; gap: 8px; padding: 6px 22px 18px; min-width: 0; }
 .sl-area + .sl-area { border-left: 1px solid var(--separator); }
+/* Heads and model colors: side by side without a rule between them. */
+.sl-bottom .sl-area + .sl-area { border-left: 0; }
 .sl-area > .set-section { margin: 12px 2px 0; }
 .sl-card { border-radius: var(--radius-card); border: 1px solid var(--card-border); background: var(--card-bg); }
 
@@ -2859,7 +2861,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 }
 @media (max-width: 720px) {
   .sl-bottom { grid-template-columns: minmax(0, 1fr); }
-  .sl-bottom .sl-area + .sl-area { border-left: 0; border-top: 1px solid var(--separator); }
+
 }
 
 /* Printers as chips */
