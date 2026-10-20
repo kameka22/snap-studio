@@ -324,19 +324,17 @@ function pflRenderSelbar() {
   const on = (PFL.selMode && !!PFL.data && !PFL.player) || !!one;
   bar.classList.toggle("hidden", !on);
   bar.classList.toggle("single", !!one);
-  for (const id of ["pfl-selall", "pfl-seldone"]) $(id).classList.toggle("hidden", !!one);
+  // One file: its actions only, the selected row already says which.
+  for (const id of ["pfl-selcount", "pfl-selall", "pfl-seldone"]) $(id).classList.toggle("hidden", !!one);
   for (const id of ["pfl-selprint", "pfl-selren"]) $(id).classList.toggle("hidden", !one);
   if (!on) return;
   if (one) {
     const can = pflCanChange(one, PFL.data.printing);
-    $("pfl-selcount").textContent = pflName(one.path);
-    $("pfl-selcount").title = one.path;
     $("pfl-seldl").disabled = PFL.busy;
     $("pfl-seldel").disabled = $("pfl-selren").disabled = !can.ok;
     $("pfl-seldel").title = $("pfl-selren").title = can.ok ? "" : pflWhy(can.reason);
     return;
   }
-  $("pfl-selcount").title = "";
   $("pfl-selren").disabled = false;
   const picked = pflPicked();
   $("pfl-selcount").textContent = tr("pfiles.picked", { n: picked.length });
