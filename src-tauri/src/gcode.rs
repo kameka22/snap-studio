@@ -518,6 +518,10 @@ pub struct SliceStats {
     pub tools: Vec<u8>,
     /// True when no total time was found: everything is computed.
     pub estimated_only: bool,
+    /// Material of each G-code tool (`filament_type`), as sliced.
+    pub filament_types: Vec<String>,
+    /// Color of each G-code tool (`#rrggbb`, empty if unknown), as sliced.
+    pub filament_colors: Vec<String>,
 }
 
 pub fn stats(d: &GcodeData) -> SliceStats {
@@ -551,6 +555,8 @@ pub fn stats(d: &GcodeData) -> SliceStats {
         layer_end_s: t.layer_end.iter().map(|s| s * k).collect(),
         tools: t.tools.clone(),
         estimated_only: d.meta.print_time_s.is_none(),
+        filament_types: d.meta.filaments.clone(),
+        filament_colors: d.meta.colors.clone(),
     }
 }
 
@@ -805,6 +811,17 @@ G1 X30 Y30 F9000
         assert_eq!(tail[0], 3);
         assert_eq!(&tail[1..5], &[1, 0xff, 0x88, 0x00]);
         assert_eq!(&tail[9..13], &[0, 0, 0, 0], "unknown color");
+    }
+
+    #[test]
+    fn stats_carry_sliced_materials_and_colors() {
+        let g = "G1 X1 E1\n; filament_type = PLA;PETG\n; filament_colour = #FF0000;#000000\n";
+        let st = stats(&parse(g.as_bytes()).unwrap());
+        assert_eq!(st.filament_types, vec!["PLA", "PETG"]);
+        assert_eq!(st.filament_colors, vec!["#ff0000", "#000000"]);
+        // Older records (no such fields) still read.
+        let old: SliceStats = serde_json::from_str(r#"{"layers":3,"tools":[0]}"#).unwrap();
+        assert!(old.filament_types.is_empty() && old.filament_colors.is_empty());
     }
 
     #[test]

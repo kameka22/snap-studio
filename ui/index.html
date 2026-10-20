@@ -719,6 +719,12 @@
         </span>
         <input type="checkbox" id="set-plate-ask" class="sw" />
       </label>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.spool_check">Check spools before sending</span>
+          <span class="sub" data-i18n="settings.spool_check.sub">Warns when a head used by the print holds another material or color than at slicing, and offers another loaded spool</span>
+        </span>
+        <input type="checkbox" id="set-spool-check" class="sw" />
+      </label>
     </div>
       </div>
     </div>
@@ -1370,6 +1376,27 @@
   </div>
 </div>
 
+<div id="spmodal" class="modal hidden">
+  <div class="modal-box sp-box" role="alertdialog" aria-labelledby="sp-title">
+    <div class="sp-head">
+      <img id="sp-thumb" class="sp-thumb hidden" alt="" />
+      <div class="sp-head-text">
+        <h3 id="sp-title" data-i18n="spool.title">The loaded spools don't match the slice</h3>
+        <div id="sp-name" class="sp-name"></div>
+        <div id="sp-info" class="sp-info"></div>
+      </div>
+    </div>
+    <div class="sp-cols" aria-hidden="true"><span data-i18n="spool.col_model">Model color</span><span></span><span data-i18n="spool.use">Print with</span></div>
+    <div id="sp-list" class="sp-list"></div>
+    <div id="sp-hint" class="sp-hint"></div>
+    <div class="modal-actions">
+      <button id="sp-edit" class="btn left" data-i18n="spool.edit">Edit in Prepare</button>
+      <button id="sp-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="sp-go" class="btn primary" data-i18n="spool.send">Send</button>
+    </div>
+  </div>
+</div>
+
 <script src="scheme.js"></script>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
@@ -1383,6 +1410,7 @@
 <script src="prints.js"></script>
 <script src="prepare.js"></script>
 <script src="heads.js"></script>
+<script src="spoolcheck.js"></script>
 <script src="maint.js"></script>
 <script src="library.js"></script>
 <script src="vendor/xterm.js"></script>

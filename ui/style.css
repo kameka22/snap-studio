@@ -2412,9 +2412,38 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .pj-progress .progress i { border-radius: 4px; }
 .pj-progress b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .pj-times { font-size: 13px; color: var(--text-secondary); }
-.pj-for { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.pj-for { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+.pj-printers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 190px)); gap: 8px; }
+.pj-printers .sl-pchip {
+  position: relative;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+.pj-printers .sl-pchip:hover:not(.on) { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border)); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14); }
+.pj-printers .sl-pchip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pj-printers .sl-pchip.on { background: color-mix(in srgb, var(--accent) 10%, var(--card-bg)); cursor: default; }
+/* The chosen printer: a check badge in its corner. */
+.pj-printers .sl-pchip.on::after {
+  content: "✓";
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--content-bg);
+}
+.pj-printers .sl-pchip.away:not(.on) { opacity: 0.6; }
+.pj-printers .sl-pchip-icon.printing, .pj-printers .sl-pchip-icon.paused { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+.pj-printers .sl-pchip-icon.offline, .pj-printers .sl-pchip-icon.error { background: color-mix(in srgb, var(--text-secondary) 14%, transparent); color: var(--text-secondary); }
 .pj-opts { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
-.pj-opts label { display: flex; align-items: center; gap: 6px; }
+.pj-opts label { display: flex; align-items: center; gap: 8px; }
 .pj-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
 .pj-cols { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; margin-top: 22px; }
 .pj-cols .vp-section { display: flex; align-items: center; justify-content: space-between; }
@@ -2969,6 +2998,41 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .occ-list { max-height: 160px; overflow: auto; }
 .occ-list .grow-row .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .occ-dup { font-size: 11px; color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); border-radius: 6px; padding: 1px 6px; margin-left: auto; margin-right: 8px; white-space: nowrap; }
+.sp-box { width: 640px; max-width: calc(100vw - 40px); }
+.sp-box .modal-actions { flex-wrap: wrap; row-gap: 8px; }
+.sp-box .modal-actions .btn { white-space: nowrap; }
+.sp-box .modal-actions .btn:disabled { opacity: 0.45; }
+/* Header: the print being sent. */
+.sp-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.sp-thumb { flex: none; width: 84px; height: 84px; border-radius: 10px; object-fit: cover; background: var(--card-bg); border: 1px solid var(--card-border); }
+.sp-head-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sp-head-text h3 { margin: 0 0 2px; }
+.sp-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-name:empty, .sp-info:empty { display: none; }
+.sp-info { font-size: 12px; color: var(--text-secondary); }
+/* One row per color: expected → loaded spool. */
+.sp-cols, .sp-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1.25fr); align-items: center; column-gap: 8px; }
+.sp-cols { padding: 0 12px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
+.sp-list { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; max-height: 48vh; overflow: auto; }
+.sp-row { row-gap: 6px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; }
+.sp-exp { display: flex; align-items: center; gap: 9px; min-width: 0; font-size: 13px; font-weight: 500; }
+.sp-exp span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-arrow { text-align: center; color: var(--text-tertiary); }
+.sp-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.sp-toks { display: flex; flex-wrap: wrap; gap: 5px; }
+.sp-toks .sl-token { cursor: pointer; font-family: inherit; }
+.sp-toks .sl-token:hover:not(:disabled):not(.on) { border-color: color-mix(in srgb, var(--accent) 45%, var(--control-border)); }
+.sp-toks .sl-token:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sp-toks .sl-token:disabled { cursor: default; }
+.sp-toks .sl-token em.ok { color: var(--success); font-weight: 700; }
+.sp-chosen { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.sp-choice.missing .sp-chosen { color: var(--warning); }
+.sp-sw { flex: none; width: 16px; height: 16px; border-radius: 50%; background: var(--c); border: 1px solid rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.sp-sw.none { background: repeating-linear-gradient(45deg, transparent 0 3px, var(--separator) 3px 5px); }
+.sp-note { grid-column: 3; font-size: 11px; color: var(--text-secondary); }
+.sp-note.warn { color: var(--warning); }
+.sp-hint { font-size: 12px; color: var(--text-secondary); margin: 0 0 6px; }
+.sp-hint:empty { display: none; }
 .occ-noask { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); margin: 4px 0 2px; }
 
 /* ------------------------------------------------- heads and spools */

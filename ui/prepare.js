@@ -57,12 +57,33 @@ void main() { frag = uColor; }`;
 
 /* ------------------------------------------------------------ state */
 
+/* An object as stored: placement and choices, never its mesh. */
+const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free }) => ({
+  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free,
+});
+
 function prSave() {
-  const objects = PR.objects.map(({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free }) => ({
-    id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free,
-  }));
+  const objects = PR.objects.map(prStored);
   localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId }));
   prStatus();
+}
+
+/* The objects of a slice (`ids`), kept with the print: a queued print can
+   come back to Prepare to be sliced again. */
+function prPlateOf(ids) {
+  return PR.objects.filter((o) => ids.includes(o.id)).map(prStored);
+}
+
+/* A print's plate put back in place of the current one, as one undo step. */
+async function prLoadPlate(objects) {
+  prRemember();
+  PR.objects = objects.map((o) => ({ ...o, id: PR.nextId++ }));
+  PR.sel.clear();
+  prSave();
+  prRenderInspector();
+  prSchedule();
+  if (PR.gl) await Promise.all(PR.objects.map(prLoadMesh));
+  prSchedule();
 }
 
 function prLoadState() {

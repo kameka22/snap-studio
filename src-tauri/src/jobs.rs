@@ -39,6 +39,9 @@ pub struct Profile {
     /// Plate label as shown when slicing.
     pub bed_label: Option<String>,
     pub colors: Vec<Option<String>>,
+    /// The Prepare plate's objects as sliced: the spool check can bring a
+    /// queued print back to Prepare. None for records older than it.
+    pub plate: Option<serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -494,6 +497,20 @@ fn notify(app: &AppHandle, title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_keeps_the_plate() {
+        let p: Profile = serde_json::from_str(
+            r#"{"machine":"U1","filaments":["PLA"],"plate":[{"id":3,"path":"/m/a.3mf","item":0,"pos":[1,2],"heads":{"1":0,"2":3}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(p.plate.as_ref().unwrap()[0]["heads"]["2"], 3);
+        let back: Profile = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(back.plate, p.plate);
+        // Records written before: no plate, nothing to bring back.
+        let old: Profile = serde_json::from_str(r#"{"machine":"U1"}"#).unwrap();
+        assert!(old.plate.is_none());
+    }
 
     #[test]
     fn prune_keeps_recent_history_and_queue() {

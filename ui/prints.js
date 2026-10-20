@@ -292,13 +292,21 @@ function pjRenderDetail({ job, live, active }) {
       `<button class="btn danger" data-act="cancel">${esc(tr("prints.cancel"))}</button>`;
   } else if (state === "queued") {
     kicker = esc(`${tr("prints.position", { n: qi + 1 })} · ${tr("prints.starts_at", { time: fmtClock(pjStartEstimate(job)) })}`);
-    progress = `<label class="pj-for">${esc(tr("prints.for"))} <select id="pj-printer">${P.list
-      .map((p) => `<option value="${esc(p.id)}"${p.id === job.printer_id ? " selected" : ""}>${esc(p.name || p.host)}</option>`)
-      .join("")}</select></label>
+    // One chip per printer, with its state, as in the Slice sheet.
+    progress = `<div class="pj-for"><span>${esc(tr("prints.for"))}</span><div class="pj-printers" role="radiogroup" aria-label="${esc(tr("prints.for"))}">${P.list
+      .map((p) => {
+        const s = slPrinterStatus(p.id);
+        const on = p.id === job.printer_id;
+        const away = s === "offline" || s === "error";
+        return `<button type="button" class="sl-pchip${on ? " on" : ""}${away ? " away" : ""}" role="radio" aria-checked="${on}" data-printer="${esc(p.id)}">
+          <span class="sl-pchip-icon ${esc(s || "")}">${PRINTER_ICON}</span>
+          <span class="sl-pchip-text"><b>${esc(p.name || p.host)}</b><small class="st ${esc(s || "")}">${esc(s ? pstateLabel(s) : "—")}</small></span></button>`;
+      })
+      .join("")}</div></div>
       <div class="pj-opts">
-        <label><input type="checkbox" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> ${esc(tr("prints.opt.leveling_cap"))}</label>
-        <label><input type="checkbox" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> ${esc(tr("prints.opt.flow_cap"))}</label>
-        <label><input type="checkbox" data-opt="timelapse"${job.options.timelapse ? " checked" : ""}/> ${esc(tr("prints.opt.timelapse_cap"))}</label>
+        <label><input type="checkbox" class="sw" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> ${esc(tr("prints.opt.leveling_cap"))}</label>
+        <label><input type="checkbox" class="sw" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> ${esc(tr("prints.opt.flow_cap"))}</label>
+        <label><input type="checkbox" class="sw" data-opt="timelapse"${job.options.timelapse ? " checked" : ""}/> ${esc(tr("prints.opt.timelapse_cap"))}</label>
       </div>`;
     actions = `<button class="btn primary" data-act="launch"${printerFree ? "" : " disabled"} title="${
       printerFree ? "" : esc(tr("prints.not_free", { name: printerName }))
@@ -374,15 +382,25 @@ function pjRefreshDetail() {
 $("pj-detail").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-act]");
   if (b) pjAct(b.dataset.act);
+  const chip = e.target.closest(".pj-printers [data-printer]");
+  if (chip && !chip.classList.contains("on")) pjSetPrinter(chip.dataset.printer);
   if (e.target.closest("#pj-cam-toggle")) PJ.cam.on ? pjCamStop(true) : pjCamStart();
 });
+/* A queued print moved to another printer. */
+async function pjSetPrinter(printerId) {
+  const id = $("pj-detail").dataset.job;
+  if (!id) return;
+  try {
+    await invoke("job_edit", { id, printerId });
+  } catch (err) {
+    toast(String(err), true);
+  }
+}
 $("pj-detail").addEventListener("change", async (e) => {
   const id = $("pj-detail").dataset.job;
   if (!id) return;
   try {
-    if (e.target.id === "pj-printer") {
-      await invoke("job_edit", { id, printerId: e.target.value });
-    } else if (e.target.dataset.opt) {
+    if (e.target.dataset.opt) {
       const options = {};
       document.querySelectorAll("#pj-detail [data-opt]").forEach((c) => (options[c.dataset.opt] = c.checked));
       await invoke("job_edit", { id, options });
@@ -545,14 +563,35 @@ $("q-later").addEventListener("click", () => {
 });
 $("q-go").addEventListener("click", async () => {
   const ev = PJ.next;
-  if (!ev || !$("q-free").checked || PJ.launching) return;
+  if (!ev || !$("q-free").checked || PJ.launching || PJ.checking) return;
+  // Spools loaded now against those of the slice.
+  const j = ev.next;
+  const pid = j.printer_id || ev.printer_id;
+  const printer = P.list.find((x) => x.id === pid);
+  if (!printer) return;
+  PJ.checking = true;
+  let ok;
+  try {
+    // Back to Prepare: only for jobs that kept their plate; an older record
+    // has nothing to slice again.
+    const print = { thumb: pjThumb(j, 240), name: j.name, printer: ev.printer_name };
+    ok = await spCheckBeforeStart(printer, { tools: j.tools, profile: j.profile || {}, stats: j.stats || {}, canEdit: !!j.profile?.plate?.length, print });
+  } catch (e) {
+    $("q-msg").className = "pf-test err";
+    $("q-msg").textContent = String(e.message || e);
+    return;
+  } finally {
+    PJ.checking = false;
+  }
+  if (!ok || PJ.next !== ev) return;
+  if (ok.edit) return pjEditInPrepare(ev);
   PJ.launching = true;
   $("q-go").disabled = true;
   $("q-later").disabled = true;
   $("q-msg").className = "pf-test busy";
   $("q-msg").textContent = tr("send.preparing");
   try {
-    await invoke("job_launch", { id: ev.next.id });
+    await invoke("job_launch", { id: ev.next.id, map: ok.map });
     PJ.launching = false;
     closeSheet($("qmodal"));
     toast(tr("queue.launched", { name: ev.next.name, printer: ev.printer_name }));
@@ -568,6 +607,26 @@ $("q-go").addEventListener("click", async () => {
     $("q-msg").textContent = String(e);
   }
 });
+/* Spool check's "Edit in Prepare" for a queued print: its plate replaces
+   Prepare's (asked first when the plate holds other objects), and the Slice
+   sheet opens on its printer, spools read again. Once the new slice is sent,
+   the queued print is removed. */
+async function pjEditInPrepare(ev) {
+  const j = ev.next;
+  if (PR.objects.length) {
+    const ok = await confirmDelete(tr("spool.replace.title"), tr("spool.replace.text"), tr("spool.replace.ok"));
+    if (!ok) return;
+  }
+  // As "Later": not offered again until the printer finishes another print.
+  invoke("queue_dismiss", { printerId: ev.printer_id }).catch(() => {});
+  closeSheet($("qmodal"));
+  pjQueueClosed();
+  switchView("prepare");
+  await prLoadPlate(j.profile.plate);
+  rememberPrinter(j.printer_id || ev.printer_id);
+  openSlice({ replaces: j.id });
+}
+
 listen("print-send", (e) => {
   if (!PJ.launching) return;
   const s = e.payload;
