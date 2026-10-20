@@ -605,11 +605,7 @@
           <input id="chat-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
         </div>
         <div id="ia-term" class="ia-term"></div>
-        <button id="ia-term-stop" class="ia-term-stop" title="Stop Claude's current answer (Esc)" data-i18n-title="ia.stop.term_title"><svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span></button>
-        <div id="ia-dead" class="ia-dead hidden">
-          <span data-i18n="ia.session_ended">The session has ended.</span>
-          <button id="ia-restart" class="btn small" data-i18n="ia.reopen">Reopen</button>
-        </div>
+        <button id="ia-term-stop" class="ia-term-stop hidden" title="Stop Claude's current answer (Esc)" data-i18n-title="ia.stop.term_title"><svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span></button>
       </div>
     </div>
   </div>
@@ -1488,6 +1484,7 @@
 <script src="ia-list.js"></script>
 <script src="ia.js"></script>
 <script src="ia-chat.js"></script>
+<script src="ia-trace.js"></script>
 <script src="auth.js"></script>
 <script src="settings.js"></script>
 <script src="update.js"></script>

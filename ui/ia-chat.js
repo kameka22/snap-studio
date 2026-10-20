@@ -114,6 +114,8 @@ function chatSetBusy(on) {
   $("chat-stop").classList.toggle("hidden", !on);
   $("chat-stop").disabled = false;
   $("chat-send").classList.toggle("hidden", on);
+  // The terminal view has the same Stop.
+  $("ia-term-stop").classList.toggle("hidden", !on);
   chatList.querySelector(".chat-working")?.remove();
   if (on) {
     chatAdd(chatWorking());
@@ -806,8 +808,9 @@ $("chat-stop").addEventListener("click", chatStop);
    message field — unless a sheet or menu has it. */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !CHAT.id || !CHAT.busy.has(CHAT.id) || e.defaultPrevented) return;
-  if ($("view-ia").classList.contains("hidden") || $("ia-left").dataset.mode !== "chat") return;
-  if (document.querySelector(".modal:not(.hidden)") || e.target.closest?.("input, select, textarea")) return;
+  if ($("view-ia").classList.contains("hidden")) return;
+  // Fields keep their Esc; the terminal's own hidden field does not count.
+  if (document.querySelector(".modal:not(.hidden)") || (e.target.closest?.("input, select, textarea") && !e.target.closest(".xterm"))) return;
   // The preview enlarged out of its pane: Esc puts it back (viewer.js).
   const v = $("viewer");
   if (!v.classList.contains("hidden") && !v.classList.contains("docked")) return;

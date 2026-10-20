@@ -265,6 +265,7 @@ pub fn for_view(event: &Value) -> Option<Value> {
         "result" => Some(json!({
             "type": "result", "subtype": event["subtype"], "is_error": event["is_error"],
             "total_cost_usd": event["total_cost_usd"], "result": event["result"],
+            "duration_ms": event["duration_ms"],
         })),
         "control_request" if event["request"]["subtype"] == "can_use_tool" => {
             let r = &event["request"];

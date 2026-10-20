@@ -1760,15 +1760,6 @@ input.sw.small:checked::after { transform: translateX(12px); }
 .ia-term { flex: 1; min-height: 0; padding: 8px 10px; background: var(--content-bg); }
 .ia-term-host { width: 100%; height: 100%; }
 .ia-term .xterm-viewport { background: transparent !important; }
-.ia-dead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  border-top: 1px solid var(--card-border);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
 .ia-hint {
   padding: 8px 14px;
   border-bottom: 1px solid var(--card-border);
@@ -1778,9 +1769,8 @@ input.sw.small:checked::after { transform: translateX(12px); }
 }
 
 /* ---------- conversation: chat view ---------- */
-/* The left pane shows either the chat or the raw terminal of the session. */
+/* The column shows the session either as the chat or as a terminal. */
 .ia-left[data-mode="chat"] .ia-term,
-.ia-left[data-mode="chat"] .ia-dead,
 .ia-left[data-mode="term"] .ia-chat { display: none !important; }
 .ia-chat { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--content-bg); }
 .chat-list {
@@ -3497,4 +3487,3 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .ia-term-stop svg { width: 10px; height: 10px; fill: currentColor; }
 .ia-term-stop:hover { opacity: 1; color: var(--danger); }
 .ia-left[data-mode="chat"] .ia-term-stop { display: none; }
-.ia-term-stop.sent { color: var(--accent); opacity: 1; }

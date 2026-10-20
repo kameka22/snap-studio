@@ -910,8 +910,11 @@ function iaTerm(id) {
     fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
     fontSize: 12.5,
     lineHeight: 1.25,
-    cursorBlink: true,
-    scrollback: 5000,
+    // Read only: the session is written to from the chat.
+    disableStdin: true,
+    cursorBlink: false,
+    cursorInactiveStyle: "none",
+    scrollback: 10000,
     allowProposedApi: true,
     theme: iaTheme(),
   });
@@ -919,8 +922,7 @@ function iaTerm(id) {
   term.loadAddon(fit);
   const el = document.createElement("div");
   el.className = "ia-term-host";
-  term.onData((d) => invoke("pty_write", { id, data: d }).catch(() => {}));
-  t = { term, fit, el, opened: false, dead: false };
+  t = { term, fit, el, opened: false, ready: false, st: {} };
   IA.terms.set(id, t);
   return t;
 }
@@ -936,7 +938,6 @@ function iaFit(id) {
   if (!t || !t.opened) return;
   try {
     t.fit.fit();
-    invoke("pty_resize", { id, cols: t.term.cols, rows: t.term.rows }).catch(() => {});
   } catch {}
 }
 
@@ -982,50 +983,17 @@ async function iaOpen(id) {
   $("ia-left").dataset.mode = IA.view;
   document.querySelectorAll("#ia-views [data-iaview]").forEach((b) => b.classList.toggle("on", b.dataset.iaview === IA.view));
   iaHint(c);
-  document.querySelector('#ia-views [data-iaview="term"]').disabled = !!IA.locked;
   // The 3D pane and the folder watch live with the screen.
   iaQueue(() => iaLoadPane(id));
-  if (IA.view === "chat") chatOpen(c);
-  else iaOpenTerminal(c);
+  // One Claude per conversation, the chat's: the terminal shows it.
+  chatOpen(c);
+  if (IA.view === "term") iaTraceOpen(c);
 }
 
 /* Why a conversation is read-only. */
 function iaLockReason(c) {
   if (aiChoice() === "off") return tr("ais.reason.off");
   return tr("ia.locked", { mode: tr("ais.mode." + c.engine) });
-}
-
-/* The raw Claude Code terminal of the conversation. */
-function iaOpenTerminal(c) {
-  const id = c.id;
-  const host = $("ia-term");
-  const t = iaTerm(id);
-  host.innerHTML = "";
-  host.appendChild(t.el);
-  if (!t.opened) {
-    t.term.open(t.el);
-    t.opened = true;
-  }
-  $("ia-dead").classList.toggle("hidden", !t.dead);
-
-  // Wait one frame: xterm measures the cell on the displayed element.
-  requestAnimationFrame(async () => {
-    iaFit(id);
-    if (!t.dead) {
-      if (c.engine === "container" && !t.greeted) {
-        t.greeted = true;
-        t.term.writeln(`\x1b[90m${tr("ia.sandbox_starting")}\x1b[0m`);
-      }
-      try {
-        await invoke("pty_open", { id, cols: t.term.cols, rows: t.term.rows });
-      } catch (e) {
-        t.term.writeln(`\x1b[31m${String(e)}\x1b[0m`);
-        t.dead = true;
-        $("ia-dead").classList.remove("hidden");
-      }
-    }
-    t.term.focus();
-  });
 }
 
 /* The viewer is unique: it must leave the pane as soon as the tab changes,
@@ -1051,66 +1019,17 @@ function iaBack() {
   iaRefresh();
 }
 
-async function iaRestart() {
-  const id = IA.open;
-  const t = IA.terms.get(id);
-  if (!t) return;
-  t.dead = false;
-  $("ia-dead").classList.add("hidden");
-  t.term.writeln("");
-  try {
-    await invoke("pty_open", { id, cols: t.term.cols, rows: t.term.rows });
-  } catch (e) {
-    toast(String(e), true);
-    t.dead = true;
-    $("ia-dead").classList.remove("hidden");
-  }
-}
-
-/* Bytes arrive in base64: hand them as is to the emulator, which can glue
-   back a character split across two packets. */
-listen("ia-pty", (e) => {
-  const t = IA.terms.get(e.payload.id);
-  if (!t) return;
-  const bin = atob(e.payload.b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  t.term.write(bytes);
-});
-
-listen("ia-exit", (e) => {
-  const t = IA.terms.get(e.payload.id);
-  if (!t) return;
-  t.dead = true;
-  if (IA.open === e.payload.id) $("ia-dead").classList.remove("hidden");
-});
-
 /* ------------------------------------------------------------ detail */
 
 $("ia-back").addEventListener("click", iaBack);
-$("ia-restart").addEventListener("click", iaRestart);
 
 /* Red button of the open conversation: same confirmation as in the list. */
 $("ia-delete").addEventListener("click", () => {
   if (IA.open) iaAskDelete(IA.open);
 });
 
-/* Terminal view: Esc is Claude Code's own interrupt. The button sends it
-   for those who do not know; the terminal keeps it when focused. */
-$("ia-term-stop").addEventListener("click", () => {
-  const id = IA.open;
-  if (!id) return;
-  invoke("pty_write", { id, data: "\x1b" }).catch(() => {});
-  const b = $("ia-term-stop");
-  b.classList.add("sent");
-  b.querySelector("span").textContent = tr("ia.stop.sent");
-  clearTimeout(b._t);
-  b._t = setTimeout(() => {
-    b.classList.remove("sent");
-    b.querySelector("span").textContent = tr("ia.stop.button");
-  }, 1500);
-  IA.terms.get(id)?.term.focus();
-});
+/* Terminal view: the same Stop as the chat's, shown while Claude answers. */
+$("ia-term-stop").addEventListener("click", () => chatStop());
 
 $("ia-folder").addEventListener("click", async () => {
   if (!IA.open) return;
@@ -1504,22 +1423,18 @@ listen("ia-mesh", async (e) => {
 
 /* Conversation or terminal: the same Claude session, never both at once —
    the process of one view ends before the other resumes the transcript. */
-async function iaSwitchView(view) {
+/* Chat or terminal: two views of the same session. Nothing is closed or
+   started; the terminal reads what the chat's Claude does. */
+function iaSwitchView(view) {
   if (view === IA.view) return;
-  const id = IA.open;
   IA.view = view;
   localStorage.setItem("snapstudio.iaview", view);
-  if (!id) return;
-  if (view === "term") {
-    chatLeave();
-    await invoke("ia_chat_close", { id }).catch(() => {});
-    // The terminal resumes the session at once, not through "Reopen".
-    const t = IA.terms.get(id);
-    if (t) t.dead = false;
-  } else {
-    await invoke("pty_close", { id }).catch(() => {});
-  }
-  if (IA.open === id) iaOpen(id);
+  const c = IA.open && IA.list.find((x) => x.id === IA.open);
+  if (!c) return;
+  $("ia-left").dataset.mode = view;
+  document.querySelectorAll("#ia-views [data-iaview]").forEach((b) => b.classList.toggle("on", b.dataset.iaview === view));
+  if (view === "term") iaTraceOpen(c);
+  else requestAnimationFrame(() => $("chat-input").focus());
 }
 
 $("ia-views").addEventListener("click", (e) => {
