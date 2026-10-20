@@ -1277,6 +1277,8 @@ document.addEventListener("mousedown", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("ia-pop").classList.contains("hidden")) {
+    // Taken here: the same Esc must not also stop Claude (ia-chat.js).
+    e.preventDefault();
     iaPop(false);
     $("ia-more").focus();
   }
