@@ -293,16 +293,7 @@ function pjRenderDetail({ job, live, active }) {
   } else if (state === "queued") {
     kicker = esc(`${tr("prints.position", { n: qi + 1 })} · ${tr("prints.starts_at", { time: fmtClock(pjStartEstimate(job)) })}`);
     // One chip per printer, with its state, as in the Slice sheet.
-    progress = `<div class="pj-for"><span>${esc(tr("prints.for"))}</span><div class="pj-printers" role="radiogroup" aria-label="${esc(tr("prints.for"))}">${P.list
-      .map((p) => {
-        const s = slPrinterStatus(p.id);
-        const on = p.id === job.printer_id;
-        const away = s === "offline" || s === "error";
-        return `<button type="button" class="sl-pchip${on ? " on" : ""}${away ? " away" : ""}" role="radio" aria-checked="${on}" data-printer="${esc(p.id)}">
-          <span class="sl-pchip-icon ${esc(s || "")}">${PRINTER_ICON}</span>
-          <span class="sl-pchip-text"><b>${esc(p.name || p.host)}</b><small class="st ${esc(s || "")}">${esc(s ? pstateLabel(s) : "—")}</small></span></button>`;
-      })
-      .join("")}</div></div>
+    progress = `<div class="pj-for"><span>${esc(tr("prints.for"))}</span><div class="pj-printers" role="radiogroup" aria-label="${esc(tr("prints.for"))}">${printerChips(P.list, job.printer_id)}</div></div>
       <div class="pj-opts">
         <label><input type="checkbox" class="sw" role="switch" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> ${esc(tr("prints.opt.leveling_cap"))}</label>
         <label><input type="checkbox" class="sw" role="switch" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> ${esc(tr("prints.opt.flow_cap"))}</label>

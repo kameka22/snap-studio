@@ -117,6 +117,22 @@ function slPrinterStatus(id) {
   return live ? (live.status.online ? live.status.state : "offline") : null;
 }
 
+/* The printer picker of the print queue: one chip per printer with its
+   state, the chosen one ticked. Also the send sheet's (after a slice, or
+   from a printer's files), so that both look and behave the same. */
+function printerChips(list, selected, disabled = false) {
+  return list
+    .map((p) => {
+      const s = slPrinterStatus(p.id);
+      const on = p.id === selected;
+      const away = s === "offline" || s === "error";
+      return `<button type="button" class="sl-pchip${on ? " on" : ""}${away ? " away" : ""}" role="radio" aria-checked="${on}" data-printer="${esc(p.id)}"${disabled ? " disabled" : ""}>
+          <span class="sl-pchip-icon ${esc(s || "")}">${PRINTER_ICON}</span>
+          <span class="sl-pchip-text"><b>${esc(p.name || p.host)}</b><small class="st ${esc(s || "")}">${esc(s ? pstateLabel(s) : "—")}</small></span></button>`;
+    })
+    .join("");
+}
+
 /* Called by the spool reading; `id`: the printer queried. */
 function slPrinterState(state, id = $("s-printer").value) {
   SL.pstate = { ...(SL.pstate || {}), [id]: state };
