@@ -989,54 +989,70 @@ $("ia-folder").addEventListener("click", async () => {
 
 /* ------------------------------------------------------------ splitter */
 
-/* The preview's share of the centre column, from 0.25 to 0.8, kept for all
-   conversations. Dragged with the mouse, moved with ↑/↓, reset by a
-   double-click. */
-const IA_SPLIT_KEY = "snapstudio.ia.split";
-const IA_SPLIT_DEFAULT = 0.6;
-const iaClampSplit = (r) => Math.min(0.8, Math.max(0.25, r));
-function iaSplitApply(r, save = true) {
-  r = iaClampSplit(Number.isFinite(r) ? r : IA_SPLIT_DEFAULT);
-  $("ia-center").style.setProperty("--ia-preview", `${(r * 100).toFixed(1)}%`);
-  $("ia-splitter").setAttribute("aria-valuenow", Math.round(r * 100));
-  if (save) localStorage.setItem(IA_SPLIT_KEY, String(r));
-  return r;
+/* Width of the conversation column, in pixels, kept for all conversations.
+   At least 280 px (less in narrow windows); at most 720 px, and never so
+   wide that the preview falls under its minimum width. Dragged with the mouse, moved with ←/→ (Shift: bigger
+   steps), reset by a double-click, Home or Enter. */
+const IA_CHAT_KEY = "snapstudio.ia.chatw";
+const IA_CHAT_DEFAULT = 380;
+/* Minimums come from the stylesheet, which lowers them in narrow windows. */
+const iaMinW = (el, fallback) => parseFloat(getComputedStyle(el).minWidth) || fallback;
+const iaChatMin = () => iaMinW($("ia-left"), 280);
+const iaChatMax = () => {
+  const split = $("ia-left").parentElement;
+  const room = split.clientWidth - $("ia-split-right").offsetWidth - iaMinW($("ia-center"), 320);
+  // Hidden (another tab): no measure, only the fixed bound.
+  return split.clientWidth ? Math.max(iaChatMin(), Math.min(720, room)) : 720;
+};
+function iaChatApply(w, save = true) {
+  w = Math.round(Math.min(iaChatMax(), Math.max(iaChatMin(), Number.isFinite(w) ? w : IA_CHAT_DEFAULT)));
+  $("ia-left").style.setProperty("--ia-chat-w", `${w}px`);
+  $("ia-splitter").setAttribute("aria-valuenow", w);
+  $("ia-splitter").setAttribute("aria-valuemin", iaChatMin());
+  $("ia-splitter").setAttribute("aria-valuemax", iaChatMax());
+  if (save) localStorage.setItem(IA_CHAT_KEY, String(w));
+  return w;
 }
-let iaSplit = iaSplitApply(parseFloat(localStorage.getItem(IA_SPLIT_KEY)), false);
-$("ia-splitter").setAttribute("aria-valuemin", 25);
-$("ia-splitter").setAttribute("aria-valuemax", 80);
+/* What the user chose, kept apart from what fits: a narrow window clamps
+   the column without forgetting the choice. */
+let iaChatWanted = parseFloat(localStorage.getItem(IA_CHAT_KEY)) || IA_CHAT_DEFAULT;
+let iaChatW = iaChatApply(iaChatWanted, false);
+const iaChatSet = (w) => {
+  iaChatW = iaChatApply(w);
+  iaChatWanted = iaChatW;
+};
 
 $("ia-splitter").addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   e.preventDefault();
   const bar = e.currentTarget;
-  const box = $("ia-center");
-  const rect = box.getBoundingClientRect();
+  const split = $("ia-left").parentElement;
+  const left = $("ia-left").getBoundingClientRect().left;
   bar.setPointerCapture(e.pointerId);
   bar.classList.add("drag");
-  box.classList.add("dragging");
-  const move = (ev) => {
-    iaSplit = iaSplitApply((ev.clientY - rect.top) / rect.height, false);
-  };
+  split.classList.add("dragging");
+  const move = (ev) => (iaChatW = iaChatApply(ev.clientX - left, false));
   const up = () => {
     bar.removeEventListener("pointermove", move);
     bar.classList.remove("drag");
-    box.classList.remove("dragging");
-    iaSplit = iaSplitApply(iaSplit);
+    split.classList.remove("dragging");
+    iaChatSet(iaChatW);
   };
   bar.addEventListener("pointermove", move);
   bar.addEventListener("pointerup", up, { once: true });
   bar.addEventListener("pointercancel", up, { once: true });
 });
-$("ia-splitter").addEventListener("dblclick", () => (iaSplit = iaSplitApply(IA_SPLIT_DEFAULT)));
+$("ia-splitter").addEventListener("dblclick", () => iaChatSet(IA_CHAT_DEFAULT));
 $("ia-splitter").addEventListener("keydown", (e) => {
-  const step = e.shiftKey ? 0.1 : 0.03;
-  if (e.key === "ArrowUp") iaSplit = iaSplitApply(iaSplit - step);
-  else if (e.key === "ArrowDown") iaSplit = iaSplitApply(iaSplit + step);
-  else if (e.key === "Home" || e.key === "Enter") iaSplit = iaSplitApply(IA_SPLIT_DEFAULT);
+  const step = e.shiftKey ? 64 : 16;
+  if (e.key === "ArrowLeft") iaChatSet(iaChatW - step);
+  else if (e.key === "ArrowRight") iaChatSet(iaChatW + step);
+  else if (e.key === "Home" || e.key === "Enter") iaChatSet(IA_CHAT_DEFAULT);
   else return;
   e.preventDefault();
 });
+/* The window (or the app's sidebar) changes: refit, back to the choice. */
+new ResizeObserver(() => (iaChatW = iaChatApply(iaChatWanted, false))).observe($("ia-left").parentElement);
 
 const iaResizeObserver = new ResizeObserver(() => {
   if (IA.open) iaFit(IA.open);
