@@ -257,7 +257,7 @@ function advField(k) {
       .map(([val, lbl]) => `<option value="${esc(val)}"${String(v) === val ? " selected" : ""}>${esc(lbl)}</option>`)
       .join("")}</select>`;
   } else if (def.type === "bool") {
-    input = `<input type="checkbox" class="sw" data-k="${k}"${String(v) === "1" ? " checked" : ""} />`;
+    input = `<input type="checkbox" class="sw" role="switch" data-k="${k}"${String(v) === "1" ? " checked" : ""} />`;
   } else {
     const pct = def.type === "percent" || String(v ?? "").endsWith("%");
     const num = v == null ? "" : String(v).replace(/%$/, "");

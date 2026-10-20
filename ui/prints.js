@@ -304,9 +304,9 @@ function pjRenderDetail({ job, live, active }) {
       })
       .join("")}</div></div>
       <div class="pj-opts">
-        <label><input type="checkbox" class="sw" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> ${esc(tr("prints.opt.leveling_cap"))}</label>
-        <label><input type="checkbox" class="sw" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> ${esc(tr("prints.opt.flow_cap"))}</label>
-        <label><input type="checkbox" class="sw" data-opt="timelapse"${job.options.timelapse ? " checked" : ""}/> ${esc(tr("prints.opt.timelapse_cap"))}</label>
+        <label><input type="checkbox" class="sw" role="switch" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> ${esc(tr("prints.opt.leveling_cap"))}</label>
+        <label><input type="checkbox" class="sw" role="switch" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> ${esc(tr("prints.opt.flow_cap"))}</label>
+        <label><input type="checkbox" class="sw" role="switch" data-opt="timelapse"${job.options.timelapse ? " checked" : ""}/> ${esc(tr("prints.opt.timelapse_cap"))}</label>
       </div>`;
     actions = `<button class="btn primary" data-act="launch"${printerFree ? "" : " disabled"} title="${
       printerFree ? "" : esc(tr("prints.not_free", { name: printerName }))
@@ -351,7 +351,7 @@ function pjRenderDetail({ job, live, active }) {
         ${
           active
             ? `<div class="vp-section">${esc(printerName)}</div><div class="group">${pjTemps(st)}</div>
-               <div class="vp-section">${esc(tr("printers.camera"))} <button id="pj-cam-toggle" class="btn small">${esc(tr(PJ.cam.on ? "common.hide" : "common.show"))}</button></div>
+               <div class="vp-section">${esc(tr("printers.camera"))} <input type="checkbox" id="pj-cam-toggle" class="sw small" role="switch" aria-label="${esc(tr("printers.camera"))}"${PJ.cam.on ? " checked" : ""} /></div>
                <div id="pj-cam" class="pj-cam${PJ.cam.on ? "" : " hidden"}"><img id="pj-cam-img" alt="" /><span id="pj-cam-note"></span></div>`
             : live
               ? `<div class="vp-section">${esc(printerName)}</div><div class="group">${pjRow(tr("prints.status"), esc(live.status.online ? (PJ_STATES.includes(live.status.state) ? pjState(live.status.state) : tr("printers.state.ready")) : tr("printers.state.offline")))}${live.status.online ? pjTemps(live.status) : ""}</div>`

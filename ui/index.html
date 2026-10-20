@@ -287,7 +287,7 @@
         </div>
         <div class="vp-section" data-i18n="prepare.scale">Scale</div>
         <div class="group">
-          <label class="grow-row"><span class="k" data-i18n="prepare.keep_ratio">Keep proportions</span><input type="checkbox" id="p-lock" class="sw" checked /></label>
+          <label class="grow-row"><span class="k" data-i18n="prepare.keep_ratio">Keep proportions</span><input type="checkbox" id="p-lock" class="sw" role="switch" checked /></label>
           <label class="grow-row p-uni"><span class="k" data-i18n="prepare.scale">Scale</span><input id="p-scale" class="field num" type="number" step="5" min="1" /><span class="unit">%</span></label>
           <label class="grow-row p-axis"><span class="k">X</span><input id="p-sx" class="field num" type="number" step="5" min="1" /><span class="unit">%</span></label>
           <label class="grow-row p-axis"><span class="k">Y</span><input id="p-sy" class="field num" type="number" step="5" min="1" /><span class="unit">%</span></label>
@@ -446,7 +446,7 @@
 
         <div class="group cam">
           <div class="ghead"><span data-i18n="printers.camera">Camera</span><span id="cam-note" class="note"></span>
-            <button id="cam-toggle" class="btn small" data-i18n="common.show">Show</button>
+            <input type="checkbox" id="cam-toggle" class="sw small" role="switch" aria-label="Camera" data-i18n-aria="printers.camera" />
           </div>
           <div id="cam-box" class="cam-box hidden"><img id="cam-img" alt="Printer camera" data-i18n-alt="printers.camera_alt" />
             <div class="cam-bar"><button id="cam-size" class="cam-btn" title="Enlarge" data-i18n-title="printers.cam.enlarge">
@@ -662,7 +662,7 @@
         <span class="k"><span data-i18n="settings.update_auto">Check for updates at launch</span>
           <span class="sub" data-i18n="settings.update_auto.sub">A window offers to install a new version when one is published</span>
         </span>
-        <input type="checkbox" id="up-auto" class="sw" />
+        <input type="checkbox" id="up-auto" class="sw" role="switch" />
       </label>
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.updates">Updates</span>
@@ -697,7 +697,7 @@
         <span class="k"><span data-i18n="settings.wheel_invert">Invert scroll wheel</span>
           <span class="sub" data-i18n="settings.wheel_invert.sub">Scrolling up moves the camera away instead of closer</span>
         </span>
-        <input type="checkbox" id="set-invert-wheel" class="sw" />
+        <input type="checkbox" id="set-invert-wheel" class="sw" role="switch" />
       </label>
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.wheel_speed">Sensitivity</span>
@@ -724,7 +724,7 @@
         <span class="k"><span data-i18n="settings.recursive">Include subfolders</span>
           <span class="sub" data-i18n="settings.recursive.sub">Also browse the folders inside the open one</span>
         </span>
-        <input type="checkbox" id="opt-recursive" class="sw" />
+        <input type="checkbox" id="opt-recursive" class="sw" role="switch" />
       </label>
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.thumb_source">Preview source</span>
@@ -748,13 +748,13 @@
         <span class="k"><span data-i18n="settings.plate_ask">Warn when the plate is not empty</span>
           <span class="sub" data-i18n="settings.plate_ask.sub">Asks whether to clear or keep the plate when preparing new models</span>
         </span>
-        <input type="checkbox" id="set-plate-ask" class="sw" />
+        <input type="checkbox" id="set-plate-ask" class="sw" role="switch" />
       </label>
       <label class="grow-row">
         <span class="k"><span data-i18n="settings.spool_check">Check spools before sending</span>
           <span class="sub" data-i18n="settings.spool_check.sub">Warns when a head used by the print holds another material or color than at slicing, and offers another loaded spool</span>
         </span>
-        <input type="checkbox" id="set-spool-check" class="sw" />
+        <input type="checkbox" id="set-spool-check" class="sw" role="switch" />
       </label>
     </div>
       </div>
@@ -931,13 +931,13 @@
           <div class="sl-adv-row">
             <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16v4H4zm2 6h2v12H6zm5 0h2v12h-2zm5 0h2v12h-2z"/></svg></span>
             <span class="k"><span data-i18n="slice.supports">Supports</span><small id="s-adv-sum-support" class="sub"></small></span>
-            <input type="checkbox" id="s-supports" class="sw" />
+            <input type="checkbox" id="s-supports" class="sw" role="switch" />
             <button class="btn info-btn sl-adv-btn" data-adv="support" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
           </div>
           <div class="sl-adv-row">
             <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8zM3 3h18v18H3zm2 2v14h14V5z"/></svg></span>
             <span class="k"><span data-i18n="slice.brim">Brim</span><small id="s-adv-sum-brim" class="sub"></small></span>
-            <input type="checkbox" id="s-brim" class="sw" />
+            <input type="checkbox" id="s-brim" class="sw" role="switch" />
             <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
           </div>
           <div class="sl-adv-row">
@@ -1155,15 +1155,15 @@
     <div class="group">
       <label class="grow-row">
         <span class="k" data-i18n="send.leveling">Automatic bed leveling</span>
-        <input type="checkbox" id="snd-level" class="sw" />
+        <input type="checkbox" id="snd-level" class="sw" role="switch" />
       </label>
       <label class="grow-row">
         <span class="k" data-i18n="send.flow">Extrusion flow calibration</span>
-        <input type="checkbox" id="snd-flow" class="sw" />
+        <input type="checkbox" id="snd-flow" class="sw" role="switch" />
       </label>
       <label class="grow-row">
         <span class="k" data-i18n="send.timelapse">Timelapse camera</span>
-        <input type="checkbox" id="snd-timelapse" class="sw" />
+        <input type="checkbox" id="snd-timelapse" class="sw" role="switch" />
       </label>
     </div>
 
@@ -1213,7 +1213,7 @@
     <div id="pd-summary" class="pd-summary"></div>
     <div class="pd-tools">
       <input id="pd-search" class="field" type="search" placeholder="Search a setting" spellcheck="false" data-i18n-placeholder="profile.search" />
-      <label class="pd-all"><input id="pd-all" type="checkbox" class="sw" /> <span data-i18n="profile.all">All settings</span></label>
+      <label class="pd-all"><input id="pd-all" type="checkbox" class="sw" role="switch" /> <span data-i18n="profile.all">All settings</span></label>
     </div>
     <div id="pd-tabs" class="seg pd-tabs"></div>
     <div id="pd-body" class="pd-body"></div>

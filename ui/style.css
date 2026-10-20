@@ -2213,7 +2213,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .viewer.previewing .v-layers { right: 324px; }
 
 /* ---------- printer camera ---------- */
-.group.cam .ghead .btn { margin-left: 10px; }
+.group.cam .ghead .sw { margin-left: 10px; }
+.vp-section .sw { vertical-align: middle; margin: -2px 0 0 6px; }
 .cam-box {
   position: relative;
   max-width: 560px;

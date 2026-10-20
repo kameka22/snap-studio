@@ -410,7 +410,6 @@
   "printers.remove.title": "Supprimer « {name} » ?",
   "printers.remove.text": "Elle disparaîtra de la liste ; rien n'est modifié sur la machine.",
   "printers.removed": "Imprimante supprimée",
-  "common.hide": "Masquer",
   "printers.cam.starting": "démarrage…",
   "printers.cam.retry": "image indisponible, nouvel essai…",
   "prints.state.printing": "En impression",

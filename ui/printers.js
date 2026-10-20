@@ -204,7 +204,7 @@ function setOffline(mode, st) {
   $("prn-offline-ico").classList.toggle("hidden", connecting);
   $("prn-offline-spin").classList.toggle("hidden", !connecting);
   setOfflineSeen(connecting ? null : P.seen.get(P.sel));
-  // No camera without a connection: stop it and disable the button.
+  // No camera without a connection: stop it and disable its switch.
   if (CAM.on) camStop();
   $("cam-toggle").disabled = true;
   const err = (!connecting && st?.message) || "";
@@ -781,10 +781,10 @@ const CAM = { id: null, on: false, n: 0, timer: 0, keep: 0 };
 
 async function camStart() {
   const p = current();
-  if (!p) return;
+  if (!p) return void ($("cam-toggle").checked = false);
   camStop();
   Object.assign(CAM, { id: p.id, on: true });
-  $("cam-toggle").textContent = tr("common.hide");
+  $("cam-toggle").checked = true;
   $("cam-note").textContent = tr("printers.cam.starting");
   $("cam-box").classList.remove("hidden");
   try {
@@ -810,7 +810,7 @@ function camStop() {
   clearInterval(CAM.keep);
   if (CAM.on && CAM.id) invoke("camera_stop", { printerId: CAM.id }).catch(() => {});
   Object.assign(CAM, { id: null, on: false, timer: 0, keep: 0 });
-  $("cam-toggle").textContent = tr("common.show");
+  $("cam-toggle").checked = false;
   $("cam-note").textContent = "";
   $("cam-box").classList.add("hidden");
   $("cam-img").removeAttribute("src");
@@ -826,7 +826,8 @@ $("cam-img").addEventListener("error", () => {
   $("cam-note").textContent = tr("printers.cam.retry");
   CAM.timer = setTimeout(camNext, 1000);
 });
-$("cam-toggle").addEventListener("click", () => (CAM.on ? camStop() : camStart()));
+// The camera's switch: on, the live image; off, nothing is fetched.
+$("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart() : camStop()));
 // Double-click: the image takes the full width of the printer pane.
 /* Enlarge the camera: its button (shown on hover) or a double-click. */
 function camToggleSize() {
@@ -861,7 +862,6 @@ window.addEventListener("langchange", () => {
   prnRenderList();
   prnRenderDetail();
   discRender();
-  $("cam-toggle").textContent = tr(CAM.on ? "common.hide" : "common.show");
   if (P.editing !== undefined && !$("pmodal").classList.contains("hidden"))
     $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
 });
