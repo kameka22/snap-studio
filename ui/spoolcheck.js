@@ -9,24 +9,26 @@
    with no slice record: a slice made without a printer has no spool color,
    and its presets' default colors are not a choice. Heads the print does
    not use are ignored. A different material family, a clearly different
-   color, or an empty or unknown spool opens a sheet listing each head; the
-   sheet shows each color of the model with the spool that will print it;
-   the user changes those, sends, cancels, or goes back to Prepare to slice
-   the plate again with the spools loaded.
+   color, or an empty head opens a sheet: each color of the model with the
+   spool that will print it. The user changes those, sends, cancels, or goes
+   back to Prepare to slice the plate again with the spools loaded.
+   A printer that reports no spools (another Klipper) is not checked; an
+   unreachable one is not sent to.
 
    Material: compared by family, case-insensitive. "PLA", "PLA+", "PLA Matte",
    "PLA Silk", "PLA-CF" are all PLA; "PETG" and "PET" differ, as do "PC" and
-   "PCTG". Unknown material on either side: not compared.
-   Color: CIE76 distance in Lab; below SP_COLOR_TOL the spools match (a
-   white and an off-white, two reds of different brands). Unknown color on
-   either side: not compared.
+   "PCTG". Unknown material on either side (a spool without RFID nor
+   material set on the printer): not compared.
+   Color: CIEDE2000 distance; below SP_COLOR_TOL the spools match (a white
+   and an off-white, two reds of different brands, but not a violet and a
+   blue). Unknown color on either side: not compared.
 
    Substitution: the G-code tool is routed to the chosen head through the
    firmware's extruder map (SET_PRINT_EXTRUDER_MAP, sent before every print
    anyway). One tool per head; the G-code itself is not rewritten, so its
    temperatures stay those of the sliced material. */
 
-const SP_COLOR_TOL = 25;
+const SP_COLOR_TOL = 10;
 const SP_KEY = "snapstudio.spoolcheck.off";
 
 /* Longest names first: PETG before PET, PCTG before PC, PPS before PP. */
@@ -72,11 +74,42 @@ function spLab(hex) {
   const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
   return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
 }
-/* Perceptual distance (CIE76); Infinity when one color is unknown. */
+/* Perceptual distance (CIEDE2000, Sharma et al. 2005); Infinity when one
+   color is unknown. Unlike the plain Lab distance, it does not shrink the
+   gaps between blues and violets. */
 function spColorDelta(a, b) {
   const x = spLab(a), y = spLab(b);
   if (!x || !y) return Infinity;
-  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+  const [L1, a1, b1] = x, [L2, a2, b2] = y;
+  const rad = Math.PI / 180;
+  const C1 = Math.hypot(a1, b1), C2 = Math.hypot(a2, b2);
+  const Cm = (C1 + C2) / 2;
+  const G = 0.5 * (1 - Math.sqrt(Cm ** 7 / (Cm ** 7 + 25 ** 7)));
+  const a1p = (1 + G) * a1, a2p = (1 + G) * a2;
+  const C1p = Math.hypot(a1p, b1), C2p = Math.hypot(a2p, b2);
+  const hue = (bb, ap) => (bb === 0 && ap === 0 ? 0 : (Math.atan2(bb, ap) / rad + 360) % 360);
+  const h1p = hue(b1, a1p), h2p = hue(b2, a2p);
+  const dLp = L2 - L1, dCp = C2p - C1p;
+  let dhp = 0;
+  if (C1p * C2p !== 0) {
+    dhp = h2p - h1p;
+    if (dhp > 180) dhp -= 360;
+    else if (dhp < -180) dhp += 360;
+  }
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin((dhp / 2) * rad);
+  const Lm = (L1 + L2) / 2, Cmp = (C1p + C2p) / 2;
+  let hm = h1p + h2p;
+  if (C1p * C2p !== 0) {
+    if (Math.abs(h1p - h2p) > 180) hm += h1p + h2p < 360 ? 360 : -360;
+    hm /= 2;
+  }
+  const T = 1 - 0.17 * Math.cos((hm - 30) * rad) + 0.24 * Math.cos(2 * hm * rad) + 0.32 * Math.cos((3 * hm + 6) * rad) - 0.2 * Math.cos((4 * hm - 63) * rad);
+  const dTheta = 30 * Math.exp(-(((hm - 275) / 25) ** 2));
+  const Rc = 2 * Math.sqrt(Cmp ** 7 / (Cmp ** 7 + 25 ** 7));
+  const Sl = 1 + (0.015 * (Lm - 50) ** 2) / Math.sqrt(20 + (Lm - 50) ** 2);
+  const Sc = 1 + 0.045 * Cmp, Sh = 1 + 0.015 * Cmp * T;
+  const Rt = -Math.sin(2 * dTheta * rad) * Rc;
+  return Math.sqrt((dLp / Sl) ** 2 + (dCp / Sc) ** 2 + (dHp / Sh) ** 2 + Rt * (dCp / Sc) * (dHp / Sh));
 }
 
 /* What each used G-code tool expects. `ftypeOf(profile name)` gives a
@@ -96,9 +129,10 @@ function spLoaded(slots, head) {
   const s = (slots || []).find((x) => x.index === head);
   if (!s) return { head, state: "unknown", material: "", color: "" };
   if (!s.present) return { head, state: "empty", material: "", color: "" };
-  const material = spMaterialFamily(s.kind);
+  // Loaded, material unknown (no RFID, nothing set on the printer): only
+  // its color can be compared.
   const label = [s.kind, s.sub_type].filter(Boolean).join(" ");
-  return { head, state: material ? "ok" : "unknown", material, label, color: spHex(s.color), vendor: s.vendor || "" };
+  return { head, state: "ok", material: spMaterialFamily(s.kind), label, color: spHex(s.color), vendor: s.vendor || "" };
 }
 
 /* Reasons a loaded spool does not fit what a tool expects ([] = fits). */
@@ -208,6 +242,31 @@ function spFtypeOf(pid) {
   };
 }
 
+/* The printer's spools, read now (`printer`: { id, host, port }).
+   → { online, slots }: slots empty when the printer reports none, as
+   another Klipper does. */
+async function spReadSpools(printer) {
+  try {
+    const st = await invoke("printer_status", { host: printer.host, port: printer.port });
+    if (!st.online) return { online: false, slots: [] };
+    const slots = st.filaments || [];
+    if (typeof headsSetSlots === "function") headsSetSlots(printer.id, slots);
+    return { online: true, slots };
+  } catch {
+    return { online: false, slots: [] };
+  }
+}
+
+/* Spool check of a print about to start, printer read first. Unreachable:
+   an error, nothing sent. No spools reported: nothing to compare, sent as
+   sliced. Otherwise `spoolCheck`, with the same answer. */
+async function spCheckBeforeStart(printer, args) {
+  const { online, slots } = await spReadSpools(printer);
+  if (!online) throw new Error(tr("spool.unreachable", { name: printer.name || printer.host }));
+  if (!slots.length) return { map: [] };
+  return spoolCheck({ ...args, pid: printer.id, slots });
+}
+
 /* "red PLA" / "PLA rouge"; parts left out when unknown. */
 function spDescribe(material, color, fallback) {
   const c = color ? colorName(color) : "";
@@ -259,6 +318,8 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
         const h = picks[e.tool];
         const l = h != null ? spLoaded(slots, h) : null;
         // One token per head, as in Prepare: the spool's color and number.
+        // One Tab stop per row: the chosen head, or the first loaded one.
+        const stop = h ?? heads.find((hd) => (slots || []).some((x) => x.index === hd && x.present));
         const toks = heads
           .map((hd) => {
             const slot = (slots || []).find((x) => x.index === hd);
@@ -268,7 +329,7 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
             const other = expected.find((o) => o.tool !== e.tool && picks[o.tool] === hd);
             const fits = slot?.present && !spReasons(e, sl).length;
             const title = `T${hd} · ${label}${other ? " — " + tr("spool.swap", { what: what(other) }) : ""}`;
-            return `<button type="button" class="sl-token${hd === h ? " on" : ""}${slot?.present ? "" : " is-empty"}${other ? " busy" : ""}" data-tool="${e.tool}" data-head="${hd}"${slot?.present ? "" : " disabled"} role="radio" aria-checked="${hd === h}" title="${esc(title)}"><i${sl.color ? ` style="background:${esc(sl.color)}"` : ""}></i>T${hd}${fits ? '<em class="ok">✓</em>' : ""}</button>`;
+            return `<button type="button" class="sl-token${hd === h ? " on" : ""}${slot?.present ? "" : " is-empty"}${other ? " busy" : ""}" data-tool="${e.tool}" data-head="${hd}"${slot?.present ? "" : " disabled"} tabindex="${hd === stop ? 0 : -1}" role="radio" aria-checked="${hd === h}" title="${esc(title)}"><i${sl.color ? ` style="background:${esc(sl.color)}"` : ""}></i>T${hd}${fits ? '<em class="ok">✓</em>' : ""}</button>`;
           })
           .join("");
         // Only another material is worth a word: the G-code keeps the
@@ -300,20 +361,35 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
   requestAnimationFrame(() => ($("sp-go").disabled ? $("sp-cancel") : $("sp-go")).focus());
   return new Promise((resolve) => {
     const done = (v) => {
-      $("sp-go").onclick = $("sp-edit").onclick = $("sp-cancel").onclick = $("sp-list").onclick = modal.onkeydown = null;
+      $("sp-go").onclick = $("sp-edit").onclick = $("sp-cancel").onclick = $("sp-list").onclick = $("sp-list").onkeydown = modal.onkeydown = null;
       closeSheet(modal);
       resolve(v);
     };
-    $("sp-list").onclick = (e) => {
-      const b = e.target.closest(".sl-token[data-head]");
-      if (!b || b.disabled) return;
-      const t = +b.dataset.tool, hd = +b.dataset.head;
+    const pick = (t, hd) => {
       // Already printing another color: that color takes this one's spool.
       const other = expected.find((o) => o.tool !== t && picks[o.tool] === hd);
       if (other) picks[other.tool] = picks[t] ?? null;
       picks[t] = hd;
       render();
-      $("sp-list").querySelector(`.sl-token[data-tool="${b.dataset.tool}"][data-head="${b.dataset.head}"]`)?.focus();
+      $("sp-list").querySelector(`.sl-token[data-tool="${t}"][data-head="${hd}"]`)?.focus();
+    };
+    $("sp-list").onclick = (e) => {
+      const b = e.target.closest(".sl-token[data-head]");
+      if (b && !b.disabled) pick(+b.dataset.tool, +b.dataset.head);
+    };
+    // Arrows, Home and End move between a row's heads; Enter or Space
+    // takes one. Moving alone never swaps colors.
+    $("sp-list").onkeydown = (e) => {
+      const b = e.target.closest(".sl-token[data-head]");
+      const keys = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1, Home: "first", End: "last" };
+      if (!b || !(e.key in keys)) return;
+      e.preventDefault();
+      const row = [...b.parentElement.querySelectorAll(".sl-token:not(:disabled)")];
+      const i = row.indexOf(b), k = keys[e.key];
+      const next = k === "first" ? row[0] : k === "last" ? row[row.length - 1] : row[(i + k + row.length) % row.length];
+      if (!next) return;
+      for (const x of row) x.tabIndex = x === next ? 0 : -1;
+      next.focus();
     };
     $("sp-go").onclick = () => {
       try {

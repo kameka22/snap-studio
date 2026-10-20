@@ -751,7 +751,6 @@ async function checkSendPrinter() {
   // G-code heads with no spool on this machine: to flag before sending.
   const tools = SL.preview?.stats?.tools || [];
   const missing = tools.filter((t) => (st.filaments || []).some((f) => f.index === t && !f.present));
-  SL.sendSlots = st.filaments || [];
   el.className = "pf-test" + (missing.length ? " err" : " ok");
   el.textContent = missing.length
     ? tr("send.missing", { heads: missing.map((t) => "T" + t).join(", "), name: p.name })
@@ -791,10 +790,17 @@ async function sendPrint(queue = SL.sendMode === "queue") {
   if (!queue) {
     if (SL.checking) return;
     SL.checking = true;
-    const slots = (await headsRefreshSlots(p.id)).length ? headsSlots(p.id) : SL.sendSlots || [];
     // The plate is still the one in Prepare: it can be sliced again there.
     const print = { thumb: thumbSrc(pv.gcode, 240, 0), name: pv.source.name, printer: p.name || p.host };
-    const ok = await spoolCheck({ pid: p.id, tools, profile: r, stats: pv.stats, slots, canEdit: true, print }).finally(() => (SL.checking = false));
+    let ok;
+    try {
+      ok = await spCheckBeforeStart(p, { tools, profile: r, stats: pv.stats, canEdit: true, print });
+    } catch (e) {
+      setSendMessage(String(e.message || e), "err");
+      return;
+    } finally {
+      SL.checking = false;
+    }
     if (!ok) return;
     if (ok.edit) {
       closeSheet($("sendmodal"));

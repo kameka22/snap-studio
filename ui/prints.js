@@ -567,14 +567,19 @@ $("q-go").addEventListener("click", async () => {
   // Spools loaded now against those of the slice.
   const j = ev.next;
   const pid = j.printer_id || ev.printer_id;
+  const printer = P.list.find((x) => x.id === pid);
+  if (!printer) return;
   PJ.checking = true;
-  let ok, slots;
+  let ok;
   try {
-    slots = await headsRefreshSlots(pid);
     // Back to Prepare: only for jobs that kept their plate; an older record
     // has nothing to slice again.
     const print = { thumb: pjThumb(j, 240), name: j.name, printer: ev.printer_name };
-    ok = await spoolCheck({ pid, tools: j.tools, profile: j.profile || {}, stats: j.stats || {}, slots, canEdit: !!j.profile?.plate?.length, print });
+    ok = await spCheckBeforeStart(printer, { tools: j.tools, profile: j.profile || {}, stats: j.stats || {}, canEdit: !!j.profile?.plate?.length, print });
+  } catch (e) {
+    $("q-msg").className = "pf-test err";
+    $("q-msg").textContent = String(e.message || e);
+    return;
   } finally {
     PJ.checking = false;
   }

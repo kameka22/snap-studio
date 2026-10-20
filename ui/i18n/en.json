@@ -1266,6 +1266,7 @@
   "spool.send": "Send",
   "spool.choose": "Choose a spool…",
   "spool.choose_first": "Choose a spool for each color",
+  "spool.unreachable": "{name} is unreachable: check that it is on and connected",
   "spool.swap": "used for {what}: they swap",
   "spool.other_material": "{got} instead of {want}: printed with the {want} settings",
   "spool.loaded_unknown": "spool unknown",

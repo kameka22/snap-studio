@@ -23,6 +23,10 @@ assert.ok(S.spColorDelta("#ff0000", "#f01010") < S.SP_COLOR_TOL);
 assert.ok(S.spColorDelta("#FFFFFF", "#f4f4f0FF") < S.SP_COLOR_TOL, "white / off-white, RGBA accepted");
 assert.ok(S.spColorDelta("#ff0000", "#000000") > S.SP_COLOR_TOL);
 assert.ok(S.spColorDelta("#0047ab", "#00a651") > S.SP_COLOR_TOL, "blue / green");
+assert.ok(S.spColorDelta("#e01010", "#c81e1e") < S.SP_COLOR_TOL, "two reds of different brands");
+assert.ok(S.spColorDelta("#1a1a1a", "#000000") < S.SP_COLOR_TOL, "two blacks");
+assert.ok(S.spColorDelta("#7a3fd0", "#1144dd") > S.SP_COLOR_TOL, "violet / blue (CIE76 put them at 19)");
+assert.ok(S.spColorDelta("#ffffff", "#c0c0c0") > S.SP_COLOR_TOL, "white / silver");
 assert.equal(S.spColorDelta("", "#000000"), Infinity);
 
 const slots = [
@@ -56,10 +60,12 @@ assert.equal(S.spMismatches([{ tool: 1, material: "PLA", color: "#ff0000" }], sl
 assert.deepEqual(S.spMismatches([{ tool: 0, material: "PLA", color: "#ff0000" }], slots)[0].reasons, ["color"]);
 // Unknown expectations: nothing to compare.
 assert.equal(S.spMismatches([{ tool: 2, material: "", color: "" }], slots).length, 0);
-// Empty and unknown heads are warnings.
+// Empty heads are warnings; a head the printer does not report is unknown.
 assert.deepEqual(S.spMismatches([{ tool: 3, material: "PLA", color: "" }], slots)[0].reasons, ["empty"]);
 assert.deepEqual(S.spMismatches([{ tool: 3, material: "PLA", color: "" }], [])[0].reasons, ["unknown"]);
-assert.deepEqual(S.spMismatches([{ tool: 0, material: "PLA", color: "" }], [{ index: 0, present: true, kind: "" }])[0].reasons, ["unknown"]);
+// A loaded spool whose material is unknown: only its color is compared.
+assert.equal(S.spMismatches([{ tool: 0, material: "PLA", color: "#ffffff" }], [{ index: 0, present: true, kind: "", color: "#fcfcfc" }]).length, 0);
+assert.deepEqual(S.spMismatches([{ tool: 0, material: "PLA", color: "#ffffff" }], [{ index: 0, present: true, kind: "", color: "#000000" }])[0].reasons, ["color"]);
 
 // Substitution: T2 → head 1 (red PLA) clears the warning.
 assert.equal(S.spSuggest(exp[1], slots, new Set([0])), 1);
