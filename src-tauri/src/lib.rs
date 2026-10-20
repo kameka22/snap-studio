@@ -866,7 +866,9 @@ async fn share_native(app: tauri::AppHandle, path: String, x: f64, y: f64) -> Re
     #[cfg(target_os = "macos")]
     {
         use tauri::Manager;
-        let w = app.get_webview_window("main").ok_or("no window")?;
+        // The window, not the "webview window": once the Library has added
+        // its own views to it, it is no longer one (get_webview_window: None).
+        let w = app.get_window("main").ok_or("no window")?;
         let ns = w.ns_window().map_err(|e| e.to_string())? as usize;
         let (tx, rx) = std::sync::mpsc::channel();
         app.run_on_main_thread(move || {
