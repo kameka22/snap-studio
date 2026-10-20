@@ -1619,6 +1619,82 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// The Speed adjustment reaches the engine: the values the slice sheet
+    /// sends at 75 % (lists per nozzle flow type, as in the U1 profiles) are
+    /// in the G-code's config block and slow the print down; with no
+    /// override the config block is the profile's.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_speed_overrides -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_speed_overrides() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = "0.20mm Standard @Snapmaker U1 (0.4 nozzle)".to_string();
+        assert!(l.processes.iter().any(|p| p.name == process), "{process}");
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-speed");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let s = 30.0f32;
+        let p = [[0., 0., 0.], [s, 0., 0.], [s, s, 0.], [0., s, 0.], [0., 0., s], [s, 0., s], [s, s, s], [0., s, s]];
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                 [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let tris: Vec<Tri> = f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("cube.3mf");
+        crate::write3mf::write_scene(&src, &[
+            crate::write3mf::SceneObject { name: "cube".into(), tris, transform: Mat::IDENTITY, extruder: None },
+        ]).unwrap();
+        let slice = |id: &str, overrides: Map<String, Value>| {
+            let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+            let sink = seen.clone();
+            run_job(
+                binary(&app).unwrap(),
+                index_for(&app).unwrap(),
+                Request {
+                    machine: machine.clone(),
+                    process: process.clone(),
+                    filaments: vec![pla.clone()],
+                    scene: vec![crate::plate::SceneItem {
+                        path: src.to_string_lossy().to_string(), item: 0, name: "cube".into(),
+                        pos: [135.0, 135.0], rot: [0.0; 3], scale: [1.0; 3], extruder_map: vec![0],
+                        piece: None,
+                    }],
+                    overrides,
+                    name: Some(id.into()),
+                    ..Default::default()
+                },
+                id.into(),
+                &move |p| sink.lock().unwrap().push(p),
+            );
+            let last = seen.lock().unwrap().last().cloned().unwrap();
+            assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+            let gcode = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+            discard(id);
+            (gcode, last.stats.unwrap())
+        };
+        let (base, base_stats) = slice("speed100", Map::new());
+        for line in ["; outer_wall_speed = 200,500", "; sparse_infill_speed = 270,600", "; default_acceleration = 10000", "; travel_speed = 500"] {
+            assert!(base.contains(line), "profile value missing: {line}");
+        }
+        // What the slice sheet computes at 75 % (scripts/test-speed.js).
+        let at75: Map<String, Value> = serde_json::from_str(r#"{"outer_wall_speed":["150","375"],"inner_wall_speed":["225","450"],"sparse_infill_speed":["202","450"],"internal_solid_infill_speed":["187","450"],"gap_infill_speed":"187","top_surface_speed":"150","support_speed":"112","support_interface_speed":"60","bridge_speed":"37","default_acceleration":"5600","outer_wall_acceleration":"2800","inner_wall_acceleration":"5600","top_surface_acceleration":"1100"}"#).unwrap();
+        let (slow, slow_stats) = slice("speed75", at75);
+        for line in [
+            "; outer_wall_speed = 150,375", "; inner_wall_speed = 225,450", "; sparse_infill_speed = 202,450",
+            "; gap_infill_speed = 187", "; top_surface_speed = 150", "; bridge_speed = 37",
+            "; default_acceleration = 5600", "; outer_wall_acceleration = 2800", "; inner_wall_acceleration = 5600",
+            "; top_surface_acceleration = 1100", "; travel_speed = 500", "; initial_layer_speed = 50",
+        ] {
+            assert!(slow.contains(line), "missing in G-code: {line}");
+        }
+        let (t0, t1) = (base_stats.print_time_s.unwrap(), slow_stats.print_time_s.unwrap());
+        println!("print time: 100 % {t0} s, 75 % {t1} s");
+        assert!(t1 > t0, "slower: {t0} s → {t1} s");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     #[test]
     fn plate_scene_job_keeps_placements() {
         let Some(app) = engine() else { return };
