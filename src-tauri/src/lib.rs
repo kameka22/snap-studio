@@ -1199,8 +1199,11 @@ fn ia_create(
     source: String,
     prompt: String,
     engine: String,
+    model: Option<String>,
 ) -> Result<ia::Conversation, String> {
-    ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())
+    let model = creation_model(model)?;
+    let c = ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())?;
+    with_model(c, model)
 }
 
 #[tauri::command]
@@ -1209,8 +1212,27 @@ fn ia_create_blank(
     engine: String,
     dest: String,
     bounds: Option<[f32; 3]>,
+    model: Option<String>,
 ) -> Result<ia::Conversation, String> {
-    ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())
+    let model = creation_model(model)?;
+    let c = ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())?;
+    with_model(c, model)
+}
+
+/// Model chosen in the creation sheet, checked before anything is created.
+/// Empty or none: the account's default.
+fn creation_model(model: Option<String>) -> Result<Option<String>, String> {
+    match model.filter(|m| !m.is_empty()) {
+        Some(m) if !chat::MODELS.contains(&m.as_str()) => Err(format!("unknown model: {m}")),
+        m => Ok(m),
+    }
+}
+
+/// The new conversation with its model, kept for its first start.
+fn with_model(c: ia::Conversation, model: Option<String>) -> Result<ia::Conversation, String> {
+    let Some(m) = model else { return Ok(c) };
+    chat::set_model(&c.id, Some(&m)).map_err(|e| e.to_string())?;
+    ia::get(&c.id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1623,6 +1645,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn creation_model_is_checked_first() {
+        assert_eq!(creation_model(None), Ok(None));
+        assert_eq!(creation_model(Some(String::new())), Ok(None));
+        assert_eq!(creation_model(Some("claude-opus-5-5".into())), Ok(Some("claude-opus-5-5".into())));
+        assert!(creation_model(Some("gpt-9".into())).is_err());
+    }
 
     #[test]
     fn parse_query() {

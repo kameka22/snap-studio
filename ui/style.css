@@ -1655,8 +1655,105 @@ input.sw.small:checked::after { transform: translateX(12px); }
   border-radius: 8px;
   transform: perspective(300px) rotateX(55deg);
 }
-.ia-hints { margin: 0; font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
-#ia-prompt { resize: vertical; }
+/* Creation sheet: a large field, ideas, then the options as controls. */
+.ia-new-box { width: 620px; gap: 14px; }
+.ia-new-head { display: flex; align-items: center; gap: 12px; }
+.ia-new-thumb { flex: none; width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: var(--card-bg); border: 1px solid var(--card-border); }
+.ia-new-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.ia-new-icon svg { width: 22px; height: 22px; fill: currentColor; }
+.ia-new-titles { min-width: 0; }
+.ia-new-titles h3 { margin: 0; }
+.ia-new-src { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ia-new-src:empty { display: none; }
+.ia-prompt-box { position: relative; }
+.ia-prompt-box textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 132px;
+  max-height: 40vh;
+  resize: none;
+  padding: 12px 14px 30px;
+  border-radius: 12px;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.ia-prompt-box textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+.ia-prompt-kbd { position: absolute; right: 10px; bottom: 8px; font: inherit; font-size: 11px; color: var(--text-tertiary); background: none; pointer-events: none; }
+.ia-ideas { display: flex; align-items: baseline; gap: 8px; margin-top: -4px; }
+.ia-ideas-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ia-idea {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--control-border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+.ia-idea:hover { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 8%, var(--card-bg)); }
+.ia-idea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ia-new-opts { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--separator); }
+.ia-new-group { display: flex; flex-direction: column; gap: 10px; }
+.ia-new-group.hidden { display: none; }
+.ia-new-row { display: grid; grid-template-columns: 116px minmax(0, auto) auto; align-items: center; justify-content: start; column-gap: 10px; }
+.ia-new-k { font-size: 12px; color: var(--text-secondary); }
+.ia-chip-btn, .ia-folder-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--control-border);
+  background: var(--card-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.ia-chip-btn:hover, .ia-folder-btn:hover { border-color: var(--accent); }
+.ia-chip-btn:focus-visible, .ia-folder-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ia-folder-btn { max-width: 320px; }
+.ia-folder-btn svg { flex: none; width: 15px; height: 15px; fill: var(--accent); }
+.ia-folder-btn #ia-dest-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.ia-caret { color: var(--text-tertiary); font-size: 10px; }
+.ia-engines { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 8px; grid-column: 2 / span 2; }
+.ia-engine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.ia-engine:hover:not(:disabled):not(.on) { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border)); }
+.ia-engine.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card-bg)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.ia-engine:disabled { opacity: 0.5; cursor: default; }
+.ia-engine:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ia-engine-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.ia-engine:disabled .ia-engine-icon { background: color-mix(in srgb, var(--text-secondary) 14%, transparent); color: var(--text-secondary); }
+.ia-engine-icon svg { width: 16px; height: 16px; fill: currentColor; }
+.ia-engine-text { display: flex; flex-direction: column; min-width: 0; }
+.ia-engine-text b { font-size: 12px; font-weight: 600; }
+.ia-engine-text small { font-size: 11px; line-height: 1.3; color: var(--text-secondary); }
+.ia-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 10px; background: color-mix(in srgb, var(--text) 7%, transparent); grid-column: 2 / span 2; justify-self: start; }
+.ia-seg button { font: inherit; font-size: 12px; padding: 4px 12px; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); cursor: pointer; }
+.ia-seg button.on { background: var(--control-bg); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.ia-seg button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ---------- conversation: bar, terminal ---------- */
 .ia-detail { flex: 1; display: flex; flex-direction: column; min-height: 0; }

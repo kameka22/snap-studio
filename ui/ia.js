@@ -68,6 +68,7 @@ async function iaRefresh() {
 /* New checks, or a new choice in Settings. */
 window.addEventListener("aichange", () => {
   if (!IA.open) iaRender();
+  if (!$("iamodal").classList.contains("hidden")) iaRenderEngines();
   iaApplyAi();
 });
 
@@ -455,74 +456,184 @@ function iaRenameStart(id) {
 
 /* ------------------------------------------------------------ creation */
 
-/* The sheet serves both paths: only the labels and the creation fields
-   change. */
+/* The sheet serves both paths: only the labels, the ideas and the
+   creation fields change. A large field to describe, ideas that fill it,
+   then the options as controls rather than lists. */
+const IA_IDEAS = {
+  create: ["ia.new.idea.c1", "ia.new.idea.c2", "ia.new.idea.c3"],
+  edit: ["ia.new.idea.e1", "ia.new.idea.e2", "ia.new.idea.e3"],
+};
+const IA_ENGINE_ICON = {
+  container: '<svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 1 5 5v2h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3v2h6V7a3 3 0 0 0-3-3"/></svg>',
+  local: '<svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-6v2h3v2H7v-2h3v-2H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1m1 2v8h14V7z"/></svg>',
+};
+const IA_NEW_MODEL_KEY = "snapstudio.ia.newModel";
+
+function iaSheetTexts() {
+  const create = IA.mode === "create";
+  $("ia-mtitle").textContent = tr(create ? "ia.new_object" : "ia.new.title");
+  $("ia-prompt").placeholder = tr(create ? "ia.new.describe" : "ia.new.what");
+  $("ia-prompt").setAttribute("aria-label", tr(create ? "ia.new.describe" : "ia.new.what"));
+  $("ia-kbd").textContent = (IS_MAC ? "⌘↩ " : "Ctrl+↩ ") + tr("ia.new.start");
+  $("ia-ideas").innerHTML = IA_IDEAS[create ? "create" : "edit"]
+    .map((k) => `<button type="button" class="ia-idea" data-idea="${esc(tr(k))}">${esc(tr(k))}</button>`)
+    .join("");
+  iaRenderEngines();
+  iaRenderModels();
+  iaRenderDest();
+}
+
+/* Where the conversation runs: one card per mode; a mode not chosen or not
+   ready is shown off, with why. */
+function iaRenderEngines() {
+  const ready = iaModes();
+  const cur = ready.includes(IA.engine) ? IA.engine : ready[0] || "";
+  IA.engine = cur;
+  $("ia-engines").innerHTML = ["container", "local"]
+    .map((m) => {
+      const on = m === cur, ok = ready.includes(m);
+      const sub = ok
+        ? tr(m === "container" ? "ia.new.run_container" : "ia.new.run_local")
+        : !aiWanted().includes(m)
+          ? tr("ia.new.run_off")
+          : AIS.report
+            ? tr("ia.new.run_missing")
+            : tr("ais.checking");
+      return `<button type="button" class="ia-engine${on ? " on" : ""}" data-engine="${m}" role="radio" aria-checked="${on}"${ok ? "" : " disabled"}>
+        <span class="ia-engine-icon">${IA_ENGINE_ICON[m]}</span>
+        <span class="ia-engine-text"><b>${esc(tr("ais.mode." + m))}</b><small>${esc(sub)}</small></span>
+      </button>`;
+    })
+    .join("");
+}
+
+/* The Claude model of the new conversation: the account's default or one
+   of those the chat offers; the last choice comes back. */
+function iaRenderModels() {
+  const list = [["", tr("chat.model.default")], ...(typeof CHAT_MODELS !== "undefined" ? CHAT_MODELS : [])];
+  if (!list.some(([m]) => m === IA.newModel)) IA.newModel = "";
+  $("ia-models").innerHTML = list
+    .map(([m, name]) => `<button type="button" class="${m === IA.newModel ? "on" : ""}" data-model="${esc(m)}" role="radio" aria-checked="${m === IA.newModel}">${esc(name)}</button>`)
+    .join("");
+}
+
+/* The text area grows with what is typed, up to its maximum height. */
+function iaPromptFit() {
+  const t = $("ia-prompt");
+  t.style.height = "auto";
+  t.style.height = t.scrollHeight + 2 + "px";
+}
+
 function iaSheet(mode) {
   IA.mode = mode;
+  IA.newModel = localStorage.getItem(IA_NEW_MODEL_KEY) || "";
   const create = mode === "create";
-  $("ia-mtitle").textContent = tr(create ? "ia.new_object" : "ia.new.title");
-  $("ia-plabel").textContent = tr(create ? "ia.new.describe" : "ia.new.what");
-  $("ia-prompt").placeholder = tr(create ? "ia.new.placeholder_create" : "ia.new.placeholder_edit");
-  $("ia-hints").textContent = tr(create ? "ia.new.hints_create" : "ia.new.hints_edit");
   $("ia-cfields").classList.toggle("hidden", !create);
+  $("ia-new-icon").innerHTML = IA_GLYPH;
   $("ia-prompt").value = "";
   $("ia-msg").textContent = "";
   $("ia-msg").className = "pf-test";
-
-  // Only the modes that are chosen and ready.
-  const sel = $("ia-engine");
-  const modes = iaModes();
-  for (const o of sel.options) {
-    o.disabled = !modes.includes(o.value);
-    o.textContent = tr(o.value === "container" ? "ia.engine.container" : "ia.engine.local") + (o.disabled ? ` — ${tr("ia.engine.not_ready")}` : "");
-  }
-  sel.value = modes[0] || "";
-
+  iaSheetTexts();
   openSheet($("iamodal"));
+  iaPromptFit();
   $("ia-prompt").focus();
 }
 
-/* Called from the Files screen. */
+/* Called from the Files screen: the file's thumbnail heads the sheet. */
 function iaStart(file) {
   if (!file || file.kind === "gcode") return;
   IA.source = file;
   $("ia-src").textContent = file.name;
+  const th = $("ia-src-thumb");
+  th.classList.add("hidden");
+  $("ia-new-icon").classList.add("hidden");
+  th.onload = () => th.classList.remove("hidden");
+  th.onerror = () => {
+    th.classList.add("hidden");
+    $("ia-new-icon").classList.remove("hidden");
+  };
+  th.src = thumbSrc(file.path, 160, 0);
   iaSheet("edit");
 }
 
 /* Folders offered to store the object: the one Files shows, then the
-   recent ones, and a way to pick another. */
+   recent ones, and a way to pick another — a native menu on the button. */
 function iaFillDest(pick) {
-  const dirs = [...new Set([pick, state.dir, ...(state.recents || [])].filter(Boolean))];
-  $("ia-dest").innerHTML =
-    dirs.map((d) => `<option value="${esc(d)}" title="${esc(d)}">${esc(baseName(d))}</option>`).join("") +
-    `<option value="">${esc(tr("ia.new.other_folder"))}</option>`;
-  $("ia-dest").value = dirs[0] || "";
-  $("ia-dest").dataset.prev = dirs[0] || "";
+  IA.destDirs = [...new Set([pick, state.dir, ...(state.recents || [])].filter(Boolean))];
+  IA.dest = IA.destDirs[0] || "";
+  iaRenderDest();
 }
-
-$("ia-dest").addEventListener("change", async () => {
-  const sel = $("ia-dest");
-  if (sel.value) {
-    sel.dataset.prev = sel.value;
+function iaRenderDest() {
+  $("ia-dest-name").textContent = IA.dest ? baseName(IA.dest) : tr("ia.new.other_folder");
+  $("ia-dest").title = IA.dest || "";
+}
+$("ia-dest").addEventListener("click", () => {
+  const r = $("ia-dest").getBoundingClientRect();
+  nativeMenu(
+    [
+      ...(IA.destDirs || []).map((d, i) => ({ id: "iadest:" + i, label: baseName(d), checked: d === IA.dest })),
+      {},
+      { id: "iadest:other", label: tr("ia.new.other_folder") },
+    ],
+    r.left,
+    r.bottom + 4
+  );
+});
+onMenu("iadest", async (arg) => {
+  if (arg === "other") {
+    const dir = await invoke("pick_folder");
+    if (dir) iaFillDest(dir);
     return;
   }
-  const dir = await invoke("pick_folder");
-  if (dir) iaFillDest(dir);
-  else sel.value = sel.dataset.prev;
+  const d = IA.destDirs?.[+arg];
+  if (d) {
+    IA.dest = d;
+    iaRenderDest();
+  }
 });
 
 /* Creation from scratch: the size limit starts from the printer's bed. */
-function iaNew() {
-  IA.source = null;
-  $("ia-src").textContent = "";
-  const bed = (typeof PR !== "undefined" && PR.bed) || { w: 270, d: 270 };
+const iaBed = () => (typeof PR !== "undefined" && PR.bed) || { w: 270, d: 270 };
+function iaBedFill() {
+  const bed = iaBed();
   $("ia-bx").value = bed.w;
   $("ia-by").value = bed.d;
   $("ia-bz").value = 270;
+}
+function iaNew() {
+  IA.source = null;
+  $("ia-src").textContent = "";
+  $("ia-src-thumb").classList.add("hidden");
+  $("ia-new-icon").classList.remove("hidden");
+  iaBedFill();
   iaFillDest();
   iaSheet("create");
 }
+$("ia-bed-fill").addEventListener("click", iaBedFill);
+
+$("ia-prompt").addEventListener("input", iaPromptFit);
+$("ia-ideas").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-idea]");
+  if (!b) return;
+  const t = $("ia-prompt");
+  t.value = b.dataset.idea;
+  iaPromptFit();
+  t.focus();
+  t.setSelectionRange(t.value.length, t.value.length);
+});
+$("ia-engines").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-engine]");
+  if (!b || b.disabled) return;
+  IA.engine = b.dataset.engine;
+  iaRenderEngines();
+});
+$("ia-models").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-model]");
+  if (!b) return;
+  IA.newModel = b.dataset.model;
+  localStorage.setItem(IA_NEW_MODEL_KEY, IA.newModel);
+  iaRenderModels();
+});
 
 /* The size entered, or null when incomplete: then nothing is imposed. */
 function iaBounds() {
@@ -533,7 +644,7 @@ function iaBounds() {
 async function iaCreate() {
   const create = IA.mode === "create";
   if (!create && !IA.source) return;
-  if (!iaModes().includes($("ia-engine").value)) {
+  if (!iaModes().includes(IA.engine)) {
     $("ia-msg").textContent = aiBlockedReason() || tr("ia.engine.not_ready");
     $("ia-msg").className = "pf-test err";
     return;
@@ -544,7 +655,7 @@ async function iaCreate() {
     $("ia-prompt").focus();
     return;
   }
-  if (create && !$("ia-dest").value) {
+  if (create && !IA.dest) {
     $("ia-msg").textContent = tr("ia.new.need_dest");
     $("ia-msg").className = "pf-test err";
     return;
@@ -553,18 +664,21 @@ async function iaCreate() {
   btn.disabled = true;
   $("ia-msg").textContent = tr("ia.new.preparing");
   $("ia-msg").className = "pf-test busy";
+  const model = IA.newModel || null;
   try {
     const c = create
       ? await invoke("ia_create_blank", {
           prompt: $("ia-prompt").value,
-          engine: $("ia-engine").value,
-          dest: $("ia-dest").value,
+          engine: IA.engine,
+          dest: IA.dest,
           bounds: iaBounds(),
+          model,
         })
       : await invoke("ia_create", {
           source: IA.source.path,
           prompt: $("ia-prompt").value,
-          engine: $("ia-engine").value,
+          engine: IA.engine,
+          model,
         });
     closeSheet($("iamodal"));
     await iaRefresh();
@@ -1520,13 +1634,7 @@ window.addEventListener("langchange", () => {
     iaRenderVersions(IA.open, c?.version || 0);
     iaDetailState();
   }
-  if (!$("iamodal").classList.contains("hidden")) {
-    const create = IA.mode === "create";
-    $("ia-mtitle").textContent = tr(create ? "ia.new_object" : "ia.new.title");
-    $("ia-plabel").textContent = tr(create ? "ia.new.describe" : "ia.new.what");
-    $("ia-prompt").placeholder = tr(create ? "ia.new.placeholder_create" : "ia.new.placeholder_edit");
-    $("ia-hints").textContent = tr(create ? "ia.new.hints_create" : "ia.new.hints_edit");
-  }
+  if (!$("iamodal").classList.contains("hidden")) iaSheetTexts();
 });
 
 // Conversations listed from launch, in the sidebar.
