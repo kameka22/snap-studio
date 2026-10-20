@@ -24,6 +24,13 @@ the packages and publishes the `vx.y.z` release with its `latest.json`.
 (newer than the latest); a version not yet published (failed build) is reused
 without a bump.
 
+The release notes come from [CHANGELOG.md](../CHANGELOG.md): before the
+version commit, `scripts/changelog.py release x.y.z` turns the *Unreleased*
+section into `## [x.y.z] — date` (compare links included) and the commit
+carries it; the workflow publishes that section (`changelog.py notes`), and
+its plain-text form for the app's update sheet. With nothing under
+*Unreleased*, the script warns and the notes list the commits, as before.
+
 ## Changing the engine version
 
 `scripts/engine.sh 2.5.0` starts the
