@@ -22,14 +22,11 @@ const CHAT = {
   /* tool_use id → row; request_id → permission card. */
   tools: new Map(),
   perms: new Map(),
-  model: "",
-  cost: 0,
   /* Images waiting to leave with the next message. */
   attach: [],
   /* Initial requests already sent, so a reopening does not send them twice. */
   autoSent: new Set(),
-  /* What the status line says about the turn of the conversation shown:
-     "" | "answering" | "stopping" | "stopped". */
+  /* The turn of the conversation shown: "" | "answering" | "stopping". */
   phase: "",
 };
 
@@ -120,44 +117,29 @@ function chatSetBusy(on) {
   chatList.querySelector(".chat-working")?.remove();
   if (on) {
     chatAdd(chatWorking());
-    CHAT.phase = "answering";
     if (CHAT.id) IA.failed.delete(CHAT.id);
-  } else if (CHAT.phase !== "stopped") {
-    CHAT.phase = CHAT.phase === "stopping" ? "stopped" : "";
   }
-  chatStatus();
+  CHAT.phase = on ? "answering" : "";
   iaStatusChanged();
 }
 
-/* Stop button and Esc: interrupt the turn, say so until it is done. */
+/* Stop button and Esc: interrupt the turn; the button waits until it is
+   done. */
 function chatStop() {
   if (!CHAT.id || !CHAT.busy.has(CHAT.id) || CHAT.phase === "stopping") return;
   CHAT.phase = "stopping";
   $("chat-stop").disabled = true;
-  chatStatus();
   invoke("ia_chat_stop", { id: CHAT.id }).catch((e) => {
     CHAT.phase = "answering";
     $("chat-stop").disabled = false;
-    chatStatus();
     toast(String(e), true);
   });
 }
 
-const CHAT_PHASE = { answering: "chat.phase.answering", stopping: "chat.phase.stopping", stopped: "chat.phase.stopped" };
-
 /* A conversation whose mode is not ready: its history only. */
 function chatSetLocked(on) {
-  for (const id of ["chat-input", "chat-send", "chat-add", "chat-mode", "chat-model"]) $(id).disabled = on;
+  for (const id of ["chat-input", "chat-send", "chat-add", "chat-model"]) $(id).disabled = on;
   $("chat-input").placeholder = tr(on ? "chat.placeholder_locked" : "chat.placeholder");
-}
-
-function chatStatus() {
-  const cost = CHAT.cost
-    ? fmtNum(CHAT.cost, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : "";
-  const phase = CHAT_PHASE[CHAT.phase] ? tr(CHAT_PHASE[CHAT.phase]) : "";
-  $("chat-status").textContent = [phase, chatModelName(CHAT.model), cost].filter(Boolean).join(" · ");
-  $("chat-status").classList.toggle("live", CHAT.phase === "answering" || CHAT.phase === "stopping");
 }
 
 /* An image of the conversation folder, served by the thumbnail protocol. */
@@ -469,13 +451,7 @@ function chatVersion(n) {
 function chatHandle(ev, live) {
   switch (ev.type) {
     case "system":
-      if (ev.subtype === "init") {
-        CHAT.model = ev.model || CHAT.model;
-        chatStatus();
-        if (ev.mode) chatModeShow(ev.mode);
-      } else if (ev.subtype === "mode") {
-        chatModeShow(ev.mode);
-      } else if (ev.subtype === "api_retry" && live && ev.error !== "authentication_failed") {
+      if (ev.subtype === "api_retry" && live && ev.error !== "authentication_failed") {
         chatNote(tr("chat.retry", { n: ev.attempt, max: ev.max_retries }), "muted");
       }
       break;
@@ -543,10 +519,6 @@ function chatHandle(ev, live) {
       chatSeen(ev.tool_use_id, ev.name);
       break;
     case "result":
-      if (typeof ev.total_cost_usd === "number") {
-        CHAT.cost = ev.total_cost_usd;
-        chatStatus();
-      }
       if (CHAT.streaming && CHAT.streamText) chatAssistant(CHAT.streamText, CHAT.streaming);
       CHAT.streaming = null;
       CHAT.streamText = "";
@@ -588,21 +560,7 @@ listen("ia-mesh", (e) => {
   if (e.payload.id === CHAT.id) chatVersion(e.payload.version);
 });
 
-/* ------------------------------------------------------------ mode */
-
-/* Modes offered: locally, from the most autonomous to plan only; in the
-   sandbox, everything is allowed already, so only plan mode is a choice. */
-const CHAT_MODES = {
-  local: ["acceptEdits", "default", "plan"],
-  container: ["bypassPermissions", "plan"],
-};
-
-function chatModeFill(c) {
-  const sel = $("chat-mode");
-  const modes = CHAT_MODES[c.engine === "container" ? "container" : "local"];
-  sel.innerHTML = modes.map((m) => `<option value="${m}">${esc(tr("chat.mode." + m))}</option>`).join("");
-  sel.value = modes[0];
-}
+/* ------------------------------------------------------------ model */
 
 /* Models a conversation may choose (chat.rs `MODELS`), with their names;
    "" is the account's default. */
@@ -628,16 +586,6 @@ $("chat-model").addEventListener("change", (e) => {
     .catch((err) => toast(String(err), true));
 });
 
-/* The mode Claude reports — after our change, or when it leaves plan mode. */
-function chatModeShow(mode) {
-  const sel = $("chat-mode");
-  if ([...sel.options].some((o) => o.value === mode)) sel.value = mode;
-}
-
-$("chat-mode").addEventListener("change", (e) => {
-  if (CHAT.id) invoke("ia_chat_mode", { id: CHAT.id, mode: e.target.value }).catch((err) => toast(String(err), true));
-});
-
 /* ------------------------------------------------------------ opening */
 
 function chatReset() {
@@ -646,9 +594,6 @@ function chatReset() {
   CHAT.perms.clear();
   CHAT.streaming = null;
   CHAT.streamText = "";
-  CHAT.model = "";
-  CHAT.cost = 0;
-  chatStatus();
 }
 
 /* Shows a conversation: its past, then — for a brand new one — its initial
@@ -658,7 +603,6 @@ async function chatOpen(c) {
   CHAT.conv = c;
   chatReset();
   chatClearAttachments();
-  chatModeFill(c);
   chatModelFill(c);
   let past = [];
   try {
@@ -735,10 +679,16 @@ function chatSubmit() {
   chatSend(text, attachments);
 }
 
+/* The field grows with its text. Empty, it stays one line: measured with
+   only its placeholder, while the column is still narrow or hidden, it
+   came out two lines tall and the placeholder sat too high. */
 function chatGrow() {
   const input = $("chat-input");
-  input.style.height = "auto";
-  input.style.height = Math.min(input.scrollHeight, 220) + "px";
+  if (!input.value) input.style.height = "";
+  else {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 220) + "px";
+  }
   $("chat-send").disabled = !input.value.trim() && !CHAT.attach.length;
 }
 
@@ -826,6 +776,14 @@ function chatClearAttachments() {
 /* ------------------------------------------------------------ controls */
 
 $("chat-input").addEventListener("input", chatGrow);
+// A wider or narrower column rewraps the text: its height follows.
+let chatInputW = 0;
+new ResizeObserver(([e]) => {
+  const w = Math.round(e.contentRect.width);
+  if (w === chatInputW) return;
+  chatInputW = w;
+  if ($("chat-input").value) chatGrow();
+}).observe($("chat-input"));
 $("chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
@@ -888,6 +846,4 @@ chatList.addEventListener("click", (e) => {
 window.addEventListener("langchange", () => {
   const c = CHAT.id && IA.list.find((x) => x.id === CHAT.id);
   if (c && !CHAT.busy.has(c.id)) chatOpen(c);
-  // Mid-answer the view stays, but its status line speaks the new language.
-  else if (CHAT.id) chatStatus();
 });

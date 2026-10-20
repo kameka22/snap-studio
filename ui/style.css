@@ -1945,9 +1945,6 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   line-height: 18px;
   padding: 0;
 }
-.chat-foot { display: flex; align-items: center; gap: 10px; padding: 5px 2px 0; }
-#chat-mode { font-size: 11px; min-height: 0; color: var(--text-secondary); }
-.chat-status { flex: 1; text-align: right; font-size: 11px; color: var(--text-tertiary); }
 .chat-question { margin: 6px 0 8px; }
 .chat-question .q { font-weight: 600; margin-bottom: 5px; }
 .chat-question .opts { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -3481,7 +3478,6 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .chat-send.stop svg { width: 12px; height: 12px; }
 .chat-send.stop:hover { background: var(--danger-soft); color: var(--danger); }
 .chat-send.stop:disabled { opacity: 0.6; }
-.chat-status.live { color: var(--accent); }
 .ia-term-stop {
   position: absolute;
   right: 18px;
