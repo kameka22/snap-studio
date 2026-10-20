@@ -1406,6 +1406,15 @@ async function iaLoadPane(id) {
   }
 }
 
+/* End of a turn of the conversation shown: the pane is read again from
+   disk — object, versions, measurements. A sandbox (re)starting or a write
+   caught half-way could leave the details bar empty until then. */
+listen("ia-chat", (e) => {
+  const { id, events } = e.payload;
+  if (id !== IA.open || !events.some((ev) => ev.type === "result" || ev.type === "exited")) return;
+  iaQueue(() => (IA.open === id ? iaLoadPane(id) : null));
+});
+
 /* Claude just wrote: the object changes before the user's eyes. */
 listen("ia-mesh", async (e) => {
   const { id, version, stats } = e.payload;
@@ -1421,8 +1430,6 @@ listen("ia-mesh", async (e) => {
   });
 });
 
-/* Conversation or terminal: the same Claude session, never both at once —
-   the process of one view ends before the other resumes the transcript. */
 /* Chat or terminal: two views of the same session. Nothing is closed or
    started; the terminal reads what the chat's Claude does. */
 function iaSwitchView(view) {

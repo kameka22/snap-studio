@@ -92,7 +92,7 @@ function traceEvent(ev, st, t) {
       if (ev.is_error) return `${C.err}✗ ${traceNl(ev.result || t("trace.failed"))}${C.off}\r\n`;
       return `${C.dim}— ${typeof ev.duration_ms === "number" ? t("trace.done_in", { s: Math.round(ev.duration_ms / 1000) }) : t("trace.done")}${C.off}\r\n`;
     case "exited":
-      return `${C.dim}${t("trace.exited")}${C.off}\r\n`;
+      return `${C.dim}${t("trace.exited")}${ev.code != null ? ` (${t("trace.code", { code: ev.code })})` : ""}${C.off}\r\n`;
     case "auth_failed":
       return `${C.err}${t("trace.auth")}${C.off}\r\n`;
     case "error":

@@ -1317,6 +1317,7 @@
   "trace.done": "Terminé",
   "trace.done_in": "Terminé en {s} s",
   "trace.exited": "Claude s'est fermé",
+  "trace.code": "code {code}",
   "trace.auth": "Claude n'est pas connecté : voir Réglages → IA",
   "trace.retry": "Nouvelle tentative ({n}/{max})…",
   "trace.more": "… {n} lignes de plus",

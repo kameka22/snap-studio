@@ -1314,6 +1314,7 @@
   "trace.done": "Done",
   "trace.done_in": "Done in {s} s",
   "trace.exited": "Claude has closed",
+  "trace.code": "code {code}",
   "trace.auth": "Claude is not signed in: see Settings → AI",
   "trace.retry": "Retrying ({n}/{max})…",
   "trace.more": "… {n} more lines",

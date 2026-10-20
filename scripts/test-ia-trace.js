@@ -43,6 +43,8 @@ assert.ok(run([{ type: "result", subtype: "error_during_execution", is_error: tr
 assert.ok(run([{ type: "result", is_error: true, result: "Overloaded" }]).includes("✗ Overloaded"));
 assert.ok(run([{ type: "control_request", request: { subtype: "can_use_tool", tool_name: "Bash", input: { command: "rm -rf build" } } }]).includes('? trace.permission{"tool":"Bash"} rm -rf build'));
 assert.ok(run([{ type: "permission_answer", allow: false }]).includes("→ trace.denied"));
+assert.ok(run([{ type: "exited", code: 137 }]).includes('trace.exited (trace.code{"code":137})'));
+assert.equal(run([{ type: "exited" }]), "trace.exited\r\n");
 // The interruption marker and events of no interest show nothing.
 assert.equal(run([{ type: "user", message: { content: [{ type: "text", text: "[Request interrupted by user]" }] } }, { type: "seen" }, { type: "system", subtype: "init" }]), "");
 

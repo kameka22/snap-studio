@@ -506,7 +506,11 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], liste
     std::thread::spawn(move || {
         // Said once per turn: retries repeat the same failure.
         let mut auth_said = false;
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        // Line by line until the process closes its output: a line that is
+        // not valid UTF-8 is read leniently rather than taken for the end —
+        // the session would be forgotten while Claude still runs, and the
+        // next message would start a second one (a second sandbox).
+        for line in lines_lossy(BufReader::new(stdout)) {
             // yolobox may print a few lines of its own (image build): not ours.
             let Ok(event) = serde_json::from_str::<Value>(&line) else {
                 continue;
@@ -553,10 +557,13 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], liste
                 None
             }
         };
-        if let Some(mut s) = mine {
-            let _ = s.child.wait();
+        // Its exit code, said in the terminal view and the console: a
+        // session ending by itself must be explainable.
+        let code = mine.and_then(|mut s| s.child.wait().ok()).map(|st| st.code());
+        if let Some(code) = code {
+            eprintln!("[chat] Claude ended for {id}: code {code:?}");
         }
-        listener(json!({ "type": "exited" }));
+        listener(json!({ "type": "exited", "code": code.flatten() }));
     });
 
     Ok(Session {
@@ -642,6 +649,24 @@ fn app_listener(app: &AppHandle, id: &str) -> Listener {
 }
 
 /// Starts the conversation's Claude if it is not running.
+/// The lines of a stream until its end, invalid UTF-8 replaced rather than
+/// ending the reading.
+fn lines_lossy(mut r: impl BufRead) -> impl Iterator<Item = String> {
+    let mut buf = Vec::new();
+    std::iter::from_fn(move || {
+        buf.clear();
+        match r.read_until(b'\n', &mut buf) {
+            Ok(0) | Err(_) => None,
+            Ok(_) => {
+                while matches!(buf.last(), Some(b'\n' | b'\r')) {
+                    buf.pop();
+                }
+                Some(String::from_utf8_lossy(&buf).into_owned())
+            }
+        }
+    })
+}
+
 fn ensure_started(app: &AppHandle, c: &Conversation) -> Result<()> {
     // Two simultaneous messages would start two Claudes on one session.
     static GATE: OnceLock<Mutex<()>> = OnceLock::new();
@@ -825,6 +850,16 @@ pub fn close_all() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_invalid_line_does_not_end_the_reading() {
+        let data: &[u8] = b"{\"a\":1}\r\n\xff\xfe garbage\n{\"b\":2}\n";
+        let lines: Vec<String> = lines_lossy(data).collect();
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], "{\"a\":1}");
+        assert!(lines[1].ends_with(" garbage"));
+        assert_eq!(lines[2], "{\"b\":2}");
+    }
 
     const STREAM: &str = include_str!("../tests/fixtures/chat-stream.jsonl");
     const TRANSCRIPT: &str = include_str!("../tests/fixtures/chat-transcript.jsonl");
