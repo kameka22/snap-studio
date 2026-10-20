@@ -1679,13 +1679,13 @@ mod tests {
             assert!(base.contains(line), "profile value missing: {line}");
         }
         // What the slice sheet computes at 75 % (scripts/test-speed.js).
-        let at75: Map<String, Value> = serde_json::from_str(r#"{"outer_wall_speed":["150","375"],"inner_wall_speed":["225","450"],"sparse_infill_speed":["202","450"],"internal_solid_infill_speed":["187","450"],"gap_infill_speed":"187","top_surface_speed":"150","support_speed":"112","support_interface_speed":"60","bridge_speed":"37","default_acceleration":"5600","outer_wall_acceleration":"2800","inner_wall_acceleration":"5600","top_surface_acceleration":"1100"}"#).unwrap();
+        let at75: Map<String, Value> = serde_json::from_str(r#"{"outer_wall_speed":["150","375"],"inner_wall_speed":["225","450"],"sparse_infill_speed":["202","450"],"internal_solid_infill_speed":["187","450"],"gap_infill_speed":"187","top_surface_speed":"150","support_speed":"112","support_interface_speed":"60","bridge_speed":"37","default_acceleration":"5620","outer_wall_acceleration":"2810","inner_wall_acceleration":"5620","top_surface_acceleration":"1120"}"#).unwrap();
         let (slow, slow_stats) = slice("speed75", at75);
         for line in [
             "; outer_wall_speed = 150,375", "; inner_wall_speed = 225,450", "; sparse_infill_speed = 202,450",
             "; gap_infill_speed = 187", "; top_surface_speed = 150", "; bridge_speed = 37",
-            "; default_acceleration = 5600", "; outer_wall_acceleration = 2800", "; inner_wall_acceleration = 5600",
-            "; top_surface_acceleration = 1100", "; travel_speed = 500", "; initial_layer_speed = 50",
+            "; default_acceleration = 5620", "; outer_wall_acceleration = 2810", "; inner_wall_acceleration = 5620",
+            "; top_surface_acceleration = 1120", "; travel_speed = 500", "; initial_layer_speed = 50",
         ] {
             assert!(slow.contains(line), "missing in G-code: {line}");
         }

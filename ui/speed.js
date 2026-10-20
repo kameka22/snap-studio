@@ -6,7 +6,7 @@
    only slow down (never faster than the profile), and the first layer and
    travel moves stay as they are unless their switch is on (then they only
    slow down, too). Above 100 %, nothing goes past the machine's limits.
-   Speeds are rounded down to 1 mm/s, accelerations to 100 mm/s².
+   Speeds are rounded down to 1 mm/s, accelerations to 10 mm/s².
 
    Each row of the ⚙ panel follows the global percentage until a value is
    typed by hand: the row is then detached and keeps that value (its other
@@ -102,11 +102,13 @@ function spdFactor(row, pct) {
   return row.slow ? Math.min(f, 1) : f;
 }
 
-/* Rounded down: 1 mm/s, 100 mm/s² (the epsilon absorbs 270 × 0.7 =
-   188.99999…). Never below 1 mm/s or 100 mm/s². */
+/* Rounded down: 1 mm/s, 10 mm/s² — finer than 100, which took a low
+   profile's 500 mm/s² at 75 % to 200 instead of 281 (the epsilon absorbs
+   270 × 0.7 = 188.99999…). Never below 1 mm/s or 100 mm/s². */
 function spdRound(x, accel) {
-  const unit = accel ? 100 : 1;
-  return Math.max(unit, Math.floor(x / unit + 1e-9) * unit);
+  const unit = accel ? 10 : 1;
+  const min = accel ? 100 : 1;
+  return Math.max(min, Math.floor(x / unit + 1e-9) * unit);
 }
 
 /* One profile value times `r`, the same shape back (a list stays a list: the

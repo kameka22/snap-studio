@@ -94,7 +94,7 @@ function spdRowHtml(r) {
     <span class="k">${esc(label)}</span>
     ${link}
     <span class="spd-from" data-from="${r.id}">${known ? esc(`${fmtNum(r.profile)} →`) : "—"}</span>
-    <input type="number" class="field num" min="1" step="${r.accel ? 100 : 1}" data-spd-row="${r.id}" aria-label="${esc(label)}" value="${known && r.value != null ? r.value : ""}"${known ? "" : " disabled"} />
+    <input type="number" class="field num" min="1" step="${r.accel ? 10 : 1}" data-spd-row="${r.id}" aria-label="${esc(label)}" value="${known && r.value != null ? r.value : ""}"${known ? "" : " disabled"} />
     <span class="unit">${esc(unit)}</span>
   </div>`;
 }

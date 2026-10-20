@@ -42,11 +42,11 @@ assert.equal(c75.overrides.top_surface_speed, "150");
 assert.equal(c75.overrides.support_speed, "112", "112.5 → 112");
 assert.equal(c75.overrides.support_interface_speed, "60");
 assert.equal(c75.overrides.bridge_speed, "37", "bridges slow down");
-// Accelerations × f²: 0.5625, rounded down to 100 mm/s².
-assert.equal(c75.overrides.default_acceleration, "5600");
-assert.equal(c75.overrides.outer_wall_acceleration, "2800");
-assert.equal(c75.overrides.top_surface_acceleration, "1100");
-assert.equal(c75.overrides.inner_wall_acceleration, "5600", "engine default 10000 when the profile has none");
+// Accelerations × f²: 0.5625, rounded down to 10 mm/s².
+assert.equal(c75.overrides.default_acceleration, "5620");
+assert.equal(c75.overrides.outer_wall_acceleration, "2810");
+assert.equal(c75.overrides.top_surface_acceleration, "1120");
+assert.equal(c75.overrides.inner_wall_acceleration, "5620", "engine default 10000 when the profile has none");
 assert.ok(!("sparse_infill_acceleration" in c75.overrides), "100% of default_acceleration: follows it");
 // First layer and travel untouched by default.
 for (const k of ["initial_layer_speed", "initial_layer_infill_speed", "travel_speed"]) assert.ok(!(k in c75.overrides), k);
@@ -56,14 +56,16 @@ assert.deepEqual(
   { p: row(c75, "outer").profile, v: row(c75, "outer").value, l: row(c75, "outer").linked },
   { p: 200, v: 150, l: true }
 );
-assert.deepEqual({ p: row(c75, "accel").profile, v: row(c75, "accel").value }, { p: 10000, v: 5600 });
+assert.deepEqual({ p: row(c75, "accel").profile, v: row(c75, "accel").value }, { p: 10000, v: 5620 });
 assert.equal(S.spdCount({ pct: 75 }, U1, caps), Object.keys(c75.overrides).length);
 assert.ok(S.spdActive({ pct: 75 }));
 
 // Floating point: 270 × 0.7 = 188.99999…, still 189.
 assert.deepEqual(at(70).overrides.sparse_infill_speed, ["189", "420"]);
 assert.equal(S.spdRound(188.99999999999997, false), 189);
-assert.equal(S.spdRound(5625, true), 5600);
+assert.equal(S.spdRound(5625, true), 5620);
+// A low profile keeps its proportion: 500 mm/s² at 75 % gives 280, not 200.
+assert.equal(S.spdScale("500", 0.5625, true, 0), "280");
 assert.equal(S.spdRound(0.3, false), 1, "never below 1 mm/s");
 assert.equal(S.spdRound(40, true), 100, "never below 100 mm/s²");
 // 50 %: f² = 0.25.
@@ -85,7 +87,7 @@ assert.deepEqual(c120.overrides.outer_wall_speed, ["240", "500"], "500 × 1.2 ca
 assert.deepEqual(c120.overrides.inner_wall_speed, ["360", "600"], "a profile already above the limit keeps its value");
 assert.ok(!("bridge_speed" in c120.overrides), "bridges never faster");
 assert.equal(c120.overrides.default_acceleration, "14400", "× 1.44");
-assert.equal(c120.overrides.top_surface_acceleration, "2800");
+assert.equal(c120.overrides.top_surface_acceleration, "2880");
 assert.equal(S.spdScale("450", 1.2, false, 500), "500");
 assert.equal(S.spdScale("18000", 1.44, true, 20000), "20000");
 assert.equal(S.spdScale("450", 1.2, false, 0), "540", "no known limit");
@@ -111,12 +113,12 @@ assert.deepEqual(e50.overrides.inner_wall_speed, ["150", "300"], "the linked row
 const sup = S.spdCompute(S.spdEdit({ pct: 100 }, "support", "75", U1, caps), U1, caps);
 assert.equal(sup.overrides.support_speed, "75");
 assert.equal(sup.overrides.support_interface_speed, "40");
-// Accelerations typed: rounded to 100, the others in proportion.
-const acc = S.spdEdit({ pct: 100 }, "accel", "5050", U1, caps);
-assert.deepEqual(acc.edits, { accel: 5000 });
+// Accelerations typed: rounded down to 10, the others in proportion.
+const acc = S.spdEdit({ pct: 100 }, "accel", "5055", U1, caps);
+assert.deepEqual(acc.edits, { accel: 5050 });
 const accC = S.spdCompute(acc, U1, caps);
-assert.equal(accC.overrides.default_acceleration, "5000");
-assert.equal(accC.overrides.outer_wall_acceleration, "2500");
+assert.equal(accC.overrides.default_acceleration, "5050");
+assert.equal(accC.overrides.outer_wall_acceleration, "2520", "5000 × 0.505 = 2525, rounded down");
 // Typed above the machine's limit: capped.
 assert.deepEqual(S.spdCompute(S.spdEdit({}, "outer", "900", U1, caps), U1, caps).overrides.outer_wall_speed, ["500", "500"]);
 // At 100 %, one row edited: only that row is sent.
