@@ -1133,8 +1133,16 @@ $("v-plate").addEventListener("change", () => {
 });
 iaBedApply();
 
+/* The framing keeps clear of the floating controls: their bottom edge, and
+   as much again below it. */
+function iaInsetTop() {
+  const t = $("ia-ptools");
+  V.insetTop = t.offsetHeight ? t.offsetTop + t.offsetHeight + 8 : 0;
+}
+
 function iaDock() {
   const v = $("viewer");
+  iaInsetTop();
   if (!IA.viewerOwned) {
     IA.prevPlate = V.showPlate;
     IA.viewerOwned = true;
@@ -1426,6 +1434,7 @@ $("ia-versions").addEventListener("click", (ev) => {
    only the picture is redrawn at the new aspect. */
 const iaStageObserver = new ResizeObserver(() => {
   if (!IA.open || typeof draw !== "function") return;
+  iaInsetTop();
   if (V.framed && typeof frameCamera === "function") frameCamera();
   else draw();
 });
@@ -1494,7 +1503,10 @@ $("ia-reframe").addEventListener("click", () => {
 });
 
 $("ia-expand").addEventListener("click", iaExpand);
-$("ia-stage").addEventListener("dblclick", iaExpand);
+$("ia-stage").addEventListener("dblclick", (e) => {
+  // A quick double click on a control is not a request to enlarge.
+  if (!e.target.closest("#ia-ptools")) iaExpand();
+});
 
 window.addEventListener("langchange", () => {
   iaRender();

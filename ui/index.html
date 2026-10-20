@@ -554,15 +554,13 @@
     <div class="ia-split">
       <div id="ia-center" class="ia-center">
         <section id="ia-viewpane" class="ia-viewpane">
-          <div class="ia-rbar ia-pbar">
-            <span data-i18n="ia.preview">Preview</span>
-            <span class="ia-rbar-end">
+          <div id="ia-stage" class="ia-stage">
+            <div id="ia-ptools" class="ia-ptools" role="toolbar" aria-label="Preview" data-i18n-aria="ia.preview">
               <label id="ia-bed-sw" class="sw-label ia-bedsw" title="Show the printer's bed under the object" data-i18n-title="ia.bed.show"><input type="checkbox" id="ia-bed" class="sw small" role="switch" /><span data-i18n="ia.bed">Bed</span></label>
+              <span class="ia-ptools-sep" aria-hidden="true"></span>
               <button id="ia-reframe" class="btn small" title="Reframe the view" data-i18n-title="ia.reframe.title" data-i18n="ia.reframe">Reframe</button>
               <button id="ia-expand" class="btn small" title="Enlarge (double-click the preview)" data-i18n-title="ia.expand.title" data-i18n="ia.expand">Enlarge</button>
-            </span>
-          </div>
-          <div id="ia-stage" class="ia-stage">
+            </div>
             <div id="ia-wait" class="ia-wait hidden">
               <div class="ia-wait-bed"></div>
               <span data-i18n="ia.waiting">Waiting for Claude's first mesh…</span>

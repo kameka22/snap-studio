@@ -764,6 +764,24 @@ function drawBed(gl, bed, grid, vp, view, light) {
 
 /* ---------------------------------------------------------------- render */
 
+/* The picture is cleared with the viewer's own CSS background
+   (var(--content-bg)), so it melts into the screen around it, in light and
+   dark alike. Read once, again after a theme change. */
+let V_CLEAR = null;
+function viewerClear() {
+  if (!V_CLEAR) {
+    const m = getComputedStyle($("viewer")).backgroundColor.match(/[\d.]+/g) || [];
+    V_CLEAR = m.length >= 3 ? m.slice(0, 3).map((x) => +x / 255) : [0.953, 0.953, 0.961];
+  }
+  return V_CLEAR;
+}
+
+/* Pixels kept clear at the top of the picture: docked in the AI preview,
+   the floating controls (ia.js sets V.insetTop). Full screen, none. */
+function viewInsetTop() {
+  return $("viewer").classList.contains("docked") ? V.insetTop || 0 : 0;
+}
+
 function frameCamera() {
   const m = V.paths || V.mesh;
   if (!m) return;
@@ -779,9 +797,12 @@ function frameCamera() {
   const size = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 1);
   // The field of view is vertical: a pane taller than wide would cut the
   // sides, so step back in proportion.
+  // Under a band kept clear at the top, the object fits in what is left.
   const c = V.gl?.canvas;
-  const aspect = c && c.clientHeight ? c.clientWidth / c.clientHeight : 1;
-  V.cam.dist = size * 2.1 * (aspect < 1 ? 1 / aspect : 1);
+  const ch = c?.clientHeight || 0;
+  const free = Math.max(ch - viewInsetTop(), 1);
+  const aspect = ch ? c.clientWidth / free : 1;
+  V.cam.dist = size * 2.1 * (aspect < 1 ? 1 / aspect : 1) * (ch ? ch / free : 1);
   V.cam.yaw = -0.62;
   V.cam.pitch = 0.46;
   // Framed by the app: a resize may frame again (ia.js), until the user
@@ -803,8 +824,7 @@ function draw() {
   }
   gl.viewport(0, 0, w, h);
   const light = !isDark();
-  // --content-bg: #f3f3f5 in light mode, #1e1e20 in dark mode.
-  gl.clearColor(...(light ? [0.953, 0.953, 0.961, 1] : [0.118, 0.118, 0.125, 1]));
+  gl.clearColor(...viewerClear(), 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
 
@@ -817,6 +837,10 @@ function draw() {
   ]);
   const view = m4.lookAt(eye, c.target, [0, 0, 1]);
   const proj = m4.perspective(0.72, Math.max(w / Math.max(h, 1), 0.01), Math.max(c.dist / 100, 0.5), c.dist * 12 + 2000);
+  // A band kept clear at the top: the picture's centre moves to the middle
+  // of what is left below it.
+  const top = viewInsetTop();
+  if (top && canvas.clientHeight) proj[9] += top / canvas.clientHeight;
   const mvp = m4.mul(proj, view);
 
   if (V.showPlate && V.grid) drawBed(gl, V.bed, V.grid, mvp, view, light);
@@ -868,7 +892,10 @@ const schedule = () => {
     draw();
   });
 };
-window.addEventListener("themechange", schedule);
+window.addEventListener("themechange", () => {
+  V_CLEAR = null;
+  schedule();
+});
 
 /* Depending on the platform, Tauri serves custom protocols in one form or
    the other: try both. */
