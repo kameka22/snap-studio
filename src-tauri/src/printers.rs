@@ -225,6 +225,22 @@ pub fn preprint_script(opts: &StartOptions, tools: &[u8], map: &[(u8, u8)], lega
     lines.join("\n")
 }
 
+/// True when a substitution really moves a tool to another head.
+pub fn is_remap(map: &[(u8, u8)]) -> bool {
+    map.iter().any(|(t, h)| t != h)
+}
+
+/// Extruder map back to identity, tool `n` on head `n`. The firmware keeps
+/// the last map it was given, and Snap Studio only rewrites the entries of
+/// the tools a print uses: after a print sent with a substitution, a print
+/// started elsewhere (the printer's screen) could inherit it.
+pub fn identity_map_script() -> String {
+    (0..4u8)
+        .map(|h| format!("SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER={h} MAP_EXTRUDER={h}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Head printing a G-code tool: its substitute, otherwise the same number.
 pub fn head_of(tool: u8, map: &[(u8, u8)]) -> u8 {
     map.iter().find(|(t, _)| *t == tool).map(|(_, h)| *h).unwrap_or(tool)
@@ -725,6 +741,10 @@ mod tests {
         assert!(check_map(&[0], &[(0, 4)]).is_err(), "no head 4");
         assert!(check_map(&[0], &[(1, 2)]).is_err(), "T1 is not used");
         assert_eq!(head_of(1, &[(2, 3)]), 1);
+        assert!(is_remap(&[(1, 3)]) && !is_remap(&[]) && !is_remap(&[(2, 2)]));
+        let id = identity_map_script();
+        assert_eq!(id.lines().count(), 4);
+        assert!(id.ends_with("CONFIG_EXTRUDER=3 MAP_EXTRUDER=3"));
     }
 
     #[test]

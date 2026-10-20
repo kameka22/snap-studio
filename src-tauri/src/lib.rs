@@ -647,7 +647,14 @@ async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<Strin
     // The print's record keeps the G-code and its summary. The print has left:
     // a failure here must not make it look failed.
     let id = match add(gcode, new, "printing", remote).await.map_err(|e| anyhow::anyhow!("{e}")).and_then(|r| r) {
-        Ok(job) => job.id,
+        Ok(job) => {
+            if printers::is_remap(&request.map) {
+                if let Err(e) = jobs::mark_remapped(&job.id) {
+                    eprintln!("[jobs] substitution not recorded: {e}");
+                }
+            }
+            job.id
+        }
         Err(e) => {
             eprintln!("[jobs] record not saved: {e}");
             String::new()
@@ -686,9 +693,15 @@ async fn job_launch(app: tauri::AppHandle, id: String, map: Option<Vec<(u8, u8)>
     // A name of its own for each job: two prints of the same model do not
     // overwrite each other on the printer.
     let remote = jobs::remote_name(&job.name, &job.id);
-    let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools, &map.unwrap_or_default()).await?;
+    let map = map.unwrap_or_default();
+    let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools, &map).await?;
     if let Err(e) = jobs::mark_started(&id, &remote) {
         eprintln!("[jobs] launch not recorded: {e}");
+    }
+    if printers::is_remap(&map) {
+        if let Err(e) = jobs::mark_remapped(&id) {
+            eprintln!("[jobs] substitution not recorded: {e}");
+        }
     }
     emit_jobs(&app);
     send_progress(&app, "done", Some(100.0), warning);

@@ -70,6 +70,10 @@ pub struct Job {
     pub source: Option<String>,
     #[serde(default)]
     pub stats: Option<SliceStats>,
+    /// Started with a substitution (a tool on another head): the printer's
+    /// extruder map goes back to identity when it ends.
+    #[serde(default)]
+    pub remapped: bool,
 }
 
 fn now() -> u64 {
@@ -206,6 +210,7 @@ pub fn add(gcode: &Path, new: NewJob, state: &str, remote: &str) -> Result<Job> 
         profile: new.profile,
         source: new.source,
         stats,
+        remapped: false,
     };
     let j = job.clone();
     update(move |list| {
@@ -294,6 +299,16 @@ pub fn mark_started(id: &str, remote: &str) -> Result<()> {
         j.remote = remote.to_string();
         j.started = Some(now());
         list.push(j);
+        Ok(())
+    })
+}
+
+/// The job was started with a substitution.
+pub fn mark_remapped(id: &str) -> Result<()> {
+    update(|list| {
+        if let Some(j) = list.iter_mut().find(|j| j.id == id) {
+            j.remapped = true;
+        }
         Ok(())
     })
 }
@@ -419,8 +434,12 @@ async fn tick(app: &AppHandle) {
     for p in &printers {
         let st = printers::status(&p.host, p.port).await;
         let live = Live { printer_id: p.id.clone(), printer_name: p.name.clone(), status: st };
-        if live.status.online {
-            observe(app, &live);
+        if live.status.online && observe(app, &live) {
+            // A print started with a substitution is over: the map goes back
+            // to identity, for whatever is started next, wherever from.
+            if let Err(e) = printers::gcode_script(&p.host, p.port, &printers::identity_map_script()).await {
+                eprintln!("[jobs] extruder map not reset on {}: {e}", p.name);
+            }
         }
         snap.push(live);
     }
@@ -432,10 +451,11 @@ async fn tick(app: &AppHandle) {
 ///
 /// An end of print is only kept when confirmed by two consecutive passes and
 /// a complete state: an incomplete answer or a Klipper hiccup must not close a
-/// print that is still running.
-fn observe(app: &AppHandle, live: &Live) {
+/// print that is still running. True when a print started with a
+/// substitution was just closed.
+fn observe(app: &AppHandle, live: &Live) -> bool {
     if live.status.partial {
-        return;
+        return false;
     }
     let id = &live.printer_id;
     let state = live.status.state.as_str();
@@ -445,7 +465,7 @@ fn observe(app: &AppHandle, live: &Live) {
         m.idle.insert(id.clone(), 0);
         // New print: the question may be asked again when it ends.
         m.asked.remove(id);
-        return;
+        return false;
     }
     let pending = has_printing(id);
     let was_busy = {
@@ -455,7 +475,7 @@ fn observe(app: &AppHandle, live: &Live) {
         let confirmed = *n >= 2;
         let was_busy = m.states.get(id).is_some_and(|s| busy(s));
         if (was_busy || pending) && !confirmed {
-            return;
+            return false;
         }
         m.states.insert(id.clone(), state.to_string());
         was_busy
@@ -469,6 +489,7 @@ fn observe(app: &AppHandle, live: &Live) {
         _ => "finished",
     };
     let closed = if pending { close_printing(id, outcome) } else { vec![] };
+    let reset = closed.iter().any(|j| j.remapped);
     if was_busy || !closed.is_empty() {
         let _ = app.emit("jobs-changed", ());
         let name = closed
@@ -487,6 +508,7 @@ fn observe(app: &AppHandle, live: &Live) {
         notify(app, &crate::t!(key, name = name), &format!("{}.{next}", live.printer_name));
     }
     offer_next(app, live, closed.into_iter().next());
+    reset
 }
 
 fn notify(app: &AppHandle, title: &str, body: &str) {
@@ -529,6 +551,7 @@ mod tests {
             profile: Profile::default(),
             source: None,
             stats: None,
+            remapped: false,
         };
         let mut list: Vec<Job> = (0..30).map(|i| mk(i, "complete")).collect();
         list.push(mk(100, "queued"));
