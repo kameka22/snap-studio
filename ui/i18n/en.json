@@ -461,7 +461,7 @@
   "prints.pause": "Pause",
   "prints.cancel": "Cancel Print",
   "prints.position": "#{n} in queue",
-  "prints.for": "For",
+  "prints.for": "Print on",
   "prints.not_free": "{name} is not free",
   "prints.launch_now": "Start Now",
   "prints.move_up": "Move up in the queue",

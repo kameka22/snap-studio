@@ -296,9 +296,9 @@ function pjRenderDetail({ job, live, active }) {
       .map((p) => `<option value="${esc(p.id)}"${p.id === job.printer_id ? " selected" : ""}>${esc(p.name || p.host)}</option>`)
       .join("")}</select></label>
       <div class="pj-opts">
-        <label><input type="checkbox" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> ${esc(tr("prints.opt.leveling_cap"))}</label>
-        <label><input type="checkbox" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> ${esc(tr("prints.opt.flow_cap"))}</label>
-        <label><input type="checkbox" data-opt="timelapse"${job.options.timelapse ? " checked" : ""}/> ${esc(tr("prints.opt.timelapse_cap"))}</label>
+        <label><input type="checkbox" class="sw" data-opt="bed_leveling"${job.options.bed_leveling ? " checked" : ""}/> ${esc(tr("prints.opt.leveling_cap"))}</label>
+        <label><input type="checkbox" class="sw" data-opt="flow_calibration"${job.options.flow_calibration ? " checked" : ""}/> ${esc(tr("prints.opt.flow_cap"))}</label>
+        <label><input type="checkbox" class="sw" data-opt="timelapse"${job.options.timelapse ? " checked" : ""}/> ${esc(tr("prints.opt.timelapse_cap"))}</label>
       </div>`;
     actions = `<button class="btn primary" data-act="launch"${printerFree ? "" : " disabled"} title="${
       printerFree ? "" : esc(tr("prints.not_free", { name: printerName }))

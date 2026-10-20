@@ -2414,7 +2414,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .pj-times { font-size: 13px; color: var(--text-secondary); }
 .pj-for { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
 .pj-opts { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
-.pj-opts label { display: flex; align-items: center; gap: 6px; }
+.pj-opts label { display: flex; align-items: center; gap: 8px; }
 .pj-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
 .pj-cols { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; margin-top: 22px; }
 .pj-cols .vp-section { display: flex; align-items: center; justify-content: space-between; }

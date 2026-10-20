@@ -464,7 +464,7 @@
     "one": "{n}re position",
     "other": "{n}e position"
   },
-  "prints.for": "Pour",
+  "prints.for": "Imprimer sur",
   "prints.not_free": "{name} n'est pas libre",
   "prints.launch_now": "Lancer maintenant",
   "prints.move_up": "Monter dans la file",
