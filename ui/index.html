@@ -131,7 +131,7 @@
         <button class="seg-btn" data-iaview="term" data-i18n="chat.view.term">Terminal</button>
       </div>
       <button id="ia-folder" class="tb-btn" title="Show the working folder" data-i18n-title="ia.show_workspace"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
-      <button id="ia-stop" class="btn" data-i18n="ia.close_session">End Session</button>
+      <button id="ia-delete" class="btn ia-delete-btn" title="Delete the conversation and its Claude session" data-i18n-title="ia.delete.button_title"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg><span data-i18n="ia.delete.button">Delete Conversation</span></button>
     </div>
   </div>
   <div class="tb-actions" data-for="library">
@@ -517,57 +517,97 @@
     <button class="btn small" data-ai-settings data-i18n="ais.open_settings">Settings → AI</button>
   </div>
 
-  <div id="ia-list" class="ia-list"></div>
+  <div id="ia-listbar" class="ia-listbar hidden">
+    <label class="ia-search">
+      <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.7 10.7l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4m0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/></svg>
+      <input id="ia-q" type="search" placeholder="Search conversations" data-i18n-placeholder="ia.list.search" aria-label="Search conversations" data-i18n-aria="ia.list.search" autocomplete="off" spellcheck="false" />
+    </label>
+    <select id="ia-f-kind" aria-label="Kind" data-i18n-aria="ia.list.kind">
+      <option value="all" data-i18n="ia.list.kind_all">All kinds</option>
+      <option value="create" data-i18n="ia.list.kind_create">Created</option>
+      <option value="edit" data-i18n="ia.list.kind_edit">Modified</option>
+    </select>
+    <select id="ia-f-state" aria-label="State" data-i18n-aria="ia.list.state">
+      <option value="all" data-i18n="ia.list.state_all">All states</option>
+      <option value="saved" data-i18n="ia.list.state_saved">Saved</option>
+      <option value="pending" data-i18n="ia.list.state_pending">Not saved</option>
+    </select>
+    <select id="ia-f-engine" aria-label="Where Claude runs" data-i18n-aria="ia.list.engine">
+      <option value="all" data-i18n="ia.list.engine_all">All modes</option>
+      <option value="local" data-i18n="ia.engine.local_short">On this Mac</option>
+      <option value="container" data-i18n="ia.engine.container_short">Sandbox</option>
+    </select>
+    <select id="ia-sort" aria-label="Sort" data-i18n-aria="ia.list.sort">
+      <option value="activity" data-i18n="ia.list.sort_activity">Last activity</option>
+      <option value="created" data-i18n="ia.list.sort_created">Creation date</option>
+      <option value="title" data-i18n="ia.list.sort_title">Title</option>
+    </select>
+  </div>
+  <div id="ia-list" class="ia-list" role="listbox" tabindex="0" aria-label="Conversations" data-i18n-aria="ia.conversations"></div>
+  <div id="ia-nomatch" class="ia-nomatch hidden">
+    <span data-i18n="ia.list.nomatch">No conversation matches.</span>
+    <button id="ia-clearq" class="btn small" data-i18n="ia.list.clear">Clear Search and Filters</button>
+  </div>
 
   <div id="ia-detail" class="ia-detail hidden">
     <div id="ia-hint" class="ia-hint hidden"></div>
     <div class="ia-split">
-      <div id="ia-left" class="ia-left" data-mode="chat">
-        <div id="ia-chat" class="ia-chat">
-          <div id="chat-list" class="chat-list" role="log" aria-live="polite"></div>
-          <div class="chat-compose">
-            <div id="chat-attach" class="chat-attach hidden"></div>
-            <div class="chat-row">
-              <button id="chat-add" class="chat-icon" title="Attach an image" data-i18n-title="chat.attach">
-                <svg viewBox="0 0 24 24"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10z"/></svg>
-              </button>
-              <select id="chat-model" class="chat-model" title="Claude model for this conversation" data-i18n-title="chat.model.title"></select>
-              <textarea id="chat-input" rows="1" placeholder="Message Claude…" data-i18n-placeholder="chat.placeholder"></textarea>
-              <button id="chat-send" class="chat-send" title="Send" data-i18n-title="chat.send" disabled>
-                <svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
-              </button>
-              <button id="chat-stop" class="chat-send stop hidden" title="Stop (Esc)" data-i18n-title="chat.stop">
-                <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg>
-              </button>
-            </div>
-            <div class="chat-foot">
-              <select id="chat-mode" title="How much Claude may do without asking" data-i18n-title="chat.mode.title"></select>
-              <span id="chat-status" class="chat-status"></span>
+      <div id="ia-center" class="ia-center">
+        <section id="ia-viewpane" class="ia-viewpane">
+          <div class="ia-rbar ia-pbar">
+            <span data-i18n="ia.preview">Preview</span>
+            <span class="ia-rbar-end">
+              <button id="ia-reframe" class="btn small" title="Reframe the view" data-i18n-title="ia.reframe.title" data-i18n="ia.reframe">Reframe</button>
+              <button id="ia-expand" class="btn small" title="Enlarge (double-click the preview)" data-i18n-title="ia.expand.title" data-i18n="ia.expand">Enlarge</button>
+              <span id="ia-vlabel" class="ia-vlabel"></span>
+            </span>
+          </div>
+          <div id="ia-stage" class="ia-stage">
+            <div id="ia-wait" class="ia-wait hidden">
+              <div class="ia-wait-bed"></div>
+              <span data-i18n="ia.waiting">Waiting for Claude's first mesh…</span>
             </div>
           </div>
-          <input id="chat-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
-        </div>
-        <div id="ia-term" class="ia-term"></div>
-        <div id="ia-dead" class="ia-dead hidden">
-          <span data-i18n="ia.session_ended">The session has ended.</span>
-          <button id="ia-restart" class="btn small" data-i18n="ia.reopen">Reopen</button>
+        </section>
+        <div id="ia-splitter" class="ia-splitter" role="separator" aria-orientation="horizontal" tabindex="0" title="Drag to resize; double-click to reset" data-i18n-title="ia.splitter" aria-label="Resize the preview" data-i18n-aria="ia.splitter_aria"></div>
+        <div id="ia-left" class="ia-left" data-mode="chat">
+          <div id="ia-chat" class="ia-chat">
+            <div id="chat-list" class="chat-list" role="log" aria-live="polite"></div>
+            <div class="chat-compose">
+              <div id="chat-attach" class="chat-attach hidden"></div>
+              <div class="chat-row">
+                <button id="chat-add" class="chat-icon" title="Attach an image" data-i18n-title="chat.attach">
+                  <svg viewBox="0 0 24 24"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10z"/></svg>
+                </button>
+                <select id="chat-model" class="chat-model" title="Claude model for this conversation" data-i18n-title="chat.model.title"></select>
+                <textarea id="chat-input" rows="1" placeholder="Message Claude…" data-i18n-placeholder="chat.placeholder"></textarea>
+                <button id="chat-send" class="chat-send" title="Send" data-i18n-title="chat.send" disabled>
+                  <svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
+                </button>
+                <button id="chat-stop" class="chat-send stop hidden" title="Stop Claude's answer without deleting anything (Esc)" data-i18n-title="ia.stop.title">
+                  <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span>
+                </button>
+              </div>
+              <div class="chat-foot">
+                <select id="chat-mode" title="How much Claude may do without asking" data-i18n-title="chat.mode.title"></select>
+                <span id="chat-status" class="chat-status"></span>
+              </div>
+            </div>
+            <input id="chat-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+          </div>
+          <div id="ia-term" class="ia-term"></div>
+          <button id="ia-term-stop" class="ia-term-stop" title="Stop Claude's current answer (Esc)" data-i18n-title="ia.stop.term_title"><svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span></button>
+          <div id="ia-dead" class="ia-dead hidden">
+            <span data-i18n="ia.session_ended">The session has ended.</span>
+            <button id="ia-restart" class="btn small" data-i18n="ia.reopen">Reopen</button>
+          </div>
         </div>
       </div>
 
       <aside class="ia-right">
         <div class="ia-rbar">
-          <span data-i18n="ia.preview">Preview</span>
-          <span class="ia-rbar-end">
-            <button id="ia-reframe" class="btn small" title="Reframe the view" data-i18n-title="ia.reframe.title" data-i18n="ia.reframe">Reframe</button>
-            <button id="ia-expand" class="btn small" title="Enlarge (double-click the preview)" data-i18n-title="ia.expand.title" data-i18n="ia.expand">Enlarge</button>
-            <span id="ia-vlabel" class="ia-vlabel"></span>
-          </span>
-        </div>
-        <div id="ia-stage" class="ia-stage">
-          <div id="ia-wait" class="ia-wait hidden">
-            <div class="ia-wait-bed"></div>
-            <span data-i18n="ia.waiting">Waiting for Claude's first mesh…</span>
-          </div>
+          <span data-i18n="ia.details">Details</span>
+          <span id="ia-badge" class="ia-st hidden"></span>
         </div>
         <div id="ia-versions" class="ia-versions"></div>
         <dl id="ia-stats" class="ia-stats"></dl>
@@ -1062,6 +1102,20 @@
 
 <div id="toasts" class="toasts"></div>
 
+<div id="iadelmodal" class="modal hidden">
+  <div class="modal-box iadel-box" role="alertdialog" aria-labelledby="iadel-title" aria-describedby="iadel-text">
+    <h3 id="iadel-title"></h3>
+    <div id="iadel-text" class="det-sub" data-i18n="ia.delete.text">This cannot be undone. Your saved files are not touched.</div>
+    <div class="set-section" data-i18n="ia.delete.what">What will be deleted</div>
+    <ul id="iadel-list" class="group iadel-list"></ul>
+    <div class="iadel-keep" data-i18n="ia.delete.keep">Claude's shared prompt history (history.jsonl) and the 3MF files you saved are kept.</div>
+    <div class="modal-actions">
+      <button id="iadel-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="iadel-go" class="btn destructive" data-i18n="ia.delete.confirm">Delete Conversation</button>
+    </div>
+  </div>
+</div>
+
 <div id="occmodal" class="modal hidden">
   <div class="modal-box occ-box" role="alertdialog" aria-labelledby="occ-title">
     <h3 id="occ-title"></h3>
@@ -1418,6 +1472,7 @@
 <script src="vendor/purify.js"></script>
 <script src="vendor/xterm-addon-fit.js"></script>
 <script src="ai-setup.js"></script>
+<script src="ia-list.js"></script>
 <script src="ia.js"></script>
 <script src="ia-chat.js"></script>
 <script src="auth.js"></script>

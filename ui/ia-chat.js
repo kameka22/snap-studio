@@ -28,6 +28,9 @@ const CHAT = {
   attach: [],
   /* Initial requests already sent, so a reopening does not send them twice. */
   autoSent: new Set(),
+  /* What the status line says about the turn of the conversation shown:
+     "" | "answering" | "stopping" | "stopped". */
+  phase: "",
 };
 
 const CHAT_MAX_IMAGES = 5;
@@ -106,14 +109,41 @@ function chatMoveWorkingDown() {
   }
 }
 
-/* While a turn runs, Stop stands where Send was. */
+/* While a turn runs, Stop stands where Send was, with its word. Stopping
+   only interrupts the turn: the session stays, and the next message
+   resumes it. */
 function chatSetBusy(on) {
   if (CHAT.id) on ? CHAT.busy.add(CHAT.id) : CHAT.busy.delete(CHAT.id);
   $("chat-stop").classList.toggle("hidden", !on);
+  $("chat-stop").disabled = false;
   $("chat-send").classList.toggle("hidden", on);
   chatList.querySelector(".chat-working")?.remove();
-  if (on) chatAdd(chatWorking());
+  if (on) {
+    chatAdd(chatWorking());
+    CHAT.phase = "answering";
+    if (CHAT.id) IA.failed.delete(CHAT.id);
+  } else if (CHAT.phase !== "stopped") {
+    CHAT.phase = CHAT.phase === "stopping" ? "stopped" : "";
+  }
+  chatStatus();
+  iaStatusChanged();
 }
+
+/* Stop button and Esc: interrupt the turn, say so until it is done. */
+function chatStop() {
+  if (!CHAT.id || !CHAT.busy.has(CHAT.id) || CHAT.phase === "stopping") return;
+  CHAT.phase = "stopping";
+  $("chat-stop").disabled = true;
+  chatStatus();
+  invoke("ia_chat_stop", { id: CHAT.id }).catch((e) => {
+    CHAT.phase = "answering";
+    $("chat-stop").disabled = false;
+    chatStatus();
+    toast(String(e), true);
+  });
+}
+
+const CHAT_PHASE = { answering: "chat.phase.answering", stopping: "chat.phase.stopping", stopped: "chat.phase.stopped" };
 
 /* A conversation whose mode is not ready: its history only. */
 function chatSetLocked(on) {
@@ -125,7 +155,9 @@ function chatStatus() {
   const cost = CHAT.cost
     ? fmtNum(CHAT.cost, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : "";
-  $("chat-status").textContent = [chatModelName(CHAT.model), cost].filter(Boolean).join(" · ");
+  const phase = CHAT_PHASE[CHAT.phase] ? tr(CHAT_PHASE[CHAT.phase]) : "";
+  $("chat-status").textContent = [phase, chatModelName(CHAT.model), cost].filter(Boolean).join(" · ");
+  $("chat-status").classList.toggle("live", CHAT.phase === "answering" || CHAT.phase === "stopping");
 }
 
 /* An image of the conversation folder, served by the thumbnail protocol. */
@@ -518,6 +550,7 @@ function chatHandle(ev, live) {
       if (CHAT.streaming && CHAT.streamText) chatAssistant(CHAT.streamText, CHAT.streaming);
       CHAT.streaming = null;
       CHAT.streamText = "";
+      if (live && ev.is_error && ev.subtype !== "error_during_execution" && CHAT.id) IA.failed.add(CHAT.id);
       if (live) chatSetBusy(false);
       if (ev.is_error && ev.subtype === "error_during_execution") chatNote(tr("chat.stopped"), "muted");
       else if (ev.is_error && ev.result) chatNote(String(ev.result), "error");
@@ -530,6 +563,7 @@ function chatHandle(ev, live) {
       if (live) chatAuthFailed();
       break;
     case "error":
+      if (CHAT.id) IA.failed.add(CHAT.id);
       chatSetBusy(false);
       chatNote(ev.text, "error");
       break;
@@ -540,7 +574,11 @@ listen("ia-chat", (e) => {
   const { id, events } = e.payload;
   for (const ev of events) {
     if (id === CHAT.id) chatHandle(ev, true);
-    else if (ev.type === "result" || ev.type === "exited") CHAT.busy.delete(id);
+    else if (ev.type === "result" || ev.type === "exited" || ev.type === "error") {
+      CHAT.busy.delete(id);
+      if ((ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") || ev.type === "error") IA.failed.add(id);
+      iaStatusChanged();
+    }
   }
 });
 
@@ -631,6 +669,7 @@ async function chatOpen(c) {
   chatList.scrollTop = chatList.scrollHeight;
   const busy = CHAT.busy.has(c.id);
   CHAT.busy.delete(c.id);
+  CHAT.phase = "";
   chatSetBusy(busy);
   // Claude may still be waiting on a permission asked while the conversation
   // was not shown: its card becomes answerable again.
@@ -793,7 +832,7 @@ $("chat-input").addEventListener("keydown", (e) => {
     if (!CHAT.busy.has(CHAT.id)) chatSubmit();
   } else if (e.key === "Escape" && CHAT.busy.has(CHAT.id)) {
     e.preventDefault();
-    invoke("ia_chat_stop", { id: CHAT.id }).catch(() => {});
+    chatStop();
   }
 });
 $("chat-input").addEventListener("paste", (e) => {
@@ -804,7 +843,19 @@ $("chat-input").addEventListener("paste", (e) => {
   }
 });
 $("chat-send").addEventListener("click", chatSubmit);
-$("chat-stop").addEventListener("click", () => invoke("ia_chat_stop", { id: CHAT.id }).catch(() => {}));
+$("chat-stop").addEventListener("click", chatStop);
+/* Esc stops Claude from anywhere in the conversation view, not only from the
+   message field — unless a sheet or menu has it. */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !CHAT.id || !CHAT.busy.has(CHAT.id) || e.defaultPrevented) return;
+  if ($("view-ia").classList.contains("hidden") || $("ia-left").dataset.mode !== "chat") return;
+  if (document.querySelector(".modal:not(.hidden)") || e.target.closest?.("input, select, textarea")) return;
+  // The preview enlarged out of its pane: Esc puts it back (viewer.js).
+  const v = $("viewer");
+  if (!v.classList.contains("hidden") && !v.classList.contains("docked")) return;
+  e.preventDefault();
+  chatStop();
+});
 $("chat-add").addEventListener("click", () => $("chat-file").click());
 $("chat-file").addEventListener("change", (e) => {
   chatAddFiles([...e.target.files]);
@@ -837,4 +888,6 @@ chatList.addEventListener("click", (e) => {
 window.addEventListener("langchange", () => {
   const c = CHAT.id && IA.list.find((x) => x.id === CHAT.id);
   if (c && !CHAT.busy.has(c.id)) chatOpen(c);
+  // Mid-answer the view stays, but its status line speaks the new language.
+  else if (CHAT.id) chatStatus();
 });

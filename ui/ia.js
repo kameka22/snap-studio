@@ -21,7 +21,32 @@ const IA = {
   /* One emulator per conversation: leaving the tab must not erase anything.
      id -> { term, fit, el, dead } */
   terms: new Map(),
+  /* List: search, filters and order (ia-list.js), kept between launches. */
+  q: "",
+  filters: iaStored("snapstudio.ia.filters", { kind: "all", state: "all", engine: "all" }),
+  sort: IA_SORTS.includes(localStorage.getItem("snapstudio.ia.sort")) ? localStorage.getItem("snapstudio.ia.sort") : IA_SORTS[0],
+  /* Card selected with the keyboard (or last clicked), by id. */
+  sel: null,
+  /* Card whose title is being edited. */
+  renaming: null,
+  /* Conversations whose last turn failed, this session. */
+  failed: new Set(),
+  /* Pinned conversations: on top of the list. */
+  pinned: new Set(iaStored("snapstudio.ia.pinned", [])),
 };
+
+function iaStored(key, fallback) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    if (Array.isArray(fallback)) return Array.isArray(v) ? v.filter((x) => typeof x === "string") : fallback;
+    if (v && typeof v === "object") {
+      const out = { ...fallback };
+      for (const k of Object.keys(fallback)) if (IA_FILTERS[k]?.includes(v[k])) out[k] = v[k];
+      return out;
+    }
+  } catch {}
+  return fallback;
+}
 
 /* ------------------------------------------------------------ loading */
 
@@ -90,18 +115,73 @@ function iaOrigin(c) {
 
 const iaEngineName = (c) => tr(c.engine === "container" ? "ia.engine.container_short" : "ia.engine.local_short");
 
-/* Missing or unreadable source: keep the tile, empty. A transparent pixel
-   avoids the renderer's broken-image icon. */
-const IA_BLANK =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-function iaNoThumb(img) {
-  img.onerror = null;
-  img.src = IA_BLANK;
+/* Missing or unreadable source: a real tile. The fallback is wired by a
+   listener (below), never an inline onerror — the app's CSP (script-src
+   'self') blocks inline handlers, which left the broken-image icon. */
+const IA_MISSING = '<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7zm0 2.3 6.4 3.6L12 11.4 5.6 7.9zM5 9.6l6 3.4v6.6l-6-3.4zm8 10V13l6-3.4v6.6z"/></svg>';
+function iaPlaceholder(c) {
+  const hint = tr(iaIsCreation(c) ? "ia.thumb.unavailable" : "ia.thumb.source_missing");
+  return `<div class="ia-thumb blank missing" title="${esc(hint)}">${IA_MISSING}<span>${esc(hint)}</span></div>`;
 }
 
-function iaStatus(c) {
-  if (c.saved) return `<span class="ia-badge done">✓ ${esc(tr("ia.saved_badge"))}</span>`;
-  return `<span class="ia-badge">○ ${esc(tr("ia.pending_badge"))}</span>`;
+/* An error event does not bubble, but it is seen on the way down. */
+$("ia-list").addEventListener(
+  "error",
+  (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement) || !img.classList.contains("ia-thumb")) return;
+    const c = IA.list.find((x) => x.id === img.closest(".ia-card")?.dataset.id);
+    if (c) img.outerHTML = iaPlaceholder(c);
+  },
+  true
+);
+
+/* Statuses, the most pressing first (ia-list.js `iaStatusOf`). */
+const IA_STATUS_LABEL = {
+  running: "ia.status.running",
+  error: "ia.status.error",
+  draft: "ia.status.draft",
+  saved: "ia.saved_badge",
+  pending: "ia.pending_badge",
+};
+const iaStatusKey = (c) => iaStatusOf(c, { running: typeof CHAT !== "undefined" && CHAT.busy.has(c.id), failed: IA.failed.has(c.id) });
+const iaBadge = (c) => {
+  const k = iaStatusKey(c);
+  return `<span class="ia-st ${k}">${esc(tr(IA_STATUS_LABEL[k]))}</span>`;
+};
+
+const IA_GROUP_LABEL = {
+  pinned: "ia.group.pinned",
+  today: "ia.group.today",
+  yesterday: "ia.group.yesterday",
+  week: "ia.group.week",
+  earlier: "ia.group.earlier",
+};
+
+/* The list as shown: pinned ones first, then the groups of ia-list.js. */
+function iaGroups() {
+  const opts = { query: IA.q, filters: IA.filters, sort: IA.sort, compare: collate };
+  const pinned = IA.list.filter((c) => IA.pinned.has(c.id));
+  const rest = IA.list.filter((c) => !IA.pinned.has(c.id));
+  const top = iaGroupList(pinned, opts).flatMap((g) => g.items);
+  const groups = iaGroupList(rest, opts);
+  return top.length ? [{ key: "pinned", items: top }, ...groups] : groups;
+}
+
+/* Status shown in the details pane of the open conversation. */
+function iaDetailBadge() {
+  const c = IA.open && IA.list.find((x) => x.id === IA.open);
+  const el = $("ia-badge");
+  if (!c) return el.classList.add("hidden");
+  const k = iaStatusKey(c);
+  el.className = `ia-st ${k}`;
+  el.textContent = tr(IA_STATUS_LABEL[k]);
+}
+
+/* Something changed a status (a turn started, ended, failed). */
+function iaStatusChanged() {
+  if (IA.open) iaDetailBadge();
+  else if (!IA.renaming && !$("view-ia").classList.contains("hidden")) iaRenderList();
 }
 
 /* Conversations under the sidebar's AI entry, like recent folders under
@@ -120,13 +200,7 @@ function iaRenderSide() {
       switchView("ia");
       if (IA.open !== c.id) iaOpen(c.id);
     };
-    b.oncontextmenu = (e) =>
-      nativeMenu([
-        { id: "ia:open:" + c.id, label: tr("ia.open_conv") },
-        { id: "ia:folder:" + c.id, label: tr("ia.show_workspace") },
-        {},
-        { id: "ia:delete:" + c.id, label: tr("common.delete") },
-      ], e.clientX, e.clientY);
+    b.oncontextmenu = (e) => iaMenu(c.id, e.clientX, e.clientY);
     box.appendChild(b);
   }
   sideSync();
@@ -147,29 +221,219 @@ function iaRender() {
   else tbSet("ia", tr("nav.ia"), IA.list.length ? tr("ia.count", { n: IA.list.length }) : "");
   $("ia-detail").classList.toggle("hidden", !detail);
   $("ia-empty").classList.toggle("hidden", detail || IA.list.length > 0);
-  $("ia-list").classList.toggle("hidden", detail || IA.list.length === 0);
-  if (detail) return;
+  $("ia-listbar").classList.toggle("hidden", detail || IA.list.length === 0);
+  if (detail) {
+    $("ia-list").classList.add("hidden");
+    $("ia-nomatch").classList.add("hidden");
+    iaDetailBadge();
+    return;
+  }
+  iaRenderList();
+}
 
-  $("ia-list").innerHTML = IA.list
-    .map((c) => {
-      // A created object has nothing to show before Claude's first export.
-      const thumb = c.version
-        ? `<img class="ia-thumb" src="${esc(iaThumb(c))}" alt="" onerror="iaNoThumb(this)" />`
-        : `<div class="ia-thumb blank">${IA_GLYPH}</div>`;
-      return `<article class="ia-card" data-id="${esc(c.id)}">
-        ${thumb}
-        <div class="ia-body">
-          <h3>${esc(c.title)}</h3>
-          <div class="ia-sub">${esc(iaOrigin(c))}</div>
-          <div class="ia-meta">${esc(fmtAgo(c.updated_at))} · ${c.version ? `v${c.version}` : esc(tr("ia.draft"))} · ${esc(
-            iaEngineName(c)
-          )}</div>
-          ${iaStatus(c)}
-        </div>
-        <button class="ia-del" data-act="ask" data-id="${esc(c.id)}" title="${esc(tr("common.delete"))}">✕</button>
-      </article>`;
-    })
+function iaCard(c) {
+  // A created object has nothing to show before Claude's first export.
+  const thumb = c.version
+    ? `<img class="ia-thumb" src="${esc(iaThumb(c))}" alt="" loading="lazy" decoding="async" />`
+    : `<div class="ia-thumb blank">${IA_GLYPH}</div>`;
+  const when = new Date(c.updated_at * 1000).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" });
+  const pin = IA.pinned.has(c.id) ? ` · ${esc(tr("ia.pinned"))}` : "";
+  return `<article class="ia-card${c.id === IA.sel ? " sel" : ""}" data-id="${esc(c.id)}" role="option" aria-selected="${c.id === IA.sel}" tabindex="-1">
+    ${thumb}
+    <div class="ia-body">
+      <h3>${esc(c.title)}</h3>
+      <div class="ia-sub">${esc(iaOrigin(c))}</div>
+      <div class="ia-meta"><span title="${esc(when)}">${esc(fmtAgo(c.updated_at))}</span> · ${c.version ? `v${c.version}` : esc(tr("ia.draft"))} · ${esc(iaEngineName(c))}${pin}</div>
+      ${iaBadge(c)}
+    </div>
+    <button class="ia-del" data-act="ask" data-id="${esc(c.id)}" title="${esc(tr("common.delete"))}" aria-label="${esc(tr("common.delete"))}">✕</button>
+  </article>`;
+}
+
+function iaRenderList() {
+  // A title being typed must not vanish under a refresh.
+  if (IA.renaming) return;
+  const box = $("ia-list");
+  const groups = iaGroups();
+  const shown = groups.flatMap((g) => g.items);
+  if (IA.sel && !shown.some((c) => c.id === IA.sel)) IA.sel = null;
+  const none = IA.list.length > 0 && shown.length === 0;
+  box.classList.toggle("hidden", IA.list.length === 0 || none);
+  $("ia-nomatch").classList.toggle("hidden", !none);
+  const titled = groups.length > 1 || (groups[0] && groups[0].key && groups[0].key !== "today");
+  box.innerHTML = groups
+    .map((g) => (titled && g.key ? `<h4 class="ia-group" role="presentation">${esc(tr(IA_GROUP_LABEL[g.key]))}</h4>` : "") + g.items.map(iaCard).join(""))
     .join("");
+  const n = IA.list.length;
+  tbSet("ia", tr("nav.ia"), n ? (shown.length < n ? tr("ia.count_shown", { shown: shown.length, n }) : tr("ia.count", { n })) : "");
+}
+
+/* ------------------------------------------------------------ list controls */
+
+function iaSyncListbar() {
+  $("ia-q").value = IA.q;
+  $("ia-f-kind").value = IA.filters.kind;
+  $("ia-f-state").value = IA.filters.state;
+  $("ia-f-engine").value = IA.filters.engine;
+  $("ia-sort").value = IA.sort;
+}
+iaSyncListbar();
+
+$("ia-q").addEventListener("input", (e) => {
+  IA.q = e.target.value;
+  iaRenderList();
+});
+$("ia-q").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    if (IA.q) {
+      IA.q = "";
+      e.target.value = "";
+      iaRenderList();
+    } else {
+      e.target.blur();
+      $("ia-list").focus();
+    }
+  } else if (e.key === "ArrowDown" || e.key === "Enter") {
+    // From the search, straight into the results.
+    e.preventDefault();
+    $("ia-list").focus();
+    iaKey(e.key === "Enter" && IA.sel ? "Enter" : "ArrowDown");
+  }
+});
+for (const [id, key] of [["ia-f-kind", "kind"], ["ia-f-state", "state"], ["ia-f-engine", "engine"]]) {
+  $(id).addEventListener("change", (e) => {
+    IA.filters[key] = e.target.value;
+    localStorage.setItem("snapstudio.ia.filters", JSON.stringify(IA.filters));
+    iaRenderList();
+  });
+}
+$("ia-sort").addEventListener("change", (e) => {
+  IA.sort = e.target.value;
+  localStorage.setItem("snapstudio.ia.sort", IA.sort);
+  iaRenderList();
+});
+$("ia-clearq").addEventListener("click", () => {
+  IA.q = "";
+  IA.filters = { kind: "all", state: "all", engine: "all" };
+  localStorage.setItem("snapstudio.ia.filters", JSON.stringify(IA.filters));
+  iaSyncListbar();
+  iaRenderList();
+  $("ia-q").focus();
+});
+
+/* Selection, moved with the keyboard. */
+function iaSelect(id, scroll = true) {
+  IA.sel = id;
+  for (const el of $("ia-list").querySelectorAll(".ia-card")) {
+    const on = el.dataset.id === id;
+    el.classList.toggle("sel", on);
+    el.setAttribute("aria-selected", on);
+    if (on && scroll) el.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function iaKey(key) {
+  const ids = [...$("ia-list").querySelectorAll(".ia-card")].map((el) => el.dataset.id);
+  if (key === "Enter") {
+    if (IA.sel) iaOpen(IA.sel);
+    return true;
+  }
+  const i = iaMove(ids.indexOf(IA.sel), ids.length, key);
+  if (i < 0) return false;
+  iaSelect(ids[i]);
+  return true;
+}
+
+/* On the list: ↑/↓ Home End move, Enter opens, ⌫/Delete deletes (after
+   confirming), F2 renames, ⌘F/Ctrl+F searches. Fields keep their keys. */
+document.addEventListener("keydown", (e) => {
+  if ($("view-ia").classList.contains("hidden") || IA.open || IA.renaming) return;
+  if (document.querySelector(".modal:not(.hidden)")) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f" && IA.list.length) {
+    e.preventDefault();
+    $("ia-q").focus();
+    $("ia-q").select();
+    return;
+  }
+  // Only from the list itself (or nowhere): fields and buttons keep their keys.
+  const at = document.activeElement;
+  if (at && at !== document.body && !$("ia-list").contains(at)) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (["ArrowDown", "ArrowUp", "Home", "End", "Enter"].includes(e.key)) {
+    if (iaKey(e.key)) e.preventDefault();
+  } else if ((e.key === "Backspace" || e.key === "Delete") && IA.sel) {
+    e.preventDefault();
+    iaAskDelete(IA.sel);
+  } else if (e.key === "F2" && IA.sel) {
+    e.preventDefault();
+    iaRenameStart(IA.sel);
+  } else if (e.key === "Escape" && IA.q) {
+    IA.q = "";
+    $("ia-q").value = "";
+    iaRenderList();
+  }
+});
+
+/* ------------------------------------------------------------ rename */
+
+/* The title turns into a field in place: Enter or leaving keeps it, Esc
+   gives up. An empty title keeps the old one. */
+function iaRenameStart(id) {
+  const c = IA.list.find((x) => x.id === id);
+  if (!c) return;
+  const card = $("ia-list").querySelector(`.ia-card[data-id="${CSS.escape(id)}"]`);
+  const h3 = card?.querySelector("h3");
+  if (!h3) {
+    // Filtered out of view: clear the search so it can be edited.
+    if (IA.q || Object.values(IA.filters).some((v) => v !== "all")) {
+      $("ia-clearq").click();
+      return iaRenameStart(id);
+    }
+    return;
+  }
+  IA.renaming = id;
+  iaSelect(id, true);
+  const input = document.createElement("input");
+  input.className = "ia-rename";
+  input.value = c.title;
+  input.maxLength = 120;
+  input.setAttribute("aria-label", tr("ia.rename.label"));
+  h3.classList.add("editing");
+  h3.replaceChildren(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (keep) => {
+    if (done) return;
+    done = true;
+    const title = iaCleanTitle(input.value);
+    IA.renaming = null;
+    if (keep && title && title !== c.title) {
+      try {
+        const next = await invoke("ia_rename", { id, title });
+        Object.assign(c, next);
+        toast(tr("ia.rename.done", { title: next.title }));
+      } catch (e) {
+        toast(String(e), true);
+      }
+    }
+    iaRender();
+    $("ia-list").focus();
+  };
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      finish(true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener("blur", () => finish(true));
+  input.addEventListener("click", (e) => e.stopPropagation());
 }
 
 /* ------------------------------------------------------------ creation */
@@ -300,27 +564,112 @@ async function iaCreate() {
 
 /* ------------------------------------------------------------ actions */
 
+/* The confirmation lists what goes: the folder, the Claude session files,
+   the running Claude. history.jsonl and saved files are said to stay. */
+const IADEL = { id: null };
+
 async function iaAskDelete(id) {
   const c = IA.list.find((x) => x.id === id);
   if (!c) return;
-  if (await confirmDelete(tr("printers.remove.title", { name: c.title }), tr("ia.delete.text"))) iaDelete(id);
+  let plan = { files: 0, running: false };
+  try {
+    plan = await invoke("ia_delete_plan", { id });
+  } catch {}
+  IADEL.id = id;
+  $("iadel-title").textContent = tr("ia.delete.title", { name: c.title });
+  const rows = [];
+  if (typeof CHAT !== "undefined" && CHAT.busy.has(id)) rows.push([tr("ia.delete.item_answering"), true]);
+  else if (plan.running) rows.push([tr("ia.delete.item_running"), false]);
+  rows.push([tr("ia.delete.item_folder"), false]);
+  rows.push([plan.files ? tr("ia.delete.item_session", { n: plan.files }) : tr("ia.delete.item_nosession"), false]);
+  $("iadel-list").innerHTML = rows.map(([t, warn]) => `<li${warn ? ' class="warn"' : ""}>${esc(t)}</li>`).join("");
+  $("iadel-go").disabled = false;
+  openSheet($("iadelmodal"));
+  // Cancel has the focus: Enter alone must not delete.
+  requestAnimationFrame(() => $("iadel-cancel").focus());
 }
+
+$("iadel-cancel").addEventListener("click", () => {
+  IADEL.id = null;
+  closeSheet($("iadelmodal"));
+});
+$("iadel-go").addEventListener("click", async () => {
+  const id = IADEL.id;
+  if (!id) return;
+  const go = $("iadel-go");
+  go.disabled = true;
+  $("iadel-cancel").disabled = true;
+  // Closing Claude may take a few seconds: say it is under way.
+  go.textContent = tr("ia.delete.deleting");
+  await iaDelete(id);
+  go.textContent = tr("ia.delete.confirm");
+  $("iadel-cancel").disabled = false;
+  IADEL.id = null;
+  closeSheet($("iadelmodal"));
+});
+$("iadelmodal").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.stopPropagation();
+    $("iadel-cancel").click();
+  }
+});
 
 async function iaDelete(id) {
   try {
-    IA.list = await invoke("ia_delete", { id });
+    // Leave the screen first: nothing must keep reading the folder.
+    if (IA.open === id) iaBack();
+    const r = await invoke("ia_delete", { id });
+    IA.list = r.list;
     // The terminal was closed on the app side: its emulator has no purpose left.
     const t = IA.terms.get(id);
     if (t) {
       t.term.dispose();
       IA.terms.delete(id);
     }
-    if (IA.open === id) iaBack();
+    if (typeof CHAT !== "undefined") CHAT.busy.delete(id);
+    IA.failed.delete(id);
+    if (IA.pinned.delete(id)) iaSavePins();
+    if (IA.sel === id) IA.sel = null;
     iaRender();
-    toast(tr("ia.deleted"));
+    if (r.kept.length) toast(tr("ia.deleted_kept", { n: r.kept.length }), true);
+    else toast(r.removed ? tr("ia.deleted_session", { n: r.removed }) : tr("ia.deleted"));
   } catch (e) {
     toast(String(e), true);
   }
+}
+
+const iaSavePins = () => localStorage.setItem("snapstudio.ia.pinned", JSON.stringify([...IA.pinned]));
+
+async function iaDuplicate(id) {
+  try {
+    const c = await invoke("ia_duplicate", { id });
+    IA.list = await invoke("ia_list");
+    IA.sel = c.id;
+    iaRender();
+    toast(tr("ia.duplicated", { title: c.title }));
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+/* Same menu on a card and in the sidebar. */
+function iaMenu(id, x, y) {
+  const c = IA.list.find((v) => v.id === id);
+  if (!c) return;
+  nativeMenu(
+    [
+      { id: "ia:open:" + id, label: tr("ia.open_conv") },
+      { id: "ia:rename:" + id, label: tr("ia.rename") },
+      { id: "ia:duplicate:" + id, label: tr("ia.duplicate") },
+      { id: "ia:pin:" + id, label: tr(IA.pinned.has(id) ? "ia.unpin" : "ia.pin") },
+      ...(c.version ? [{ id: "ia:save:" + id, label: tr("ia.save") }] : []),
+      { id: "ia:folder:" + id, label: tr("ia.show_workspace") },
+      {},
+      { id: "ia:delete:" + id, label: tr("ia.delete.menu") },
+    ],
+    x,
+    y
+  );
 }
 
 /* ------------------------------------------------------------ events */
@@ -333,26 +682,49 @@ $("ia-list").addEventListener("click", (ev) => {
     return;
   }
   const card = ev.target.closest(".ia-card");
-  if (!card) return;
+  if (!card || IA.renaming) return;
   const c = IA.list.find((x) => x.id === card.dataset.id);
-  if (c) iaOpen(c.id);
+  if (!c) return;
+  IA.sel = c.id;
+  iaOpen(c.id);
 });
 
 $("ia-list").addEventListener("contextmenu", (ev) => {
   const card = ev.target.closest(".ia-card");
-  if (!card) return;
-  nativeMenu([
-    { id: "ia:open:" + card.dataset.id, label: tr("ia.open_conv") },
-    { id: "ia:folder:" + card.dataset.id, label: tr("ia.show_workspace") },
-    {},
-    { id: "ia:delete:" + card.dataset.id, label: tr("common.delete") },
-  ], ev.clientX, ev.clientY);
+  if (!card || IA.renaming) return;
+  iaSelect(card.dataset.id, false);
+  iaMenu(card.dataset.id, ev.clientX, ev.clientY);
 });
 onMenu("ia", async (arg) => {
   const i = arg.indexOf(":");
   const what = arg.slice(0, i), id = arg.slice(i + 1);
   if (what === "open") iaOpen(id);
   if (what === "delete") iaAskDelete(id);
+  if (what === "rename") {
+    // Renaming happens on the list: go there, drawn at once.
+    if ($("view-ia").classList.contains("hidden")) switchView("ia");
+    if (IA.open) iaBack();
+    iaRender();
+    iaRenameStart(id);
+  }
+  if (what === "duplicate") iaDuplicate(id);
+  if (what === "pin") {
+    IA.pinned.has(id) ? IA.pinned.delete(id) : IA.pinned.add(id);
+    iaSavePins();
+    if (!IA.open) iaRenderList();
+  }
+  if (what === "save") {
+    try {
+      const path = await invoke("ia_save", { id });
+      const c = IA.list.find((x) => x.id === id);
+      if (c) c.saved = path;
+      await refresh();
+      toast(tr("ia.saved_toast", { name: path.split(/[\\/]/).pop() }));
+      if (!IA.open) iaRenderList();
+    } catch (e) {
+      toast(String(e), true);
+    }
+  }
   if (what === "folder") {
     const path = await invoke("ia_workspace", { id });
     invoke("reveal", { path }).catch((e) => toast(String(e), true));
@@ -587,15 +959,83 @@ listen("ia-exit", (e) => {
 $("ia-back").addEventListener("click", iaBack);
 $("ia-restart").addEventListener("click", iaRestart);
 
-$("ia-stop").addEventListener("click", async () => {
-  if (!IA.open) return;
-  await Promise.all([invoke("pty_close", { id: IA.open }), invoke("ia_chat_close", { id: IA.open })]);
+/* Red button of the open conversation: same confirmation as in the list. */
+$("ia-delete").addEventListener("click", () => {
+  if (IA.open) iaAskDelete(IA.open);
+});
+
+/* Terminal view: Esc is Claude Code's own interrupt. The button sends it
+   for those who do not know; the terminal keeps it when focused. */
+$("ia-term-stop").addEventListener("click", () => {
+  const id = IA.open;
+  if (!id) return;
+  invoke("pty_write", { id, data: "\x1b" }).catch(() => {});
+  const b = $("ia-term-stop");
+  b.classList.add("sent");
+  b.querySelector("span").textContent = tr("ia.stop.sent");
+  clearTimeout(b._t);
+  b._t = setTimeout(() => {
+    b.classList.remove("sent");
+    b.querySelector("span").textContent = tr("ia.stop.button");
+  }, 1500);
+  IA.terms.get(id)?.term.focus();
 });
 
 $("ia-folder").addEventListener("click", async () => {
   if (!IA.open) return;
   const path = await invoke("ia_workspace", { id: IA.open });
   invoke("reveal", { path }).catch((e) => toast(String(e), true));
+});
+
+/* ------------------------------------------------------------ splitter */
+
+/* The preview's share of the centre column, from 0.25 to 0.8, kept for all
+   conversations. Dragged with the mouse, moved with ↑/↓, reset by a
+   double-click. */
+const IA_SPLIT_KEY = "snapstudio.ia.split";
+const IA_SPLIT_DEFAULT = 0.6;
+const iaClampSplit = (r) => Math.min(0.8, Math.max(0.25, r));
+function iaSplitApply(r, save = true) {
+  r = iaClampSplit(Number.isFinite(r) ? r : IA_SPLIT_DEFAULT);
+  $("ia-center").style.setProperty("--ia-preview", `${(r * 100).toFixed(1)}%`);
+  $("ia-splitter").setAttribute("aria-valuenow", Math.round(r * 100));
+  if (save) localStorage.setItem(IA_SPLIT_KEY, String(r));
+  return r;
+}
+let iaSplit = iaSplitApply(parseFloat(localStorage.getItem(IA_SPLIT_KEY)), false);
+$("ia-splitter").setAttribute("aria-valuemin", 25);
+$("ia-splitter").setAttribute("aria-valuemax", 80);
+
+$("ia-splitter").addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const bar = e.currentTarget;
+  const box = $("ia-center");
+  const rect = box.getBoundingClientRect();
+  bar.setPointerCapture(e.pointerId);
+  bar.classList.add("drag");
+  box.classList.add("dragging");
+  const move = (ev) => {
+    iaSplit = iaSplitApply((ev.clientY - rect.top) / rect.height, false);
+  };
+  const up = () => {
+    bar.removeEventListener("pointermove", move);
+    bar.classList.remove("drag");
+    box.classList.remove("dragging");
+    iaSplit = iaSplitApply(iaSplit);
+  };
+  bar.addEventListener("pointermove", move);
+  bar.addEventListener("pointerup", up, { once: true });
+  bar.addEventListener("pointercancel", up, { once: true });
+});
+$("ia-splitter").addEventListener("dblclick", () => (iaSplit = iaSplitApply(IA_SPLIT_DEFAULT)));
+$("ia-splitter").addEventListener("keydown", (e) => {
+  const step = e.shiftKey ? 0.1 : 0.03;
+  if (e.key === "ArrowUp") iaSplit = iaSplitApply(iaSplit - step);
+  else if (e.key === "ArrowDown") iaSplit = iaSplitApply(iaSplit + step);
+  else if (e.key === "Home" || e.key === "Enter") iaSplit = iaSplitApply(IA_SPLIT_DEFAULT);
+  else return;
+  e.preventDefault();
 });
 
 const iaResizeObserver = new ResizeObserver(() => {
@@ -731,6 +1171,8 @@ listen("ia-mesh", async (e) => {
   const c = IA.list.find((x) => x.id === id);
   if (c) c.version = version;
   if (IA.open !== id) return;
+  // A draft becomes an object: its badge follows.
+  iaDetailBadge();
   iaQueue(async () => {
     await iaShowCurrent(id);
     await iaRenderVersions(id, version);
