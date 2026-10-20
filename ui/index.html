@@ -492,6 +492,7 @@
         <button id="pfl-pprev" class="tb-btn" title="Previous video (←)" data-i18n-title="pfiles.player.prev"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zm3 7 9-7v14z"/></svg></button>
         <button id="pfl-pnext" class="tb-btn" title="Next video (→)" data-i18n-title="pfiles.player.next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z"/></svg></button>
         <button id="pfl-pdl" class="btn" data-i18n="common.download">Download</button>
+        <button id="pfl-pshare" class="btn" data-i18n="share.button">Share</button>
         <button id="pfl-pdel" class="btn danger" data-i18n="common.delete">Delete</button>
       </div>
       <div class="pfl-stage">
@@ -519,6 +520,7 @@
     <button id="pfl-selall" class="btn" data-i18n="pfiles.select_all">Select All</button>
     <button id="pfl-selprint" class="btn primary" data-i18n="pfiles.print">Print</button>
     <button id="pfl-seldl" class="btn" data-i18n="common.download">Download</button>
+    <button id="pfl-selshare" class="btn" data-i18n="share.button">Share</button>
     <button id="pfl-selren" class="btn" data-i18n="pfiles.rename">Rename</button>
     <button id="pfl-seldel" class="btn danger" data-i18n="common.delete">Delete</button>
     <button id="pfl-seldone" class="btn" data-i18n="pfiles.select_done">Done</button>
@@ -1203,6 +1205,50 @@
   </div>
 </div>
 
+<div id="pfshare" class="modal hidden">
+  <div class="modal-box pfs-box" role="dialog" aria-labelledby="pfs-title">
+    <div class="pfs-head">
+      <img id="pfs-thumb" class="pfs-thumb hidden" alt="" />
+      <span id="pfs-icon" class="pfs-icon" aria-hidden="true"></span>
+      <div class="pfs-titles">
+        <h3 id="pfs-title"></h3>
+        <div id="pfs-sub" class="pfs-sub"></div>
+      </div>
+    </div>
+    <div id="pfs-grid" class="pfs-grid" role="group">
+      <button type="button" class="pfs-tile" data-share="native">
+        <span class="pfs-ico"><svg viewBox="0 0 24 24"><path d="M12 2.5 7.5 7l1.4 1.4 2.1-2.1V15h2V6.3l2.1 2.1L16.5 7zM5 10v10.5A1.5 1.5 0 0 0 6.5 22h11a1.5 1.5 0 0 0 1.5-1.5V10h-4v2h2v8H7v-8h2v-2z"/></svg></span>
+        <b data-i18n="share.native">AirDrop, Messages, Mail…</b><small data-i18n="share.native_sub">The Mac's share menu</small>
+      </button>
+      <button type="button" class="pfs-tile" data-share="qr">
+        <span class="pfs-ico"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zm2 2v4h4V5zm8-2h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zm8-2h2v2h-2zm2 2h2v2h-2zm2-2h4v2h-4zm-4 4h2v4h-2zm4 0h2v2h-2zm2 2h2v2h-2zm-2 2h2v2h-2zM6 6h2v2H6zm10 0h2v2h-2zM6 16h2v2H6z"/></svg></span>
+        <b data-i18n="share.qr">On my phone</b><small data-i18n="share.qr_sub">QR code, same Wi-Fi</small>
+      </button>
+      <button type="button" class="pfs-tile" data-share="copy">
+        <span class="pfs-ico"><svg viewBox="0 0 24 24"><path d="M8 3h9a2 2 0 0 1 2 2v12h-2V5H8zM5 7h9a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2m0 2v11h9V9z"/></svg></span>
+        <b data-i18n="share.copy">Copy the File</b><small data-i18n="share.copy_sub">To paste in a folder, a message…</small>
+      </button>
+      <button type="button" class="pfs-tile" data-share="save">
+        <span class="pfs-ico"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3zM4 18h16v2H4z"/></svg></span>
+        <b data-i18n="share.save">Save As…</b><small data-i18n="share.save_sub">Choose the folder</small>
+      </button>
+    </div>
+    <div id="pfs-qr" class="pfs-qr hidden">
+      <div id="pfs-code" class="pfs-code"></div>
+      <div class="pfs-qrtext">
+        <b data-i18n="share.qr.title">Scan with your phone</b>
+        <p data-i18n="share.qr.text">It must be on the same Wi-Fi network as this computer. The link stops when this window closes.</p>
+        <code id="pfs-url" class="pfs-url"></code>
+        <small id="pfs-left" class="pfs-left"></small>
+        <button id="pfs-qrback" type="button" class="w-link" data-i18n="share.qr.back">← Other Options</button>
+      </div>
+    </div>
+    <div id="pfs-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="pfs-close" class="btn" data-cancel data-i18n="common.close">Close</button>
+    </div>
+  </div>
+</div>
 <div id="pflrename" class="modal hidden">
   <div class="modal-box">
     <h3 data-i18n="pfiles.rename_title">Rename on the Printer</h3>
@@ -1553,6 +1599,7 @@
 <script src="maint.js"></script>
 <script src="pfiles-logic.js"></script>
 <script src="printer-files.js"></script>
+<script src="pfiles-share.js"></script>
 <script src="library.js"></script>
 <script src="vendor/xterm.js"></script>
 <script src="vendor/marked.js"></script>

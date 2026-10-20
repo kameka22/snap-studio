@@ -18,6 +18,7 @@ mod model3mf;
 mod presets;
 mod printers;
 mod printer_files;
+mod share;
 mod orient;
 mod paint;
 mod plate;
@@ -825,6 +826,76 @@ async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Opti
     .await;
     let _ = std::fs::remove_dir_all(&tmp);
     result
+}
+
+// ---------------------------------------------------------------- share
+
+/// The local copy of a printer file, to share it; fetched once per version.
+#[tauri::command]
+async fn share_fetch(printer_id: String, root: String, path: String, modified: f64) -> Result<String, String> {
+    served_root(&root)?;
+    let p = printer_by_id(&printer_id)?;
+    share::fetch(&p.host, p.port, &root, &path, modified)
+        .await
+        .map(|f| f.to_string_lossy().into_owned())
+        .map_err(|e| t!("pfiles.err.fetch", err = e))
+}
+
+#[tauri::command]
+fn share_caps() -> share::Caps {
+    share::caps()
+}
+
+#[tauri::command]
+fn share_copy(path: String) -> Result<(), String> {
+    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    share::copy(&p).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn share_save(path: String, dest: String) -> Result<(), String> {
+    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    share::save(&p, Path::new(&dest)).map_err(|e| e.to_string())
+}
+
+/// The system's share menu (AirDrop, Messages, Mail…) at (`x`, `y`) of the
+/// window. macOS only.
+#[tauri::command]
+async fn share_native(app: tauri::AppHandle, path: String, x: f64, y: f64) -> Result<(), String> {
+    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::Manager;
+        let w = app.get_webview_window("main").ok_or("no window")?;
+        let ns = w.ns_window().map_err(|e| e.to_string())? as usize;
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.run_on_main_thread(move || {
+            let _ = tx.send(share::native(ns, &p, x, y).map_err(|e| e.to_string()));
+        })
+        .map_err(|e| e.to_string())?;
+        return tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or_else(|_| Err("no answer".into())))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, p, x, y);
+        Err("not available on this system".into())
+    }
+}
+
+/// Serves a shared file to the local network for a quarter of an hour:
+/// its address and QR code. On the network that reaches the printer.
+#[tauri::command]
+fn share_qr_start(path: String, printer_id: String) -> Result<share::QrShare, String> {
+    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    let printer = printer_by_id(&printer_id)?;
+    share::qr_start(p, &printer.host).map_err(|e| t!("share.err.qr", err = e))
+}
+
+#[tauri::command]
+fn share_qr_stop() {
+    share::qr_stop();
 }
 
 /// `prn://localhost/f?id=<printer>&root=<root>&p=<path>`: a file of a
@@ -1818,6 +1889,13 @@ pub fn run() {
             pf_overview,
             pf_count,
             pf_tools,
+            share_fetch,
+            share_caps,
+            share_copy,
+            share_save,
+            share_native,
+            share_qr_start,
+            share_qr_stop,
             pf_video_duration,
             pf_delete,
             pf_rename,
@@ -1905,6 +1983,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 pty::close_all();
                 chat::close_all();
+                share::cleanup();
             }
         });
 }

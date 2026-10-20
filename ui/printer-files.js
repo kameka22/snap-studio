@@ -299,6 +299,7 @@ function pflRenderDetail() {
     <div class="det-actions">
       <button class="btn primary" data-act="print">${esc(tr("pfiles.print"))}</button>
       <button class="btn" data-act="download"${PFL.busy ? " disabled" : ""}>${esc(tr("common.download"))}</button>
+      <button class="btn" data-act="share">${esc(tr("share.button"))}</button>
       <button class="btn danger" data-act="delete"${can.ok ? "" : " disabled"} title="${esc(can.ok ? tr("common.delete") : pflWhy(can.reason))}">${esc(tr("common.delete"))}</button>
     </div>
     ${can.ok ? "" : `<p class="pfl-why">${esc(pflWhy(can.reason))}</p>`}
@@ -326,7 +327,7 @@ function pflRenderSelbar() {
   bar.classList.toggle("single", !!one);
   // One file: its actions only, the selected row already says which.
   for (const id of ["pfl-selcount", "pfl-selall", "pfl-seldone"]) $(id).classList.toggle("hidden", !!one);
-  for (const id of ["pfl-selprint", "pfl-selren"]) $(id).classList.toggle("hidden", !one);
+  for (const id of ["pfl-selprint", "pfl-selshare", "pfl-selren"]) $(id).classList.toggle("hidden", !one);
   if (!on) return;
   if (one) {
     const can = pflCanChange(one, PFL.data.printing);
@@ -646,12 +647,14 @@ $("pfl-main").addEventListener("contextmenu", (e) => {
     nativeMenu([
       { id: "pfl:print", label: tr("pfiles.print") },
       { id: "pfl:download", label: tr("common.download") },
+      { id: "pfl:share", label: tr("share.button") },
       ...(can.ok ? [{ id: "pfl:rename", label: tr("pfiles.rename") }, {}, { id: "pfl:delete", label: tr("common.delete") }] : []),
     ], e.clientX, e.clientY);
   } else {
     nativeMenu([
       { id: "pfl:play", label: tr("pfiles.play") },
       { id: "pfl:download", label: tr("common.download") },
+      { id: "pfl:share", label: tr("share.button") },
       ...(can.ok ? [{}, { id: "pfl:delete", label: tr("common.delete") }] : []),
     ], e.clientX, e.clientY);
   }
@@ -661,6 +664,7 @@ onMenu("pfl", (verb) => {
   if (!f) return;
   if (verb === "print") pflPrint(f);
   else if (verb === "download") pflDownload([f]);
+  else if (verb === "share") pfsOpen(f);
   else if (verb === "rename") pflRenameOpen(f);
   else if (verb === "delete") pflDelete([f]);
   else if (verb === "play") pflPlay(pflKey(f));
@@ -677,6 +681,7 @@ $("pfl-detail").addEventListener("click", (e) => {
     pflRenderSelbar();
   } else if (act === "print") pflPrint(f);
   else if (act === "download") pflDownload([f]);
+  else if (act === "share") pfsOpen(f);
   else if (act === "delete") pflDelete([f]);
 });
 
@@ -689,6 +694,7 @@ $("pfl-selall").addEventListener("click", () => {
 /* The bar acts on the files picked, or on the one file selected. */
 const pflBarFiles = () => (PFL.selMode ? pflPicked() : [pflFind(PFL.sel)].filter(Boolean));
 $("pfl-selprint").addEventListener("click", () => pflPrint(pflFind(PFL.sel)));
+$("pfl-selshare").addEventListener("click", () => pfsOpen(pflFind(PFL.sel)));
 $("pfl-selren").addEventListener("click", () => {
   const f = pflFind(PFL.sel);
   if (f) pflRenameOpen(f);
@@ -713,6 +719,7 @@ $("pfl-pdl").addEventListener("click", () => {
   const v = pflFind(PFL.player);
   if (v) pflDownload([v]);
 });
+$("pfl-pshare").addEventListener("click", () => pfsOpen(pflFind(PFL.player)));
 $("pfl-pdel").addEventListener("click", () => {
   const v = pflFind(PFL.player);
   if (v) pflDelete([v]);
