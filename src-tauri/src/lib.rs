@@ -657,9 +657,9 @@ async fn pf_overview(printer_id: String) -> Result<printer_files::Overview, Stri
 /// Tools a print file on a printer uses, read from the G-code when the
 /// metadata does not say.
 #[tauri::command]
-async fn pf_tools(printer_id: String, path: String) -> Result<Vec<u8>, String> {
+async fn pf_tools(printer_id: String, path: String, modified: f64) -> Result<Vec<u8>, String> {
     let p = printer_by_id(&printer_id)?;
-    printer_files::tools(&p.host, p.port, &path).await.map_err(|e| e.to_string())
+    printer_files::tools(&p.host, p.port, &path, modified).await.map_err(|e| e.to_string())
 }
 
 /// Number of print files on a printer, for the sidebar.

@@ -1494,6 +1494,8 @@
     "other": "{n} fichiers n'ont pas été supprimés : {err}"
   },
   "pfiles.err.video_delete": "L'imprimante a refusé de supprimer cette vidéo : {err}",
+  "pfiles.err.video_unlisted": "Le service caméra de l'imprimante n'a pas répondu : la vidéo n'a pas été supprimée, pour ne pas en effacer une autre par erreur. Réessayez dans un instant.",
+  "pfiles.err.video_unknown": "Le service caméra de l'imprimante ne connaît pas cette vidéo ({err}) : elle n'a pas été supprimée.",
   "pfiles.err.video_kept": "L'imprimante a accepté, mais la vidéo est toujours listée. Actualisez dans un instant ; si elle y est encore, supprimez-la depuis l'écran de l'imprimante.",
   "pfiles.err.fetch": "Le fichier n'a pas pu être copié depuis l'imprimante : {err}",
   "send.fetching": "Copie du fichier depuis l'imprimante…"

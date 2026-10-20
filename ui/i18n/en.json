@@ -1491,6 +1491,8 @@
     "other": "{n} files were not deleted: {err}"
   },
   "pfiles.err.video_delete": "The printer refused to delete this video: {err}",
+  "pfiles.err.video_unlisted": "The printer's camera service did not answer: the video was not deleted, so as not to remove another one by mistake. Try again in a moment.",
+  "pfiles.err.video_unknown": "The printer's camera service does not know this video ({err}): it was not deleted.",
   "pfiles.err.video_kept": "The printer accepted, but the video is still listed. Refresh in a moment; if it is still there, delete it from the printer's screen.",
   "pfiles.err.fetch": "The file could not be copied from the printer: {err}",
   "send.fetching": "Copying the file from the printer…"

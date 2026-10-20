@@ -277,11 +277,30 @@ pub fn gcode_tools(path: &Path) -> Option<Vec<u8>> {
     (!t.is_empty()).then_some(t)
 }
 
+fn tools_cache() -> &'static Mutex<HashMap<MetaKey, Vec<u8>>> {
+    static C: OnceLock<Mutex<HashMap<MetaKey, Vec<u8>>>> = OnceLock::new();
+    C.get_or_init(Default::default)
+}
+
 /// Tools a print file on the printer uses: from Moonraker's metadata when
 /// it says so; otherwise the G-code is read (fetched to a temporary folder).
-/// A multi-color file must not be prepared as a single-color one.
-pub async fn tools(host: &str, port: u16, path: &str) -> Result<Vec<u8>> {
+/// A multi-color file must not be prepared as a single-color one. The
+/// answer is kept until the file changes (`modified`): the G-code is read
+/// once, not at each opening of the send sheet.
+pub async fn tools(host: &str, port: u16, path: &str, modified: f64) -> Result<Vec<u8>> {
     let b = base(host, port);
+    let key = (b.clone(), path.to_string(), modified.to_bits());
+    if let Some(t) = tools_cache().lock().ok().and_then(|c| c.get(&key).cloned()) {
+        return Ok(t);
+    }
+    let t = tools_uncached(host, port, &b, path).await?;
+    if let Ok(mut c) = tools_cache().lock() {
+        c.insert(key, t.clone());
+    }
+    Ok(t)
+}
+
+async fn tools_uncached(host: &str, port: u16, b: &str, path: &str) -> Result<Vec<u8>> {
     let url = format!("{b}/server/files/metadata?filename={}", urlencoding::encode(path));
     let meta = get(&url, 6).await.ok().map(|v| parse_meta(&v, ""));
     if let Some(m) = meta.as_ref().filter(|m| m.tools_known) {
@@ -661,41 +680,22 @@ pub async fn delete(host: &str, port: u16, root: &str, path: &str) -> Result<()>
 }
 
 /// The camera service's id of a video (U1): the instance whose video has
-/// this name, else one whose id is in the name, else the 14-digit date the
-/// name ends with ("<print>_<YYYYMMDDHHMMSS>.mp4").
+/// this name, else the one whose id is in the name. Never guessed: without
+/// the service's list, or with no instance for this video, there is none —
+/// a date read from the name alone could be another video's.
 pub fn date_index_of(path: &str, instances: Option<&Value>) -> Option<String> {
     let base = path.rsplit('/').next().unwrap_or(path);
-    let list: Vec<(&str, &str)> = instances
-        .and_then(|v| v.get("instances"))
-        .and_then(|a| a.as_array())
-        .map(|a| {
-            a.iter()
-                .filter_map(|i| Some((i.get("date_index")?.as_str()?, i.get("video_path").and_then(|v| v.as_str()).unwrap_or(""))))
-                .filter(|(d, _)| !d.is_empty())
-                .collect()
-        })
-        .unwrap_or_default();
+    let list: Vec<(&str, &str)> = instances?
+        .get("instances")?
+        .as_array()?
+        .iter()
+        .filter_map(|i| Some((i.get("date_index")?.as_str()?, i.get("video_path").and_then(|v| v.as_str()).unwrap_or(""))))
+        .filter(|(d, _)| !d.is_empty())
+        .collect();
     if let Some((d, _)) = list.iter().find(|(_, v)| v.rsplit('/').next() == Some(base)) {
         return Some(d.to_string());
     }
-    if let Some((d, _)) = list.iter().find(|(d, _)| base.contains(d)) {
-        return Some(d.to_string());
-    }
-    let stem = base.rsplit_once('.').map(|(s, _)| s).unwrap_or(base);
-    let b = stem.as_bytes();
-    let (mut i, mut found) = (0, None);
-    while i < b.len() {
-        if b[i].is_ascii_digit() {
-            let j = (i..b.len()).find(|&k| !b[k].is_ascii_digit()).unwrap_or(b.len());
-            if j - i == 14 {
-                found = Some(stem[i..j].to_string());
-            }
-            i = j;
-        } else {
-            i += 1;
-        }
-    }
-    found
+    list.iter().find(|(d, _)| base.contains(d)).map(|(d, _)| d.to_string())
 }
 
 fn req_id() -> u64 {
@@ -727,8 +727,11 @@ pub async fn delete_video(host: &str, port: u16, root: &str, path: &str) -> Resu
     )
     .await
     .ok();
-    let Some(index) = date_index_of(path, instances.as_ref()) else {
-        return Err(anyhow!(crate::t!("pfiles.err.video_delete", err = first)));
+    let Some(instances) = instances else {
+        return Err(anyhow!(crate::t!("pfiles.err.video_unlisted")));
+    };
+    let Some(index) = date_index_of(path, Some(&instances)) else {
+        return Err(anyhow!(crate::t!("pfiles.err.video_unknown", err = first)));
     };
     let r = crate::printers::ws_call(
         host,
@@ -1217,9 +1220,11 @@ mod tests {
     fn tools_come_from_the_metadata_or_the_gcode() {
         let port = fake_moonraker(true);
         // The slicer's list, as Moonraker reads it: nothing is fetched.
-        assert_eq!(block_on(tools("127.0.0.1", port, "Cube-1a2b3c.gcode")).unwrap(), vec![0, 1]);
-        // Nothing said: the G-code is read, T0 and T2.
-        assert_eq!(block_on(tools("127.0.0.1", port, "Bare.gcode")).unwrap(), vec![0, 2]);
+        assert_eq!(block_on(tools("127.0.0.1", port, "Cube-1a2b3c.gcode", 1.0)).unwrap(), vec![0, 1]);
+        // Nothing said: the G-code is read, T0 and T2; then kept for that version.
+        assert_eq!(block_on(tools("127.0.0.1", port, "Bare.gcode", 1.0)).unwrap(), vec![0, 2]);
+        let key = (base("127.0.0.1", port), "Bare.gcode".to_string(), 1.0f64.to_bits());
+        assert_eq!(tools_cache().lock().unwrap().get(&key), Some(&vec![0, 2]));
     }
 
     #[test]
@@ -1258,10 +1263,11 @@ mod tests {
         ]});
         assert_eq!(date_index_of("Cube_20261019153000.mp4", Some(&list)).as_deref(), Some("20261019153000"));
         assert_eq!(date_index_of("sub/x_20261018120000.mp4", Some(&list)).as_deref(), Some("20261018120000"));
-        // Without the service's list: the date in the name.
-        assert_eq!(date_index_of("Vase-1a2b3c_20260107114733.mp4", None).as_deref(), Some("20260107114733"));
-        assert_eq!(date_index_of("timelapse_f120_r24_classic.mp4", None), None);
-        assert_eq!(date_index_of("2026101915300.mp4", None), None);
+        // Never guessed: without the service's list, or with no instance for
+        // the video, there is no id — a date in the name could be another's.
+        assert_eq!(date_index_of("Vase-1a2b3c_20260107114733.mp4", None), None);
+        assert_eq!(date_index_of("Vase-1a2b3c_20260107114733.mp4", Some(&list)), None);
+        assert_eq!(date_index_of("timelapse_f120_r24_classic.mp4", Some(&list)), None);
     }
 
     #[test]

@@ -724,7 +724,7 @@ async function openSendRemote(printer, file, thumb) {
   // be prepared as a single-color one).
   if (!file.meta?.tools_known) {
     const remote = SL.remote;
-    remote.toolsReady = invoke("pf_tools", { printerId: printer.id, path: file.path })
+    remote.toolsReady = invoke("pf_tools", { printerId: printer.id, path: file.path, modified: file.modified || 0 })
       .then((tools) => {
         if (tools?.length) remote.stats.tools = tools;
         if (SL.remote === remote && !$("sendmodal").classList.contains("hidden")) checkSendPrinter();
