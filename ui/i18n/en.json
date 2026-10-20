@@ -410,7 +410,6 @@
   "printers.remove.title": "Delete “{name}”?",
   "printers.remove.text": "It will disappear from the list; nothing changes on the machine.",
   "printers.removed": "Printer deleted",
-  "common.hide": "Hide",
   "printers.cam.starting": "starting…",
   "printers.cam.retry": "image unavailable, retrying…",
   "prints.state.printing": "Printing",
