@@ -557,7 +557,7 @@
           <div class="ia-rbar ia-pbar">
             <span data-i18n="ia.preview">Preview</span>
             <span class="ia-rbar-end">
-              <button id="ia-bed" class="btn small ia-toggle" aria-pressed="false" title="Show the printer's bed under the object" data-i18n-title="ia.bed.show"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 15.5 8.5 11h13L15 15.5zm0 2h13v2H2zm13 0 6.5-4.5v2L15 19.5z"/></svg><span data-i18n="ia.bed">Bed</span></button>
+              <label id="ia-bed-sw" class="sw-label ia-bedsw" title="Show the printer's bed under the object" data-i18n-title="ia.bed.show"><input type="checkbox" id="ia-bed" class="sw small" role="switch" /><span data-i18n="ia.bed">Bed</span></label>
               <button id="ia-reframe" class="btn small" title="Reframe the view" data-i18n-title="ia.reframe.title" data-i18n="ia.reframe">Reframe</button>
               <button id="ia-expand" class="btn small" title="Enlarge (double-click the preview)" data-i18n-title="ia.expand.title" data-i18n="ia.expand">Enlarge</button>
             </span>
@@ -1065,8 +1065,8 @@
         <button class="seg-btn" data-mode="feature" title="One color per path type" data-i18n-title="viewer.color.paths.title" data-i18n="viewer.color.paths">Paths</button>
         <button class="seg-btn" data-mode="tool" title="Plain color of each filament" data-i18n-title="viewer.color.filaments.title" data-i18n="viewer.color.filaments">Filaments</button>
       </div>
-      <button id="v-travel" class="btn hidden" data-i18n="viewer.travel">Travel moves</button>
-      <button id="v-plate" class="btn on" data-i18n="slice.plate">Plate</button>
+      <label id="v-travel-sw" class="sw-label hidden"><input type="checkbox" id="v-travel" class="sw small" role="switch" /><span data-i18n="viewer.travel">Travel moves</span></label>
+      <label class="sw-label"><input type="checkbox" id="v-plate" class="sw small" role="switch" checked /><span data-i18n="slice.plate">Plate</span></label>
       <button id="v-reset" class="btn" title="Reframe (R)" data-i18n-title="viewer.reframe.title" data-i18n="ia.reframe">Reframe</button>
       <button id="v-close" class="btn" title="Close (Esc)" data-i18n-title="viewer.close.title" data-i18n="common.close">Close</button>
     </div>

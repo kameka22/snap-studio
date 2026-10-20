@@ -1111,13 +1111,12 @@ const IA_BED_KEY = "snapstudio.ia.bed";
 IA.bed = localStorage.getItem(IA_BED_KEY) === "1";
 IA.viewerOwned = false;
 function iaBedApply() {
-  const btn = $("ia-bed");
-  btn.setAttribute("aria-pressed", String(IA.bed));
-  btn.title = tr(IA.bed ? "ia.bed.hide" : "ia.bed.show");
+  $("ia-bed").checked = IA.bed;
+  $("ia-bed-sw").title = tr(IA.bed ? "ia.bed.hide" : "ia.bed.show");
   if (!IA.viewerOwned) return;
   V.showPlate = IA.bed;
   V.frameWithBed = true;
-  $("v-plate").classList.toggle("on", V.showPlate);
+  $("v-plate").checked = V.showPlate;
 }
 function iaBedSet(on) {
   IA.bed = on;
@@ -1127,9 +1126,9 @@ function iaBedSet(on) {
   if (V.framed) frameCamera();
   else draw();
 }
-$("ia-bed").addEventListener("click", () => iaBedSet(!IA.bed));
-// Enlarged, the viewer's own Plate button is the same switch.
-$("v-plate").addEventListener("click", () => {
+$("ia-bed").addEventListener("change", () => iaBedSet($("ia-bed").checked));
+// Enlarged, the viewer's own Plate switch is the same switch.
+$("v-plate").addEventListener("change", () => {
   if (IA.viewerOwned && V.showPlate !== IA.bed) iaBedSet(V.showPlate);
 });
 iaBedApply();
@@ -1157,7 +1156,7 @@ function iaUndock(hide = true) {
     if (IA.viewerOwned) {
       V.showPlate = IA.prevPlate;
       V.frameWithBed = false;
-      $("v-plate").classList.toggle("on", V.showPlate);
+      $("v-plate").checked = V.showPlate;
       IA.viewerOwned = false;
     }
   }

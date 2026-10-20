@@ -1223,6 +1223,16 @@ async function boot() {
   if (state.dir) await refresh();
 }
 
+/* Switches (input.sw, role="switch"): Enter toggles them too, as Space
+   does, and is kept from submitting or closing anything around them. */
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (e.key !== "Enter" || !(t instanceof HTMLInputElement) || !t.classList.contains("sw") || t.disabled) return;
+  e.preventDefault();
+  e.stopPropagation();
+  t.click();
+}, true);
+
 /* A new language: everything Files builds in code is rebuilt. */
 window.addEventListener("langchange", () => {
   renderRecents();

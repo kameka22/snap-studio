@@ -1185,7 +1185,8 @@ body.dragover #stage::after {
 .v-title { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
 .v-title b { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v-title span { font-size: 12px; white-space: nowrap; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.v-actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.v-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+.v-actions .sw-label { padding: 0 6px; }
 .v-actions .btn.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
 .v-msg {
   position: absolute;
@@ -1328,6 +1329,16 @@ input.sw::after {
 input.sw:checked { background: var(--success); }
 input.sw:checked::after { transform: translateX(16px); }
 input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* The app's switch, wherever a setting is on or off: a checkbox drawn as
+   track and knob. It keeps the checkbox's keyboard (Space) and checked
+   state; role="switch" tells assistive tech, and Enter toggles it too
+   (app.js). Small: in bars of 22-24 px controls, with its label beside it. */
+input.sw:disabled { opacity: 0.45; }
+input.sw.small { width: 30px; height: 18px; border-radius: 9px; }
+input.sw.small::after { width: 14px; height: 14px; }
+input.sw.small:checked::after { transform: translateX(12px); }
+.sw-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; text-transform: none; letter-spacing: 0; }
+.sw-label:has(input.sw:disabled) { color: var(--text-tertiary); }
 .range-wrap { display: flex; align-items: center; gap: 10px; flex: none; }
 .range-wrap input[type=range] { width: 120px; }
 .range-wrap b { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; white-space: nowrap; }
@@ -2019,10 +2030,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ia-dock.fit-wrap .ia-zone-actions::before { display: none; }
 .ia-dock.fit-wrap .ia-zone-actions .btn { flex: 1; }
 .ia-rbar-end { display: flex; align-items: center; gap: 8px; }
-/* A toggle among the preview's buttons: pressed, it takes the accent. */
-.ia-rbar .btn.ia-toggle { gap: 5px; text-transform: none; letter-spacing: 0; }
-.ia-rbar .btn.ia-toggle svg { width: 13px; height: 13px; }
-.ia-rbar .btn.ia-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+/* The Bed switch, among the preview's buttons: a little room before them. */
+.ia-bedsw { margin-right: 6px; }
 
 /* ---------- slicing: heads, model colors, progress ---------- */
 .set-note { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-tertiary); }

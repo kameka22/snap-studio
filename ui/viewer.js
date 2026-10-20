@@ -948,7 +948,7 @@ async function openViewer(path, name, kind, bust) {
   if (!V.preview || V.preview.path !== path) hidePreviewPanel();
   $("v-layers").classList.toggle("hidden", !gcode);
   $("v-legend").classList.toggle("hidden", !gcode);
-  $("v-travel").classList.toggle("hidden", !gcode);
+  $("v-travel-sw").classList.toggle("hidden", !gcode);
   $("v-colors").classList.toggle("hidden", !gcode);
 
   try {
@@ -1209,16 +1209,14 @@ $("v-layer").addEventListener("input", () => {
   updateLayerLabel();
   schedule();
 });
-$("v-travel").addEventListener("click", () => {
-  V.showTravel = !V.showTravel;
-  $("v-travel").classList.toggle("on", V.showTravel);
+$("v-travel").addEventListener("change", () => {
+  V.showTravel = $("v-travel").checked;
   draw();
 });
 $("v-close").addEventListener("click", closeViewer);
 $("v-reset").addEventListener("click", frameCamera);
-$("v-plate").addEventListener("click", () => {
-  V.showPlate = !V.showPlate;
-  $("v-plate").classList.toggle("on", V.showPlate);
+$("v-plate").addEventListener("change", () => {
+  V.showPlate = $("v-plate").checked;
   draw();
 });
 document.addEventListener("keydown", (e) => {
