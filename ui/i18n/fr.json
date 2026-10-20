@@ -1280,8 +1280,8 @@
   "spool.replace.text": "Le plateau de Préparer contient d'autres objets. Les remplacer par le plateau de cette impression ? Vous pourrez revenir en arrière.",
   "spool.replace.ok": "Remplacer",
   "ia.details": "Détails",
-  "ia.splitter": "Faites glisser pour redimensionner ; double-clic pour rétablir",
-  "ia.splitter_aria": "Redimensionner l'aperçu",
+  "ia.splitter": "Faites glisser pour redimensionner la conversation ; double-clic pour rétablir",
+  "ia.splitter_aria": "Redimensionner la conversation",
   "ia.delete.button": "Supprimer la conversation",
   "ia.delete.button_title": "Supprimer la conversation et sa session Claude",
   "ia.delete.menu": "Supprimer la conversation…",
@@ -1354,5 +1354,13 @@
   "ia.list.nomatch": "Aucune conversation ne correspond.",
   "ia.list.clear": "Effacer la recherche et les filtres",
   "ia.delete.deleting": "Suppression…",
-  "err.conv_unknown": "conversation inconnue"
+  "err.conv_unknown": "conversation inconnue",
+  "ia.versions": "Versions",
+  "ia.stats.watertight_yes": "étanche",
+  "ia.stats.watertight_no": "non étanche",
+  "ia.stats.watertight_unchecked": "étanchéité non vérifiée",
+  "ia.stats.faces_short": {
+    "one": "{count} face",
+    "other": "{count} faces"
+  }
 }

@@ -989,54 +989,73 @@ $("ia-folder").addEventListener("click", async () => {
 
 /* ------------------------------------------------------------ splitter */
 
-/* The preview's share of the centre column, from 0.25 to 0.8, kept for all
-   conversations. Dragged with the mouse, moved with ↑/↓, reset by a
-   double-click. */
-const IA_SPLIT_KEY = "snapstudio.ia.split";
-const IA_SPLIT_DEFAULT = 0.6;
-const iaClampSplit = (r) => Math.min(0.8, Math.max(0.25, r));
-function iaSplitApply(r, save = true) {
-  r = iaClampSplit(Number.isFinite(r) ? r : IA_SPLIT_DEFAULT);
-  $("ia-center").style.setProperty("--ia-preview", `${(r * 100).toFixed(1)}%`);
-  $("ia-splitter").setAttribute("aria-valuenow", Math.round(r * 100));
-  if (save) localStorage.setItem(IA_SPLIT_KEY, String(r));
-  return r;
+/* Width of the conversation column on the right, in pixels, kept for all
+   conversations: 400 by default, at least the stylesheet's minimum, at most
+   760 px or half the screen, so the preview stays the main area. Dragged with the mouse,
+   moved with ←/→ (the bar follows the arrow; Shift: bigger steps), reset by
+   a double-click, Home or Enter. */
+const IA_CHAT_KEY = "snapstudio.ia.chat";
+const IA_CHAT_DEFAULT = 400;
+const iaMinW = (el, fallback) => parseFloat(getComputedStyle(el).minWidth) || fallback;
+const iaChatMin = () => iaMinW($("ia-left"), 300);
+const iaChatMax = () => {
+  const split = $("ia-left").parentElement;
+  // Hidden (another tab): nothing to measure, only the fixed bound.
+  if (!split.clientWidth) return 760;
+  // The preview is the main area: it keeps its minimum and at least half.
+  const keep = Math.max(iaMinW($("ia-center"), 360), split.clientWidth / 2);
+  return Math.max(iaChatMin(), Math.min(760, split.clientWidth - keep - 7));
+};
+function iaChatApply(w, save = true) {
+  w = Math.round(Math.min(iaChatMax(), Math.max(iaChatMin(), Number.isFinite(w) ? w : IA_CHAT_DEFAULT)));
+  $("ia-left").style.setProperty("--ia-chat-w", `${w}px`);
+  const bar = $("ia-splitter");
+  bar.setAttribute("aria-valuenow", w);
+  bar.setAttribute("aria-valuemin", iaChatMin());
+  bar.setAttribute("aria-valuemax", iaChatMax());
+  if (save) localStorage.setItem(IA_CHAT_KEY, String(w));
+  return w;
 }
-let iaSplit = iaSplitApply(parseFloat(localStorage.getItem(IA_SPLIT_KEY)), false);
-$("ia-splitter").setAttribute("aria-valuemin", 25);
-$("ia-splitter").setAttribute("aria-valuemax", 80);
+/* The user's choice is kept apart from what fits: a narrow window clamps
+   the column without forgetting it. */
+let iaChatWanted = parseFloat(localStorage.getItem(IA_CHAT_KEY)) || IA_CHAT_DEFAULT;
+let iaChatW = iaChatApply(iaChatWanted, false);
+const iaChatSet = (w) => {
+  iaChatW = iaChatApply(w);
+  iaChatWanted = iaChatW;
+};
 
 $("ia-splitter").addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   e.preventDefault();
   const bar = e.currentTarget;
-  const box = $("ia-center");
-  const rect = box.getBoundingClientRect();
+  const split = $("ia-left").parentElement;
+  const right = $("ia-left").getBoundingClientRect().right;
   bar.setPointerCapture(e.pointerId);
   bar.classList.add("drag");
-  box.classList.add("dragging");
-  const move = (ev) => {
-    iaSplit = iaSplitApply((ev.clientY - rect.top) / rect.height, false);
-  };
+  split.classList.add("dragging");
+  const move = (ev) => (iaChatW = iaChatApply(right - ev.clientX, false));
   const up = () => {
     bar.removeEventListener("pointermove", move);
     bar.classList.remove("drag");
-    box.classList.remove("dragging");
-    iaSplit = iaSplitApply(iaSplit);
+    split.classList.remove("dragging");
+    iaChatSet(iaChatW);
   };
   bar.addEventListener("pointermove", move);
   bar.addEventListener("pointerup", up, { once: true });
   bar.addEventListener("pointercancel", up, { once: true });
 });
-$("ia-splitter").addEventListener("dblclick", () => (iaSplit = iaSplitApply(IA_SPLIT_DEFAULT)));
+$("ia-splitter").addEventListener("dblclick", () => iaChatSet(IA_CHAT_DEFAULT));
 $("ia-splitter").addEventListener("keydown", (e) => {
-  const step = e.shiftKey ? 0.1 : 0.03;
-  if (e.key === "ArrowUp") iaSplit = iaSplitApply(iaSplit - step);
-  else if (e.key === "ArrowDown") iaSplit = iaSplitApply(iaSplit + step);
-  else if (e.key === "Home" || e.key === "Enter") iaSplit = iaSplitApply(IA_SPLIT_DEFAULT);
+  const step = e.shiftKey ? 64 : 16;
+  if (e.key === "ArrowLeft") iaChatSet(iaChatW + step);
+  else if (e.key === "ArrowRight") iaChatSet(iaChatW - step);
+  else if (e.key === "Home" || e.key === "Enter") iaChatSet(IA_CHAT_DEFAULT);
   else return;
   e.preventDefault();
 });
+/* The window (or the app's sidebar) changes: refit, back to the choice. */
+new ResizeObserver(() => (iaChatW = iaChatApply(iaChatWanted, false))).observe($("ia-left").parentElement);
 
 const iaResizeObserver = new ResizeObserver(() => {
   if (IA.open) iaFit(IA.open);
@@ -1084,6 +1103,8 @@ function iaExpand() {
    mesh the volume means nothing, so we abstain. */
 function iaRenderStats(s) {
   IA.stats = s;
+  // [label, value, warn, short]: the short form stands alone when the
+  // toolbar is too narrow for labels ("24" means nothing, "24 faces" does).
   const rows = [[tr("ia.stats.size"), s.size.map((x) => fmtDec(x, 1)).join(" × ") + " mm"]];
   if (s.watertight === true) {
     rows.push([tr("ia.stats.mass"), tr("ia.stats.mass_v", { g: Math.round(s.volume_cm3 * 1.24) })]);
@@ -1093,10 +1114,17 @@ function iaRenderStats(s) {
     tr("ia.stats.watertight"),
     tr(s.watertight === null ? "ia.stats.unchecked" : s.watertight ? "common.yes" : "common.no"),
     leak,
+    tr(s.watertight === null ? "ia.stats.watertight_unchecked" : s.watertight ? "ia.stats.watertight_yes" : "ia.stats.watertight_no"),
   ]);
-  rows.push([tr("ia.stats.faces"), fmtNum(s.triangles)]);
+  rows.push([tr("ia.stats.faces"), fmtNum(s.triangles), false, tr("ia.stats.faces_short", { n: s.triangles, count: fmtNum(s.triangles) })]);
+  // Chips under the preview; the full text stays as the tooltip.
   $("ia-stats").innerHTML = rows
-    .map(([k, v, warn]) => `<dt>${esc(k)}</dt><dd${warn ? ' class="warn"' : ""}>${esc(v)}</dd>`)
+    .map(
+      ([k, v, warn, short]) =>
+        `<span class="ia-chip${warn ? " warn" : ""}${short ? " has-short" : ""}" title="${esc(k)} : ${esc(v)}"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span>${
+          short ? `<span class="s">${esc(short)}</span>` : ""
+        }</span>`
+    )
     .join("");
 }
 
@@ -1106,13 +1134,22 @@ async function iaRenderVersions(id, current) {
     list = await invoke("ia_versions", { id });
   } catch {}
   $("ia-vlabel").textContent = current ? `v${current}` : "";
-  $("ia-versions").innerHTML = list
-    .map(
-      (v) =>
-        `<button class="ia-ver${v.n === current ? " on" : ""}" data-v="${v.n}"
-          title="${esc(tr(v.n === 1 ? "ia.version.first" : "ia.version.revert"))}">v${v.n}</button>`
-    )
-    .join("");
+  // Up to six versions: a segmented control; beyond, a menu, newest first.
+  const box = $("ia-versions");
+  if (list.length <= 6) {
+    box.innerHTML = `<div class="seg">${list
+      .map(
+        (v) =>
+          `<button class="ia-ver${v.n === current ? " on" : ""}" data-v="${v.n}" aria-pressed="${v.n === current}"
+            title="${esc(tr(v.n === 1 ? "ia.version.first" : "ia.version.revert"))}">v${v.n}</button>`
+      )
+      .join("")}</div>`;
+  } else {
+    box.innerHTML = `<select class="ia-vsel" aria-label="${esc(tr("ia.versions"))}" title="${esc(tr("ia.version.revert"))}">${[...list]
+      .reverse()
+      .map((v) => `<option value="${v.n}"${v.n === current ? " selected" : ""}>v${v.n}${v.n === 1 ? ` — ${esc(tr("ia.version.first"))}` : ""}</option>`)
+      .join("")}</select>`;
+  }
 }
 
 /* An object created from scratch has nothing to show before its first
@@ -1138,7 +1175,7 @@ async function iaShowCurrent(id) {
     iaDock();
     await openViewer(path, c ? c.title : "", "3mf", stamp);
   } catch (e) {
-    $("ia-stats").innerHTML = `<dt>${esc(tr("ia.stats.object"))}</dt><dd class="warn">${esc(String(e))}</dd>`;
+    $("ia-stats").innerHTML = `<span class="ia-chip warn"><span class="k">${esc(tr("ia.stats.object"))}</span>${esc(String(e))}</span>`;
   }
 }
 
@@ -1215,13 +1252,21 @@ async function iaShowVersion(id, n) {
   }
 }
 
+$("ia-versions").addEventListener("change", (ev) => {
+  if (ev.target.matches(".ia-vsel") && IA.open) iaShowVersion(IA.open, +ev.target.value);
+});
 $("ia-versions").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-v]");
   if (btn && IA.open) iaShowVersion(IA.open, +btn.dataset.v);
 });
 
+/* The preview's size changes (splitter, window, toolbar wrapping): the
+   framing follows as long as the user has not moved the camera; otherwise
+   only the picture is redrawn at the new aspect. */
 const iaStageObserver = new ResizeObserver(() => {
-  if (IA.open && typeof draw === "function") draw();
+  if (!IA.open || typeof draw !== "function") return;
+  if (V.framed && typeof frameCamera === "function") frameCamera();
+  else draw();
 });
 iaStageObserver.observe($("ia-stage"));
 

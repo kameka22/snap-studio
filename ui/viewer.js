@@ -772,9 +772,16 @@ function frameCamera() {
     (m.min[2] + m.max[2]) / 2,
   ];
   const size = Math.max(m.max[0] - m.min[0], m.max[1] - m.min[1], m.max[2] - m.min[2], 1);
-  V.cam.dist = size * 2.1;
+  // The field of view is vertical: a pane taller than wide would cut the
+  // sides, so step back in proportion.
+  const c = V.gl?.canvas;
+  const aspect = c && c.clientHeight ? c.clientWidth / c.clientHeight : 1;
+  V.cam.dist = size * 2.1 * (aspect < 1 ? 1 / aspect : 1);
   V.cam.yaw = -0.62;
   V.cam.pitch = 0.46;
+  // Framed by the app: a resize may frame again (ia.js), until the user
+  // turns, pans or zooms.
+  V.framed = true;
   draw();
 }
 
@@ -1149,6 +1156,7 @@ function bindInteractions(canvas) {
     const dy = e.clientY - V.drag.y;
     V.drag.x = e.clientX;
     V.drag.y = e.clientY;
+    if (dx || dy) V.framed = false;
     if (V.drag.pan) {
       panBy(dx, dy);
     } else {
@@ -1172,6 +1180,7 @@ function bindInteractions(canvas) {
       const pinch = e.ctrlKey;
       // ⇧ + scroll moves the view (a trackpad's ⇧ + two fingers).
       const action = pinch ? "zoom" : e.shiftKey ? "pan" : state.wheelAction || "zoom";
+      V.framed = false;
 
       if (action === "zoom") {
         const s = pinch ? 1 : dir;

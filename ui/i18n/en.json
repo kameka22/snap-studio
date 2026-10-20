@@ -1277,8 +1277,8 @@
   "spool.replace.text": "The Prepare plate holds other objects. Put this print's plate in their place? This can be undone.",
   "spool.replace.ok": "Replace",
   "ia.details": "Details",
-  "ia.splitter": "Drag to resize; double-click to reset",
-  "ia.splitter_aria": "Resize the preview",
+  "ia.splitter": "Drag to resize the conversation; double-click to reset",
+  "ia.splitter_aria": "Resize the conversation",
   "ia.delete.button": "Delete Conversation",
   "ia.delete.button_title": "Delete the conversation and its Claude session",
   "ia.delete.menu": "Delete Conversation…",
@@ -1351,5 +1351,13 @@
   "ia.list.nomatch": "No conversation matches.",
   "ia.list.clear": "Clear Search and Filters",
   "ia.delete.deleting": "Deleting…",
-  "err.conv_unknown": "unknown conversation"
+  "err.conv_unknown": "unknown conversation",
+  "ia.versions": "Versions",
+  "ia.stats.watertight_yes": "watertight",
+  "ia.stats.watertight_no": "not watertight",
+  "ia.stats.watertight_unchecked": "watertightness not checked",
+  "ia.stats.faces_short": {
+    "one": "{count} face",
+    "other": "{count} faces"
+  }
 }

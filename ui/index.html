@@ -568,54 +568,52 @@
               <span data-i18n="ia.waiting">Waiting for Claude's first mesh…</span>
             </div>
           </div>
-        </section>
-        <div id="ia-splitter" class="ia-splitter" role="separator" aria-orientation="horizontal" tabindex="0" title="Drag to resize; double-click to reset" data-i18n-title="ia.splitter" aria-label="Resize the preview" data-i18n-aria="ia.splitter_aria"></div>
-        <div id="ia-left" class="ia-left" data-mode="chat">
-          <div id="ia-chat" class="ia-chat">
-            <div id="chat-list" class="chat-list" role="log" aria-live="polite"></div>
-            <div class="chat-compose">
-              <div id="chat-attach" class="chat-attach hidden"></div>
-              <div class="chat-row">
-                <button id="chat-add" class="chat-icon" title="Attach an image" data-i18n-title="chat.attach">
-                  <svg viewBox="0 0 24 24"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10z"/></svg>
-                </button>
-                <select id="chat-model" class="chat-model" title="Claude model for this conversation" data-i18n-title="chat.model.title"></select>
-                <textarea id="chat-input" rows="1" placeholder="Message Claude…" data-i18n-placeholder="chat.placeholder"></textarea>
-                <button id="chat-send" class="chat-send" title="Send" data-i18n-title="chat.send" disabled>
-                  <svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
-                </button>
-                <button id="chat-stop" class="chat-send stop hidden" title="Stop Claude's answer without deleting anything (Esc)" data-i18n-title="ia.stop.title">
-                  <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span>
-                </button>
-              </div>
-              <div class="chat-foot">
-                <select id="chat-mode" title="How much Claude may do without asking" data-i18n-title="chat.mode.title"></select>
-                <span id="chat-status" class="chat-status"></span>
-              </div>
+          <div id="ia-dock" class="ia-dock" role="toolbar" aria-label="Details" data-i18n-aria="ia.details">
+            <div class="ia-dock-info">
+              <span id="ia-badge" class="ia-st hidden"></span>
+              <div id="ia-versions" class="ia-versions" role="group" aria-label="Versions" data-i18n-aria="ia.versions"></div>
+              <div id="ia-stats" class="ia-stats"></div>
             </div>
-            <input id="chat-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+            <div class="ia-rActions">
+              <button id="ia-slice" class="btn" data-i18n="prepare.slice">Slice</button>
+              <button id="ia-save" class="btn primary" data-i18n="ia.save">Save to Files</button>
+            </div>
           </div>
-          <div id="ia-term" class="ia-term"></div>
-          <button id="ia-term-stop" class="ia-term-stop" title="Stop Claude's current answer (Esc)" data-i18n-title="ia.stop.term_title"><svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span></button>
-          <div id="ia-dead" class="ia-dead hidden">
-            <span data-i18n="ia.session_ended">The session has ended.</span>
-            <button id="ia-restart" class="btn small" data-i18n="ia.reopen">Reopen</button>
+        </section>
+      </div>
+      <div id="ia-splitter" class="ia-splitter" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to resize the conversation; double-click to reset" data-i18n-title="ia.splitter" aria-label="Resize the conversation" data-i18n-aria="ia.splitter_aria"></div>
+      <div id="ia-left" class="ia-left" data-mode="chat">
+        <div id="ia-chat" class="ia-chat">
+          <div id="chat-list" class="chat-list" role="log" aria-live="polite"></div>
+          <div class="chat-compose">
+            <div id="chat-attach" class="chat-attach hidden"></div>
+            <div class="chat-row">
+              <button id="chat-add" class="chat-icon" title="Attach an image" data-i18n-title="chat.attach">
+                <svg viewBox="0 0 24 24"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10z"/></svg>
+              </button>
+              <select id="chat-model" class="chat-model" title="Claude model for this conversation" data-i18n-title="chat.model.title"></select>
+              <textarea id="chat-input" rows="1" placeholder="Message Claude…" data-i18n-placeholder="chat.placeholder"></textarea>
+              <button id="chat-send" class="chat-send" title="Send" data-i18n-title="chat.send" disabled>
+                <svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
+              </button>
+              <button id="chat-stop" class="chat-send stop hidden" title="Stop Claude's answer without deleting anything (Esc)" data-i18n-title="ia.stop.title">
+                <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span>
+              </button>
+            </div>
+            <div class="chat-foot">
+              <select id="chat-mode" title="How much Claude may do without asking" data-i18n-title="chat.mode.title"></select>
+              <span id="chat-status" class="chat-status"></span>
+            </div>
           </div>
+          <input id="chat-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+        </div>
+        <div id="ia-term" class="ia-term"></div>
+        <button id="ia-term-stop" class="ia-term-stop" title="Stop Claude's current answer (Esc)" data-i18n-title="ia.stop.term_title"><svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span></button>
+        <div id="ia-dead" class="ia-dead hidden">
+          <span data-i18n="ia.session_ended">The session has ended.</span>
+          <button id="ia-restart" class="btn small" data-i18n="ia.reopen">Reopen</button>
         </div>
       </div>
-
-      <aside class="ia-right">
-        <div class="ia-rbar">
-          <span data-i18n="ia.details">Details</span>
-          <span id="ia-badge" class="ia-st hidden"></span>
-        </div>
-        <div id="ia-versions" class="ia-versions"></div>
-        <dl id="ia-stats" class="ia-stats"></dl>
-        <div class="ia-rActions">
-          <button id="ia-save" class="btn primary" data-i18n="ia.save">Save to Files</button>
-          <button id="ia-slice" class="btn" data-i18n="prepare.slice">Slice</button>
-        </div>
-      </aside>
     </div>
   </div>
 

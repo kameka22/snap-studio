@@ -1849,37 +1849,46 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .chat-plan { margin: 6px 0 10px; max-height: 360px; overflow: auto; padding: 8px 12px; border-radius: 8px; background: var(--content-bg); }
 
 /* ---------- conversation: the two panes ---------- */
-/* Preview on top, conversation below, split by a bar the user moves (its
-   share is kept); details on the right. */
+/* The preview is the main area, its details in a toolbar under it; the
+   conversation sits in the right column, its width the user's (kept). */
 .ia-split { flex: 1; display: flex; min-height: 0; }
-.ia-center { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.ia-viewpane { flex: 0 0 var(--ia-preview, 55%); min-height: 140px; display: flex; flex-direction: column; padding-bottom: 8px; }
+.ia-center { flex: 1; display: flex; flex-direction: column; min-width: 360px; min-height: 0; }
+.ia-viewpane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ia-left {
+  position: relative;
+  flex: 0 0 var(--ia-chat-w, 400px);
+  width: var(--ia-chat-w, 400px);
+  display: flex;
+  flex-direction: column;
+  min-width: 300px;
+  min-height: 0;
+}
 .ia-splitter {
   flex: none;
-  height: 7px;
-  margin: -3px 0;
+  width: 7px;
+  margin: 0 -3px;
   position: relative;
   z-index: 2;
-  cursor: row-resize;
+  cursor: col-resize;
   outline: none;
 }
 .ia-splitter::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 3px;
-  height: 1px;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
   background: var(--separator);
 }
 .ia-splitter::before {
   content: "";
   position: absolute;
-  left: 50%;
-  top: 1px;
-  width: 36px;
-  height: 5px;
-  margin-left: -18px;
+  top: 50%;
+  left: 1px;
+  width: 5px;
+  height: 36px;
+  margin-top: -18px;
   border-radius: 3px;
   background: var(--control-bg-hover);
   z-index: 1;
@@ -1887,15 +1896,11 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   transition: opacity 120ms ease;
 }
 .ia-splitter:hover::before, .ia-splitter:focus-visible::before, .ia-splitter.drag::before { opacity: 1; background: var(--accent); }
-.ia-center.dragging { user-select: none; cursor: row-resize; }
-.ia-left { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 120px; }
-.ia-right {
-  width: 300px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--separator);
-  overflow: auto;
+.ia-split.dragging { user-select: none; cursor: col-resize; }
+/* Narrow windows (the app allows 900 px): the conversation gives way first. */
+@media (max-width: 1180px) {
+  .ia-left { min-width: 270px; }
+  .ia-center { min-width: 300px; }
 }
 .ia-rbar {
   display: flex;
@@ -1914,34 +1919,70 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .viewer.docked { position: absolute; inset: 0; z-index: 1; }
 .viewer.docked .v-bar,
 .viewer.docked .v-hint { display: none; }
-.ia-versions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
+/* ---------- the toolbar under the preview ---------- */
+.ia-dock {
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 10px 14px 12px;
+  padding: 7px 8px 7px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+}
+.ia-dock-info { flex: 1 1 260px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ia-dock .ia-st { margin-top: 0; }
+/* Versions: a segmented control while short, a menu beyond. */
+.ia-versions { display: inline-flex; align-items: center; }
+.ia-versions:empty { display: none; }
+.ia-versions .seg { display: inline-flex; }
 .ia-ver {
   border: 1px solid var(--control-border);
   background: var(--control-bg);
   color: var(--text-secondary);
-  border-radius: 999px;
   padding: 2px 9px;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  margin-left: -1px;
 }
-.ia-ver.on { background: var(--accent); border-color: transparent; color: var(--accent-text); }
-.ia-stats {
-  margin: 0 14px;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  font-size: 12px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 10px;
-  overflow: hidden;
+.ia-ver:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.ia-ver:last-child { border-radius: 0 6px 6px 0; }
+.ia-ver:only-child { border-radius: 6px; }
+.ia-ver.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); position: relative; }
+.ia-vsel { font-size: 11px; padding: 2px 4px; font-variant-numeric: tabular-nums; }
+/* Measurements as small chips: label, then value. */
+/* The chips flow with the badge and the versions, line by line. */
+.ia-stats { display: contents; }
+.ia-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--control-bg-hover);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.ia-stats:empty { display: none; }
-.ia-stats dt { color: var(--text-secondary); padding: 6px 0 6px 12px; border-top: 1px solid var(--card-border); }
-.ia-stats dd { margin: 0; padding: 6px 12px; text-align: right; font-variant-numeric: tabular-nums; border-top: 1px solid var(--card-border); }
-.ia-stats dt:first-of-type, .ia-stats dd:first-of-type { border-top: 0; }
-.ia-stats dd.warn { color: var(--danger); }
-.ia-rActions { padding: 14px; display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
-.ia-rActions .btn { justify-content: center; }
+.ia-chip .k { color: var(--text-tertiary); }
+.ia-chip .s { display: none; }
+.ia-chip.warn { color: var(--danger); background: var(--danger-soft); }
+.ia-chip.warn .k { color: inherit; }
+.ia-rActions { flex: none; display: flex; gap: 8px; margin-left: auto; }
+.ia-rActions .btn { justify-content: center; white-space: nowrap; }
+/* Narrow: labels go, values stay (each chip keeps its label as a tooltip). */
+@container (max-width: 900px) {
+  .ia-chip .k { display: none; }
+  .ia-chip.has-short .v { display: none; }
+  .ia-chip.has-short .s { display: inline; }
+}
+@container (max-width: 380px) {
+  .ia-rActions { flex: 1 1 100%; }
+  .ia-rActions .btn { flex: 1; }
+}
 .ia-rbar-end { display: flex; align-items: center; gap: 10px; }
 
 /* ---------- slicing: heads, model colors, progress ---------- */
