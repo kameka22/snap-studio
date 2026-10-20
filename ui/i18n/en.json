@@ -1353,11 +1353,16 @@
   "ia.delete.deleting": "Deleting…",
   "err.conv_unknown": "unknown conversation",
   "ia.versions": "Versions",
-  "ia.stats.watertight_yes": "watertight",
-  "ia.stats.watertight_no": "not watertight",
-  "ia.stats.watertight_unchecked": "watertightness not checked",
+  "ia.stats.watertight_yes": "Watertight",
+  "ia.stats.watertight_no": "Not watertight",
+  "ia.stats.watertight_unchecked": "Not checked",
   "ia.stats.faces_short": {
     "one": "{count} face",
     "other": "{count} faces"
-  }
+  },
+  "ia.details_all": "All details",
+  "ia.stats.mass_short": "≈ {g} g",
+  "ia.details_status": "Status",
+  "ia.saved_short": "Saved",
+  "ia.save_short": "Save to Files"
 }

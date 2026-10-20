@@ -559,7 +559,6 @@
             <span class="ia-rbar-end">
               <button id="ia-reframe" class="btn small" title="Reframe the view" data-i18n-title="ia.reframe.title" data-i18n="ia.reframe">Reframe</button>
               <button id="ia-expand" class="btn small" title="Enlarge (double-click the preview)" data-i18n-title="ia.expand.title" data-i18n="ia.expand">Enlarge</button>
-              <span id="ia-vlabel" class="ia-vlabel"></span>
             </span>
           </div>
           <div id="ia-stage" class="ia-stage">
@@ -569,14 +568,18 @@
             </div>
           </div>
           <div id="ia-dock" class="ia-dock" role="toolbar" aria-label="Details" data-i18n-aria="ia.details">
-            <div class="ia-dock-info">
+            <div class="ia-zone ia-zone-lead">
               <span id="ia-badge" class="ia-st hidden"></span>
               <div id="ia-versions" class="ia-versions" role="group" aria-label="Versions" data-i18n-aria="ia.versions"></div>
-              <div id="ia-stats" class="ia-stats"></div>
             </div>
-            <div class="ia-rActions">
-              <button id="ia-slice" class="btn" data-i18n="prepare.slice">Slice</button>
-              <button id="ia-save" class="btn primary" data-i18n="ia.save">Save to Files</button>
+            <div class="ia-zone ia-zone-stats">
+              <div id="ia-stats" class="ia-stats"></div>
+              <button id="ia-more" class="tb-btn ia-more hidden" aria-haspopup="dialog" aria-expanded="false" aria-controls="ia-pop" title="All details" data-i18n-title="ia.details_all" aria-label="All details" data-i18n-aria="ia.details_all"><svg viewBox="0 0 24 24"><path d="M6 10.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3m6 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3m6 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3"/></svg></button>
+              <div id="ia-pop" class="ia-pop hidden" role="dialog" aria-label="Details" data-i18n-aria="ia.details"></div>
+            </div>
+            <div class="ia-zone ia-zone-actions">
+              <button id="ia-save" class="btn" title="Save to Files" data-i18n-title="ia.save" data-i18n="ia.save_short">Save to Files</button>
+              <button id="ia-slice" class="btn primary" data-i18n="prepare.slice">Slice</button>
             </div>
           </div>
         </section>

@@ -1356,11 +1356,16 @@
   "ia.delete.deleting": "Suppression…",
   "err.conv_unknown": "conversation inconnue",
   "ia.versions": "Versions",
-  "ia.stats.watertight_yes": "étanche",
-  "ia.stats.watertight_no": "non étanche",
-  "ia.stats.watertight_unchecked": "étanchéité non vérifiée",
+  "ia.stats.watertight_yes": "Étanche",
+  "ia.stats.watertight_no": "Non étanche",
+  "ia.stats.watertight_unchecked": "Non vérifié",
   "ia.stats.faces_short": {
     "one": "{count} face",
     "other": "{count} faces"
-  }
+  },
+  "ia.details_all": "Tous les détails",
+  "ia.stats.mass_short": "≈ {g} g",
+  "ia.details_status": "État",
+  "ia.saved_short": "Enregistré",
+  "ia.save_short": "Enregistrer"
 }

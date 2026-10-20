@@ -1856,8 +1856,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ia-viewpane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ia-left {
   position: relative;
-  flex: 0 0 var(--ia-chat-w, 400px);
-  width: var(--ia-chat-w, 400px);
+  flex: 0 0 var(--ia-chat-w, 384px);
+  width: var(--ia-chat-w, 384px);
   display: flex;
   flex-direction: column;
   min-width: 300px;
@@ -1906,83 +1906,108 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 8px;
+  padding: 12px 16px 8px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-secondary);
 }
-.ia-vlabel { color: var(--accent); font-variant-numeric: tabular-nums; }
 /* The viewer docks here: same code, same graphics context. */
-.ia-stage { position: relative; flex: 1; min-height: 0; margin: 0 14px; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); background: var(--card-bg); }
+.ia-stage { position: relative; flex: 1; min-height: 0; margin: 0 16px; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); background: var(--card-bg); }
 .viewer.docked { position: absolute; inset: 0; z-index: 1; }
 .viewer.docked .v-bar,
 .viewer.docked .v-hint { display: none; }
-/* ---------- the toolbar under the preview ---------- */
+/* ---------- the toolbar under the preview ----------
+   A bar like the window's own: a hairline on top, 28 px controls, three
+   zones (status and versions / measurements / actions) with a separator
+   between them. iaFitDock keeps it on one line. */
 .ia-dock {
-  container-type: inline-size;
+  flex: none;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  margin: 10px 14px 12px;
-  padding: 7px 8px 7px 10px;
-  border: 1px solid var(--card-border);
-  border-radius: 10px;
-  background: var(--card-bg);
-  box-shadow: var(--card-shadow);
-}
-.ia-dock-info { flex: 1 1 260px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.ia-dock .ia-st { margin-top: 0; }
-/* Versions: a segmented control while short, a menu beyond. */
-.ia-versions { display: inline-flex; align-items: center; }
-.ia-versions:empty { display: none; }
-.ia-versions .seg { display: inline-flex; }
-.ia-ver {
-  border: 1px solid var(--control-border);
-  background: var(--control-bg);
-  color: var(--text-secondary);
-  padding: 2px 9px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  margin-left: -1px;
-}
-.ia-ver:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
-.ia-ver:last-child { border-radius: 0 6px 6px 0; }
-.ia-ver:only-child { border-radius: 6px; }
-.ia-ver.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); position: relative; }
-.ia-vsel { font-size: 11px; padding: 2px 4px; font-variant-numeric: tabular-nums; }
-/* Measurements as small chips: label, then value. */
-/* The chips flow with the badge and the versions, line by line. */
-.ia-stats { display: contents; }
-.ia-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--control-bg-hover);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+  height: 48px;
+  margin-top: 12px;
+  padding: 0 16px;
+  border-top: 1px solid var(--separator);
   white-space: nowrap;
 }
-.ia-chip .k { color: var(--text-tertiary); }
-.ia-chip .s { display: none; }
+.ia-zone { position: relative; display: flex; align-items: center; gap: 8px; height: 28px; }
+.ia-zone + .ia-zone { padding-left: 12px; margin-left: 12px; }
+.ia-zone + .ia-zone::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--separator);
+}
+.ia-zone-lead { flex: none; }
+.ia-zone-stats { flex: 1 1 auto; min-width: 0; justify-content: center; }
+.ia-zone-actions { flex: none; }
+/* Nothing measured (waiting, unreadable): no empty zone between two lines. */
+.ia-zone-stats:has(> .ia-stats:empty) { visibility: hidden; }
+.ia-dock .ia-st { align-self: center; margin-top: 0; height: 22px; padding: 0 8px 0 7px; font-size: 12px; }
+.ia-dock.fit-dot .ia-st { width: 22px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+.ia-dock.fit-dot .ia-st::before { width: 8px; height: 8px; }
+/* Versions: the app's segmented control while short, a menu beyond. */
+.ia-versions { display: flex; align-items: center; }
+.ia-versions:empty { display: none; }
+.ia-ver { font-size: 12px; font-variant-numeric: tabular-nums; padding: 0 8px; }
+.ia-vsel { height: 28px; min-width: 64px; padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--control-bg); color: var(--text); }
+/* Measurements: one height, one gap, the icon muted, the value plain. */
+.ia-stats { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.ia-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--control-bg-hover);
+  font-size: 12px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.ia-chip svg { width: 13px; height: 13px; color: var(--text-secondary); }
+.ia-chip.off { display: none; }
 .ia-chip.warn { color: var(--danger); background: var(--danger-soft); }
-.ia-chip.warn .k { color: inherit; }
-.ia-rActions { flex: none; display: flex; gap: 8px; margin-left: auto; }
-.ia-rActions .btn { justify-content: center; white-space: nowrap; }
-/* Narrow: labels go, values stay (each chip keeps its label as a tooltip). */
-@container (max-width: 900px) {
-  .ia-chip .k { display: none; }
-  .ia-chip.has-short .v { display: none; }
-  .ia-chip.has-short .s { display: inline; }
+.ia-chip.warn svg { color: inherit; }
+.ia-chip .v { overflow: hidden; text-overflow: ellipsis; }
+.ia-more { width: 28px; flex: none; }
+/* No chip left: "…" joins the versions, without a zone of its own. */
+.ia-dock.fit-none .ia-zone-stats { margin-left: 8px; padding-left: 0; justify-content: flex-start; }
+.ia-dock.fit-none .ia-zone-stats::before { display: none; }
+.ia-dock .ia-more.on { background: var(--control-bg-hover); color: var(--text); }
+/* "All details", above its button. */
+.ia-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  z-index: 20;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+  white-space: normal;
 }
-@container (max-width: 380px) {
-  .ia-rActions { flex: 1 1 100%; }
-  .ia-rActions .btn { flex: 1; }
-}
+.ia-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; padding: 0 16px; font-size: 12px; }
+.ia-pop dt { color: var(--text-secondary); }
+.ia-pop dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ia-zone-actions .btn { height: 28px; min-height: 28px; padding: 0 14px; justify-content: center; }
+/* Last resort, a very narrow pane: the buttons get a line of their own. */
+.ia-dock.fit-wrap { flex-wrap: wrap; height: auto; padding: 10px 16px; row-gap: 8px; }
+.ia-dock.fit-wrap .ia-zone-stats { flex-basis: 0; justify-content: flex-end; }
+.ia-dock.fit-wrap .ia-zone-actions { flex: 1 1 100%; margin-left: 0; padding-left: 0; }
+.ia-dock.fit-wrap .ia-zone-actions::before { display: none; }
+.ia-dock.fit-wrap .ia-zone-actions .btn { flex: 1; }
 .ia-rbar-end { display: flex; align-items: center; gap: 10px; }
 
 /* ---------- slicing: heads, model colors, progress ---------- */

@@ -175,7 +175,10 @@ function iaDetailBadge() {
   if (!c) return el.classList.add("hidden");
   const k = iaStatusKey(c);
   el.className = `ia-st ${k}`;
-  el.textContent = tr(IA_STATUS_LABEL[k]);
+  // The toolbar says it short ("Saved"); the tooltip and "All details" in full.
+  el.textContent = tr(k === "saved" ? "ia.saved_short" : IA_STATUS_LABEL[k]);
+  el.title = tr(IA_STATUS_LABEL[k]);
+  iaFitDock();
 }
 
 /* Something changed a status (a turn started, ended, failed). */
@@ -995,7 +998,7 @@ $("ia-folder").addEventListener("click", async () => {
    moved with ←/→ (the bar follows the arrow; Shift: bigger steps), reset by
    a double-click, Home or Enter. */
 const IA_CHAT_KEY = "snapstudio.ia.chat";
-const IA_CHAT_DEFAULT = 400;
+const IA_CHAT_DEFAULT = 384;
 const iaMinW = (el, fallback) => parseFloat(getComputedStyle(el).minWidth) || fallback;
 const iaChatMin = () => iaMinW($("ia-left"), 300);
 const iaChatMax = () => {
@@ -1099,57 +1102,139 @@ function iaExpand() {
   };
 }
 
+/* Icons of the measurement chips: the icon stands for the label, which
+   stays in the tooltip and in the "All details" popover. */
+const IA_STAT_ICON = {
+  size: '<svg viewBox="0 0 24 24"><path d="M4 4h6v2H7.4l3.8 3.8-1.4 1.4L6 7.4V10H4zm16 16h-6v-2h2.6l-3.8-3.8 1.4-1.4 3.8 3.8V14h2z"/></svg>',
+  mass: '<svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 1 2.83 4H18a1 1 0 0 1 .97.76l2.5 10A1 1 0 0 1 20.5 19h-17a1 1 0 0 1-.97-1.24l2.5-10A1 1 0 0 1 6 7h3.17A3 3 0 0 1 12 3m0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></svg>',
+  watertight: '<svg viewBox="0 0 24 24"><path d="M12 2.7S5.5 9.9 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 9.9 12 2.7 12 2.7"/></svg>',
+  faces: '<svg viewBox="0 0 24 24"><path d="M12 2.5 21.5 19h-19zm0 4L6 17h5.2zm1.6 0 .4 10.5h5.6z"/></svg>',
+};
+
 /* Estimated mass: PLA weighs 1.24 g per cubic centimeter. Without a closed
    mesh the volume means nothing, so we abstain. */
 function iaRenderStats(s) {
   IA.stats = s;
-  // [label, value, warn, short]: the short form stands alone when the
-  // toolbar is too narrow for labels ("24" means nothing, "24 faces" does).
-  const rows = [[tr("ia.stats.size"), s.size.map((x) => fmtDec(x, 1)).join(" × ") + " mm"]];
+  // [icon, label, full value, chip value, warn]: the chip says it short
+  // ("90 × 40 × 25 mm", "≈ 39 g"), the popover and the tooltip in full.
+  const short = (x) => fmtNum(x, { maximumFractionDigits: 1 });
+  const rows = [["size", tr("ia.stats.size"), s.size.map((x) => fmtDec(x, 1)).join(" × ") + " mm", s.size.map(short).join("\u202f×\u202f") + "\u00a0mm"]];
   if (s.watertight === true) {
-    rows.push([tr("ia.stats.mass"), tr("ia.stats.mass_v", { g: Math.round(s.volume_cm3 * 1.24) })]);
+    const g = Math.round(s.volume_cm3 * 1.24);
+    rows.push(["mass", tr("ia.stats.mass"), tr("ia.stats.mass_v", { g }), tr("ia.stats.mass_short", { g })]);
   }
-  const leak = s.watertight === false;
   rows.push([
+    "watertight",
     tr("ia.stats.watertight"),
     tr(s.watertight === null ? "ia.stats.unchecked" : s.watertight ? "common.yes" : "common.no"),
-    leak,
     tr(s.watertight === null ? "ia.stats.watertight_unchecked" : s.watertight ? "ia.stats.watertight_yes" : "ia.stats.watertight_no"),
+    s.watertight === false,
   ]);
-  rows.push([tr("ia.stats.faces"), fmtNum(s.triangles), false, tr("ia.stats.faces_short", { n: s.triangles, count: fmtNum(s.triangles) })]);
-  // Chips under the preview; the full text stays as the tooltip.
+  rows.push(["faces", tr("ia.stats.faces"), fmtNum(s.triangles), tr("ia.stats.faces_short", { n: s.triangles, count: fmtNum(s.triangles) })]);
+  IA.statRows = rows;
   $("ia-stats").innerHTML = rows
     .map(
-      ([k, v, warn, short]) =>
-        `<span class="ia-chip${warn ? " warn" : ""}${short ? " has-short" : ""}" title="${esc(k)} : ${esc(v)}"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span>${
-          short ? `<span class="s">${esc(short)}</span>` : ""
-        }</span>`
+      ([icon, k, v, chip, warn]) =>
+        `<span class="ia-chip${warn ? " warn" : ""}" title="${esc(k)} : ${esc(v)}">${IA_STAT_ICON[icon]}<span class="v">${esc(chip)}</span></span>`
     )
     .join("");
+  iaFitDock();
 }
+
+/* The toolbar under the preview stays on one line: when it runs out of
+   room, the chips go one by one (last first) behind "…", then the status
+   shrinks to its dot (its text in the tooltip and the popover). Only when
+   even that does not fit do the buttons take a second line, which frees
+   the first one again for the status and as many chips as fit. */
+function iaFitDock() {
+  const dock = $("ia-dock");
+  if (!dock || !dock.offsetWidth) return;
+  const stats = $("ia-stats");
+  const chips = [...stats.children];
+  const more = $("ia-more");
+  const canMore = !!(IA.statRows && IA.statRows.length);
+  const zone = stats.parentElement;
+  const tight = (el) => el.scrollWidth > el.clientWidth + 0.5;
+  const over = () => tight(dock) || tight(zone) || tight(stats);
+  const fitChips = () => {
+    dock.classList.remove("fit-dot", "fit-none");
+    chips.forEach((c) => c.classList.remove("off"));
+    more.classList.add("hidden");
+    for (let i = chips.length - 1; i >= 0 && over(); i--) {
+      chips[i].classList.add("off");
+      if (canMore) more.classList.remove("hidden");
+    }
+    if (chips.length && chips.every((c) => c.classList.contains("off"))) dock.classList.add("fit-none");
+    if (over()) dock.classList.add("fit-dot");
+  };
+  dock.classList.remove("fit-wrap");
+  fitChips();
+  if (over()) {
+    dock.classList.add("fit-wrap");
+    fitChips();
+  }
+  if (!$("ia-pop").classList.contains("hidden")) iaFillPop();
+}
+
+/* "All details": every measurement in full, and the status. */
+function iaFillPop() {
+  const badge = $("ia-badge");
+  const rows = [
+    ...(badge.classList.contains("hidden") ? [] : [[tr("ia.details_status"), badge.title]]),
+    ...(IA.statRows || []).map((r) => [r[1], r[2]]),
+  ];
+  $("ia-pop").innerHTML = `<dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
+}
+function iaPop(open) {
+  const pop = $("ia-pop");
+  if (open) iaFillPop();
+  pop.classList.toggle("hidden", !open);
+  $("ia-more").setAttribute("aria-expanded", String(open));
+  $("ia-more").classList.toggle("on", open);
+}
+$("ia-more").addEventListener("click", (e) => {
+  e.stopPropagation();
+  iaPop($("ia-pop").classList.contains("hidden"));
+});
+document.addEventListener("mousedown", (e) => {
+  if (!$("ia-pop").classList.contains("hidden") && !e.target.closest("#ia-pop, #ia-more")) iaPop(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("ia-pop").classList.contains("hidden")) {
+    iaPop(false);
+    $("ia-more").focus();
+  }
+});
+let iaDockW = 0;
+new ResizeObserver(() => {
+  const w = $("ia-dock").clientWidth;
+  if (w === iaDockW) return;
+  iaDockW = w;
+  iaFitDock();
+}).observe($("ia-dock"));
 
 async function iaRenderVersions(id, current) {
   let list = [];
   try {
     list = await invoke("ia_versions", { id });
   } catch {}
-  $("ia-vlabel").textContent = current ? `v${current}` : "";
   // Up to six versions: a segmented control; beyond, a menu, newest first.
   const box = $("ia-versions");
   if (list.length <= 6) {
     box.innerHTML = `<div class="seg">${list
       .map(
         (v) =>
-          `<button class="ia-ver${v.n === current ? " on" : ""}" data-v="${v.n}" aria-pressed="${v.n === current}"
+          `<button class="seg-btn ia-ver${v.n === current ? " on" : ""}" data-v="${v.n}" aria-pressed="${v.n === current}"
             title="${esc(tr(v.n === 1 ? "ia.version.first" : "ia.version.revert"))}">v${v.n}</button>`
       )
       .join("")}</div>`;
   } else {
     box.innerHTML = `<select class="ia-vsel" aria-label="${esc(tr("ia.versions"))}" title="${esc(tr("ia.version.revert"))}">${[...list]
       .reverse()
-      .map((v) => `<option value="${v.n}"${v.n === current ? " selected" : ""}>v${v.n}${v.n === 1 ? ` — ${esc(tr("ia.version.first"))}` : ""}</option>`)
+      .map((v) => `<option value="${v.n}"${v.n === current ? " selected" : ""} title="${esc(tr(v.n === 1 ? "ia.version.first" : "ia.version.revert"))}">v${v.n}</option>`)
       .join("")}</select>`;
   }
+  iaFitDock();
 }
 
 /* An object created from scratch has nothing to show before its first
@@ -1175,7 +1260,9 @@ async function iaShowCurrent(id) {
     iaDock();
     await openViewer(path, c ? c.title : "", "3mf", stamp);
   } catch (e) {
-    $("ia-stats").innerHTML = `<span class="ia-chip warn"><span class="k">${esc(tr("ia.stats.object"))}</span>${esc(String(e))}</span>`;
+    IA.statRows = [];
+    $("ia-stats").innerHTML = `<span class="ia-chip warn" title="${esc(tr("ia.stats.object"))} : ${esc(String(e))}"><span class="v">${esc(String(e))}</span></span>`;
+    iaFitDock();
   }
 }
 
@@ -1198,7 +1285,9 @@ async function iaLoadPane(id) {
   try {
     iaRenderStats(await invoke("ia_stats", { id }));
   } catch {
+    IA.statRows = [];
     $("ia-stats").innerHTML = "";
+    iaFitDock();
   }
 }
 
