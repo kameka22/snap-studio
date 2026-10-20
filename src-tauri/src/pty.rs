@@ -376,6 +376,7 @@ mod tests {
             updated_at: 0,
             version: 1,
             saved: None,
+            saved_versions: Default::default(),
             started,
             kind: String::new(),
             dest_dir: None,

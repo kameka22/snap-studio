@@ -647,7 +647,14 @@ async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<Strin
     // The print's record keeps the G-code and its summary. The print has left:
     // a failure here must not make it look failed.
     let id = match add(gcode, new, "printing", remote).await.map_err(|e| anyhow::anyhow!("{e}")).and_then(|r| r) {
-        Ok(job) => job.id,
+        Ok(job) => {
+            if printers::is_remap(&request.map) {
+                if let Err(e) = jobs::mark_remapped(&job.id) {
+                    eprintln!("[jobs] substitution not recorded: {e}");
+                }
+            }
+            job.id
+        }
         Err(e) => {
             eprintln!("[jobs] record not saved: {e}");
             String::new()
@@ -686,9 +693,15 @@ async fn job_launch(app: tauri::AppHandle, id: String, map: Option<Vec<(u8, u8)>
     // A name of its own for each job: two prints of the same model do not
     // overwrite each other on the printer.
     let remote = jobs::remote_name(&job.name, &job.id);
-    let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools, &map.unwrap_or_default()).await?;
+    let map = map.unwrap_or_default();
+    let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools, &map).await?;
     if let Err(e) = jobs::mark_started(&id, &remote) {
         eprintln!("[jobs] launch not recorded: {e}");
+    }
+    if printers::is_remap(&map) {
+        if let Err(e) = jobs::mark_remapped(&id) {
+            eprintln!("[jobs] substitution not recorded: {e}");
+        }
     }
     emit_jobs(&app);
     send_progress(&app, "done", Some(100.0), warning);
@@ -1186,8 +1199,11 @@ fn ia_create(
     source: String,
     prompt: String,
     engine: String,
+    model: Option<String>,
 ) -> Result<ia::Conversation, String> {
-    ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())
+    let model = creation_model(model)?;
+    let c = ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())?;
+    with_model(c, model)
 }
 
 #[tauri::command]
@@ -1196,18 +1212,93 @@ fn ia_create_blank(
     engine: String,
     dest: String,
     bounds: Option<[f32; 3]>,
+    model: Option<String>,
 ) -> Result<ia::Conversation, String> {
-    ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())
+    let model = creation_model(model)?;
+    let c = ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())?;
+    with_model(c, model)
+}
+
+/// Model chosen in the creation sheet, checked before anything is created.
+/// Empty or none: the account's default.
+fn creation_model(model: Option<String>) -> Result<Option<String>, String> {
+    match model.filter(|m| !m.is_empty()) {
+        Some(m) if !chat::MODELS.contains(&m.as_str()) => Err(format!("unknown model: {m}")),
+        m => Ok(m),
+    }
+}
+
+/// The new conversation with its model, kept for its first start.
+fn with_model(c: ia::Conversation, model: Option<String>) -> Result<ia::Conversation, String> {
+    let Some(m) = model else { return Ok(c) };
+    chat::set_model(&c.id, Some(&m)).map_err(|e| e.to_string())?;
+    ia::get(&c.id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn ia_delete(id: String) -> Result<Vec<ia::Conversation>, String> {
-    // Deleting the folder under a running Claude would leave it running without
-    // a directory: close first, delete afterwards.
-    pty::close(&id);
-    chat::close(&id);
-    ia::remove(&id).map_err(|e| e.to_string())?;
-    Ok(ia::list())
+async fn ia_delete(id: String) -> Result<IaDeleted, String> {
+    tauri::async_runtime::spawn_blocking(move || delete_conversation(&id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// What a deletion left behind, for the toast.
+#[derive(serde::Serialize)]
+struct IaDeleted {
+    list: Vec<ia::Conversation>,
+    /// Claude session files removed.
+    removed: usize,
+    /// Paths that were kept: links, out of place, or not removable.
+    kept: Vec<String>,
+}
+
+fn delete_conversation(id: &str) -> Result<IaDeleted, String> {
+    // Only one of our conversations: its id is then a session we created,
+    // never someone else's Claude session.
+    ia::get(id).map_err(|_| t!("err.conv_unknown"))?;
+    // Deleting under a running Claude would leave it running without a
+    // directory, and still writing its transcript: both close first, and each
+    // close waits for its process to exit.
+    pty::close(id);
+    chat::close(id);
+    ia::watch_stop(id);
+    // Listed before the folder goes: the project folder's name derives from it.
+    let found = ia::session_artifacts(id).map_err(|e| e.to_string())?;
+    ia::remove(id).map_err(|e| e.to_string())?;
+    let (removed, failed) = ia::remove_artifacts(&found);
+    let kept = found
+        .skipped
+        .iter()
+        .chain(&failed)
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    Ok(IaDeleted { list: ia::list(), removed, kept })
+}
+
+/// What deleting a conversation would remove, for its confirmation.
+#[derive(serde::Serialize)]
+struct IaDeletePlan {
+    /// Claude session files found for it.
+    files: usize,
+    /// A Claude process is open for it (chat or terminal).
+    running: bool,
+}
+
+#[tauri::command]
+fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
+    ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
+    let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
+    Ok(IaDeletePlan { files: found.paths.len(), running: pty::is_open(&id) || chat::is_open(&id) })
+}
+
+#[tauri::command]
+fn ia_duplicate(id: String) -> Result<ia::Conversation, String> {
+    ia::duplicate(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn ia_rename(id: String, title: String) -> Result<ia::Conversation, String> {
+    ia::rename(&id, &title).map_err(|e| e.to_string())
 }
 
 /// Path of the current mesh and stamp of its last write.
@@ -1491,6 +1582,9 @@ pub fn run() {
             ia_create,
             ia_create_blank,
             ia_delete,
+            ia_delete_plan,
+            ia_rename,
+            ia_duplicate,
             ia_current,
             ia_get,
             ia_workspace,
@@ -1551,6 +1645,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn creation_model_is_checked_first() {
+        assert_eq!(creation_model(None), Ok(None));
+        assert_eq!(creation_model(Some(String::new())), Ok(None));
+        assert_eq!(creation_model(Some("claude-opus-5-5".into())), Ok(Some("claude-opus-5-5".into())));
+        assert!(creation_model(Some("gpt-9".into())).is_err());
+    }
 
     #[test]
     fn parse_query() {

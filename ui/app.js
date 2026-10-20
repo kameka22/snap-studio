@@ -989,6 +989,8 @@ onMenu("nav", (v) => switchView(v));
 onMenu("view", (v) => { switchView("files"); setView(v); });
 onMenu("edit", (what) => {
   if (what === "find" && window.currentView === "files") { $("search").focus(); $("search").select(); }
+  // On macOS ⌘F is the menu's: the AI list has its own search.
+  if (what === "find" && window.currentView === "ia" && !IA.open && IA.list.length) { $("ia-q").focus(); $("ia-q").select(); }
 });
 onMenu("files", (what) => {
   if (what === "open") { switchView("files"); pickFolder(); }
@@ -1220,6 +1222,16 @@ async function boot() {
   updateStatus();
   if (state.dir) await refresh();
 }
+
+/* Switches (input.sw, role="switch"): Enter toggles them too, as Space
+   does, and is kept from submitting or closing anything around them. */
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (e.key !== "Enter" || !(t instanceof HTMLInputElement) || !t.classList.contains("sw") || t.disabled) return;
+  e.preventDefault();
+  e.stopPropagation();
+  t.click();
+}, true);
 
 /* A new language: everything Files builds in code is rebuilt. */
 window.addEventListener("langchange", () => {

@@ -1185,7 +1185,8 @@ body.dragover #stage::after {
 .v-title { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
 .v-title b { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v-title span { font-size: 12px; white-space: nowrap; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.v-actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.v-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+.v-actions .sw-label { padding: 0 6px; }
 .v-actions .btn.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
 .v-msg {
   position: absolute;
@@ -1328,6 +1329,16 @@ input.sw::after {
 input.sw:checked { background: var(--success); }
 input.sw:checked::after { transform: translateX(16px); }
 input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* The app's switch, wherever a setting is on or off: a checkbox drawn as
+   track and knob. It keeps the checkbox's keyboard (Space) and checked
+   state; role="switch" tells assistive tech, and Enter toggles it too
+   (app.js). Small: in bars of 22-24 px controls, with its label beside it. */
+input.sw:disabled { opacity: 0.45; }
+input.sw.small { width: 30px; height: 18px; border-radius: 9px; }
+input.sw.small::after { width: 14px; height: 14px; }
+input.sw.small:checked::after { transform: translateX(12px); }
+.sw-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; text-transform: none; letter-spacing: 0; }
+.sw-label:has(input.sw:disabled) { color: var(--text-tertiary); }
 .range-wrap { display: flex; align-items: center; gap: 10px; flex: none; }
 .range-wrap input[type=range] { width: 120px; }
 .range-wrap b { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; white-space: nowrap; }
@@ -1572,8 +1583,6 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 }
 .ia-sub { font-size: 12px; color: var(--text-secondary); }
 .ia-meta { font-size: 11px; color: var(--text-tertiary); }
-.ia-badge { margin-top: 4px; font-size: 12px; color: var(--text-secondary); }
-.ia-badge.done { color: var(--accent); }
 .ia-del {
   position: absolute;
   top: 10px;
@@ -1591,7 +1600,7 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   opacity: 0;
   transition: opacity 120ms ease;
 }
-.ia-card:hover .ia-del { opacity: 1; }
+.ia-card:hover .ia-del, .ia-card.sel .ia-del, .ia-card:focus-within .ia-del { opacity: 1; }
 .ia-del:hover { background: var(--danger-soft); color: var(--danger); }
 .ia-empty {
   flex: 1;
@@ -1646,23 +1655,111 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   border-radius: 8px;
   transform: perspective(300px) rotateX(55deg);
 }
-.ia-hints { margin: 0; font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
-#ia-prompt { resize: vertical; }
+/* Creation sheet: a large field, ideas, then the options as controls. */
+.ia-new-box { width: 620px; gap: 14px; }
+.ia-new-head { display: flex; align-items: center; gap: 12px; }
+.ia-new-thumb { flex: none; width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: var(--card-bg); border: 1px solid var(--card-border); }
+.ia-new-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.ia-new-icon svg { width: 22px; height: 22px; fill: currentColor; }
+.ia-new-titles { min-width: 0; }
+.ia-new-titles h3 { margin: 0; }
+.ia-new-src { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ia-new-src:empty { display: none; }
+.ia-prompt-box { position: relative; }
+.ia-prompt-box textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 132px;
+  max-height: 40vh;
+  resize: none;
+  padding: 12px 14px 30px;
+  border-radius: 12px;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.ia-prompt-box textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+.ia-prompt-kbd { position: absolute; right: 10px; bottom: 8px; font: inherit; font-size: 11px; color: var(--text-tertiary); background: none; pointer-events: none; }
+.ia-ideas { display: flex; align-items: baseline; gap: 8px; margin-top: -4px; }
+.ia-ideas-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ia-idea {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--control-border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+.ia-idea:hover { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 8%, var(--card-bg)); }
+.ia-idea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ia-new-opts { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--separator); }
+.ia-new-group { display: flex; flex-direction: column; gap: 10px; }
+.ia-new-group.hidden { display: none; }
+.ia-new-row { display: grid; grid-template-columns: 116px minmax(0, auto) auto; align-items: center; justify-content: start; column-gap: 10px; }
+.ia-new-k { font-size: 12px; color: var(--text-secondary); }
+.ia-chip-btn, .ia-folder-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--control-border);
+  background: var(--card-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.ia-chip-btn:hover, .ia-folder-btn:hover { border-color: var(--accent); }
+.ia-chip-btn:focus-visible, .ia-folder-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ia-folder-btn { max-width: 320px; }
+.ia-folder-btn svg { flex: none; width: 15px; height: 15px; fill: var(--accent); }
+.ia-folder-btn #ia-dest-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.ia-caret { color: var(--text-tertiary); font-size: 10px; }
+.ia-engines { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 8px; grid-column: 2 / span 2; }
+.ia-engine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.ia-engine:hover:not(:disabled):not(.on) { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border)); }
+.ia-engine.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card-bg)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.ia-engine:disabled { opacity: 0.5; cursor: default; }
+.ia-engine:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ia-engine-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.ia-engine:disabled .ia-engine-icon { background: color-mix(in srgb, var(--text-secondary) 14%, transparent); color: var(--text-secondary); }
+.ia-engine-icon svg { width: 16px; height: 16px; fill: currentColor; }
+.ia-engine-text { display: flex; flex-direction: column; min-width: 0; }
+.ia-engine-text b { font-size: 12px; font-weight: 600; }
+.ia-engine-text small { font-size: 11px; line-height: 1.3; color: var(--text-secondary); }
+.ia-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 10px; background: color-mix(in srgb, var(--text) 7%, transparent); grid-column: 2 / span 2; justify-self: start; }
+.ia-seg button { font: inherit; font-size: 12px; padding: 4px 12px; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); cursor: pointer; }
+.ia-seg button.on { background: var(--control-bg); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.ia-seg button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ---------- conversation: bar, terminal ---------- */
 .ia-detail { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .ia-term { flex: 1; min-height: 0; padding: 8px 10px; background: var(--content-bg); }
 .ia-term-host { width: 100%; height: 100%; }
 .ia-term .xterm-viewport { background: transparent !important; }
-.ia-dead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  border-top: 1px solid var(--card-border);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
 .ia-hint {
   padding: 8px 14px;
   border-bottom: 1px solid var(--card-border);
@@ -1672,9 +1769,8 @@ input.sw:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 }
 
 /* ---------- conversation: chat view ---------- */
-/* The left pane shows either the chat or the raw terminal of the session. */
+/* The column shows the session either as the chat or as a terminal. */
 .ia-left[data-mode="chat"] .ia-term,
-.ia-left[data-mode="chat"] .ia-dead,
 .ia-left[data-mode="term"] .ia-chat { display: none !important; }
 .ia-chat { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--content-bg); }
 .chat-list {
@@ -1821,7 +1917,6 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .chat-icon svg, .chat-send svg { width: 17px; height: 17px; fill: currentColor; }
 .chat-send { background: var(--accent); color: #fff; }
 .chat-send:disabled { opacity: 0.35; }
-.chat-send.stop { background: var(--text); color: var(--content-bg); }
 .chat-attach { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 6px; }
 .chat-thumb { position: relative; }
 .chat-thumb img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; border: 1px solid var(--card-border); }
@@ -1839,9 +1934,6 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   line-height: 18px;
   padding: 0;
 }
-.chat-foot { display: flex; align-items: center; gap: 10px; padding: 5px 2px 0; }
-#chat-mode { font-size: 11px; min-height: 0; color: var(--text-secondary); }
-.chat-status { flex: 1; text-align: right; font-size: 11px; color: var(--text-tertiary); }
 .chat-question { margin: 6px 0 8px; }
 .chat-question .q { font-weight: 600; margin-bottom: 5px; }
 .chat-question .opts { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1851,62 +1943,187 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .chat-plan { margin: 6px 0 10px; max-height: 360px; overflow: auto; padding: 8px 12px; border-radius: 8px; background: var(--content-bg); }
 
 /* ---------- conversation: the two panes ---------- */
+/* The preview and its details toolbar on the left, the conversation in the
+   right column: half and half by default, the user's share kept. */
 .ia-split { flex: 1; display: flex; min-height: 0; }
-.ia-left { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.ia-right {
-  width: 300px;
-  flex: none;
+.ia-center { flex: 1; display: flex; flex-direction: column; min-width: 360px; min-height: 0; }
+.ia-viewpane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ia-left {
+  position: relative;
+  flex: 0 0 var(--ia-chat-w, 50%);
+  width: var(--ia-chat-w, 50%);
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--separator);
-  overflow: auto;
+  min-width: 300px;
+  min-height: 0;
 }
-.ia-rbar {
+.ia-splitter {
+  flex: none;
+  width: 7px;
+  margin: 0 -3px;
+  position: relative;
+  z-index: 2;
+  cursor: col-resize;
+  outline: none;
+}
+.ia-splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--separator);
+}
+.ia-splitter::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 1px;
+  width: 5px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 3px;
+  background: var(--control-bg-hover);
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.ia-splitter:hover::before, .ia-splitter:focus-visible::before, .ia-splitter.drag::before { opacity: 1; background: var(--accent); }
+.ia-split.dragging { user-select: none; cursor: col-resize; }
+/* Narrow windows (the app allows 900 px): the conversation gives way first. */
+@media (max-width: 1180px) {
+  .ia-left { min-width: 270px; }
+  .ia-center { min-width: 300px; }
+}
+/* The viewer docks here: same code, same graphics context. No frame: the
+   picture is cleared with the screen's own background (viewer.js), so the
+   object stands on the window itself. */
+.ia-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+/* The preview's controls float over its top right corner, in a translucent
+   pill; the framing keeps clear of them (V.insetTop). */
+.ia-ptools {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 3;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
+  gap: 2px;
+  max-width: calc(100% - 24px);
+  padding: 3px 3px 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card-bg) 72%, transparent);
+  border: 1px solid var(--separator);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
 }
-.ia-vlabel { color: var(--accent); font-variant-numeric: tabular-nums; }
-/* The viewer docks here: same code, same graphics context. */
-.ia-stage { position: relative; height: 240px; flex: none; margin: 0 14px; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); background: var(--card-bg); }
+.ia-ptools .btn { border-radius: 999px; border-color: transparent; background: transparent; }
+.ia-ptools .btn:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.ia-ptools-sep { flex: none; width: 1px; height: 14px; margin: 0 4px 0 6px; background: var(--separator); }
 .viewer.docked { position: absolute; inset: 0; z-index: 1; }
 .viewer.docked .v-bar,
 .viewer.docked .v-hint { display: none; }
-.ia-versions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
-.ia-ver {
-  border: 1px solid var(--control-border);
-  background: var(--control-bg);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  padding: 2px 9px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+/* ---------- the toolbar under the preview ----------
+   A bar like the window's own: a hairline on top, 28 px controls, three
+   zones (status and versions / measurements / actions) with a separator
+   between them. iaFitDock keeps it on one line. */
+.ia-dock {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 16px;
+  border-top: 1px solid var(--separator);
+  white-space: nowrap;
 }
-.ia-ver.on { background: var(--accent); border-color: transparent; color: var(--accent-text); }
-.ia-stats {
-  margin: 0 14px;
-  display: grid;
-  grid-template-columns: auto 1fr;
+.ia-zone { position: relative; display: flex; align-items: center; gap: 8px; height: 28px; }
+.ia-zone + .ia-zone { padding-left: 12px; margin-left: 12px; }
+.ia-zone + .ia-zone::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--separator);
+}
+.ia-zone-lead { flex: none; }
+/* No version yet (an object still being created): no empty first zone. */
+.ia-zone-lead:has(> .ia-versions:empty) { display: none; }
+.ia-zone-lead:has(> .ia-versions:empty) + .ia-zone { margin-left: 0; padding-left: 0; }
+.ia-zone-lead:has(> .ia-versions:empty) + .ia-zone::before { display: none; }
+.ia-zone-stats { flex: 1 1 auto; min-width: 0; justify-content: center; }
+.ia-zone-actions { flex: none; }
+/* Nothing measured (waiting, unreadable): no empty zone between two lines. */
+.ia-zone-stats:has(> .ia-stats:empty) { visibility: hidden; }
+.ia-zone-stats:has(> .ia-stats:empty) + .ia-zone-actions::before { display: none; }
+/* Versions: the app's segmented control while short, a menu beyond. */
+.ia-versions { display: flex; align-items: center; }
+.ia-versions:empty { display: none; }
+.ia-ver { font-size: 12px; font-variant-numeric: tabular-nums; padding: 0 8px; }
+.ia-vsel { height: 28px; min-width: 64px; padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--control-bg); color: var(--text); }
+/* Measurements: one height, one gap, the icon muted, the value plain. */
+.ia-stats { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.ia-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--control-bg-hover);
   font-size: 12px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 10px;
-  overflow: hidden;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
-.ia-stats:empty { display: none; }
-.ia-stats dt { color: var(--text-secondary); padding: 6px 0 6px 12px; border-top: 1px solid var(--card-border); }
-.ia-stats dd { margin: 0; padding: 6px 12px; text-align: right; font-variant-numeric: tabular-nums; border-top: 1px solid var(--card-border); }
-.ia-stats dt:first-of-type, .ia-stats dd:first-of-type { border-top: 0; }
-.ia-stats dd.warn { color: var(--danger); }
-.ia-rActions { padding: 14px; display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
-.ia-rActions .btn { justify-content: center; }
-.ia-rbar-end { display: flex; align-items: center; gap: 10px; }
+.ia-chip svg { width: 13px; height: 13px; color: var(--text-secondary); }
+.ia-chip.off { display: none; }
+.ia-chip.warn { color: var(--danger); background: var(--danger-soft); }
+.ia-chip.warn svg { color: inherit; }
+.ia-chip .v { overflow: hidden; text-overflow: ellipsis; }
+.ia-more { width: 28px; flex: none; }
+/* No chip left: "…" joins the versions, without a zone of its own. */
+.ia-dock.fit-none .ia-zone-stats { margin-left: 8px; padding-left: 0; justify-content: flex-start; }
+.ia-dock.fit-none .ia-zone-stats::before { display: none; }
+.ia-dock .ia-more.on { background: var(--control-bg-hover); color: var(--text); }
+/* "All details", above its button. */
+.ia-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  z-index: 20;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+  white-space: normal;
+}
+.ia-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; padding: 0 16px; font-size: 12px; }
+.ia-pop dt { color: var(--text-secondary); }
+.ia-pop dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ia-zone-actions .btn { height: 28px; min-height: 28px; padding: 0 14px; justify-content: center; }
+/* Save tells whether the version shown is in your files: done, it steps
+   back (no border, muted text, a green check) and shows the file instead. */
+.ia-savebtn .ia-check { display: none; width: 13px; height: 13px; color: var(--success); }
+.ia-savebtn.done { background: var(--control-bg-hover); border-color: transparent; box-shadow: none; color: var(--text-secondary); font-weight: 500; }
+.ia-savebtn.done:hover { background: color-mix(in srgb, var(--control-bg-hover) 100%, var(--text) 5%); color: var(--text); }
+.ia-savebtn.done .ia-check { display: block; }
+/* The last turn failed: a red dot on the Conversation tab, whose log says why. */
+.seg-btn.alert::after { content: ""; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--danger); }
+/* Last resort, a very narrow pane: the buttons get a line of their own. */
+.ia-dock.fit-wrap { flex-wrap: wrap; height: auto; padding: 10px 16px; row-gap: 8px; }
+.ia-dock.fit-wrap .ia-zone-stats { flex-basis: 0; justify-content: flex-end; }
+.ia-dock.fit-wrap .ia-zone-actions { flex: 1 1 100%; margin-left: 0; padding-left: 0; }
+.ia-dock.fit-wrap .ia-zone-actions::before { display: none; }
+.ia-dock.fit-wrap .ia-zone-actions .btn { flex: 1; }
 
 /* ---------- slicing: heads, model colors, progress ---------- */
 .set-note { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-tertiary); }
@@ -3141,3 +3358,141 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .cam-btn svg { width: 20px; height: 20px; fill: currentColor; }
 .cam-btn .shrink, .cam-box.big .cam-btn .grow { display: none; }
 .cam-box.big .cam-btn .shrink { display: block; }
+
+/* ---------- AI list: search, filters, groups, badges ---------- */
+.ia-listbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 22px 0; }
+.ia-search {
+  flex: 1 1 220px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 180px;
+  padding: 0 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 7px;
+  background: var(--card-bg);
+}
+.ia-search svg { width: 14px; height: 14px; fill: var(--text-tertiary); flex: none; }
+.ia-search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 5px 0; color: var(--text); outline: none; }
+.ia-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ia-listbar select { max-width: 170px; }
+.ia-list:focus { outline: none; }
+.ia-group {
+  margin: 6px 2px -4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.ia-group:first-child { margin-top: 0; }
+.ia-card.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ia-body { flex: 1; }
+.ia-body h3 { padding-right: 26px; }
+.ia-body h3.editing { overflow: visible; padding-right: 34px; }
+.ia-rename {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  box-sizing: border-box;
+  width: calc(100% + 8px);
+  padding: 1px 4px;
+  margin: -2px -5px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--content-bg);
+  color: var(--text);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.ia-nomatch { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 22px; color: var(--text-secondary); }
+mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 2px; }
+
+/* Missing source or unreadable preview: a real tile, not a broken image. */
+.ia-thumb.blank.missing { flex-direction: column; gap: 4px; color: var(--text-tertiary); }
+.ia-thumb.blank.missing svg { width: 28px; height: 28px; opacity: 0.55; }
+.ia-thumb.blank.missing span { font-size: 9.5px; line-height: 1.15; text-align: center; padding: 0 6px; }
+
+/* One status per conversation. */
+.ia-st {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-secondary);
+  background: var(--control-bg-hover);
+}
+.ia-st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ia-st.saved { color: #248a3d; background: color-mix(in srgb, #34c759 16%, transparent); }
+.ia-st.running { color: var(--accent); background: var(--accent-soft); }
+.ia-st.running::before { animation: ia-pulse 1.1s ease-in-out infinite; }
+.ia-st.error { color: var(--danger); background: var(--danger-soft); }
+.ia-st.draft { color: #a05a00; background: color-mix(in srgb, #ff9f0a 16%, transparent); }
+@media (prefers-color-scheme: dark) {
+  .ia-st.saved { color: #30d158; }
+  .ia-st.draft { color: #ffb340; }
+}
+@keyframes ia-pulse { 50% { opacity: 0.3; } }
+
+/* ---------- delete / stop ---------- */
+.ia-delete-btn { color: #fff; background: var(--danger); border-color: transparent; gap: 5px; }
+.ia-delete-btn svg { width: 13px; height: 13px; fill: currentColor; }
+.ia-delete-btn:hover { background: color-mix(in srgb, var(--danger) 86%, #000); }
+.btn.destructive { background: var(--danger); color: #fff; border-color: transparent; }
+.btn.destructive:hover { background: color-mix(in srgb, var(--danger) 86%, #000); }
+.iadel-box { width: 460px; }
+.iadel-list { margin: 0; padding: 4px 0; list-style: none; }
+.iadel-list li { display: flex; gap: 8px; padding: 6px 12px; font-size: 12px; }
+.iadel-list li::before { content: "–"; color: var(--danger); }
+.iadel-list li.warn { color: var(--danger); font-weight: 500; }
+.iadel-keep { font-size: 11px; color: var(--text-tertiary); margin: 6px 0 10px; }
+
+/* Stop: discreet, where Send was, with its word. */
+/* Stop takes Send's place, same round button: a square inside, and a ring
+   turning around it while Claude answers. Its words stay for screen
+   readers and in the tooltip. */
+.chat-send.stop { position: relative; background: var(--text); color: var(--content-bg); cursor: pointer; }
+.chat-send.stop svg { width: 18px; height: 18px; }
+.chat-send.stop span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.chat-send.stop::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  animation: spin 0.9s linear infinite;
+  pointer-events: none;
+}
+.chat-send.stop:hover { background: var(--danger); color: #fff; }
+.chat-send.stop:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Stopping: the ring slows down until the answer ends. */
+.chat-send.stop:disabled { opacity: 0.6; }
+.chat-send.stop:disabled::after { animation-duration: 2.4s; }
+@media (prefers-reduced-motion: reduce) { .chat-send.stop::after { animation: none; } }
+.ia-term-stop {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 11px;
+  opacity: 0.75;
+}
+.ia-term-stop svg { width: 10px; height: 10px; fill: currentColor; }
+.ia-term-stop:hover { opacity: 1; color: var(--danger); }
+.ia-left[data-mode="chat"] .ia-term-stop { display: none; }

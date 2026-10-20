@@ -18,6 +18,7 @@ const V = {
   drag: null,
   path: null,
   showPlate: true,
+  frameWithBed: false, // framing includes the bed when shown (AI preview)
   raf: 0,
   /* Slice preview in progress: summary, head colors, actions. */
   preview: null,
@@ -763,18 +764,50 @@ function drawBed(gl, bed, grid, vp, view, light) {
 
 /* ---------------------------------------------------------------- render */
 
+/* The picture is cleared with the viewer's own CSS background
+   (var(--content-bg)), so it melts into the screen around it, in light and
+   dark alike. Read once, again after a theme change. */
+let V_CLEAR = null;
+function viewerClear() {
+  if (!V_CLEAR) {
+    const m = getComputedStyle($("viewer")).backgroundColor.match(/[\d.]+/g) || [];
+    V_CLEAR = m.length >= 3 ? m.slice(0, 3).map((x) => +x / 255) : [0.953, 0.953, 0.961];
+  }
+  return V_CLEAR;
+}
+
+/* Pixels kept clear at the top of the picture: docked in the AI preview,
+   the floating controls (ia.js sets V.insetTop). Full screen, none. */
+function viewInsetTop() {
+  return $("viewer").classList.contains("docked") ? V.insetTop || 0 : 0;
+}
+
 function frameCamera() {
   const m = V.paths || V.mesh;
   if (!m) return;
-  V.cam.target = [
-    (m.min[0] + m.max[0]) / 2,
-    (m.min[1] + m.max[1]) / 2,
-    (m.min[2] + m.max[2]) / 2,
-  ];
-  const size = Math.max(m.max[0] - m.min[0], m.max[1] - m.min[1], m.max[2] - m.min[2], 1);
-  V.cam.dist = size * 2.1;
+  let lo = m.min;
+  let hi = m.max;
+  // Asked by the AI preview: with the bed shown, the frame takes it in too;
+  // bed hidden, the object alone, closer.
+  if (V.frameWithBed && V.showPlate && !V.paths) {
+    lo = [Math.min(lo[0], 0), Math.min(lo[1], 0), Math.min(lo[2], 0)];
+    hi = [Math.max(hi[0], PLATE.w), Math.max(hi[1], PLATE.d), hi[2]];
+  }
+  V.cam.target = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+  const size = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 1);
+  // The field of view is vertical: a pane taller than wide would cut the
+  // sides, so step back in proportion.
+  // Under a band kept clear at the top, the object fits in what is left.
+  const c = V.gl?.canvas;
+  const ch = c?.clientHeight || 0;
+  const free = Math.max(ch - viewInsetTop(), 1);
+  const aspect = ch ? c.clientWidth / free : 1;
+  V.cam.dist = size * 2.1 * (aspect < 1 ? 1 / aspect : 1) * (ch ? ch / free : 1);
   V.cam.yaw = -0.62;
   V.cam.pitch = 0.46;
+  // Framed by the app: a resize may frame again (ia.js), until the user
+  // turns, pans or zooms.
+  V.framed = true;
   draw();
 }
 
@@ -791,8 +824,7 @@ function draw() {
   }
   gl.viewport(0, 0, w, h);
   const light = !isDark();
-  // --content-bg: #f3f3f5 in light mode, #1e1e20 in dark mode.
-  gl.clearColor(...(light ? [0.953, 0.953, 0.961, 1] : [0.118, 0.118, 0.125, 1]));
+  gl.clearColor(...viewerClear(), 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
 
@@ -805,6 +837,10 @@ function draw() {
   ]);
   const view = m4.lookAt(eye, c.target, [0, 0, 1]);
   const proj = m4.perspective(0.72, Math.max(w / Math.max(h, 1), 0.01), Math.max(c.dist / 100, 0.5), c.dist * 12 + 2000);
+  // A band kept clear at the top: the picture's centre moves to the middle
+  // of what is left below it.
+  const top = viewInsetTop();
+  if (top && canvas.clientHeight) proj[9] += top / canvas.clientHeight;
   const mvp = m4.mul(proj, view);
 
   if (V.showPlate && V.grid) drawBed(gl, V.bed, V.grid, mvp, view, light);
@@ -856,7 +892,10 @@ const schedule = () => {
     draw();
   });
 };
-window.addEventListener("themechange", schedule);
+window.addEventListener("themechange", () => {
+  V_CLEAR = null;
+  schedule();
+});
 
 /* Depending on the platform, Tauri serves custom protocols in one form or
    the other: try both. */
@@ -936,7 +975,7 @@ async function openViewer(path, name, kind, bust) {
   if (!V.preview || V.preview.path !== path) hidePreviewPanel();
   $("v-layers").classList.toggle("hidden", !gcode);
   $("v-legend").classList.toggle("hidden", !gcode);
-  $("v-travel").classList.toggle("hidden", !gcode);
+  $("v-travel-sw").classList.toggle("hidden", !gcode);
   $("v-colors").classList.toggle("hidden", !gcode);
 
   try {
@@ -1149,6 +1188,7 @@ function bindInteractions(canvas) {
     const dy = e.clientY - V.drag.y;
     V.drag.x = e.clientX;
     V.drag.y = e.clientY;
+    if (dx || dy) V.framed = false;
     if (V.drag.pan) {
       panBy(dx, dy);
     } else {
@@ -1172,6 +1212,7 @@ function bindInteractions(canvas) {
       const pinch = e.ctrlKey;
       // ⇧ + scroll moves the view (a trackpad's ⇧ + two fingers).
       const action = pinch ? "zoom" : e.shiftKey ? "pan" : state.wheelAction || "zoom";
+      V.framed = false;
 
       if (action === "zoom") {
         const s = pinch ? 1 : dir;
@@ -1195,16 +1236,14 @@ $("v-layer").addEventListener("input", () => {
   updateLayerLabel();
   schedule();
 });
-$("v-travel").addEventListener("click", () => {
-  V.showTravel = !V.showTravel;
-  $("v-travel").classList.toggle("on", V.showTravel);
+$("v-travel").addEventListener("change", () => {
+  V.showTravel = $("v-travel").checked;
   draw();
 });
 $("v-close").addEventListener("click", closeViewer);
 $("v-reset").addEventListener("click", frameCamera);
-$("v-plate").addEventListener("click", () => {
-  V.showPlate = !V.showPlate;
-  $("v-plate").classList.toggle("on", V.showPlate);
+$("v-plate").addEventListener("change", () => {
+  V.showPlate = $("v-plate").checked;
   draw();
 });
 document.addEventListener("keydown", (e) => {
