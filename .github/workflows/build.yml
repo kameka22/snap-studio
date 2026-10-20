@@ -161,16 +161,25 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # Notes: the commits since the previous release.
+      # Notes: this version's section of CHANGELOG.md (written by
+      # scripts/release.sh); otherwise the commits since the previous
+      # release. notes-app.md is the same as plain text, for the app's
+      # update sheet (latest.json).
       - name: Release notes
         run: |
-          prev=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          if [ -n "$prev" ]; then
-            git log "$prev..HEAD" --no-merges --format='- %s' > notes.md
+          if python3 scripts/changelog.py notes "$VERSION" > notes.md; then
+            python3 scripts/changelog.py notes "$VERSION" --plain > notes-app.md
+            printf '\n[Full changelog](https://github.com/%s/blob/v%s/CHANGELOG.md)\n' "${{ github.repository }}" "$VERSION" >> notes.md
           else
-            git log -20 --no-merges --format='- %s' > notes.md
+            prev=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+            if [ -n "$prev" ]; then
+              git log "$prev..HEAD" --no-merges --format='- %s' > notes.md
+            else
+              git log -20 --no-merges --format='- %s' > notes.md
+            fi
+            [ -s notes.md ] || echo "- Rebuild without changes" > notes.md
+            cp notes.md notes-app.md
           fi
-          [ -s notes.md ] || echo "- Reconstruction sans changement" > notes.md
           cat notes.md
 
       # File read by the installed app: one entry per platform, with the
@@ -184,7 +193,7 @@ jobs:
           arm="Snap-Studio_${VERSION}_arm64.AppImage"
           jq -n \
             --arg v "$VERSION" \
-            --rawfile notes notes.md \
+            --rawfile notes notes-app.md \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg mu "$base/$mac" --rawfile ms "dist/$mac.sig" \
             --arg wu "$base/$win" --rawfile ws "dist/$win.sig" \

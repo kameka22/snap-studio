@@ -32,7 +32,8 @@ et les idées à discuter, il y a les [Discussions](https://github.com/kameka22/
 
 1. **Compiler** : Rust (stable) et la CLI Tauri, puis `cargo tauri dev`.
    L'interface est en HTML/CSS/JavaScript simples dans `ui/`, sans npm.
-2. **Tester** : `cd src-tauri && cargo test --lib`. Certains tests
+2. **Tester** : `cd src-tauri && cargo test --lib`, et la logique de
+   l'interface avec `for t in scripts/test-*.js; do node "$t"; done`. Certains tests
    demandent le moteur de découpe ou un vrai Claude Code et sont facultatifs
    (`--ignored`, voir leurs commentaires).
 3. **Écrire en anglais** : code, commentaires, commits et documentation. Les
@@ -43,6 +44,9 @@ et les idées à discuter, il y a les [Discussions](https://github.com/kameka22/
 5. **Un sujet par pull request**, avec ce qu'elle change et comment elle a
    été vérifiée. Pour un changement plus large, ouvrez d'abord une issue ou
    une discussion ; le travail en cours vit dans [`docs/plans/`](docs/plans/).
+6. **Changelog** : un changement visible pour l'utilisateur ajoute une ligne
+   sous *Unreleased* dans [CHANGELOG.md](CHANGELOG.md) (en anglais), avec le
+   numéro de sa pull request.
 
 ## Traduire
 

@@ -32,7 +32,8 @@ ideas to talk over, use the [Discussions](https://github.com/kameka22/snap-studi
 
 1. **Build**: Rust (stable) and the Tauri CLI, then `cargo tauri dev`. The
    interface is plain HTML/CSS/JavaScript in `ui/`, without npm.
-2. **Test**: `cd src-tauri && cargo test --lib`. Some tests need the
+2. **Test**: `cd src-tauri && cargo test --lib`, and the interface logic with
+   `for t in scripts/test-*.js; do node "$t"; done`. Some tests need the
    slicing engine or a real Claude Code and are opt-in (`--ignored`, see
    their comments).
 3. **Write in English**: code, comments, commits and docs. Interface texts
@@ -43,6 +44,8 @@ ideas to talk over, use the [Discussions](https://github.com/kameka22/snap-studi
 5. **One subject per pull request**, with what it changes and how it was
    checked. For a larger change, open an issue or a discussion first; the
    work in progress lives in [`docs/plans/`](docs/plans/).
+6. **Changelog**: a user-visible change adds a line under *Unreleased* in
+   [CHANGELOG.md](CHANGELOG.md), with its pull request number.
 
 ## Translate
 
