@@ -47,7 +47,12 @@ function switchView(v) {
 }
 
 document.querySelectorAll(".sidebar .side-item[data-view]").forEach((b) =>
-  b.addEventListener("click", () => switchView(b.dataset.view))
+  b.addEventListener("click", () => {
+    // AI in the sidebar leads to the list of conversations, even from one
+    // that is open; its conversations below it open them.
+    if (b.dataset.view === "ia" && typeof IA !== "undefined" && IA.open) iaBack();
+    switchView(b.dataset.view);
+  })
 );
 /* Titles of the views that have nothing more specific to show. */
 function tbDefaults() {
