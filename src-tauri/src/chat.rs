@@ -376,12 +376,13 @@ fn transcript_path(id: &str) -> Option<PathBuf> {
     if p.is_file() {
         return Some(p);
     }
-    let projects = dirs::home_dir()?.join(".claude").join("projects");
-    std::fs::read_dir(projects)
-        .ok()?
-        .filter_map(Result::ok)
-        .map(|e| e.path().join(format!("{id}.jsonl")))
-        .find(|p| p.is_file())
+    crate::ia::claude_roots().into_iter().find_map(|root| {
+        std::fs::read_dir(root.join("projects"))
+            .ok()?
+            .filter_map(Result::ok)
+            .map(|e| e.path().join(format!("{id}.jsonl")))
+            .find(|p| p.is_file())
+    })
 }
 
 /// The past of a conversation: our log, or — for a conversation from before

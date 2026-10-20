@@ -1201,13 +1201,69 @@ fn ia_create_blank(
 }
 
 #[tauri::command]
-fn ia_delete(id: String) -> Result<Vec<ia::Conversation>, String> {
-    // Deleting the folder under a running Claude would leave it running without
-    // a directory: close first, delete afterwards.
-    pty::close(&id);
-    chat::close(&id);
-    ia::remove(&id).map_err(|e| e.to_string())?;
-    Ok(ia::list())
+async fn ia_delete(id: String) -> Result<IaDeleted, String> {
+    tauri::async_runtime::spawn_blocking(move || delete_conversation(&id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// What a deletion left behind, for the toast.
+#[derive(serde::Serialize)]
+struct IaDeleted {
+    list: Vec<ia::Conversation>,
+    /// Claude session files removed.
+    removed: usize,
+    /// Paths that were kept: links, out of place, or not removable.
+    kept: Vec<String>,
+}
+
+fn delete_conversation(id: &str) -> Result<IaDeleted, String> {
+    // Only one of our conversations: its id is then a session we created,
+    // never someone else's Claude session.
+    ia::get(id).map_err(|_| t!("err.conv_unknown"))?;
+    // Deleting under a running Claude would leave it running without a
+    // directory, and still writing its transcript: both close first, and each
+    // close waits for its process to exit.
+    pty::close(id);
+    chat::close(id);
+    ia::watch_stop(id);
+    // Listed before the folder goes: the project folder's name derives from it.
+    let found = ia::session_artifacts(id).map_err(|e| e.to_string())?;
+    ia::remove(id).map_err(|e| e.to_string())?;
+    let (removed, failed) = ia::remove_artifacts(&found);
+    let kept = found
+        .skipped
+        .iter()
+        .chain(&failed)
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    Ok(IaDeleted { list: ia::list(), removed, kept })
+}
+
+/// What deleting a conversation would remove, for its confirmation.
+#[derive(serde::Serialize)]
+struct IaDeletePlan {
+    /// Claude session files found for it.
+    files: usize,
+    /// A Claude process is open for it (chat or terminal).
+    running: bool,
+}
+
+#[tauri::command]
+fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
+    ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
+    let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
+    Ok(IaDeletePlan { files: found.paths.len(), running: pty::is_open(&id) || chat::is_open(&id) })
+}
+
+#[tauri::command]
+fn ia_duplicate(id: String) -> Result<ia::Conversation, String> {
+    ia::duplicate(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn ia_rename(id: String, title: String) -> Result<ia::Conversation, String> {
+    ia::rename(&id, &title).map_err(|e| e.to_string())
 }
 
 /// Path of the current mesh and stamp of its last write.
@@ -1491,6 +1547,9 @@ pub fn run() {
             ia_create,
             ia_create_blank,
             ia_delete,
+            ia_delete_plan,
+            ia_rename,
+            ia_duplicate,
             ia_current,
             ia_get,
             ia_workspace,
