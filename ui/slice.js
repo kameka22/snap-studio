@@ -719,6 +719,18 @@ async function openSendRemote(printer, file, thumb) {
   if (!SL.printers.some((p) => p.id === printer.id)) SL.printers = [printer, ...SL.printers];
   SL.remote = { printer, file, thumb, stats: pflSendStats(file.meta) };
   const st = SL.remote.stats;
+  // The metadata does not say which heads the file uses: the G-code is
+  // read before anything is checked or sent (a multi-color file must not
+  // be prepared as a single-color one).
+  if (!file.meta?.tools_known) {
+    const remote = SL.remote;
+    remote.toolsReady = invoke("pf_tools", { printerId: printer.id, path: file.path })
+      .then((tools) => {
+        if (tools?.length) remote.stats.tools = tools;
+        if (SL.remote === remote && !$("sendmodal").classList.contains("hidden")) checkSendPrinter();
+      })
+      .catch(() => {});
+  }
   $("snd-file").textContent = pflName(file.path) + (st.print_time_s ? " · " + fmtDuration(st.print_time_s) : "");
   SL.sendPid = printer.id;
   renderSendPrinters();
@@ -904,6 +916,13 @@ async function sendRemote(queue) {
   const { printer: src, file, stats, thumb } = SL.remote;
   const p = sendPrinter();
   if (!p || (!queue && $("snd-go").disabled) || SL.checking) return;
+  if (SL.remote.toolsReady) {
+    SL.checking = true;
+    setSendMessage(tr("pfiles.reading_tools"), "busy");
+    await SL.remote.toolsReady;
+    SL.checking = false;
+    setSendMessage("");
+  }
   let map = [];
   if (!queue) {
     SL.checking = true;

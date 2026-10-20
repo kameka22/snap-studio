@@ -1388,6 +1388,7 @@
   "ia.bed.show": "Afficher le plateau de l’imprimante sous l’objet",
   "ia.bed.hide": "Masquer le plateau : l’objet seul, cadré de plus près",
   "pfiles.title": "Fichiers",
+  "pfiles.reading_tools": "Lecture des têtes utilisées par le fichier…",
   "pfiles.tab.files": "Fichiers d'impression",
   "pfiles.tab.videos": "Timelapses",
   "pfiles.layout.grid": "Vignettes",

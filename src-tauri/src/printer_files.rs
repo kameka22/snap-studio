@@ -63,6 +63,9 @@ pub struct FileMeta {
     pub filament_weight_total: Option<f64>,
     /// Tools the print uses.
     pub tools: Vec<u8>,
+    /// True when `tools` comes from the file (the slicer's list or the
+    /// filament it consumes); false: T0 by default, nothing said.
+    pub tools_known: bool,
     /// Largest thumbnail, as a path in the same root.
     pub thumb: Option<String>,
 }
@@ -254,6 +257,7 @@ pub fn parse_meta(v: &Value, file_dir: &str) -> FileMeta {
         filament_weights: weights,
         filament_weight_total: f("filament_weight_total"),
         tools: Vec::new(),
+        tools_known: false,
         thumb,
     };
     let referenced: Vec<u8> = r
@@ -262,7 +266,37 @@ pub fn parse_meta(v: &Value, file_dir: &str) -> FileMeta {
         .map(|a| a.iter().filter_map(|x| x.as_u64()).filter(|x| *x < 16).map(|x| x as u8).collect())
         .unwrap_or_default();
     m.tools = tools_of(&referenced, &m);
+    m.tools_known = !referenced.is_empty() || m.filament_weights.iter().any(|w| *w > 0.0);
     m
+}
+
+/// Tools a G-code really uses, read from the file itself.
+pub fn gcode_tools(path: &Path) -> Option<Vec<u8>> {
+    let d = crate::gcode::parse(std::fs::File::open(path).ok()?).ok()?;
+    let t = crate::gcode::stats(&d).tools;
+    (!t.is_empty()).then_some(t)
+}
+
+/// Tools a print file on the printer uses: from Moonraker's metadata when
+/// it says so; otherwise the G-code is read (fetched to a temporary folder).
+/// A multi-color file must not be prepared as a single-color one.
+pub async fn tools(host: &str, port: u16, path: &str) -> Result<Vec<u8>> {
+    let b = base(host, port);
+    let url = format!("{b}/server/files/metadata?filename={}", urlencoding::encode(path));
+    let meta = get(&url, 6).await.ok().map(|v| parse_meta(&v, ""));
+    if let Some(m) = meta.as_ref().filter(|m| m.tools_known) {
+        return Ok(m.tools.clone());
+    }
+    let tmp = std::env::temp_dir().join("snapstudio-pfiles").join(crate::printers::new_id());
+    std::fs::create_dir_all(&tmp)?;
+    let read = async {
+        let f = download(host, port, "gcodes", path, &tmp).await?;
+        let p = f.clone();
+        Ok::<_, anyhow::Error>(tokio::task::spawn_blocking(move || gcode_tools(&p)).await.ok().flatten())
+    }
+    .await;
+    let _ = std::fs::remove_dir_all(&tmp);
+    Ok(read?.unwrap_or_else(|| meta.map(|m| m.tools).unwrap_or_else(|| vec![0])))
 }
 
 /// Tools a print uses: the slicer's own list, otherwise the filaments
@@ -922,6 +956,8 @@ mod tests {
         assert_eq!(m.tools, [0, 3]);
         assert_eq!(m.filament_colors, ["#ff0000", "#00ff00"], "extruder colors when no filament colors");
         assert_eq!(parse_meta(&json!({"result": {}}), "").tools, [0], "nothing known: one color, T0");
+        assert!(!parse_meta(&json!({"result": {}}), "").tools_known, "T0 by default is not knowledge");
+        assert!(m.tools_known);
     }
 
     #[test]
@@ -1117,6 +1153,9 @@ mod tests {
                             "referenced_tools": [0, 1],
                             "thumbnails": [{"width": 300, "height": 300, "relative_path": ".thumbs/Cube-1a2b3c-300x300.png"}]
                         }})),
+                        // A file Moonraker says nothing about: its G-code must be read.
+                        "/server/files/metadata?filename=Bare.gcode" => json(json!({"result": {"estimated_time": 60}})),
+                        "/server/files/gcodes/Bare.gcode" => (200, "text/plain", b"G1 F600\nG1 X10 Y0 E1\nT2\nG1 X10 Y20 E2\nT0\nG1 X0 Y20 E3\n".to_vec(), None),
                         "/server/history/list?limit=200&order=desc" => json(json!({"result": {"jobs": [
                             {"filename": "Cube-1a2b3c.gcode", "status": "completed", "end_time": 1760001000.0, "print_duration": 3500.0}
                         ]}})),
@@ -1172,6 +1211,15 @@ mod tests {
         assert_eq!(v.thumb.as_deref(), Some("20261019153000.jpg"));
         assert_eq!(o.video_roots.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["camera"]);
         assert_eq!(block_on(count("127.0.0.1", port)).unwrap(), 1);
+    }
+
+    #[test]
+    fn tools_come_from_the_metadata_or_the_gcode() {
+        let port = fake_moonraker(true);
+        // The slicer's list, as Moonraker reads it: nothing is fetched.
+        assert_eq!(block_on(tools("127.0.0.1", port, "Cube-1a2b3c.gcode")).unwrap(), vec![0, 1]);
+        // Nothing said: the G-code is read, T0 and T2.
+        assert_eq!(block_on(tools("127.0.0.1", port, "Bare.gcode")).unwrap(), vec![0, 2]);
     }
 
     #[test]

@@ -654,6 +654,14 @@ async fn pf_overview(printer_id: String) -> Result<printer_files::Overview, Stri
     printer_files::overview(&p.host, p.port, printing).await.map_err(|e| e.to_string())
 }
 
+/// Tools a print file on a printer uses, read from the G-code when the
+/// metadata does not say.
+#[tauri::command]
+async fn pf_tools(printer_id: String, path: String) -> Result<Vec<u8>, String> {
+    let p = printer_by_id(&printer_id)?;
+    printer_files::tools(&p.host, p.port, &path).await.map_err(|e| e.to_string())
+}
+
 /// Number of print files on a printer, for the sidebar.
 #[tauri::command]
 async fn pf_count(printer_id: String) -> Result<usize, String> {
@@ -746,8 +754,11 @@ struct PfPrintRequest {
 #[tauri::command]
 async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Option<String>, String> {
     let p = printer_by_id(&request.printer_id)?;
-    let tools = if request.tools.is_empty() { vec![0] } else { request.tools.clone() };
-    if !request.queue && request.source_id == request.printer_id {
+    let mut tools = if request.tools.is_empty() { vec![0] } else { request.tools.clone() };
+    // Started in place only without a substitution: a substituted print
+    // needs its record (the extruder map goes back to identity when it
+    // ends), so it goes the copy's way, as any sent print.
+    if !request.queue && request.source_id == request.printer_id && !printers::is_remap(&request.map) {
         let warning = prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
         printer_files::start(&p.host, p.port, &request.path)
             .await
@@ -763,6 +774,11 @@ async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Opti
         let gcode = printer_files::download(&src.host, src.port, "gcodes", &request.path, &tmp)
             .await
             .map_err(|e| t!("pfiles.err.fetch", err = e))?;
+        // The copy is here: its own tools, rather than the metadata's.
+        let g = gcode.clone();
+        if let Some(t) = tauri::async_runtime::spawn_blocking(move || printer_files::gcode_tools(&g)).await.ok().flatten() {
+            tools = t;
+        }
         let id = printers::new_id();
         let stem = printer_files::display_name(&request.path);
         let remote = jobs::remote_name(&stem, &id);
@@ -1801,6 +1817,7 @@ pub fn run() {
             print_send,
             pf_overview,
             pf_count,
+            pf_tools,
             pf_video_duration,
             pf_delete,
             pf_rename,

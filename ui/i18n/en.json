@@ -1385,6 +1385,7 @@
   "ia.bed.show": "Show the printer’s bed under the object",
   "ia.bed.hide": "Hide the bed: the object alone, framed closer",
   "pfiles.title": "Files",
+  "pfiles.reading_tools": "Reading which heads the file uses…",
   "pfiles.tab.files": "Print Files",
   "pfiles.tab.videos": "Timelapses",
   "pfiles.layout.grid": "Thumbnails",
