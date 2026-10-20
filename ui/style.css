@@ -1849,46 +1849,37 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .chat-plan { margin: 6px 0 10px; max-height: 360px; overflow: auto; padding: 8px 12px; border-radius: 8px; background: var(--content-bg); }
 
 /* ---------- conversation: the two panes ---------- */
-/* Three columns: conversation on the left (its width is the user's, kept),
-   the preview over the whole height in the centre, details on the right. */
+/* Preview on top, conversation below, split by a bar the user moves (its
+   share is kept); details on the right. */
 .ia-split { flex: 1; display: flex; min-height: 0; }
-.ia-left {
-  position: relative;
-  flex: 0 0 var(--ia-chat-w, 380px);
-  width: var(--ia-chat-w, 380px);
-  display: flex;
-  flex-direction: column;
-  min-width: 280px;
-  min-height: 0;
-}
-.ia-center { flex: 1; display: flex; flex-direction: column; min-width: 320px; min-height: 0; }
-.ia-viewpane { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 14px; }
+.ia-center { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.ia-viewpane { flex: 0 0 var(--ia-preview, 55%); min-height: 140px; display: flex; flex-direction: column; padding-bottom: 8px; }
 .ia-splitter {
   flex: none;
-  width: 7px;
-  margin: 0 -3px;
+  height: 7px;
+  margin: -3px 0;
   position: relative;
   z-index: 2;
-  cursor: col-resize;
+  cursor: row-resize;
   outline: none;
 }
 .ia-splitter::after {
   content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 1px;
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 1px;
   background: var(--separator);
 }
 .ia-splitter::before {
   content: "";
   position: absolute;
-  top: 50%;
-  left: 1px;
-  width: 5px;
-  height: 36px;
-  margin-top: -18px;
+  left: 50%;
+  top: 1px;
+  width: 36px;
+  height: 5px;
+  margin-left: -18px;
   border-radius: 3px;
   background: var(--control-bg-hover);
   z-index: 1;
@@ -1896,18 +1887,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   transition: opacity 120ms ease;
 }
 .ia-splitter:hover::before, .ia-splitter:focus-visible::before, .ia-splitter.drag::before { opacity: 1; background: var(--accent); }
-.ia-split.dragging { user-select: none; cursor: col-resize; }
-/* Narrow windows (the app allows 900 px): the side columns give way so the
-   preview keeps a usable width. The splitter reads these minimums. */
-@media (max-width: 1180px) {
-  .ia-split .ia-right { width: 240px; }
-  .ia-center { min-width: 240px; }
-}
-@media (max-width: 1000px) {
-  .ia-split .ia-right { width: 210px; }
-  .ia-left { min-width: 250px; }
-  .ia-center { min-width: 200px; }
-}
+.ia-center.dragging { user-select: none; cursor: row-resize; }
+.ia-left { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 120px; }
 .ia-right {
   width: 300px;
   flex: none;

@@ -772,11 +772,7 @@ function frameCamera() {
     (m.min[2] + m.max[2]) / 2,
   ];
   const size = Math.max(m.max[0] - m.min[0], m.max[1] - m.min[1], m.max[2] - m.min[2], 1);
-  // The field of view is vertical: a pane taller than wide (the AI preview
-  // between its columns) would cut the sides, so step back in proportion.
-  const c = V.gl?.canvas;
-  const aspect = c && c.clientHeight ? c.clientWidth / c.clientHeight : 1;
-  V.cam.dist = size * 2.1 * (aspect < 1 ? 1 / aspect : 1);
+  V.cam.dist = size * 2.1;
   V.cam.yaw = -0.62;
   V.cam.pitch = 0.46;
   draw();
