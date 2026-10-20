@@ -1006,41 +1006,61 @@ $("ia-folder").addEventListener("click", async () => {
 
 /* ------------------------------------------------------------ splitter */
 
-/* Width of the conversation column on the right, in pixels, kept for all
-   conversations: 400 by default, at least the stylesheet's minimum, at most
-   760 px or half the screen, so the preview stays the main area. Dragged with the mouse,
-   moved with ←/→ (the bar follows the arrow; Shift: bigger steps), reset by
-   a double-click, Home or Enter. */
-const IA_CHAT_KEY = "snapstudio.ia.chat";
-const IA_CHAT_DEFAULT = 384;
+/* Share of the width between the preview and the conversation column on
+   the right, kept for all conversations as a ratio, so that it follows the
+   window: half and half by default, each side keeping the stylesheet's
+   minimum. Dragged with the mouse, moved with ←/→ (the bar follows the
+   arrow; Shift: bigger steps), reset to half and half by a double-click,
+   Home or Enter. The pixel widths of earlier builds are dropped: everyone
+   starts from half and half. */
+const IA_CHAT_KEY = "snapstudio.ia.chatRatio";
+const IA_CHAT_DEFAULT = 0.5;
+["snapstudio.ia.chat", "snapstudio.ia.chatw", "snapstudio.ia.split"].forEach((k) => localStorage.removeItem(k));
 const iaMinW = (el, fallback) => parseFloat(getComputedStyle(el).minWidth) || fallback;
-const iaChatMin = () => iaMinW($("ia-left"), 300);
-const iaChatMax = () => {
-  const split = $("ia-left").parentElement;
-  // Hidden (another tab): nothing to measure, only the fixed bound.
-  if (!split.clientWidth) return 760;
-  // The preview is the main area: it keeps its minimum and at least half.
-  const keep = Math.max(iaMinW($("ia-center"), 360), split.clientWidth / 2);
-  return Math.max(iaChatMin(), Math.min(760, split.clientWidth - keep - 7));
+/* Width shared by the two sides: the split less the splitter and its
+   (negative) margins. */
+const iaSplitW = () => {
+  const bar = $("ia-splitter");
+  const cs = getComputedStyle(bar);
+  const used = bar.offsetWidth + parseFloat(cs.marginLeft) + parseFloat(cs.marginRight);
+  return Math.max(0, $("ia-left").parentElement.clientWidth - used);
 };
-function iaChatApply(w, save = true) {
-  w = Math.round(Math.min(iaChatMax(), Math.max(iaChatMin(), Number.isFinite(w) ? w : IA_CHAT_DEFAULT)));
+const iaChatMin = () => iaMinW($("ia-left"), 300);
+const iaChatMax = () => Math.max(iaChatMin(), iaSplitW() - iaMinW($("ia-center"), 360));
+const iaRatioOk = (r) => (Number.isFinite(r) && r > 0 && r < 1 ? r : IA_CHAT_DEFAULT);
+/* Lays out a ratio and returns the ratio laid out (clamped by the minimums). */
+function iaChatApply(r, save = true) {
+  // Dragged past an edge: the edge (the minimums do the rest).
+  r = Number.isFinite(r) ? Math.min(1, Math.max(0, r)) : IA_CHAT_DEFAULT;
+  const total = iaSplitW();
+  // Hidden (another tab): nothing to measure; the ratio waits.
+  if (!total) {
+    $("ia-left").style.setProperty("--ia-chat-w", `${r * 100}%`);
+    return r;
+  }
+  const w = Math.round(Math.min(iaChatMax(), Math.max(iaChatMin(), r * total)));
   $("ia-left").style.setProperty("--ia-chat-w", `${w}px`);
   const bar = $("ia-splitter");
-  bar.setAttribute("aria-valuenow", w);
-  bar.setAttribute("aria-valuemin", iaChatMin());
-  bar.setAttribute("aria-valuemax", iaChatMax());
-  if (save) localStorage.setItem(IA_CHAT_KEY, String(w));
-  return w;
+  const pc = (x) => Math.round((x / total) * 100);
+  bar.setAttribute("aria-valuenow", pc(w));
+  bar.setAttribute("aria-valuemin", pc(iaChatMin()));
+  bar.setAttribute("aria-valuemax", pc(iaChatMax()));
+  bar.setAttribute("aria-valuetext", `${pc(w)} %`);
+  // Not clamped: the ratio asked (0.5 stays 0.5, not its rounded pixels).
+  const laid = Math.abs(w - r * total) < 1 ? r : w / total;
+  if (save) localStorage.setItem(IA_CHAT_KEY, laid.toFixed(4));
+  return laid;
 }
 /* The user's choice is kept apart from what fits: a narrow window clamps
    the column without forgetting it. */
-let iaChatWanted = parseFloat(localStorage.getItem(IA_CHAT_KEY)) || IA_CHAT_DEFAULT;
-let iaChatW = iaChatApply(iaChatWanted, false);
-const iaChatSet = (w) => {
-  iaChatW = iaChatApply(w);
-  iaChatWanted = iaChatW;
+let iaChatWanted = iaRatioOk(parseFloat(localStorage.getItem(IA_CHAT_KEY)));
+let iaChatR = iaChatApply(iaChatWanted, false);
+const iaChatSet = (r) => {
+  iaChatR = iaChatApply(r);
+  iaChatWanted = iaChatR;
 };
+/* A step in pixels, as a ratio of the width shared. */
+const iaChatStep = (px) => iaChatR + px / (iaSplitW() || 1);
 
 $("ia-splitter").addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
@@ -1051,12 +1071,12 @@ $("ia-splitter").addEventListener("pointerdown", (e) => {
   bar.setPointerCapture(e.pointerId);
   bar.classList.add("drag");
   split.classList.add("dragging");
-  const move = (ev) => (iaChatW = iaChatApply(right - ev.clientX, false));
+  const move = (ev) => (iaChatR = iaChatApply((right - ev.clientX) / (iaSplitW() || 1), false));
   const up = () => {
     bar.removeEventListener("pointermove", move);
     bar.classList.remove("drag");
     split.classList.remove("dragging");
-    iaChatSet(iaChatW);
+    iaChatSet(iaChatR);
   };
   bar.addEventListener("pointermove", move);
   bar.addEventListener("pointerup", up, { once: true });
@@ -1065,14 +1085,14 @@ $("ia-splitter").addEventListener("pointerdown", (e) => {
 $("ia-splitter").addEventListener("dblclick", () => iaChatSet(IA_CHAT_DEFAULT));
 $("ia-splitter").addEventListener("keydown", (e) => {
   const step = e.shiftKey ? 64 : 16;
-  if (e.key === "ArrowLeft") iaChatSet(iaChatW + step);
-  else if (e.key === "ArrowRight") iaChatSet(iaChatW - step);
+  if (e.key === "ArrowLeft") iaChatSet(iaChatStep(step));
+  else if (e.key === "ArrowRight") iaChatSet(iaChatStep(-step));
   else if (e.key === "Home" || e.key === "Enter") iaChatSet(IA_CHAT_DEFAULT);
   else return;
   e.preventDefault();
 });
-/* The window (or the app's sidebar) changes: refit, back to the choice. */
-new ResizeObserver(() => (iaChatW = iaChatApply(iaChatWanted, false))).observe($("ia-left").parentElement);
+/* The window (or the app's sidebar) changes: the same share, refitted. */
+new ResizeObserver(() => (iaChatR = iaChatApply(iaChatWanted, false))).observe($("ia-left").parentElement);
 
 const iaResizeObserver = new ResizeObserver(() => {
   if (IA.open) iaFit(IA.open);
@@ -1084,8 +1104,43 @@ iaResizeObserver.observe($("ia-term"));
 /* The viewer is not duplicated: the app's own is moved into the pane. Same
    graphics context, same code, no possible divergence. */
 
+/* The bed under the object in the AI preview: hidden by default (the
+   object alone, framed closer), the choice kept. The viewer is shared with
+   Files and Prepare: their own setting comes back when it leaves. */
+const IA_BED_KEY = "snapstudio.ia.bed";
+IA.bed = localStorage.getItem(IA_BED_KEY) === "1";
+IA.viewerOwned = false;
+function iaBedApply() {
+  const btn = $("ia-bed");
+  btn.setAttribute("aria-pressed", String(IA.bed));
+  btn.title = tr(IA.bed ? "ia.bed.hide" : "ia.bed.show");
+  if (!IA.viewerOwned) return;
+  V.showPlate = IA.bed;
+  V.frameWithBed = true;
+  $("v-plate").classList.toggle("on", V.showPlate);
+}
+function iaBedSet(on) {
+  IA.bed = on;
+  localStorage.setItem(IA_BED_KEY, on ? "1" : "0");
+  iaBedApply();
+  if (typeof frameCamera !== "function" || !IA.viewerOwned) return;
+  if (V.framed) frameCamera();
+  else draw();
+}
+$("ia-bed").addEventListener("click", () => iaBedSet(!IA.bed));
+// Enlarged, the viewer's own Plate button is the same switch.
+$("v-plate").addEventListener("click", () => {
+  if (IA.viewerOwned && V.showPlate !== IA.bed) iaBedSet(V.showPlate);
+});
+iaBedApply();
+
 function iaDock() {
   const v = $("viewer");
+  if (!IA.viewerOwned) {
+    IA.prevPlate = V.showPlate;
+    IA.viewerOwned = true;
+  }
+  iaBedApply();
   if (v.parentElement !== $("ia-stage")) {
     $("ia-stage").appendChild(v);
     v.classList.add("docked");
@@ -1099,6 +1154,12 @@ function iaUndock(hide = true) {
   if (hide) {
     v.classList.add("hidden");
     V.onClose = null;
+    if (IA.viewerOwned) {
+      V.showPlate = IA.prevPlate;
+      V.frameWithBed = false;
+      $("v-plate").classList.toggle("on", V.showPlate);
+      IA.viewerOwned = false;
+    }
   }
   if (v.parentElement !== document.body) document.body.appendChild(v);
 }
@@ -1429,6 +1490,7 @@ $("ia-slice").addEventListener("click", () =>
 );
 
 $("ia-reframe").addEventListener("click", () => {
+  // Bed shown: the bed and the object; hidden: the object alone.
   if (typeof frameCamera === "function") frameCamera();
 });
 
@@ -1437,6 +1499,7 @@ $("ia-stage").addEventListener("dblclick", iaExpand);
 
 window.addEventListener("langchange", () => {
   iaRender();
+  iaBedApply();
   if (IA.open) {
     const c = IA.list.find((x) => x.id === IA.open);
     if (c) iaHint(c);

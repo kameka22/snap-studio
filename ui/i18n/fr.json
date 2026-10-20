@@ -1280,7 +1280,7 @@
   "spool.replace.text": "Le plateau de Préparer contient d'autres objets. Les remplacer par le plateau de cette impression ? Vous pourrez revenir en arrière.",
   "spool.replace.ok": "Remplacer",
   "ia.details": "Détails",
-  "ia.splitter": "Faites glisser pour redimensionner la conversation ; double-clic pour rétablir",
+  "ia.splitter": "Glisser pour partager la largeur avec la conversation ; double-clic : moitié-moitié",
   "ia.splitter_aria": "Redimensionner la conversation",
   "ia.delete.button": "Supprimer la conversation",
   "ia.delete.button_title": "Supprimer la conversation et sa session Claude",
@@ -1371,5 +1371,8 @@
   "ia.save_done_aria": "Version {v} enregistrée, l’afficher dans le Finder",
   "ia.save_title": "Enregistrer la version {v} dans vos fichiers, en 3MF",
   "ia.save_nothing": "Rien à enregistrer pour l’instant",
-  "ia.chat_failed": "Le dernier échange s’est terminé par une erreur : voir la conversation"
+  "ia.chat_failed": "Le dernier échange s’est terminé par une erreur : voir la conversation",
+  "ia.bed": "Plateau",
+  "ia.bed.show": "Afficher le plateau de l’imprimante sous l’objet",
+  "ia.bed.hide": "Masquer le plateau : l’objet seul, cadré de plus près"
 }

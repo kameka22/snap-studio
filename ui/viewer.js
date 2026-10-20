@@ -18,6 +18,7 @@ const V = {
   drag: null,
   path: null,
   showPlate: true,
+  frameWithBed: false, // framing includes the bed when shown (AI preview)
   raf: 0,
   /* Slice preview in progress: summary, head colors, actions. */
   preview: null,
@@ -766,12 +767,16 @@ function drawBed(gl, bed, grid, vp, view, light) {
 function frameCamera() {
   const m = V.paths || V.mesh;
   if (!m) return;
-  V.cam.target = [
-    (m.min[0] + m.max[0]) / 2,
-    (m.min[1] + m.max[1]) / 2,
-    (m.min[2] + m.max[2]) / 2,
-  ];
-  const size = Math.max(m.max[0] - m.min[0], m.max[1] - m.min[1], m.max[2] - m.min[2], 1);
+  let lo = m.min;
+  let hi = m.max;
+  // Asked by the AI preview: with the bed shown, the frame takes it in too;
+  // bed hidden, the object alone, closer.
+  if (V.frameWithBed && V.showPlate && !V.paths) {
+    lo = [Math.min(lo[0], 0), Math.min(lo[1], 0), Math.min(lo[2], 0)];
+    hi = [Math.max(hi[0], PLATE.w), Math.max(hi[1], PLATE.d), hi[2]];
+  }
+  V.cam.target = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+  const size = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 1);
   // The field of view is vertical: a pane taller than wide would cut the
   // sides, so step back in proportion.
   const c = V.gl?.canvas;

@@ -1849,15 +1849,15 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .chat-plan { margin: 6px 0 10px; max-height: 360px; overflow: auto; padding: 8px 12px; border-radius: 8px; background: var(--content-bg); }
 
 /* ---------- conversation: the two panes ---------- */
-/* The preview is the main area, its details in a toolbar under it; the
-   conversation sits in the right column, its width the user's (kept). */
+/* The preview and its details toolbar on the left, the conversation in the
+   right column: half and half by default, the user's share kept. */
 .ia-split { flex: 1; display: flex; min-height: 0; }
 .ia-center { flex: 1; display: flex; flex-direction: column; min-width: 360px; min-height: 0; }
 .ia-viewpane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ia-left {
   position: relative;
-  flex: 0 0 var(--ia-chat-w, 384px);
-  width: var(--ia-chat-w, 384px);
+  flex: 0 0 var(--ia-chat-w, 50%);
+  width: var(--ia-chat-w, 50%);
   display: flex;
   flex-direction: column;
   min-width: 300px;
@@ -2018,7 +2018,11 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ia-dock.fit-wrap .ia-zone-actions { flex: 1 1 100%; margin-left: 0; padding-left: 0; }
 .ia-dock.fit-wrap .ia-zone-actions::before { display: none; }
 .ia-dock.fit-wrap .ia-zone-actions .btn { flex: 1; }
-.ia-rbar-end { display: flex; align-items: center; gap: 10px; }
+.ia-rbar-end { display: flex; align-items: center; gap: 8px; }
+/* A toggle among the preview's buttons: pressed, it takes the accent. */
+.ia-rbar .btn.ia-toggle { gap: 5px; text-transform: none; letter-spacing: 0; }
+.ia-rbar .btn.ia-toggle svg { width: 13px; height: 13px; }
+.ia-rbar .btn.ia-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
 
 /* ---------- slicing: heads, model colors, progress ---------- */
 .set-note { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-tertiary); }

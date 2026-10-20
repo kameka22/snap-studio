@@ -1277,7 +1277,7 @@
   "spool.replace.text": "The Prepare plate holds other objects. Put this print's plate in their place? This can be undone.",
   "spool.replace.ok": "Replace",
   "ia.details": "Details",
-  "ia.splitter": "Drag to resize the conversation; double-click to reset",
+  "ia.splitter": "Drag to share the width with the conversation; double-click for half and half",
   "ia.splitter_aria": "Resize the conversation",
   "ia.delete.button": "Delete Conversation",
   "ia.delete.button_title": "Delete the conversation and its Claude session",
@@ -1368,5 +1368,8 @@
   "ia.save_done_aria": "Version {v} saved, show it in the Finder",
   "ia.save_title": "Save version {v} to your files, as 3MF",
   "ia.save_nothing": "Nothing to save yet",
-  "ia.chat_failed": "The last turn ended in an error: see the conversation"
+  "ia.chat_failed": "The last turn ended in an error: see the conversation",
+  "ia.bed": "Bed",
+  "ia.bed.show": "Show the printer’s bed under the object",
+  "ia.bed.hide": "Hide the bed: the object alone, framed closer"
 }
