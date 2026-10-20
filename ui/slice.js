@@ -251,6 +251,7 @@ async function onMachineChange(mem) {
     renderHeads(m.filaments || (m.filament ? [m.filament] : null), false);
     renderModelMap(false);
     await loadDefaults(m.simple);
+    spdLoad(m.speed);
     advLoad(m.adv);
   } catch (e) {
     setSliceMessage(String(e), "err");
@@ -466,12 +467,15 @@ function slSummary() {
     $("s-layer-val").textContent,
     tr("slice.sum.infill", { v: $("s-infill-val").textContent }),
     tr("slice.sum.walls", { v: $("s-walls-val").textContent }),
+    typeof spdSummary === "function" && spdSummary(),
     $("s-supports").checked && [tr("slice.sum.supports"), heads?.supports].filter(Boolean).join(" "),
     $("s-brim").checked && tr("slice.sum.brim"),
     heads?.others,
     typeof advCount === "function" && advCount() && tr("slice.sum.adv", { n: advCount() }),
   ].filter(Boolean);
-  $("s-summary").innerHTML = parts.map((p) => `<span>${esc(p)}</span>`).join("");
+  $("s-summary").innerHTML = parts
+    .map((p) => (typeof p === "object" ? `<span class="${esc(p.cls)}">${esc(p.text)}</span>` : `<span>${esc(p)}</span>`))
+    .join("");
 }
 
 /* Adjustments touched by hand: they survive a profile change. */
@@ -527,7 +531,7 @@ function showSliceBusy(busy) {
   $("s-cancel").classList.toggle("hidden", busy);
   $("s-stop").classList.toggle("hidden", !busy);
   document
-    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-cols button:not(.info-btn)")
+    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn)")
     .forEach((el) => (el.disabled = busy));
   if (busy) closePicker();
   // Unlocked: the chips of empty heads must stay inactive.
@@ -559,9 +563,12 @@ async function startSlice() {
     return slot?.present && slot.color ? slot.color : null;
   });
 
+  // The profile's values the Speed adjustment works from must be this
+  // profile's.
+  await ADV.ready?.catch(() => {});
   const simple = currentSimple();
   const bed = $("s-bed").value;
-  remember(machine, { process, filaments, simple, bed, adv: SL.adv || {} });
+  remember(machine, { process, filaments, simple, bed, adv: SL.adv || {}, speed: SL.speed });
   const printer = currentPrinter();
   rememberPrinter(printer?.id || "");
   if (printer) {
@@ -576,7 +583,7 @@ async function startSlice() {
     SL.job = await invoke("slice_start", {
       request: {
         source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
-        overrides: { ...advOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
+        overrides: { ...advOverrides(), ...spdOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";

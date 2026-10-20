@@ -76,7 +76,7 @@ $("picker-list").addEventListener("click", (e) => {
 });
 $("picker-foot").addEventListener("click", () => PK.foot?.onClick());
 // Anchored to a scrolling element: it closes rather than float elsewhere.
-document.querySelector("#smodal .sl-cols").addEventListener("scroll", () => {
+document.querySelector("#smodal .sl-areas").addEventListener("scroll", () => {
   if (!$("picker").classList.contains("hidden")) closePicker();
 });
 document.addEventListener("mousedown", (e) => {

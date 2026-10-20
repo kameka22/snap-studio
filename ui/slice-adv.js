@@ -150,8 +150,12 @@ function advLoad(saved) {
 }
 
 /* Reference values: the chosen profile with the quick settings, without
-   the advanced differences. */
-async function advRefreshDefaults() {
+   the advanced differences. They also give the Speed adjustment its
+   profile values (speed.js); a slice waits for them (`ADV.ready`). */
+function advRefreshDefaults() {
+  return (ADV.ready = advRefreshNow());
+}
+async function advRefreshNow() {
   const machine = $("s-machine").value, process = $("s-process").value;
   const seq = ++ADV.seq;
   if (machine && process) {
@@ -162,9 +166,12 @@ async function advRefreshDefaults() {
       });
       if (seq !== ADV.seq) return;
       ADV.defaults = { ...ADV_ENGINE_DEFAULTS, ...Object.fromEntries(Object.entries(d?.values || {}).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])) };
+      await spdSetProfile(d?.values || null);
     } catch {
       ADV.defaults = { ...ADV_ENGINE_DEFAULTS };
+      await spdSetProfile(null);
     }
+    if (seq !== ADV.seq) return;
   }
   // With the brim switch on, the quick settings send "outer_only".
   if ($("s-brim").checked) ADV.defaults.brim_type = "outer_only";
@@ -207,6 +214,7 @@ function advRenderRows() {
     btn.classList.toggle("mod", n > 0);
     btn.querySelector(".sl-adv-n").textContent = n || "";
   }
+  spdRenderRow();
   slSummary();
 }
 
@@ -219,16 +227,16 @@ async function advOpen(cat) {
   // The sheet can change height while the panel is open (spools read,
   // window resized): the panel follows.
   ADV.ro ||= new ResizeObserver(() => ADV.cat && advFit());
-  ADV.ro.observe(document.querySelector("#smodal .sl-cols"));
+  ADV.ro.observe(document.querySelector("#smodal .sl-areas"));
   ADV.ro.observe(document.querySelector("#smodal .sl-box"));
   $("s-adv").classList.remove("hidden");
   advRenderPanel();
   requestAnimationFrame(() => $("s-adv-back").focus());
 }
 
-/* Covers exactly the sheet's columns: header and footer stay. */
+/* Covers exactly the sheet's areas: header and footer stay. */
 function advFit() {
-  const cols = document.querySelector("#smodal .sl-cols");
+  const cols = document.querySelector("#smodal .sl-areas");
   Object.assign($("s-adv").style, { top: cols.offsetTop + "px", height: cols.offsetHeight + "px" });
 }
 
@@ -272,6 +280,7 @@ function advField(k) {
 }
 
 function advRenderPanel() {
+  if (ADV.cat === "speed") return spdRenderPanel();
   const c = ADV_CATS[ADV.cat];
   if (!c) return;
   $("s-adv-title").textContent = tr(c.title);
@@ -351,6 +360,7 @@ $("s-adv-body").addEventListener("click", (e) => {
 });
 $("s-adv-back").addEventListener("click", advClose);
 $("s-adv-reset").addEventListener("click", () => {
+  if (ADV.cat === "speed") return spdResetAll();
   for (const k of advCatKeysAll(ADV.cat)) delete SL.adv[k];
   advRemember();
   advRenderPanel();
@@ -376,7 +386,7 @@ function advSaveOpen() {
   if (!process) return;
   $("advsave-base").textContent = tr("slice.adv.save.base", { name: process });
   $("advsave-name").value = tr("slice.adv.save.default", { name: process.replace(/ @.*$/, "") });
-  const n = advCount();
+  const n = advCount() + spdNChanged();
   $("advsave-what").textContent = tr("slice.adv.save.what", { n });
   $("advsave-msg").textContent = "";
   $("advsave-msg").className = "pf-test";
@@ -397,7 +407,7 @@ async function advSaveGo() {
   }
   if (exists && !(await confirmDelete(tr("slice.adv.save.replace_title"), tr("slice.adv.save.replace_text", { name }), tr("slice.adv.save.replace")))) return;
   try {
-    await invoke("slice_save_process", { name, base, simple: currentSimple(), overrides: advOverrides() });
+    await invoke("slice_save_process", { name, base, simple: currentSimple(), overrides: { ...advOverrides(), ...spdOverrides() } });
   } catch (e) {
     $("advsave-msg").textContent = String(e);
     $("advsave-msg").className = "pf-test err";
@@ -407,8 +417,10 @@ async function advSaveGo() {
   // The new profile carries the differences: it becomes the choice, clean.
   SL.lists = await invoke("slice_lists", { machine }).catch(() => SL.lists);
   fillSelect($("s-process"), SL.lists.processes, name);
+  // The speed, too, is now the profile's.
   SL.adv = {};
-  remember(machine, { process: name, adv: {} });
+  SL.speed = spdReset();
+  remember(machine, { process: name, adv: {}, speed: SL.speed });
   $("s-process").dispatchEvent(new Event("change", { bubbles: true }));
   toast(tr("slice.adv.save.done", { name }));
 }

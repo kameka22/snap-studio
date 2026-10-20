@@ -1516,5 +1516,38 @@
   "share.qr.back": "← Other Options",
   "share.qr.left": "Available for {time} more",
   "share.qr.expired": "The link has expired.",
-  "share.err.qr": "Cannot serve the file on the local network: {err}"
+  "share.err.qr": "Cannot serve the file on the local network: {err}",
+  "slice.speed": "Speed",
+  "slice.speed.mark.very_safe": "Very safe",
+  "slice.speed.mark.safe": "Safe",
+  "slice.speed.mark.profile": "Profile",
+  "slice.speed.mark.fast": "Fast",
+  "slice.speed.row.outer": "Outer wall",
+  "slice.speed.row.inner": "Inner wall",
+  "slice.speed.row.infill": "Infill",
+  "slice.speed.row.top": "Top surface",
+  "slice.speed.row.support": "Supports",
+  "slice.speed.row.bridge": "Bridges",
+  "slice.speed.row.accel": "Accelerations",
+  "slice.speed.row.first": "First layer",
+  "slice.speed.row.travel": "Travel",
+  "slice.speed.global": "Global",
+  "slice.speed.g.values": "Profile → this slice",
+  "slice.speed.g.also": "First layer and travel",
+  "slice.speed.opt.first": "Also slow down the first layer",
+  "slice.speed.opt.travel": "Also slow down travel moves",
+  "slice.speed.linked": "Follows the global speed",
+  "slice.speed.unlinked": "Set by hand: click to follow the global speed again",
+  "slice.speed.edited": {
+    "one": "{n} set by hand",
+    "other": "{n} set by hand"
+  },
+  "slice.speed.caps": "Above 100 %, values stay within the machine's limits ({speed}, {accel}).",
+  "slice.speed.flow": "Whatever the speed, Orca keeps the flow under the filament's maximum volumetric speed.",
+  "slice.speed.flow_list": "Whatever the speed, Orca keeps the flow under each filament's maximum volumetric speed: {list}.",
+  "slice.sum.speed": "speed {v}",
+  "slice.sum.speed_edited": {
+    "one": "speed: {n} set by hand",
+    "other": "speed: {n} set by hand"
+  }
 }
