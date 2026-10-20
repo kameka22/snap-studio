@@ -1917,7 +1917,6 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .chat-icon svg, .chat-send svg { width: 17px; height: 17px; fill: currentColor; }
 .chat-send { background: var(--accent); color: #fff; }
 .chat-send:disabled { opacity: 0.35; }
-.chat-send.stop { background: var(--text); color: var(--content-bg); }
 .chat-attach { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 6px; }
 .chat-thumb { position: relative; }
 .chat-thumb img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; border: 1px solid var(--card-border); }
@@ -3455,19 +3454,29 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .iadel-keep { font-size: 11px; color: var(--text-tertiary); margin: 6px 0 10px; }
 
 /* Stop: discreet, where Send was, with its word. */
-.chat-send.stop {
-  width: auto;
-  padding: 0 10px 0 8px;
-  gap: 5px;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 500;
-  background: var(--control-bg-hover);
-  color: var(--text);
+/* Stop takes Send's place, same round button: a square inside, and a ring
+   turning around it while Claude answers. Its words stay for screen
+   readers and in the tooltip. */
+.chat-send.stop { position: relative; background: var(--text); color: var(--content-bg); cursor: pointer; }
+.chat-send.stop svg { width: 18px; height: 18px; }
+.chat-send.stop span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.chat-send.stop::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  animation: spin 0.9s linear infinite;
+  pointer-events: none;
 }
-.chat-send.stop svg { width: 12px; height: 12px; }
-.chat-send.stop:hover { background: var(--danger-soft); color: var(--danger); }
+.chat-send.stop:hover { background: var(--danger); color: #fff; }
+.chat-send.stop:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Stopping: the ring slows down until the answer ends. */
 .chat-send.stop:disabled { opacity: 0.6; }
+.chat-send.stop:disabled::after { animation-duration: 2.4s; }
+@media (prefers-reduced-motion: reduce) { .chat-send.stop::after { animation: none; } }
 .ia-term-stop {
   position: absolute;
   right: 18px;
