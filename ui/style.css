@@ -2412,7 +2412,36 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .pj-progress .progress i { border-radius: 4px; }
 .pj-progress b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .pj-times { font-size: 13px; color: var(--text-secondary); }
-.pj-for { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.pj-for { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+.pj-printers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 190px)); gap: 8px; }
+.pj-printers .sl-pchip {
+  position: relative;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+.pj-printers .sl-pchip:hover:not(.on) { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border)); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14); }
+.pj-printers .sl-pchip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pj-printers .sl-pchip.on { background: color-mix(in srgb, var(--accent) 10%, var(--card-bg)); cursor: default; }
+/* The chosen printer: a check badge in its corner. */
+.pj-printers .sl-pchip.on::after {
+  content: "✓";
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--content-bg);
+}
+.pj-printers .sl-pchip.away:not(.on) { opacity: 0.6; }
+.pj-printers .sl-pchip-icon.printing, .pj-printers .sl-pchip-icon.paused { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+.pj-printers .sl-pchip-icon.offline, .pj-printers .sl-pchip-icon.error { background: color-mix(in srgb, var(--text-secondary) 14%, transparent); color: var(--text-secondary); }
 .pj-opts { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
 .pj-opts label { display: flex; align-items: center; gap: 8px; }
 .pj-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
