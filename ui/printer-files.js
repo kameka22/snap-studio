@@ -318,9 +318,26 @@ function pflRenderDetail() {
 
 function pflRenderSelbar() {
   const bar = $("pfl-selbar");
-  const on = PFL.selMode && !!PFL.data && !PFL.player;
+  // One print file selected (not in Select mode, its panel closed): the
+  // same bar, with that file's actions.
+  const one = !PFL.selMode && PFL.tab === "files" && !PFL.detail && !PFL.player && PFL.data ? pflFind(PFL.sel) : null;
+  const on = (PFL.selMode && !!PFL.data && !PFL.player) || !!one;
   bar.classList.toggle("hidden", !on);
+  bar.classList.toggle("single", !!one);
+  for (const id of ["pfl-selall", "pfl-seldone"]) $(id).classList.toggle("hidden", !!one);
+  for (const id of ["pfl-selprint", "pfl-selren"]) $(id).classList.toggle("hidden", !one);
   if (!on) return;
+  if (one) {
+    const can = pflCanChange(one, PFL.data.printing);
+    $("pfl-selcount").textContent = pflName(one.path);
+    $("pfl-selcount").title = one.path;
+    $("pfl-seldl").disabled = PFL.busy;
+    $("pfl-seldel").disabled = $("pfl-selren").disabled = !can.ok;
+    $("pfl-seldel").title = $("pfl-selren").title = can.ok ? "" : pflWhy(can.reason);
+    return;
+  }
+  $("pfl-selcount").title = "";
+  $("pfl-selren").disabled = false;
   const picked = pflPicked();
   $("pfl-selcount").textContent = tr("pfiles.picked", { n: picked.length });
   $("pfl-seldl").disabled = !picked.length || PFL.busy;
@@ -376,6 +393,7 @@ function pflSelect(key, open = false) {
     el.setAttribute("aria-selected", String(on));
   });
   pflRenderDetail();
+  pflRenderSelbar();
 }
 
 function pflPrint(f) {
@@ -658,6 +676,7 @@ $("pfl-detail").addEventListener("click", (e) => {
   if (act === "close-detail") {
     PFL.detail = false;
     pflRenderDetail();
+    pflRenderSelbar();
   } else if (act === "print") pflPrint(f);
   else if (act === "download") pflDownload([f]);
   else if (act === "delete") pflDelete([f]);
@@ -669,8 +688,15 @@ $("pfl-selall").addEventListener("click", () => {
   PFL.picked = all ? new Set() : new Set(shown.map(pflKey));
   pflRender();
 });
-$("pfl-seldl").addEventListener("click", () => pflDownload(pflPicked()));
-$("pfl-seldel").addEventListener("click", () => pflDelete(pflPicked()));
+/* The bar acts on the files picked, or on the one file selected. */
+const pflBarFiles = () => (PFL.selMode ? pflPicked() : [pflFind(PFL.sel)].filter(Boolean));
+$("pfl-selprint").addEventListener("click", () => pflPrint(pflFind(PFL.sel)));
+$("pfl-selren").addEventListener("click", () => {
+  const f = pflFind(PFL.sel);
+  if (f) pflRenameOpen(f);
+});
+$("pfl-seldl").addEventListener("click", () => pflDownload(pflBarFiles()));
+$("pfl-seldel").addEventListener("click", () => pflDelete(pflBarFiles()));
 $("pfl-seldone").addEventListener("click", () => pflSetSelMode(false));
 
 $("pflren-go").addEventListener("click", pflRenameGo);
@@ -753,7 +779,8 @@ document.addEventListener("keydown", (e) => {
     else if (PFL.detail) {
       PFL.detail = false;
       pflRenderDetail();
-    }
+      pflRenderSelbar();
+    } else if (PFL.sel) pflSelect(null); // then the selection, and its bar
   } else if (e.key === "Enter" && PFL.sel && PFL.tab === "files") pflSelect(PFL.sel, true);
 });
 

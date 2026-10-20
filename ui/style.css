@@ -821,6 +821,10 @@ body.dragover #stage::after {
 .selbar .btn:hover { background: rgba(255, 255, 255, 0.24); }
 .selbar .btn.danger { color: #ff6961; }
 .selbar span { font-weight: 600; margin-right: 4px; font-variant-numeric: tabular-nums; }
+.selbar .btn.primary { background: var(--accent); border-color: transparent; color: var(--accent-text); }
+.selbar .btn.primary:hover { background: var(--accent-hover); }
+/* One file selected: its name, cut when long. */
+.selbar.single #pfl-selcount { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- window: vibrant sidebar + opaque content ---------- */
 .window { display: flex; flex: 1; min-height: 0; height: 100%; }
