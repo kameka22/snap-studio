@@ -626,6 +626,118 @@ pub async fn delete(host: &str, port: u16, root: &str, path: &str) -> Result<()>
     Ok(())
 }
 
+/// The camera service's id of a video (U1): the instance whose video has
+/// this name, else one whose id is in the name, else the 14-digit date the
+/// name ends with ("<print>_<YYYYMMDDHHMMSS>.mp4").
+pub fn date_index_of(path: &str, instances: Option<&Value>) -> Option<String> {
+    let base = path.rsplit('/').next().unwrap_or(path);
+    let list: Vec<(&str, &str)> = instances
+        .and_then(|v| v.get("instances"))
+        .and_then(|a| a.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|i| Some((i.get("date_index")?.as_str()?, i.get("video_path").and_then(|v| v.as_str()).unwrap_or(""))))
+                .filter(|(d, _)| !d.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some((d, _)) = list.iter().find(|(_, v)| v.rsplit('/').next() == Some(base)) {
+        return Some(d.to_string());
+    }
+    if let Some((d, _)) = list.iter().find(|(d, _)| base.contains(d)) {
+        return Some(d.to_string());
+    }
+    let stem = base.rsplit_once('.').map(|(s, _)| s).unwrap_or(base);
+    let b = stem.as_bytes();
+    let (mut i, mut found) = (0, None);
+    while i < b.len() {
+        if b[i].is_ascii_digit() {
+            let j = (i..b.len()).find(|&k| !b[k].is_ascii_digit()).unwrap_or(b.len());
+            if j - i == 14 {
+                found = Some(stem[i..j].to_string());
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    found
+}
+
+fn req_id() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64 % 2_000_000_000)
+        .unwrap_or(1)
+}
+
+/// Deletes a timelapse. Moonraker first; a U1 lists its videos in the
+/// `camera` folder read-only (snapmakercloud.py registers it without write
+/// access, and the delete is refused with 405), so the printer's own camera
+/// service is asked next, as Snapmaker's apps do: `camera.delete_timelapse_instance`
+/// over the websocket, which removes the video and its picture. The video must
+/// then be gone from the listing.
+pub async fn delete_video(host: &str, port: u16, root: &str, path: &str) -> Result<()> {
+    let first = match delete(host, port, root, path).await {
+        Ok(()) => return Ok(()),
+        Err(e) => e,
+    };
+    if !is_video(path) {
+        return Err(first);
+    }
+    let instances = crate::printers::ws_call(
+        host,
+        port,
+        "camera.get_timelapse_instance",
+        serde_json::json!({ "req_id": req_id(), "page_index": 1, "page_rows": 1000 }),
+    )
+    .await
+    .ok();
+    let Some(index) = date_index_of(path, instances.as_ref()) else {
+        return Err(anyhow!(crate::t!("pfiles.err.video_delete", err = first)));
+    };
+    let r = crate::printers::ws_call(
+        host,
+        port,
+        "camera.delete_timelapse_instance",
+        serde_json::json!({ "req_id": req_id(), "date_index": index }),
+    )
+    .await
+    .map_err(|e| anyhow!(crate::t!("pfiles.err.video_delete", err = e)))?;
+    if r.get("state").and_then(|s| s.as_str()) == Some("failed") {
+        let msg = r.get("message").and_then(|m| m.as_str()).unwrap_or("failed").to_string();
+        return Err(anyhow!(crate::t!("pfiles.err.video_delete", err = msg)));
+    }
+    let b = base(host, port);
+    for i in 0..5 {
+        if i > 0 {
+            tokio::time::sleep(Duration::from_millis(400)).await;
+        }
+        if let Ok(list) = list_root(&b, root).await {
+            if !list.iter().any(|(p, _, _)| p == path) {
+                return Ok(());
+            }
+        }
+    }
+    Err(anyhow!(crate::t!("pfiles.err.video_kept")))
+}
+
+/// Name shown for a print file: no folder, no extension, without the
+/// "-a1b2c3" Snap Studio adds (six hex digits, one digit at least).
+pub fn display_name(path: &str) -> String {
+    let base = path.rsplit('/').next().unwrap_or(path);
+    let stem = match base.rsplit_once('.') {
+        Some((s, e)) if ["gcode", "gco", "g", "3mf"].contains(&e.to_ascii_lowercase().as_str()) => s,
+        _ => base,
+    };
+    if let Some((head, tail)) = stem.rsplit_once('-') {
+        if !head.is_empty() && tail.len() == 6 && tail.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) && tail.chars().any(|c| c.is_ascii_digit()) {
+            return head.to_string();
+        }
+    }
+    stem.to_string()
+}
+
 /// Renames a print file; returns its new path.
 pub async fn rename(host: &str, port: u16, path: &str, new_name: &str) -> Result<String> {
     let dest = rename_target(path, new_name)?;
@@ -918,20 +1030,55 @@ mod tests {
     /// timelapses in the read-only `camera` root. `ranges`: whether it
     /// honours Range headers. Returns its port.
     fn fake_moonraker(ranges: bool) -> u16 {
+        fake_moonraker_with(ranges).0
+    }
+
+    /// The same, with the camera folder's content, which its camera service
+    /// (websocket, `camera.*`) can change: Moonraker itself refuses (405).
+    fn fake_moonraker_with(ranges: bool) -> (u16, std::sync::Arc<Mutex<Vec<String>>>) {
         use std::io::{BufRead, BufReader, Write};
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = l.local_addr().unwrap().port();
+        let camera = std::sync::Arc::new(Mutex::new(vec!["monitor.jpg".to_string(), "20261019153000.mp4".into(), "20261019153000.jpg".into()]));
+        let cam = camera.clone();
         std::thread::spawn(move || {
             let mp4 = fake_mp4();
             for conn in l.incoming() {
                 let Ok(mut c) = conn else { continue };
                 let mp4 = mp4.clone();
+                let cam = cam.clone();
                 std::thread::spawn(move || {
+                    let mut peek = [0u8; 32];
+                    let n = c.peek(&mut peek).unwrap_or(0);
+                    if peek[..n].starts_with(b"GET /websocket") {
+                        use tokio_tungstenite::tungstenite::{accept, Message};
+                        let Ok(mut ws) = accept(c) else { return };
+                        while let Ok(Message::Text(t)) = ws.read() {
+                            let v: Value = serde_json::from_str(&t).unwrap();
+                            let id = v["id"].clone();
+                            let result = match v["method"].as_str().unwrap_or("") {
+                                "camera.get_timelapse_instance" => json!({"state": "success", "instances": [
+                                    {"date_index": "20261019153000", "video_path": "/userdata/.tmp_timelapse/20261019153000/timelapse.mp4"}
+                                ]}),
+                                "camera.delete_timelapse_instance" => {
+                                    let idx = v["params"]["date_index"].as_str().unwrap_or("").to_string();
+                                    let mut files = cam.lock().unwrap();
+                                    let before = files.len();
+                                    files.retain(|f| idx.is_empty() || !f.starts_with(&idx));
+                                    if files.len() == before { json!({"state": "failed", "message": "no such instance"}) } else { json!({"state": "success"}) }
+                                }
+                                _ => json!(null),
+                            };
+                            let _ = ws.send(Message::Text(json!({"jsonrpc": "2.0", "id": id, "result": result}).to_string().into()));
+                        }
+                        return;
+                    }
                     let mut rd = BufReader::new(c.try_clone().unwrap());
                     let mut line = String::new();
                     if rd.read_line(&mut line).is_err() {
                         return;
                     }
+                    let method = line.split_whitespace().next().unwrap_or("GET").to_string();
                     let target = line.split_whitespace().nth(1).unwrap_or("/").to_string();
                     let mut range = None;
                     loop {
@@ -944,7 +1091,15 @@ mod tests {
                         }
                     }
                     let json = |v: serde_json::Value| (200u16, "application/json", v.to_string().into_bytes(), None::<String>);
+                    let camera_list = || {
+                        let files = cam.lock().unwrap();
+                        json!({"result": files.iter().map(|f| json!({"path": f, "size": if f.ends_with(".mp4") { mp4.len() } else { 900 }, "modified": 1760000200.0})).collect::<Vec<_>>()})
+                    };
                     let (code, mime, body, cr) = match target.as_str() {
+                        _ if method == "DELETE" && target.starts_with("/server/files/camera/") => {
+                            (405, "application/json", br#"{"error": {"code": 405, "message": "Path not available for DELETE"}}"#.to_vec(), None)
+                        }
+                        _ if method == "DELETE" && target.starts_with("/server/files/gcodes/") => (200, "application/json", b"{}".to_vec(), None),
                         "/server/files/roots" => json(json!({"result": [
                             {"name": "gcodes", "path": "/userdata/gcodes", "permissions": "rw"},
                             {"name": "camera", "path": "/oem/printer_data/camera", "permissions": "r"},
@@ -955,11 +1110,7 @@ mod tests {
                             {"path": ".thumbs/Cube-1a2b3c-300x300.png", "size": 100, "modified": 1760000000.0},
                             {"path": "notes.txt", "size": 5, "modified": 1760000000.0}
                         ]})),
-                        "/server/files/list?root=camera" => json(json!({"result": [
-                            {"path": "monitor.jpg", "size": 900, "modified": 1760000100.0},
-                            {"path": "20261019153000.mp4", "size": mp4.len(), "modified": 1760000200.0},
-                            {"path": "20261019153000.jpg", "size": 800, "modified": 1760000200.0}
-                        ]})),
+                        "/server/files/list?root=camera" => json(camera_list()),
                         "/server/files/metadata?filename=Cube-1a2b3c.gcode" => json(json!({"result": {
                             "estimated_time": 3600, "slicer": "OrcaSlicer", "filament_type": "PLA;PETG",
                             "filament_colors": ["#FF0000", "#00FF00"], "filament_weights": [10.0, 2.5],
@@ -992,7 +1143,7 @@ mod tests {
                 });
             }
         });
-        port
+        (port, camera)
     }
 
     fn block_on<F: std::future::Future>(f: F) -> F::Output {
@@ -1049,5 +1200,40 @@ mod tests {
         }
         // Outside the roots: refused before asking the printer.
         assert!(block_on(proxy("127.0.0.1", 1, "camera", "../config/printer.cfg", None)).is_err());
+    }
+
+    #[test]
+    fn camera_ids_of_videos() {
+        let list = json!({"instances": [
+            {"date_index": "20261019153000", "video_path": "/userdata/.tmp_timelapse/20261019153000/Cube_20261019153000.mp4"},
+            {"date_index": "20261018120000", "video_path": ""}
+        ]});
+        assert_eq!(date_index_of("Cube_20261019153000.mp4", Some(&list)).as_deref(), Some("20261019153000"));
+        assert_eq!(date_index_of("sub/x_20261018120000.mp4", Some(&list)).as_deref(), Some("20261018120000"));
+        // Without the service's list: the date in the name.
+        assert_eq!(date_index_of("Vase-1a2b3c_20260107114733.mp4", None).as_deref(), Some("20260107114733"));
+        assert_eq!(date_index_of("timelapse_f120_r24_classic.mp4", None), None);
+        assert_eq!(date_index_of("2026101915300.mp4", None), None);
+    }
+
+    #[test]
+    fn display_names() {
+        assert_eq!(display_name("Cube-3f9a0c.gcode"), "Cube");
+        assert_eq!(display_name("dir/Maison-facade.gcode"), "Maison-facade");
+        assert_eq!(display_name("Vase.3mf"), "Vase");
+        assert_eq!(display_name("Part-ABC123.gcode"), "Part-ABC123");
+    }
+
+    #[test]
+    fn read_only_timelapses_are_deleted_by_the_camera_service() {
+        let (port, camera) = fake_moonraker_with(true);
+        // Moonraker refuses (405); the camera service deletes the video and its picture.
+        block_on(delete_video("127.0.0.1", port, "camera", "20261019153000.mp4")).unwrap();
+        assert_eq!(*camera.lock().unwrap(), vec!["monitor.jpg".to_string()]);
+        // A picture is never sent to the camera service: Moonraker's answer stands.
+        let e = block_on(delete_video("127.0.0.1", port, "camera", "monitor.jpg")).unwrap_err();
+        assert!(e.to_string().contains("405"), "{e}");
+        // A print file goes through Moonraker.
+        block_on(delete_video("127.0.0.1", port, "gcodes", "Cube-1a2b3c.gcode")).unwrap();
     }
 }

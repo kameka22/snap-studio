@@ -679,7 +679,10 @@ async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Resu
     let mut out = Vec::new();
     for path in &paths {
         let r = match printer_files::check_change(&root, path, printing.as_deref()) {
-            Ok(()) => printer_files::delete(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            Ok(()) if root == "gcodes" => printer_files::delete(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            // Timelapses: also through the camera service when Moonraker
+            // only lists them (a U1's read-only `camera` folder).
+            Ok(()) => printer_files::delete_video(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
             Err(e) => Err(e.to_string()),
         };
         out.push(r.err());
@@ -719,27 +722,93 @@ async fn pf_download(printer_id: String, root: String, paths: Vec<String>, dir: 
 
 #[derive(serde::Deserialize)]
 struct PfPrintRequest {
-    printer_id: String,
+    /// Printer the file is on.
+    source_id: String,
     path: String,
+    /// Printer that prints it (the same one, or another).
+    printer_id: String,
     options: printers::StartOptions,
     #[serde(default)]
     tools: Vec<u8>,
     #[serde(default)]
     map: Vec<(u8, u8)>,
+    /// True: queue instead of starting.
+    #[serde(default)]
+    queue: bool,
 }
 
-/// Prints a file already on the printer: same checks and preparation as a
+/// Prints a file that is on a printer, as the send sheet does after a slice.
+/// Started at once on that same printer: same checks and preparation as a
 /// sent print, then the printer starts its own copy (nothing is uploaded).
+/// Queued, or for another printer: the G-code is copied from the printer and
+/// becomes an ordinary job (queued, or sent and started). Returns the job's
+/// id, if one was made.
 #[tauri::command]
-async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<(), String> {
+async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Option<String>, String> {
     let p = printer_by_id(&request.printer_id)?;
     let tools = if request.tools.is_empty() { vec![0] } else { request.tools.clone() };
-    let warning = prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
-    printer_files::start(&p.host, p.port, &request.path)
-        .await
-        .map_err(|e| t!("pfiles.err.start", err = e))?;
-    send_progress(&app, "done", Some(100.0), warning);
-    Ok(())
+    if !request.queue && request.source_id == request.printer_id {
+        let warning = prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
+        printer_files::start(&p.host, p.port, &request.path)
+            .await
+            .map_err(|e| t!("pfiles.err.start", err = e))?;
+        send_progress(&app, "done", Some(100.0), warning);
+        return Ok(None);
+    }
+    let src = printer_by_id(&request.source_id)?;
+    send_progress(&app, "fetch", None, None);
+    let tmp = std::env::temp_dir().join("snapstudio-pfiles").join(printers::new_id());
+    std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+    let result = async {
+        let gcode = printer_files::download(&src.host, src.port, "gcodes", &request.path, &tmp)
+            .await
+            .map_err(|e| t!("pfiles.err.fetch", err = e))?;
+        let id = printers::new_id();
+        let stem = printer_files::display_name(&request.path);
+        let remote = jobs::remote_name(&stem, &id);
+        let new = jobs::NewJob {
+            id: Some(id),
+            stats: None,
+            name: stem,
+            printer_id: p.id.clone(),
+            options: request.options.clone(),
+            tools: tools.clone(),
+            profile: jobs::Profile::default(),
+            source: None,
+        };
+        let add = |gcode: PathBuf, new: jobs::NewJob, state: &'static str, remote: String| {
+            tauri::async_runtime::spawn_blocking(move || jobs::add(&gcode, new, state, &remote))
+        };
+        if request.queue {
+            let job = add(gcode, new, "queued", String::new())
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
+            emit_jobs(&app);
+            return Ok(Some(job.id));
+        }
+        let warning = launch(&app, &p, &gcode, &remote, &request.options, &tools, &request.map).await?;
+        let id = match add(gcode, new, "printing", remote).await.map_err(|e| anyhow::anyhow!("{e}")).and_then(|r| r) {
+            Ok(job) => {
+                if printers::is_remap(&request.map) {
+                    if let Err(e) = jobs::mark_remapped(&job.id) {
+                        eprintln!("[jobs] substitution not recorded: {e}");
+                    }
+                }
+                Some(job.id)
+            }
+            Err(e) => {
+                eprintln!("[jobs] record not saved: {e}");
+                None
+            }
+        };
+        emit_jobs(&app);
+        send_progress(&app, "done", Some(100.0), warning);
+        Ok(id)
+    }
+    .await;
+    let _ = std::fs::remove_dir_all(&tmp);
+    result
 }
 
 /// `prn://localhost/f?id=<printer>&root=<root>&p=<path>`: a file of a
