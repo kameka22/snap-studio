@@ -2717,16 +2717,16 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .sl-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: contain; background: var(--thumb-bg); }
 .sl-title h3 { margin: 0; }
 .modal-box .sl-title h3 + .det-sub { margin-top: 2px; }
-.sl-cols {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-.sl-col { display: flex; flex-direction: column; gap: 8px; padding: 6px 22px 18px; min-width: 0; }
-.sl-col + .sl-col { border-left: 1px solid var(--separator); }
-.sl-col > .set-section { margin: 12px 2px 0; }
+/* Three areas: setup (top left), adjustments (top right), then heads and
+   model colors across the whole width, below a rule. */
+.sl-areas { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.sl-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.sl-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-top: 1px solid var(--separator); }
+.sl-area { display: flex; flex-direction: column; gap: 8px; padding: 6px 22px 18px; min-width: 0; }
+.sl-area + .sl-area { border-left: 1px solid var(--separator); }
+/* Heads and model colors: side by side without a rule between them. */
+.sl-bottom .sl-area + .sl-area { border-left: 0; }
+.sl-area > .set-section { margin: 12px 2px 0; }
 .sl-card { border-radius: var(--radius-card); border: 1px solid var(--card-border); background: var(--card-bg); }
 
 /* Printer */
@@ -2856,8 +2856,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .sl-summary span:nth-child(2) { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 
 @media (max-width: 900px) {
-  .sl-cols { grid-template-columns: 1fr; }
-  .sl-col + .sl-col { border-left: 0; border-top: 1px solid var(--separator); }
+  .sl-top { grid-template-columns: minmax(0, 1fr); }
+  .sl-top .sl-area + .sl-area { border-left: 0; border-top: 1px solid var(--separator); }
+}
+@media (max-width: 720px) {
+  .sl-bottom { grid-template-columns: minmax(0, 1fr); }
+
 }
 
 /* Printers as chips */
@@ -3016,7 +3020,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   background: var(--card-bg);
 }
 .sl-engine .eng-actions { justify-content: flex-end; }
-.sl-box.needs-engine .sl-cols,
+.sl-box.needs-engine .sl-areas,
 .sl-box.needs-engine .sl-summary { display: none; }
 .sl-box.needs-engine .sl-foot-row { justify-content: flex-end; }
 
@@ -3722,3 +3726,59 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .pfs-url { font-size: 11px; color: var(--text-tertiary); word-break: break-all; user-select: text; -webkit-user-select: text; }
 .pfs-left { font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .pfs-qrtext .w-link { align-self: flex-start; }
+
+/* Speed: one percentage of the profile. Below 100 % in the warning colour,
+   above in the accent colour, in the row, on the ⚙ badge and in the summary. */
+.sl-speed-row { flex-wrap: wrap; row-gap: 4px; }
+.sl-speed-val { font-size: 13px; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+.sl-speed-val.slow, .sl-summary span.spd.slow, .spd-global b.slow { color: var(--warning); }
+.sl-speed-val.fast, .sl-summary span.spd.fast, .spd-global b.fast { color: var(--accent); }
+.sl-summary span.spd.slow { border-color: color-mix(in srgb, var(--warning) 45%, transparent); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+.sl-summary span.spd.fast { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.sl-adv-btn.slow { color: var(--warning); }
+.sl-adv-btn.slow .sl-adv-n { background: var(--warning); }
+.sl-speed-ctl { flex: 1 0 100%; padding: 0 2px 2px 25px; box-sizing: border-box; }
+.sl-speed-ctl input[type="range"], .spd-global input[type="range"] { width: 100%; display: block; margin: 0; }
+.sl-speed-marks { position: relative; height: 16px; margin: 2px 8px 0; }
+.sl-speed-marks button {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  border: 0;
+  padding: 0 2px;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sl-speed-marks button:first-child { transform: none; margin-left: -8px; }
+.sl-speed-marks button:last-child { transform: translateX(-100%); margin-left: 8px; }
+.sl-speed-marks button:hover, .sl-speed-marks button.on { color: var(--text); }
+.sl-speed-marks button:disabled { cursor: default; opacity: 0.5; }
+.spd-global { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 6px; }
+.spd-global-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.spd-global-head b { font-variant-numeric: tabular-nums; font-size: 15px; }
+.spd-global .sl-speed-marks { font-size: 11px; }
+.sl-adv-body .spd-row .spd-link { border: 0; background: none; padding: 0 4px; font-size: 13px; line-height: 1; cursor: pointer; flex: none; }
+.sl-adv-body .spd-row span.spd-link { cursor: default; }
+.sl-adv-body .spd-row .spd-from { color: var(--text-tertiary); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sl-adv-body .spd-row .field.num { width: 80px; }
+.sl-adv-body .spd-row .unit { min-width: 42px; }
+.sl-adv-note.info { background: var(--control-bg); border: 1px solid var(--separator); }
+.sl-adv-body .spd-row .unit { font-size: 12px; color: var(--text-secondary); }
+
+/* Slice sheet only: heads as compact cards, two per row (the printer's
+   Heads and spools page, #hv-grid, keeps the large cards). */
+#s-heads.sl-heads { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+#s-heads .sl-headcard { gap: 3px; padding: 6px 8px; }
+#s-heads .sl-hc-top { align-items: center; min-width: 0; }
+#s-heads .sl-hc-top b { flex: none; }
+#s-heads .sl-hc-top span { min-width: 0; }
+#s-heads .sl-spool { flex: none; width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); }
+#s-heads .sl-hc-meta { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+#s-heads .sl-hc-meta .sl-hc-sub { flex: 1; min-width: 0; }
+#s-heads .sl-hc-meta .sl-hc-temp { flex: none; min-height: 0; white-space: nowrap; }
+#s-heads .sl-hc-preset { padding: 3px 6px; }

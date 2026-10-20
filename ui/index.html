@@ -937,95 +937,111 @@
     </div>
 
     <div id="s-engine" class="sl-engine hidden"></div>
-    <div class="sl-cols">
-      <div class="sl-col">
-        <div class="set-section" data-i18n="slice.printer">Printer</div>
-        <div id="s-printers" class="sl-printers"></div>
-        <select id="s-printer" class="hidden" tabindex="-1"></select>
-        <div class="sl-line">
-          <span class="k" data-i18n="slice.nozzle">Nozzle</span>
-          <div id="s-nozzles" class="sl-chips small"></div>
-          <button id="s-machine-other" class="w-link" data-i18n="slice.other_profile">Other profile…</button>
-          <button class="btn info-btn" data-info="machine" title="Profile details" data-i18n-title="slice.profile_details"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button>
-        </div>
-        <div id="s-machine-name" class="sl-note"></div>
-        <select id="s-machine" class="hidden" tabindex="-1"></select>
-
-        <div class="set-section" data-i18n="slice.plate">Plate</div>
-        <div id="s-beds" class="sl-beds"></div>
-        <select id="s-bed" class="hidden" tabindex="-1"></select>
-        <div id="s-bedtemp" class="s-bedtemp"></div>
-
-        <div class="set-section" data-i18n="slice.quality">Quality</div>
-        <div class="sl-layer">
-          <div class="sl-layer-head"><span data-i18n="slice.layer_height">Layer height</span><b id="s-layer-val">—</b></div>
-          <div id="s-layer-chips" class="sl-chips"></div>
-          <div class="sl-scale"><span data-i18n="slice.finer">finer</span><span data-i18n="slice.faster">faster</span></div>
-        </div>
-        <div class="sl-layer">
-          <div class="sl-layer-head"><span data-i18n="slice.style">Style</span></div>
-          <div id="s-styles" class="sl-chips"></div>
-        </div>
-        <div class="sl-line">
-          <span id="s-process-name" class="sl-note grow"></span>
-          <button id="s-process-other" class="w-link" data-i18n="slice.other_profile">Other profile…</button>
-          <button class="btn info-btn" data-info="process" title="Profile details" data-i18n-title="slice.profile_details"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button>
-        </div>
-        <select id="s-process" class="hidden" tabindex="-1"></select>
-
-        <div class="set-section" data-i18n="slice.adjust">Adjustments</div>
-        <div class="sl-adjust">
-          <div class="sl-card sl-tile">
-            <small data-i18n="slice.infill">Infill</small>
-            <b id="s-infill-val">—</b>
-            <input type="range" id="s-infill" min="0" max="100" step="5" />
+    <div class="sl-areas">
+      <div class="sl-top">
+        <div class="sl-area sl-area-setup">
+          <div class="set-section" data-i18n="slice.printer">Printer</div>
+          <div id="s-printers" class="sl-printers"></div>
+          <select id="s-printer" class="hidden" tabindex="-1"></select>
+          <div class="sl-line">
+            <span class="k" data-i18n="slice.nozzle">Nozzle</span>
+            <div id="s-nozzles" class="sl-chips small"></div>
+            <button id="s-machine-other" class="w-link" data-i18n="slice.other_profile">Other profile…</button>
+            <button class="btn info-btn" data-info="machine" title="Profile details" data-i18n-title="slice.profile_details"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button>
           </div>
-          <div class="sl-card sl-tile">
-            <small data-i18n="slice.walls">Walls</small>
-            <div class="sl-stepper">
-              <button class="btn" data-step="-1" title="Fewer walls" data-i18n-title="slice.walls_less">−</button>
-              <b id="s-walls-val">—</b>
-              <button class="btn" data-step="1" title="More walls" data-i18n-title="slice.walls_more">+</button>
+          <div id="s-machine-name" class="sl-note"></div>
+          <select id="s-machine" class="hidden" tabindex="-1"></select>
+
+          <div class="set-section" data-i18n="slice.plate">Plate</div>
+          <div id="s-beds" class="sl-beds"></div>
+          <select id="s-bed" class="hidden" tabindex="-1"></select>
+          <div id="s-bedtemp" class="s-bedtemp"></div>
+
+          <div class="set-section" data-i18n="slice.quality">Quality</div>
+          <div class="sl-layer">
+            <div class="sl-layer-head"><span data-i18n="slice.layer_height">Layer height</span><b id="s-layer-val">—</b></div>
+            <div id="s-layer-chips" class="sl-chips"></div>
+            <div class="sl-scale"><span data-i18n="slice.finer">finer</span><span data-i18n="slice.faster">faster</span></div>
+          </div>
+          <div class="sl-layer">
+            <div class="sl-layer-head"><span data-i18n="slice.style">Style</span></div>
+            <div id="s-styles" class="sl-chips"></div>
+          </div>
+          <div class="sl-line">
+            <span id="s-process-name" class="sl-note grow"></span>
+            <button id="s-process-other" class="w-link" data-i18n="slice.other_profile">Other profile…</button>
+            <button class="btn info-btn" data-info="process" title="Profile details" data-i18n-title="slice.profile_details"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button>
+          </div>
+          <select id="s-process" class="hidden" tabindex="-1"></select>
+        </div>
+
+        <div class="sl-area sl-area-adjust">
+          <div class="set-section" data-i18n="slice.adjust">Adjustments</div>
+          <div class="sl-adjust">
+            <div class="sl-card sl-tile">
+              <small data-i18n="slice.infill">Infill</small>
+              <b id="s-infill-val">—</b>
+              <input type="range" id="s-infill" min="0" max="100" step="5" />
             </div>
-            <input type="range" id="s-walls" class="hidden" min="1" max="6" step="1" tabindex="-1" />
+            <div class="sl-card sl-tile">
+              <small data-i18n="slice.walls">Walls</small>
+              <div class="sl-stepper">
+                <button class="btn" data-step="-1" title="Fewer walls" data-i18n-title="slice.walls_less">−</button>
+                <b id="s-walls-val">—</b>
+                <button class="btn" data-step="1" title="More walls" data-i18n-title="slice.walls_more">+</button>
+              </div>
+              <input type="range" id="s-walls" class="hidden" min="1" max="6" step="1" tabindex="-1" />
+            </div>
           </div>
-        </div>
-        <div class="sl-card sl-adv">
-          <div class="sl-adv-row">
-            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16v4H4zm2 6h2v12H6zm5 0h2v12h-2zm5 0h2v12h-2z"/></svg></span>
-            <span class="k"><span data-i18n="slice.supports">Supports</span><small id="s-adv-sum-support" class="sub"></small></span>
-            <input type="checkbox" id="s-supports" class="sw" role="switch" />
-            <button class="btn info-btn sl-adv-btn" data-adv="support" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+          <div class="sl-card sl-adv">
+            <div class="sl-adv-row sl-speed-row" id="s-speed-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 4a10 10 0 0 0-8.7 15h17.4A10 10 0 0 0 12 4m0 2a8 8 0 0 1 7.5 11h-15A8 8 0 0 1 12 6m4.2 2.4-5 4.6a1.6 1.6 0 1 0 2.2 2.2z"/></svg></span>
+              <span class="k"><span id="s-speed-label" data-i18n="slice.speed">Speed</span><small id="s-adv-sum-speed" class="sub"></small></span>
+              <b id="s-speed-val" class="sl-speed-val">100 %</b>
+              <button class="btn info-btn sl-adv-btn" data-adv="speed" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <div class="sl-speed-ctl">
+                <input type="range" id="s-speed" min="50" max="120" step="5" value="100" aria-labelledby="s-speed-label" />
+                <div class="sl-speed-marks" data-marks="s-speed"></div>
+              </div>
+            </div>
+            <div class="sl-adv-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16v4H4zm2 6h2v12H6zm5 0h2v12h-2zm5 0h2v12h-2z"/></svg></span>
+              <span class="k"><span data-i18n="slice.supports">Supports</span><small id="s-adv-sum-support" class="sub"></small></span>
+              <input type="checkbox" id="s-supports" class="sw" role="switch" />
+              <button class="btn info-btn sl-adv-btn" data-adv="support" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
+            <div class="sl-adv-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8zM3 3h18v18H3zm2 2v14h14V5z"/></svg></span>
+              <span class="k"><span data-i18n="slice.brim">Brim</span><small id="s-adv-sum-brim" class="sub"></small></span>
+              <input type="checkbox" id="s-brim" class="sw" role="switch" />
+              <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
+            <div class="sl-adv-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
+              <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
+              <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
+            <div class="sl-adv-row" id="s-adv-mm-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
+              <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
+              <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
           </div>
-          <div class="sl-adv-row">
-            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8zM3 3h18v18H3zm2 2v14h14V5z"/></svg></span>
-            <span class="k"><span data-i18n="slice.brim">Brim</span><small id="s-adv-sum-brim" class="sub"></small></span>
-            <input type="checkbox" id="s-brim" class="sw" role="switch" />
-            <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+          <div class="sl-line sl-save-line">
+            <button id="s-save-process" class="w-link" data-i18n="slice.adv.save">Save as Custom Profile…</button>
           </div>
-          <div class="sl-adv-row">
-            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
-            <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
-            <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
-          </div>
-          <div class="sl-adv-row" id="s-adv-mm-row">
-            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
-            <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
-            <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
-          </div>
-        </div>
-        <div class="sl-line sl-save-line">
-          <button id="s-save-process" class="w-link" data-i18n="slice.adv.save">Save as Custom Profile…</button>
         </div>
       </div>
 
-      <div class="sl-col">
-        <div class="set-section"><span data-i18n="slice.heads">Heads and spools</span> <span id="s-heads-note" class="set-note"></span></div>
-        <div id="s-heads" class="sl-heads"></div>
-
-        <div class="set-section"><span data-i18n="slice.model_colors">Model colors</span> <button id="s-map-edit" class="w-link set-note" data-i18n="heads.edit_in_prepare">Edit in Prepare</button></div>
-        <div id="s-map" class="sl-map"></div>
-
+      <div class="sl-bottom">
+        <div class="sl-area sl-area-heads">
+          <div class="set-section"><span data-i18n="slice.heads">Heads and spools</span> <span id="s-heads-note" class="set-note"></span></div>
+          <div id="s-heads" class="sl-heads"></div>
+        </div>
+        <div class="sl-area sl-area-colors">
+          <div class="set-section"><span data-i18n="slice.model_colors">Model colors</span> <button id="s-map-edit" class="w-link set-note" data-i18n="heads.edit_in_prepare">Edit in Prepare</button></div>
+          <div id="s-map" class="sl-map"></div>
+        </div>
       </div>
     </div>
 
@@ -1592,6 +1608,8 @@
 <script src="engine.js"></script>
 <script src="profiles.js"></script>
 <script src="slice-adv.js"></script>
+<script src="speed.js"></script>
+<script src="slice-speed.js"></script>
 <script src="prints.js"></script>
 <script src="prepare.js"></script>
 <script src="heads.js"></script>

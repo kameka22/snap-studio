@@ -1519,5 +1519,38 @@
   "share.qr.back": "← Autres options",
   "share.qr.left": "Disponible encore {time}",
   "share.qr.expired": "Le lien a expiré.",
-  "share.err.qr": "Impossible de servir le fichier sur le réseau local : {err}"
+  "share.err.qr": "Impossible de servir le fichier sur le réseau local : {err}",
+  "slice.speed": "Vitesse",
+  "slice.speed.mark.very_safe": "Très prudent",
+  "slice.speed.mark.safe": "Prudent",
+  "slice.speed.mark.profile": "Profil",
+  "slice.speed.mark.fast": "Rapide",
+  "slice.speed.row.outer": "Paroi externe",
+  "slice.speed.row.inner": "Paroi interne",
+  "slice.speed.row.infill": "Remplissage",
+  "slice.speed.row.top": "Surface supérieure",
+  "slice.speed.row.support": "Supports",
+  "slice.speed.row.bridge": "Ponts",
+  "slice.speed.row.accel": "Accélérations",
+  "slice.speed.row.first": "Première couche",
+  "slice.speed.row.travel": "Déplacements",
+  "slice.speed.global": "Global",
+  "slice.speed.g.values": "Profil → cette découpe",
+  "slice.speed.g.also": "Première couche et déplacements",
+  "slice.speed.opt.first": "Ralentir aussi la première couche",
+  "slice.speed.opt.travel": "Ralentir aussi les déplacements",
+  "slice.speed.linked": "Suit la vitesse globale",
+  "slice.speed.unlinked": "Réglé à la main : cliquer pour suivre à nouveau la vitesse globale",
+  "slice.speed.edited": {
+    "one": "{n} réglée à la main",
+    "other": "{n} réglées à la main"
+  },
+  "slice.speed.caps": "Au-dessus de 100 %, les valeurs restent dans les limites de la machine ({speed}, {accel}).",
+  "slice.speed.flow": "Quelle que soit la vitesse, Orca garde le débit sous le débit volumétrique maximal du filament.",
+  "slice.speed.flow_list": "Quelle que soit la vitesse, Orca garde le débit sous le débit volumétrique maximal de chaque filament : {list}.",
+  "slice.sum.speed": "vitesse {v}",
+  "slice.sum.speed_edited": {
+    "one": "vitesse : {n} réglée à la main",
+    "other": "vitesse : {n} réglées à la main"
+  }
 }
