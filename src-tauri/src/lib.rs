@@ -17,6 +17,7 @@ mod mesh;
 mod model3mf;
 mod presets;
 mod printers;
+mod printer_files;
 mod orient;
 mod paint;
 mod plate;
@@ -559,6 +560,27 @@ async fn launch(
     tools: &[u8],
     map: &[(u8, u8)],
 ) -> Result<Option<String>, String> {
+    let warning = prepare_printer(app, p, options, tools, map).await?;
+    let handle = app.clone();
+    printers::upload(&p.host, p.port, gcode, name, true, move |sent, total| {
+        let pct = if total > 0 { sent as f32 * 100.0 / total as f32 } else { 0.0 };
+        send_progress(&handle, "upload", Some(pct), None);
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(warning)
+}
+
+/// Before a print starts, whatever its G-code comes from: the printer is
+/// idle, every head used has a spool, the heads and options are set.
+/// Returns a warning if an option was not confirmed.
+async fn prepare_printer(
+    app: &tauri::AppHandle,
+    p: &printers::Printer,
+    options: &printers::StartOptions,
+    tools: &[u8],
+    map: &[(u8, u8)],
+) -> Result<Option<String>, String> {
     printers::check_map(tools, map).map_err(|e| e.to_string())?;
     send_progress(app, "check", None, None);
     let st = printers::status(&p.host, p.port).await;
@@ -600,15 +622,160 @@ async fn launch(
             warning = Some(t!("err.options_unconfirmed", opts = missing.join(", ")));
         }
     }
-
-    let handle = app.clone();
-    printers::upload(&p.host, p.port, gcode, name, true, move |sent, total| {
-        let pct = if total > 0 { sent as f32 * 100.0 / total as f32 } else { 0.0 };
-        send_progress(&handle, "upload", Some(pct), None);
-    })
-    .await
-    .map_err(|e| e.to_string())?;
     Ok(warning)
+}
+
+// ---------------------------------------------------------------- printer files
+
+fn served_root(root: &str) -> Result<(), String> {
+    if printer_files::served_root(root) {
+        Ok(())
+    } else {
+        Err("invalid path".into())
+    }
+}
+
+/// The file a printer is busy with, if any.
+async fn printing_file(p: &printers::Printer) -> Option<String> {
+    let st = printers::status(&p.host, p.port).await;
+    printer_files::printing_path(&st.state, st.job.as_deref())
+}
+
+/// A printer's print files and timelapses. Unreachable: an error, the
+/// view offers to try again.
+#[tauri::command]
+async fn pf_overview(printer_id: String) -> Result<printer_files::Overview, String> {
+    let p = printer_by_id(&printer_id)?;
+    let st = printers::status(&p.host, p.port).await;
+    if !st.online {
+        return Err(t!("err.printer_silent", name = p.name));
+    }
+    let printing = printer_files::printing_path(&st.state, st.job.as_deref());
+    printer_files::overview(&p.host, p.port, printing).await.map_err(|e| e.to_string())
+}
+
+/// Number of print files on a printer, for the sidebar.
+#[tauri::command]
+async fn pf_count(printer_id: String) -> Result<usize, String> {
+    let p = printer_by_id(&printer_id)?;
+    printer_files::count(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn pf_video_duration(printer_id: String, root: String, path: String, modified: f64) -> Result<Option<f64>, String> {
+    served_root(&root)?;
+    let p = printer_by_id(&printer_id)?;
+    printer_files::video_duration(&p.host, p.port, &root, &path, modified)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Deletes files of one root; each one's error, if any, in order.
+#[tauri::command]
+async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Result<Vec<Option<String>>, String> {
+    served_root(&root)?;
+    let p = printer_by_id(&printer_id)?;
+    let printing = printing_file(&p).await;
+    let mut out = Vec::new();
+    for path in &paths {
+        let r = match printer_files::check_change(&root, path, printing.as_deref()) {
+            Ok(()) => printer_files::delete(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            Err(e) => Err(e.to_string()),
+        };
+        out.push(r.err());
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+async fn pf_rename(printer_id: String, path: String, name: String) -> Result<String, String> {
+    let p = printer_by_id(&printer_id)?;
+    let printing = printing_file(&p).await;
+    printer_files::check_change("gcodes", &path, printing.as_deref()).map_err(|e| e.to_string())?;
+    printer_files::rename(&p.host, p.port, &path, &name).await.map_err(|e| e.to_string())
+}
+
+/// Downloads files into a folder: the Files folder for print files, the
+/// Downloads folder for videos unless another is given. Returns the files
+/// written; stops at the first failure.
+#[tauri::command]
+async fn pf_download(printer_id: String, root: String, paths: Vec<String>, dir: Option<String>) -> Result<Vec<String>, String> {
+    served_root(&root)?;
+    let p = printer_by_id(&printer_id)?;
+    let dir = dir
+        .map(PathBuf::from)
+        .or_else(dirs::download_dir)
+        .ok_or_else(|| t!("pfiles.err.no_folder"))?;
+    if !dir.is_dir() {
+        return Err(t!("pfiles.err.no_folder"));
+    }
+    let mut out = Vec::new();
+    for path in &paths {
+        let f = printer_files::download(&p.host, p.port, &root, path, &dir).await.map_err(|e| e.to_string())?;
+        out.push(f.to_string_lossy().to_string());
+    }
+    Ok(out)
+}
+
+#[derive(serde::Deserialize)]
+struct PfPrintRequest {
+    printer_id: String,
+    path: String,
+    options: printers::StartOptions,
+    #[serde(default)]
+    tools: Vec<u8>,
+    #[serde(default)]
+    map: Vec<(u8, u8)>,
+}
+
+/// Prints a file already on the printer: same checks and preparation as a
+/// sent print, then the printer starts its own copy (nothing is uploaded).
+#[tauri::command]
+async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<(), String> {
+    let p = printer_by_id(&request.printer_id)?;
+    let tools = if request.tools.is_empty() { vec![0] } else { request.tools.clone() };
+    let warning = prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
+    printer_files::start(&p.host, p.port, &request.path)
+        .await
+        .map_err(|e| t!("pfiles.err.start", err = e))?;
+    send_progress(&app, "done", Some(100.0), warning);
+    Ok(())
+}
+
+/// `prn://localhost/f?id=<printer>&root=<root>&p=<path>`: a file of a
+/// printer (thumbnail, timelapse picture, video by pieces).
+async fn handle_prn(uri: String, range: Option<String>) -> Response<Vec<u8>> {
+    let fail = |code: u16| {
+        Response::builder()
+            .status(code)
+            .header("Access-Control-Allow-Origin", "*")
+            .body(Vec::new())
+            .unwrap()
+    };
+    let (Some(id), Some(root), Some(path)) = (query_param(&uri, "id"), query_param(&uri, "root"), query_param(&uri, "p")) else {
+        return fail(400);
+    };
+    if !printer_files::served_root(&root) {
+        return fail(403);
+    }
+    let Ok(p) = printer_by_id(&id) else {
+        return fail(404);
+    };
+    match printer_files::proxy(&p.host, p.port, &root, &path, range.as_deref()).await {
+        Ok(r) => {
+            let mut b = Response::builder()
+                .status(r.status)
+                .header("Content-Type", r.mime)
+                .header("Accept-Ranges", "bytes")
+                .header("Cache-Control", "no-store")
+                .header("Access-Control-Allow-Origin", "*");
+            if let Some(cr) = r.content_range {
+                b = b.header("Content-Range", cr);
+            }
+            b.body(r.body).unwrap()
+        }
+        Err(_) => fail(502),
+    }
 }
 
 /// Sends a slice's preview: immediate start, or queueing. Returns the id of
@@ -1471,6 +1638,13 @@ pub fn run() {
                 responder.respond(handle_cam(uri).await);
             });
         })
+        .register_asynchronous_uri_scheme_protocol("prn", |_app, request: Request<Vec<u8>>, responder| {
+            let uri = request.uri().to_string();
+            let range = request.headers().get("range").and_then(|v| v.to_str().ok()).map(String::from);
+            tauri::async_runtime::spawn(async move {
+                responder.respond(handle_prn(uri, range).await);
+            });
+        })
         .register_asynchronous_uri_scheme_protocol("gcode", |_app, request: Request<Vec<u8>>, responder| {
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
@@ -1556,6 +1730,13 @@ pub fn run() {
             plate_orient,
             plate_save,
             print_send,
+            pf_overview,
+            pf_count,
+            pf_video_duration,
+            pf_delete,
+            pf_rename,
+            pf_download,
+            pf_print,
             jobs_list,
             prints_status,
             job_launch,

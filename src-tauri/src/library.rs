@@ -182,7 +182,7 @@ fn download_hook(app: &AppHandle, id: &str, event: tauri::webview::DownloadEvent
 }
 
 /// Adds a numbered suffix rather than overwriting an existing file.
-fn unique_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+pub(crate) fn unique_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
     let p = dir.join(name);
     if !p.exists() {
         return p;
