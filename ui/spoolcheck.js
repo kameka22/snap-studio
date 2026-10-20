@@ -296,12 +296,10 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
     $("sp-hint").textContent = canEdit ? "" : tr("spool.edit_none");
   };
   render();
-  $("sp-noask").checked = false;
   openSheet(modal);
   requestAnimationFrame(() => ($("sp-go").disabled ? $("sp-cancel") : $("sp-go")).focus());
   return new Promise((resolve) => {
     const done = (v) => {
-      if (v && $("sp-noask").checked) spSetEnabled(false);
       $("sp-go").onclick = $("sp-edit").onclick = $("sp-cancel").onclick = $("sp-list").onclick = modal.onkeydown = null;
       closeSheet(modal);
       resolve(v);

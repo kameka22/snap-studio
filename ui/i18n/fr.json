@@ -1265,7 +1265,6 @@
   "printers.cam.enlarge": "Agrandir",
   "printers.cam.shrink": "Réduire",
   "spool.title": "Les bobines chargées ne correspondent pas au tranchage",
-  "spool.noask": "Ne plus vérifier",
   "spool.col_model": "Couleur du modèle",
   "spool.send": "Envoyer",
   "spool.choose": "Choisir une bobine…",

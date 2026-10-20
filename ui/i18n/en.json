@@ -1262,7 +1262,6 @@
   "printers.cam.enlarge": "Enlarge",
   "printers.cam.shrink": "Reduce",
   "spool.title": "The loaded spools don't match the slice",
-  "spool.noask": "Don't check again",
   "spool.col_model": "Model color",
   "spool.send": "Send",
   "spool.choose": "Choose a spool…",
