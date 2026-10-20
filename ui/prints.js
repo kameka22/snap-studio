@@ -573,7 +573,8 @@ $("q-go").addEventListener("click", async () => {
     slots = await headsRefreshSlots(pid);
     // Back to Prepare: only for jobs that kept their plate; an older record
     // has nothing to slice again.
-    ok = await spoolCheck({ pid, tools: j.tools, profile: j.profile || {}, stats: j.stats || {}, slots, canEdit: !!j.profile?.plate?.length });
+    const print = { thumb: pjThumb(j, 240), name: j.name, printer: ev.printer_name };
+    ok = await spoolCheck({ pid, tools: j.tools, profile: j.profile || {}, stats: j.stats || {}, slots, canEdit: !!j.profile?.plate?.length, print });
   } finally {
     PJ.checking = false;
   }

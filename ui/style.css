@@ -2998,31 +2998,36 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .occ-list { max-height: 160px; overflow: auto; }
 .occ-list .grow-row .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .occ-dup { font-size: 11px; color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); border-radius: 6px; padding: 1px 6px; margin-left: auto; margin-right: 8px; white-space: nowrap; }
-.sp-box { width: 700px; max-width: calc(100vw - 40px); }
+.sp-box { width: 640px; max-width: calc(100vw - 40px); }
 .sp-box .modal-actions { flex-wrap: wrap; row-gap: 8px; }
 .sp-box .modal-actions .btn { white-space: nowrap; }
-.sp-hint { font-size: 12px; color: var(--text-secondary); margin: 0 0 4px; }
-.sp-hint:empty { display: none; }
 .sp-box .modal-actions .btn:disabled { opacity: 0.45; }
-.sp-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 8px; max-height: 50vh; overflow: auto; }
-.sp-row { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-.sp-line { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
-.sp-line .sp-sw { box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 55%, transparent); }
-.sp-sw { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--c); border: 1px solid rgba(0, 0, 0, 0.18); }
+/* Header: the print being sent. */
+.sp-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.sp-thumb { flex: none; width: 84px; height: 84px; border-radius: 10px; object-fit: cover; background: var(--card-bg); border: 1px solid var(--card-border); }
+.sp-head-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sp-head-text h3 { margin: 0 0 2px; }
+.sp-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-name:empty, .sp-info:empty { display: none; }
+.sp-info { font-size: 12px; color: var(--text-secondary); }
+/* One row per color: expected → loaded spool. */
+.sp-cols, .sp-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1.25fr); align-items: center; column-gap: 8px; }
+.sp-cols { padding: 0 12px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
+.sp-list { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; max-height: 48vh; overflow: auto; }
+.sp-row { row-gap: 6px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; }
+.sp-exp { display: flex; align-items: center; gap: 9px; min-width: 0; font-size: 13px; font-weight: 500; }
+.sp-exp span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-arrow { text-align: center; color: var(--text-tertiary); }
+.sp-choice { position: relative; display: flex; align-items: center; min-width: 0; }
+.sp-choice .sp-sw { position: absolute; left: 10px; pointer-events: none; }
+.sp-choice select { width: 100%; min-width: 0; padding-left: 32px; }
+.sp-choice.missing select { border-color: var(--warning); color: var(--warning); }
+.sp-sw { flex: none; width: 16px; height: 16px; border-radius: 50%; background: var(--c); border: 1px solid rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
 .sp-sw.none { background: repeating-linear-gradient(45deg, transparent 0 3px, var(--separator) 3px 5px); }
-.sp-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.sp-pick-k { font-size: 11px; color: var(--text-secondary); margin-right: 2px; }
-.sp-opt { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12px; padding: 4px 9px 4px 6px; border-radius: 999px; border: 1px solid var(--control-border); background: var(--control-bg); color: inherit; cursor: pointer; transition: background 0.12s, border-color 0.12s, box-shadow 0.12s; }
-.sp-opt:hover:not(:disabled) { background: var(--control-bg-hover); }
-.sp-opt b { font-weight: 600; }
-.sp-opt span { color: var(--text-secondary); }
-.sp-opt em { font-style: normal; font-size: 10px; color: var(--text-secondary); border: 1px solid var(--separator); border-radius: 6px; padding: 0 4px; }
-.sp-opt.fits b::after { content: " ✓"; color: #34c759; }
-.sp-opt.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
-.sp-opt.on span { color: inherit; }
-.sp-opt:disabled { opacity: 0.4; cursor: default; }
-.sp-note { font-size: 11px; color: #248a3d; }
+.sp-note { grid-column: 3; font-size: 11px; color: var(--text-secondary); }
 .sp-note.warn { color: var(--warning); }
+.sp-hint { font-size: 12px; color: var(--text-secondary); margin: 0 0 6px; }
+.sp-hint:empty { display: none; }
 .occ-noask { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); margin: 4px 0 2px; }
 
 /* ------------------------------------------------- heads and spools */

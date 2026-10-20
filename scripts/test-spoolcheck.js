@@ -79,14 +79,18 @@ assert.throws(() => S.spRemap([0], { 0: 4 }), /no head/);
 // Picks of tools the print does not use are ignored.
 assert.deepEqual(S.spRemap([0], { 3: 1 }), []);
 
-// ---------------------------------------------------------------- leading action
-// The substitution when it leaves no difference, otherwise Prepare (when the plate is known).
+// ---------------------------------------------------------------- default choices
 const slots4 = [...slots.slice(0, 3), { index: 3, present: true, kind: "PLA", color: "#1144dd" }];
-const t1 = [{ tool: 1, material: "PLA", color: "#1040e0" }];
-assert.equal(S.spMismatches(t1, slots4).length, 1, "T1 holds red, blue expected");
-assert.equal(S.spPrimary(S.spMismatches(t1, slots4, [[1, 3]]), [[1, 3]], true), "substitute", "head 3 fits");
-assert.equal(S.spPrimary(S.spMismatches(t1, slots4, [[1, 2]]), [[1, 2]], true), "edit", "head 2 is PETG");
-assert.equal(S.spPrimary(S.spMismatches(t1, slots4), [], true), "edit", "nothing chosen");
-assert.equal(S.spPrimary(S.spMismatches(t1, slots4), [], false), "substitute", "no plate to go back to");
+const white = { tool: 0, material: "PLA", color: "#ffffff" };
+// A blue expected on T1 (red loaded): the blue PLA on head 3, unused by the print, takes it.
+assert.deepEqual(S.spDefaults([white, { tool: 1, material: "PLA", color: "#1040e0" }], slots4), { 0: 0, 1: 3 });
+// Violet expected, no violet loaded: T1 keeps its own spool (the user may change it).
+assert.deepEqual(S.spDefaults([white, { tool: 1, material: "PLA", color: "#b0309a" }], slots4), { 0: 0, 1: 1 });
+// A head of the print is never taken as a substitute by default: T0 stays white.
+assert.deepEqual(S.spDefaults([white, { tool: 1, material: "PLA", color: "#ffffff" }], slots4), { 0: 0, 1: 1 });
+// Own head empty, nothing fits: no choice, the user picks one.
+assert.deepEqual(S.spDefaults([{ tool: 3, material: "PLA", color: "#b0309a" }], slots), { 3: null });
+// Own head empty, a fitting spool elsewhere: taken.
+assert.deepEqual(S.spDefaults([{ tool: 3, material: "PETG", color: "#000000" }], slots), { 3: 2 });
 
 console.log("spoolcheck.js OK");

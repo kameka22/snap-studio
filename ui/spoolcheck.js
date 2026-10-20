@@ -10,8 +10,9 @@
    and its presets' default colors are not a choice. Heads the print does
    not use are ignored. A different material family, a clearly different
    color, or an empty or unknown spool opens a sheet listing each head; the
-   user cancels, sends anyway, picks another loaded spool for that head, or
-   goes back to Prepare to slice the plate again with the spools loaded.
+   sheet shows each color of the model with the spool that will print it;
+   the user changes those, sends, cancels, or goes back to Prepare to slice
+   the plate again with the spools loaded.
 
    Material: compared by family, case-insensitive. "PLA", "PLA+", "PLA Matte",
    "PLA Silk", "PLA-CF" are all PLA; "PETG" and "PET" differ, as do "PC" and
@@ -152,16 +153,37 @@ function spSuggest(exp, slots, taken) {
   return best;
 }
 
-/* Which action the sheet leads with: the substitution when it leaves no
-   difference, otherwise slicing again in Prepare (when the plate is known):
-   another material needs its own temperatures and flow. */
-function spPrimary(after, map, canEdit) {
-  if (map.length && !after.length) return "substitute";
-  return canEdit ? "edit" : "substitute";
+/* Spool each used tool prints with at first: its own head when the spool
+   there fits; otherwise a fitting spool on a head the print does not use;
+   otherwise its own head if a spool is loaded there; otherwise none (the
+   user picks one). → { tool: head | null } */
+function spDefaults(expected, slots) {
+  const used = expected.map((e) => e.tool);
+  const picks = {};
+  const taken = new Set();
+  for (const e of expected) {
+    if (!spReasons(e, spLoaded(slots, e.tool)).length) {
+      picks[e.tool] = e.tool;
+      taken.add(e.tool);
+    }
+  }
+  for (const e of expected) {
+    if (e.tool in picks) continue;
+    const s = spSuggest(e, slots, new Set([...taken, ...used]));
+    if (s != null) {
+      picks[e.tool] = s;
+      taken.add(s);
+      continue;
+    }
+    const own = (slots || []).find((x) => x.index === e.tool);
+    picks[e.tool] = own?.present && !taken.has(e.tool) ? e.tool : null;
+    if (picks[e.tool] != null) taken.add(e.tool);
+  }
+  return picks;
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { SP_COLOR_TOL, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spPrimary };
+  module.exports = { SP_COLOR_TOL, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spDefaults };
 }
 
 /* ------------------------------------------------------------ the sheet */
@@ -194,109 +216,98 @@ function spDescribe(material, color, fallback) {
   if (!material) return c;
   return tr("spool.desc", { mat: material, color: c });
 }
-function spLoadedText(l) {
-  if (l.state === "empty") return tr("spool.loaded_empty");
-  if (l.state === "unknown" && !l.color) return tr("spool.loaded_unknown");
-  return tr("spool.loaded", { what: spDescribe(l.label || l.material, l.color, tr("spool.unknown")) });
-}
-function spLineText(m) {
-  const exp = tr("spool.expected", { what: spDescribe(m.material, m.color, tr("spool.unknown")) });
-  return tr("spool.line", { head: "T" + m.tool, expected: exp, loaded: spLoadedText(m.loaded) });
-}
 
 const spSwatch = (c) => `<i class="sp-sw${c ? "" : " none"}"${c ? ` style="--c:${esc(c)}"` : ""}></i>`;
 
-/* Asks when the loaded spools differ from the slice's. `canEdit`: the
-   plate can go back to Prepare.
-   → { map: [[tool, head]…] } to send (map empty: as sliced), { edit: true }
-   to slice again in Prepare, or null. */
-function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false }) {
-  const used = [...new Set(tools?.length ? tools : [0])];
+/* Asks when the loaded spools differ from the slice's: each color of the
+   model, and the loaded spool that will print it. `print`: { thumb, name,
+   printer } for the header. `canEdit`: the plate can go back to
+   Prepare.
+   → { map: [[tool, head]…] } to send (empty: as sliced), { edit: true } to
+   slice again in Prepare, or null. */
+function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print = {} }) {
+  const used = [...new Set(tools?.length ? tools : [0])].sort((a, b) => a - b);
   const expected = spExpected({ tools: used, profile, stats, ftypeOf: spFtypeOf(pid) });
-  const bad = spMismatches(expected, slots);
-  if (!bad.length || !spEnabled()) return Promise.resolve({ map: [] });
+  if (!spMismatches(expected, slots).length || !spEnabled()) return Promise.resolve({ map: [] });
 
-  // Picks: the head each mismatched tool will print from (own head = keep).
-  const picks = {};
-  const taken = new Set(used);
-  for (const m of bad) {
-    const s = spSuggest(m, slots, new Set([...taken].filter((h) => h !== m.tool)));
-    if (s != null && s !== m.tool && !Object.values(picks).includes(s) && !used.includes(s)) picks[m.tool] = s;
+  const picks = spDefaults(expected, slots);
+  const loaded = (slots || []).filter((s) => s.present).sort((a, b) => a.index - b.index);
+  const what = (e) => spDescribe(e.material, e.color, "T" + e.tool);
+
+  // Header: what is being sent.
+  const thumb = $("sp-thumb");
+  thumb.classList.add("hidden");
+  if (print.thumb) {
+    thumb.onload = () => thumb.classList.remove("hidden");
+    thumb.onerror = () => thumb.classList.add("hidden");
+    thumb.src = print.thumb;
   }
+  $("sp-name").textContent = print.name || "";
+  $("sp-info").textContent = [
+    stats?.print_time_s && fmtDuration(stats.print_time_s),
+    stats?.filament_g && `${stats.filament_g.toFixed(0)} g`,
+    print.printer && tr("queue.on", { name: print.printer }),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const modal = $("spmodal");
   const render = () => {
-    let map = [];
-    try {
-      map = spRemap(used, picks);
-    } catch {}
-    const headsNow = used.map((t) => spHeadOf(t, map));
-    const after = spMismatches(expected, slots, map);
-    $("sp-title").textContent = tr("spool.title", { n: bad.length });
-    $("sp-list").innerHTML = bad
-      .map((m) => {
-        const cur = picks[m.tool] ?? m.tool;
-        const opts = (slots || [])
-          .filter((s) => s.present)
+    $("sp-list").innerHTML = expected
+      .map((e) => {
+        const h = picks[e.tool];
+        const l = h != null ? spLoaded(slots, h) : null;
+        const opts = loaded
           .map((s) => {
-            const l = spLoaded(slots, s.index);
-            // Head already printing another tool: not offered.
-            const busy = s.index !== cur && headsNow.includes(s.index);
-            const fits = !spReasons(m, l).length;
-            const label = spDescribe(l.label || l.material, l.color, tr("spool.unknown"));
-            return `<button type="button" class="sp-opt${s.index === cur ? " on" : ""}${fits ? " fits" : ""}" data-tool="${m.tool}" data-head="${s.index}"${busy ? " disabled" : ""}
-              title="${esc(busy ? tr("spool.head_busy") : label)}">${spSwatch(l.color)}<b>T${s.index}</b><span>${esc(label)}</span>${s.index === m.tool ? `<em>${esc(tr("spool.keep"))}</em>` : ""}</button>`;
+            const sl = spLoaded(slots, s.index);
+            const label = spDescribe(sl.label || sl.material, sl.color, tr("spool.loaded_unknown"));
+            // A head another color already prints from.
+            const other = expected.find((o) => o.tool !== e.tool && picks[o.tool] === s.index);
+            const fits = !spReasons(e, sl).length;
+            const text = `T${s.index} · ${label}${fits ? "  ✓" : ""}${other ? " — " + tr("spool.used_for", { what: what(other) }) : ""}`;
+            return `<option value="${s.index}"${s.index === h ? " selected" : ""}${other ? " disabled" : ""}>${esc(text)}</option>`;
           })
           .join("");
-        const still = after.find((a) => a.tool === m.tool);
-        const note = cur !== m.tool
-          ? `<small class="sp-note${still ? " warn" : ""}">${esc(still ? tr("spool.sub_still", { head: "T" + cur }) : tr("spool.sub_ok", { tool: "T" + m.tool, head: "T" + cur }))}</small>`
+        const none = h == null ? `<option value="" selected disabled>${esc(tr("spool.choose"))}</option>` : "";
+        // Only another material is worth a word: the G-code keeps the
+        // temperatures it was sliced with.
+        const note = l && e.material && l.material && l.material !== e.material
+          ? `<small class="sp-note warn">${esc(tr("spool.other_material", { got: l.material, want: e.material }))}</small>`
           : "";
         return `<div class="sp-row">
-          <div class="sp-line">${spSwatch(m.color)}<span>${esc(spLineText(m))}</span></div>
-          <div class="sp-pick" role="radiogroup" aria-label="${esc(tr("spool.pick", { head: "T" + m.tool }))}"><span class="sp-pick-k">${esc(tr("spool.use"))}</span>${opts}</div>
+          <span class="sp-exp">${spSwatch(e.color)}<span>${esc(what(e))}</span></span>
+          <span class="sp-arrow" aria-hidden="true">→</span>
+          <span class="sp-choice${h == null ? " missing" : ""}">${spSwatch(l?.color)}<select data-tool="${e.tool}" aria-label="${esc(tr("spool.use") + " " + what(e))}">${none}${opts}</select></span>
           ${note}
         </div>`;
       })
       .join("");
-    // An empty head left as is: the printer would refuse the job.
-    const blocked = bad.some((m) => m.loaded.state === "empty" && (picks[m.tool] ?? m.tool) === m.tool);
-    $("sp-sub").disabled = !map.length || blocked;
-    $("sp-anyway").disabled = blocked;
-    $("sp-anyway").title = $("sp-sub").title = blocked ? tr("spool.anyway_blocked") : "";
-    // Back to Prepare: the Slice sheet reads the spools loaded now.
-    const ed = $("sp-edit");
-    ed.disabled = !canEdit;
-    ed.title = canEdit ? tr("spool.edit_tip") : tr("spool.edit_none");
-    const primary = spPrimary(after, map, canEdit);
-    ed.classList.toggle("primary", primary === "edit");
-    $("sp-sub").classList.toggle("primary", primary === "substitute");
-    $("sp-hint").textContent = !canEdit
-      ? tr("spool.edit_none")
-      : primary !== "edit"
-        ? ""
-        : tr(after.some((m) => m.reasons.includes("material")) ? "spool.hint_material" : "spool.hint_edit");
+    const missing = expected.some((e) => picks[e.tool] == null);
+    $("sp-go").disabled = missing;
+    $("sp-go").title = missing ? tr("spool.choose_first") : "";
+    $("sp-edit").disabled = !canEdit;
+    $("sp-edit").title = canEdit ? tr("spool.edit_tip") : tr("spool.edit_none");
+    $("sp-hint").textContent = canEdit ? "" : tr("spool.edit_none");
   };
   render();
   $("sp-noask").checked = false;
   openSheet(modal);
-  requestAnimationFrame(() => (document.querySelector("#spmodal .modal-actions .primary:not(:disabled)") || $("sp-cancel")).focus());
+  requestAnimationFrame(() => ($("sp-go").disabled ? $("sp-cancel") : $("sp-go")).focus());
   return new Promise((resolve) => {
     const done = (v) => {
       if (v && $("sp-noask").checked) spSetEnabled(false);
-      $("sp-sub").onclick = $("sp-edit").onclick = $("sp-anyway").onclick = $("sp-cancel").onclick = $("sp-list").onclick = modal.onkeydown = null;
+      $("sp-go").onclick = $("sp-edit").onclick = $("sp-cancel").onclick = $("sp-list").onchange = modal.onkeydown = null;
       closeSheet(modal);
       resolve(v);
     };
-    $("sp-list").onclick = (e) => {
-      const b = e.target.closest(".sp-opt");
-      if (!b || b.disabled) return;
-      const t = +b.dataset.tool, h = +b.dataset.head;
-      if (h === t) delete picks[t];
-      else picks[t] = h;
+    $("sp-list").onchange = (e) => {
+      const sel = e.target.closest("select[data-tool]");
+      if (!sel || sel.value === "") return;
+      picks[+sel.dataset.tool] = +sel.value;
       render();
+      $("sp-list").querySelector(`select[data-tool="${sel.dataset.tool}"]`)?.focus();
     };
-    $("sp-sub").onclick = () => {
+    $("sp-go").onclick = () => {
       try {
         done({ map: spRemap(used, picks) });
       } catch (e) {
@@ -304,7 +315,6 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false }) {
       }
     };
     $("sp-edit").onclick = () => done({ edit: true });
-    $("sp-anyway").onclick = () => done({ map: [] });
     $("sp-cancel").onclick = () => done(null);
     modal.onkeydown = (e) => {
       if (e.key === "Escape") {

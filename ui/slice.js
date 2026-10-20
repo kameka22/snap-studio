@@ -793,7 +793,8 @@ async function sendPrint(queue = SL.sendMode === "queue") {
     SL.checking = true;
     const slots = (await headsRefreshSlots(p.id)).length ? headsSlots(p.id) : SL.sendSlots || [];
     // The plate is still the one in Prepare: it can be sliced again there.
-    const ok = await spoolCheck({ pid: p.id, tools, profile: r, stats: pv.stats, slots, canEdit: true }).finally(() => (SL.checking = false));
+    const print = { thumb: thumbSrc(pv.gcode, 240, 0), name: pv.source.name, printer: p.name || p.host };
+    const ok = await spoolCheck({ pid: p.id, tools, profile: r, stats: pv.stats, slots, canEdit: true, print }).finally(() => (SL.checking = false));
     if (!ok) return;
     if (ok.edit) {
       closeSheet($("sendmodal"));
