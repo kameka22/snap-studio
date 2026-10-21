@@ -391,18 +391,24 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
 
 
 /// Emits the transformed triangles of the occurrences, without copying meshes.
+/// Above this many triangles a mesh is not read whole: one in so many is
+/// kept, to stay within memory (the mesh is marked truncated, and slicing
+/// refuses it). Below, the whole mesh is read and, for display, decimated.
+const READ_CAP: usize = 8_000_000;
+
 fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
     let total: usize = insts
         .iter()
         .filter_map(|i| ctx.parts.get(&i.part_key)?.objects.get(&i.objid))
         .map(|o| o.tris.len())
         .sum();
-    let step = if total > budget {
-        (total as f32 / budget as f32).ceil() as usize
+    let cap = budget.max(READ_CAP);
+    let step = if total > cap {
+        (total as f32 / cap as f32).ceil() as usize
     } else {
         1
     };
-    let mut tris: Vec<Tri> = Vec::with_capacity(total.min(budget) + 8);
+    let mut tris: Vec<Tri> = Vec::with_capacity(total.min(cap) + 8);
     // Extruder of each occurrence: the part's, otherwise the object's.
     let settings = crate::model3mf::extruder_settings(ctx.zip);
     let painted = insts
@@ -431,8 +437,8 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
         // otherwise flip them itself — moving split painting either way.
         let mirrored = inst.xf.det() < 0.0;
         for (i, t) in obj.tris.iter().enumerate() {
-            // On very dense meshes, sample instead of truncating: the silhouette stays
-            // right.
+            // Beyond what memory allows, sample rather than stop: the
+            // silhouette stays right (and the mesh says it is incomplete).
             if step > 1 && i % step != 0 {
                 continue;
             }
@@ -485,7 +491,7 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
     if !extruders.is_empty() {
         extruders.resize(tris.len(), 1);
     }
-    Ok(MeshData {
+    let mut m = MeshData {
         extruders,
         volumes,
         paint,
@@ -493,7 +499,9 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
         min,
         max,
         truncated: step > 1,
-    })
+    };
+    downsample(&mut m, budget);
+    Ok(m)
 }
 
 /// Every model color a mesh uses: its triangles' and, for painted ones, each
@@ -693,34 +701,110 @@ pub fn recenter(m: &mut MeshData) -> [f32; 3] {
     c
 }
 
-/// Reduces a mesh to the viewer's budget.
+/// Reduces a mesh to the viewer's budget, by vertex clustering.
 ///
-/// The bounding box stays the full mesh's: the display is lightened, the object
-/// is not trimmed.
+/// The space is cut into cubes; every vertex of a cube moves to the mean of
+/// that cube's vertices. A triangle whose three corners land in three cubes
+/// survives (with its color, extruder and painting); the others flatten and
+/// go, and so do duplicates. The surface stays closed: no holes, unlike
+/// keeping one triangle in so many (a dense mesh showed as lace). The cube
+/// size is set from the surface area, then adjusted until the count fits.
+///
+/// The bounding box stays the full mesh's: the display is lightened, the
+/// object is not trimmed. The mesh is marked truncated (slicing refuses it).
 pub fn downsample(mesh: &mut MeshData, budget: usize) {
-    if budget == 0 || mesh.tris.len() <= budget {
+    let n = mesh.tris.len();
+    if budget == 0 || n <= budget {
         return;
     }
-    let step = (mesh.tris.len() as f32 / budget as f32).ceil() as usize;
-    let mut i = 0usize;
-    mesh.tris.retain(|_| {
-        let keep = i % step == 0;
-        i += 1;
-        keep
-    });
+    let area: f64 = mesh.tris.iter().map(|t| tri_area(&t.v) as f64).sum();
+    let diag = (0..3).map(|k| (mesh.max[k] - mesh.min[k]).powi(2)).sum::<f32>().sqrt().max(1e-3);
+    // A surface of area A in cubes of side s keeps about 2·A / s² triangles.
+    let mut cell = ((2.0 * area / budget as f64).sqrt() as f32).clamp(diag * 1e-6, diag);
+    let mut chosen: Option<f32> = None;
+    for _ in 0..10 {
+        let count = cluster(&mesh.tris, mesh.min, cell).0.iter().filter(|k| k.is_some()).count();
+        if count == 0 {
+            // Everything collapsed: finer cubes.
+            cell *= 0.5;
+            continue;
+        }
+        chosen = Some(cell);
+        if count <= budget {
+            break;
+        }
+        cell *= ((count as f32 / budget as f32).sqrt() * 1.03).max(1.05);
+    }
+    let Some(cell) = chosen else { return };
+    let (keep, reps) = cluster(&mesh.tris, mesh.min, cell);
+    let mut out = Vec::with_capacity(budget.min(n));
+    for (t, k) in mesh.tris.iter().zip(&keep) {
+        if let Some(k) = k {
+            out.push(Tri { v: [reps[k[0]], reps[k[1]], reps[k[2]]], c: t.c });
+        }
+    }
+    mesh.tris = out;
     // Extruders and painting follow their triangles.
-    fn keep_every<T>(v: &mut Vec<T>, step: usize) {
+    fn keep_marked<T>(v: &mut Vec<T>, keep: &[Option<[usize; 3]>]) {
+        if v.len() != keep.len() {
+            return;
+        }
         let mut i = 0usize;
         v.retain(|_| {
-            let keep = i % step == 0;
+            let k = keep[i].is_some();
             i += 1;
-            keep
+            k
         });
     }
-    keep_every(&mut mesh.extruders, step);
-    keep_every(&mut mesh.volumes, step);
-    keep_every(&mut mesh.paint, step);
+    keep_marked(&mut mesh.extruders, &keep);
+    keep_marked(&mut mesh.volumes, &keep);
+    keep_marked(&mut mesh.paint, &keep);
     mesh.truncated = true;
+}
+
+fn tri_area(v: &[[f32; 3]; 3]) -> f32 {
+    let a = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
+    let b = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
+    let c = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    0.5 * (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt()
+}
+
+/// Clusters the vertices in cubes of side `cell` from `origin`: for each
+/// triangle, the cubes of its corners when it survives (three distinct
+/// cubes, first of its kind), and each cube's mean position.
+fn cluster(tris: &[Tri], origin: [f32; 3], cell: f32) -> (Vec<Option<[usize; 3]>>, Vec<[f32; 3]>) {
+    use std::collections::{HashMap, HashSet};
+    let mut ids: HashMap<[i32; 3], usize> = HashMap::new();
+    let mut sums: Vec<([f64; 3], u32)> = Vec::new();
+    let mut id_of = |p: &[f32; 3]| -> usize {
+        let key = [0, 1, 2].map(|k| ((p[k] - origin[k]) / cell).floor() as i32);
+        let next = sums.len();
+        let id = *ids.entry(key).or_insert(next);
+        if id == next {
+            sums.push(([0.0; 3], 0));
+        }
+        let s = &mut sums[id];
+        for k in 0..3 {
+            s.0[k] += p[k] as f64;
+        }
+        s.1 += 1;
+        id
+    };
+    let mut seen: HashSet<[usize; 3]> = HashSet::new();
+    let keep = tris
+        .iter()
+        .map(|t| {
+            let k = [id_of(&t.v[0]), id_of(&t.v[1]), id_of(&t.v[2])];
+            if k[0] == k[1] || k[1] == k[2] || k[0] == k[2] {
+                return None;
+            }
+            let mut sorted = k;
+            sorted.sort_unstable();
+            seen.insert(sorted).then_some(k)
+        })
+        .collect();
+    let reps = sums.iter().map(|(s, n)| [0, 1, 2].map(|k| (s[k] / *n as f64) as f32)).collect();
+    (keep, reps)
 }
 
 /// Serializes the mesh for the WebGL viewer.
@@ -885,22 +969,89 @@ mod tests {
         assert_eq!(b1.len(), 36 + 2 * 36 + 2 * 3);
     }
 
-    #[test]
-    fn downsample_keeps_extruders_aligned() {
-        let tri = |c| Tri { v: [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]], c };
-        let mut m = MeshData {
-            extruders: (1..=10).collect(),
-            tris: (0..10).map(|i| tri([i, 0, 0])).collect(),
-            min: [0.; 3],
-            max: [1.; 3],
+    /// A UV sphere of `rings` × `segs` quads (two triangles each).
+    fn sphere(rings: usize, segs: usize, r: f32) -> MeshData {
+        let p = |i: usize, j: usize| {
+            let th = std::f32::consts::PI * i as f32 / rings as f32;
+            let ph = 2.0 * std::f32::consts::PI * j as f32 / segs as f32;
+            [r * th.sin() * ph.cos(), r * th.sin() * ph.sin(), r * th.cos()]
+        };
+        let mut tris = Vec::new();
+        for i in 0..rings {
+            for j in 0..segs {
+                let (a, b, c, d) = (p(i, j), p(i + 1, j), p(i + 1, j + 1), p(i, j + 1));
+                tris.push(Tri { v: [a, b, c], c: [(j % 250) as u8, 0, 0] });
+                tris.push(Tri { v: [a, c, d], c: [(j % 250) as u8, 0, 0] });
+            }
+        }
+        let n = tris.len();
+        MeshData {
+            extruders: (0..n).map(|i| (i % 4) as u8 + 1).collect(),
+            tris,
+            min: [-r; 3],
+            max: [r; 3],
             truncated: false,
             volumes: Vec::new(),
             paint: Vec::new(),
-        };
-        downsample(&mut m, 5);
+        }
+    }
+
+    #[test]
+    fn decimation_keeps_the_surface_whole() {
+        let mut m = sphere(300, 600, 50.0);
+        let before: f32 = m.tris.iter().map(|t| tri_area(&t.v)).sum();
+        downsample(&mut m, 40_000);
+        assert!(m.tris.len() <= 40_000 && m.tris.len() > 20_000, "{}", m.tris.len());
+        assert!(m.truncated);
+        // No holes: the area stays (sampling one triangle in nine kept 11 %).
+        let after: f32 = m.tris.iter().map(|t| tri_area(&t.v)).sum();
+        assert!((after / before - 1.0).abs() < 0.05, "area {before} → {after}");
+        // Every corner stays on the sphere.
+        for t in &m.tris {
+            for v in &t.v {
+                let d = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                assert!((d - 50.0).abs() < 1.5, "{d}");
+            }
+        }
+        // The bounding box is the full mesh's.
+        assert_eq!((m.min, m.max), ([-50.0; 3], [50.0; 3]));
+    }
+
+    #[test]
+    fn downsample_keeps_extruders_aligned() {
+        let mut m = sphere(60, 120, 20.0);
+        // The model color of each triangle, tied to its color.
+        m.extruders = m.tris.iter().map(|t| t.c[0] % 4 + 1).collect();
+        downsample(&mut m, 2_000);
         assert_eq!(m.tris.len(), m.extruders.len());
-        assert_eq!(m.extruders, vec![1, 3, 5, 7, 9]);
-        assert_eq!(m.tris[1].c[0], 2);
+        for (t, e) in m.tris.iter().zip(&m.extruders) {
+            assert_eq!(t.c[0] % 4 + 1, *e);
+        }
+        // Small enough already: untouched.
+        let mut small = sphere(4, 8, 1.0);
+        downsample(&mut small, 1_000);
+        assert_eq!((small.tris.len(), small.truncated), (64, false));
+    }
+
+    /// A real dense file (MakerWorld's "10 different pumpkins" has meshes of
+    /// up to 1.5 M triangles): every object, read for the viewer, keeps its
+    /// surface. `PUMPKINS=…/10+Pumpkins.3mf cargo test --lib real_dense -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_dense_file_keeps_its_surface() {
+        let path = std::env::var("PUMPKINS").expect("PUMPKINS");
+        let n = crate::plate::items(std::path::Path::new(&path)).unwrap().len();
+        assert!(n > 0);
+        let mut zip = crate::model3mf::open(std::path::Path::new(&path)).unwrap();
+        for i in 0..n {
+            let full = load_item(&mut zip, i, usize::MAX).unwrap().mesh;
+            let shown = load_item(&mut zip, i, 400_000).unwrap().mesh;
+            let area = |m: &MeshData| m.tris.iter().map(|t| tri_area(&t.v) as f64).sum::<f64>();
+            let (a, b) = (area(&full), area(&shown));
+            println!("object {i}: {} → {} triangles, area {:.0} → {:.0} mm²", full.tris.len(), shown.tris.len(), a, b);
+            assert!(shown.tris.len() <= 400_000);
+            assert!((b / a - 1.0).abs() < 0.05, "object {i} lost its surface");
+        }
     }
 }
 
@@ -1042,10 +1193,14 @@ mod stats_tests {
         testkit::painted_cube(&path, &refs, Some(1));
         let mut m = load_mesh(&mut crate::model3mf::open(&path).unwrap(), usize::MAX).unwrap();
         downsample(&mut m, 4);
-        assert_eq!(m.tris.len(), 4);
-        assert_eq!((m.extruders.len(), m.volumes.len(), m.paint.len()), (4, 4, 4));
-        // Every third triangle kept: 1, 4, 7, 10.
-        assert_eq!(m.extruders, vec![1, 4, 7, 10]);
-        assert_eq!(m.paint[1].as_deref(), Some(crate::paint::whole(4).as_str()));
+        // A cube cannot lose triangles without collapsing whole: it is kept
+        // (never emptied), and stays aligned either way.
+        let n = m.tris.len();
+        assert!(n > 0 && n <= 12, "{n}");
+        assert_eq!((m.extruders.len(), m.volumes.len(), m.paint.len()), (n, n, n));
+        // Each triangle kept keeps its own painting: whole(k) is extruder k.
+        for (e, p) in m.extruders.iter().zip(&m.paint) {
+            assert_eq!(p.as_deref(), Some(crate::paint::whole(*e).as_str()));
+        }
     }
 }

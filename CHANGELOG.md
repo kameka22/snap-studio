@@ -11,6 +11,13 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Fixed
+- Dense models (from about 400,000 triangles, as some MakerWorld files) no
+  longer show full of holes in Prepare, the 3D viewer and the thumbnails:
+  they are simplified for display instead of keeping one triangle in so
+  many. Slicing still uses the whole mesh
+  ([#31](https://github.com/kameka22/snap-studio/pull/31)).
+
 ## [0.11.0] — 2026-10-20
 
 ### Added
