@@ -11,7 +11,26 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Prepare, reworked** ([#28](https://github.com/kameka22/snap-studio/pull/28)):
+  - placement, rotation and scale as sliders (live 3D, one undo step per
+    drag, 15° notches), each field can switch to typing; scale per axis
+    X/Y/Z;
+  - objects on or off the plate: only objects fully on it are sliced
+    ("Slice 3 Objects"); off-plate objects are greyed, listed apart, and
+    come back with + or Add All; Take All Off; an object sticking out can
+    be recentered or excluded; drag and drop between the list and the bed;
+  - off-plate objects are parked in rows beside the bed, no wider than it;
+  - the object list floats over the bed, the inspector shows for one
+    selected object;
+  - range selection (Shift-click) and rubber band (⌘/Ctrl + drag);
+  - the toolbar only shows buttons that can act;
+  - a loading indicator while a large file is read and its objects load;
+    messages show at the top of the view.
+
 ### Fixed
+- The app's window comes to the front at launch on macOS
+  ([#28](https://github.com/kameka22/snap-studio/pull/28)).
 - Dense models (from about 400,000 triangles, as some MakerWorld files) no
   longer show full of holes in Prepare, the 3D viewer and the thumbnails:
   they are simplified for display instead of keeping one triangle in so
