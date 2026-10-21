@@ -287,7 +287,36 @@ function prEnsureGL() {
   return true;
 }
 
+/* Loading feedback over the plate: the file being read, then its objects
+   one by one. A dense 3MF takes a while; the plate says so. */
+const PRL = { reading: [], total: 0, done: 0 };
+function prLoadingShow() {
+  const busy = PRL.reading.length > 0 || PRL.total > PRL.done;
+  $("p-loading").classList.toggle("hidden", !busy);
+  if (!busy) {
+    PRL.total = PRL.done = 0;
+    return;
+  }
+  $("p-loading-text").textContent = PRL.reading.length
+    ? tr("prepare.loading.file", { name: PRL.reading[0] })
+    : tr("prepare.loading.objects", { done: PRL.done, n: PRL.total });
+}
+
+/* An object's mesh, loaded once (copies share it), counted in the plate's
+   loading feedback. */
 async function prLoadMesh(o) {
+  if (PR.meshes.has(meshKey(o))) return PR.meshes.get(meshKey(o));
+  PRL.total++;
+  prLoadingShow();
+  try {
+    return await prLoadMeshNow(o);
+  } finally {
+    PRL.done++;
+    prLoadingShow();
+  }
+}
+
+async function prLoadMeshNow(o) {
   const key = meshKey(o);
   if (PR.meshes.has(key)) return PR.meshes.get(key);
   const entry = { loading: true };
@@ -1567,11 +1596,17 @@ function groupBox(list) {
    block to a free spot. The other plates follow, beside it. */
 async function prepareAddFile(path, { remember = true } = {}) {
   let items;
+  const name = path.split(/[\\/]/).pop();
+  PRL.reading.push(name);
+  prLoadingShow();
   try {
     items = await invoke("plate_items", { path });
   } catch (e) {
-    toast(`${path.split("/").pop()} : ${e}`, true);
+    toast(`${name} : ${e}`, true);
     return;
+  } finally {
+    PRL.reading.splice(PRL.reading.indexOf(name), 1);
+    prLoadingShow();
   }
   if (!items.length) return;
   const added = items.map((it) => ({

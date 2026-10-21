@@ -1585,5 +1585,7 @@
   "prepare.park_all.title": "Sortir tous les objets à côté du plateau (non découpés)",
   "prepare.scale.split": "Échelle par axe (X, Y, Z)",
   "prepare.scale.join": "Une seule échelle, proportions conservées",
-  "prepare.list.hint": "Clic : sélectionner · ⌘ clic : ajouter ou retirer · ⇧ clic : toutes les lignes jusqu’à celle-ci · glisser : sur le plateau ou à côté"
+  "prepare.list.hint": "Clic : sélectionner · ⌘ clic : ajouter ou retirer · ⇧ clic : toutes les lignes jusqu’à celle-ci · glisser : sur le plateau ou à côté",
+  "prepare.loading.file": "Lecture de {name}…",
+  "prepare.loading.objects": "Chargement des objets… {done} / {n}"
 }

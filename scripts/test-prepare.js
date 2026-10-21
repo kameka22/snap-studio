@@ -74,9 +74,25 @@ assert.strictEqual(L.plInside({ x0: -10, y0: 0, x1: 300, y1: 20 }, bed), null, "
 
 // Parking beside the plate: on its right, below what is already there.
 assert.deepStrictEqual(L.plParkSpot([], bed, 40, 30), [290, 0]);
-assert.deepStrictEqual(L.plParkSpot([{ x0: 290, y0: 0, x1: 330, y1: 30 }], bed, 40, 30), [290, 40]);
+assert.deepStrictEqual(L.plParkSpot([{ x0: 290, y0: 0, x1: 330, y1: 30 }], bed, 40, 30), [340, 0], "next in the row");
 assert.deepStrictEqual(L.plParkSpot([{ x0: 290, y0: 60, x1: 330, y1: 90 }], bed, 40, 30), [290, 0], "a gap above is used");
 assert.deepStrictEqual(L.plParkSpot([{ x0: 10, y0: 0, x1: 50, y1: 30 }], bed, 40, 30), [290, 0], "boxes on the plate do not count");
+// Many objects: rows no wider than the bed (290 → 560), several of them.
+{
+  const parked = [];
+  for (let i = 0; i < 20; i++) {
+    const [x, y] = L.plParkSpot(parked, bed, 70, 70);
+    parked.push({ x0: x, y0: y, x1: x + 70, y1: y + 70 });
+  }
+  assert.ok(parked.every((b) => b.x0 >= 290 && b.x1 <= 290 + 270), "within the bed's width");
+  assert.deepStrictEqual([...new Set(parked.map((b) => b.y0))], [0, 80, 160, 240, 320, 400, 480], "rows of three, one after the other");
+  assert.deepStrictEqual(parked.slice(0, 4).map((b) => [b.x0, b.y0]), [[290, 0], [370, 0], [450, 0], [290, 80]]);
+  // A gap left in a row is used again.
+  parked.splice(1, 1);
+  assert.deepStrictEqual(L.plParkSpot(parked, bed, 70, 70), [370, 0]);
+  // Wider than the area: alone at the start of a new row.
+  assert.deepStrictEqual(L.plParkSpot([], bed, 400, 50), [290, 0]);
+}
 
 // Shift-click: from the anchor to the clicked row, in the displayed order.
 const order = [4, 1, 7, 3, 9];

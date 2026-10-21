@@ -1582,5 +1582,7 @@
   "prepare.park_all.title": "Move every object beside the plate (not sliced)",
   "prepare.scale.split": "Scale each axis (X, Y, Z)",
   "prepare.scale.join": "One scale, proportions kept",
-  "prepare.list.hint": "Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it"
+  "prepare.list.hint": "Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it",
+  "prepare.loading.file": "Reading {name}…",
+  "prepare.loading.objects": "Loading objects… {done} / {n}"
 }

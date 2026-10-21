@@ -80,17 +80,26 @@ function plInside(box, bed) {
   return [dx, dy];
 }
 
-/* Parking spot beside the bed (on its right) for a box of `bw` × `bd`
-   mm, below the boxes already parked there: corner [x0, y0]. */
+/* Parking spot beside the bed for a box of `bw` × `bd` mm: corner
+   [x0, y0]. The parking area starts on the bed's right, aligned with its
+   front edge, and is no wider than the bed: objects go in rows, left to
+   right, a new row when one is full — many objects make several rows, not
+   one line running far away. The first free place wins (row by row), so a
+   gap left by an object put back on the bed is used again. */
 function plParkSpot(parked, bed, bw, bd, gap = 10) {
-  const x0 = bed.w + 20;
-  let y = 0;
-  const near = parked.filter((b) => b.x1 > x0 - gap).sort((a, b) => a.y0 - b.y0);
-  for (const b of near) {
-    if (y + bd + gap <= b.y0) break;
-    y = Math.max(y, b.y1 + gap);
+  const x0 = bed.w + 20, x1 = x0 + bed.w;
+  const near = parked.filter((b) => b.x1 > x0 - gap);
+  const free = (x, y) => near.every((b) => x + bw + gap <= b.x0 || b.x1 + gap <= x || y + bd + gap <= b.y0 || b.y1 + gap <= y);
+  const ys = [...new Set([0, ...near.map((b) => b.y1 + gap)])].filter((y) => y >= 0).sort((a, b) => a - b);
+  const xs = [...new Set([x0, ...near.map((b) => b.x1 + gap)])].filter((x) => x >= x0).sort((a, b) => a - b);
+  for (const y of ys) {
+    for (const x of xs) {
+      // Within the area's width (a box wider than it starts a row alone).
+      if (x + bw > x1 && x > x0) break;
+      if (free(x, y)) return [x, y];
+    }
   }
-  return [x0, y];
+  return [x0, ys[ys.length - 1] ?? 0];
 }
 
 /* Shift-click in the list: the ids from the anchor to the clicked one,
