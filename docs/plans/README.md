@@ -56,6 +56,9 @@ tests), whose real behavior remains to be checked.
 - **Speed** (unreleased): a print at 75 % — reduced accelerations (f²) and
   the real duration against the estimate; with a high-flow nozzle, the second
   value of the lists is the one used.
+- **Prepare** (unreleased): with objects set aside off the plate, only
+  those on it are printed; a dense file (as "10+Pumpkins") shows its
+  loading and prints with the full mesh.
 - **AI sandbox**: if a sandbox restarts while idle, the exit code shown in
   the Terminal tab and the `[chat] Claude ended…` console line say why.
 
