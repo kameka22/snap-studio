@@ -61,6 +61,9 @@ pub struct Config {
     pub preheat: f64,
     /// The U1's `AUTO_BED_MESH_CALIBRATE` macro exists.
     pub auto_macro: bool,
+    /// `[heater_bed] max_temp` (100 °C on the U1): the measurement never
+    /// asks for more.
+    pub bed_max: f64,
 }
 
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
@@ -135,8 +138,20 @@ fn config(settings: &Value) -> Option<Config> {
         samples: s["samples"].as_u64().unwrap_or(1) as u32,
         preheat: s["preheat_duration"].as_f64().unwrap_or(60.0),
         auto_macro: settings.get("gcode_macro auto_bed_mesh_calibrate").is_some(),
+        bed_max: bed_max(settings),
     })
 }
+
+/// The bed's highest temperature (`[heater_bed] max_temp`), 100 °C when
+/// the printer does not say.
+fn bed_max(settings: &Value) -> f64 {
+    let v = &settings["heater_bed"]["max_temp"];
+    v.as_f64()
+        .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+        .filter(|t: &f64| t.is_finite() && *t > 0.0)
+        .unwrap_or(BED_MAX_DEFAULT)
+}
+const BED_MAX_DEFAULT: f64 = 100.0;
 
 /// Covers less than 85 % of the configured area.
 fn is_partial(min: [f64; 2], max: [f64; 2], cfg: Option<&Config>) -> bool {
@@ -223,8 +238,8 @@ pub fn busy(p: Option<&Progress>) -> bool {
 }
 
 /// The measurement: home if needed, heat and soak the bed, probe, bed off.
-pub fn measure_script(homed: &str, auto_macro: bool, temp: f64) -> String {
-    let temp = temp.clamp(0.0, 110.0).round();
+pub fn measure_script(homed: &str, auto_macro: bool, temp: f64, bed_max: f64) -> String {
+    let temp = temp.clamp(0.0, bed_max.max(0.0)).round();
     let mut s = Vec::new();
     if !(homed.contains('x') && homed.contains('y') && homed.contains('z')) {
         s.push("G28".to_string());
@@ -257,7 +272,8 @@ pub async fn measure(host: &str, port: u16, temp: f64) -> Result<()> {
         return Err(anyhow!(crate::t!("err.bed_mesh_running")));
     }
     let auto = live.config.as_ref().is_some_and(|c| c.auto_macro);
-    let script = measure_script(&live.homed, auto, temp);
+    let bed_max = live.config.as_ref().map_or(BED_MAX_DEFAULT, |c| c.bed_max);
+    let script = measure_script(&live.homed, auto, temp, bed_max);
     let r = crate::printers::gcode_script_for(host, port, &script, Duration::from_secs(45 * 60)).await;
     if r.is_err() && temp > 0.0 {
         // Klipper stops a script at its first error: the bed would stay hot
@@ -437,7 +453,7 @@ mod tests {
         assert_eq!((p.current, p.total, p.state.as_str()), (28, 169, "probing"));
         assert!(busy(Some(&p)));
         let c = l.config.unwrap();
-        assert_eq!((c.count, c.samples, c.preheat, c.auto_macro), ([13, 13], 3, 60.0, true));
+        assert_eq!((c.count, c.samples, c.preheat, c.auto_macro, c.bed_max), ([13, 13], 3, 60.0, true, 100.0));
         assert_eq!(l.bed, Some(Temp { current: 54.8, target: 55.0 }));
         assert_eq!((l.state.as_str(), l.homed.as_str()), ("standby", "xyz"));
     }
@@ -457,7 +473,10 @@ mod tests {
         assert!(!l.supported && l.mesh.is_none() && l.config.is_none());
         // Strings from the raw config, a single probe count.
         let c = config(&serde_json::json!({ "bed_mesh": { "mesh_min": "10, 10", "mesh_max": "200,200", "probe_count": 5 } })).unwrap();
-        assert_eq!((c.min, c.max, c.count, c.auto_macro), ([10.0, 10.0], [200.0, 200.0], [5, 5], false));
+        assert_eq!((c.min, c.max, c.count, c.auto_macro, c.bed_max), ([10.0, 10.0], [200.0, 200.0], [5, 5], false, 100.0));
+        // The bed's max_temp, as a number or the raw config's string.
+        let s = serde_json::json!({ "bed_mesh": { "mesh_min": "10, 10", "mesh_max": "200,200" }, "heater_bed": { "max_temp": "120" } });
+        assert_eq!(config(&s).unwrap().bed_max, 120.0);
     }
 
     #[test]
@@ -478,11 +497,13 @@ mod tests {
 
     #[test]
     fn the_measurement_script() {
-        assert_eq!(measure_script("xyz", true, 55.0), "AUTO_BED_MESH_CALIBRATE TEMP=55\nM140 S0");
-        assert_eq!(measure_script("", true, 60.4), "G28\nAUTO_BED_MESH_CALIBRATE TEMP=60\nM140 S0");
-        assert_eq!(measure_script("xy", false, 60.0), "G28\nM190 S60\nBED_MESH_CALIBRATE\nM140 S0");
-        assert_eq!(measure_script("xyz", true, 0.0), "BED_MESH_CALIBRATE");
-        assert_eq!(measure_script("xyz", false, 500.0), "M190 S110\nBED_MESH_CALIBRATE\nM140 S0");
+        assert_eq!(measure_script("xyz", true, 55.0, 100.0), "AUTO_BED_MESH_CALIBRATE TEMP=55\nM140 S0");
+        assert_eq!(measure_script("", true, 60.4, 100.0), "G28\nAUTO_BED_MESH_CALIBRATE TEMP=60\nM140 S0");
+        assert_eq!(measure_script("xy", false, 60.0, 100.0), "G28\nM190 S60\nBED_MESH_CALIBRATE\nM140 S0");
+        assert_eq!(measure_script("xyz", true, 0.0, 100.0), "BED_MESH_CALIBRATE");
+        // Never above the bed's max_temp (100 °C on the U1).
+        assert_eq!(measure_script("xyz", false, 500.0, 100.0), "M190 S100\nBED_MESH_CALIBRATE\nM140 S0");
+        assert_eq!(measure_script("xyz", true, 110.0, 120.0), "AUTO_BED_MESH_CALIBRATE TEMP=110\nM140 S0");
     }
 
     fn mesh(z: f64) -> Mesh {

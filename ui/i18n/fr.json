@@ -1712,6 +1712,8 @@
   "bm.run.left": "Encore environ {t} · {elapsed} écoulé",
   "bm.run.nomesh": "L'imprimante n'a pas fourni de nouveau maillage",
   "bm.send_banner": "Plateau hors tolérance ({dev} mm)",
+  "bm.measure.other": "Une mesure est en cours sur {name}",
+  "bm.run.following": "Connexion à l'imprimante interrompue : Snap Studio continue de suivre la mesure…",
   "bm.phase.preheat": "Préchauffe",
   "bm.phase.prescan": "Coins",
   "bm.run.soak_left": "Stabilisation du plateau : encore {t}",

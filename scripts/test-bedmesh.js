@@ -223,6 +223,17 @@ assert.equal(L.bmlEstimate({ points: 169, samples: 3, preheat: 60, temp: 60, bed
 assert.deepEqual(L.bmlSuggestTemp({ bed_temp: 64.6, filename: "a.gcode" }, "55"), { temp: 65, from: "last", file: "a.gcode" });
 assert.deepEqual(L.bmlSuggestTemp({ bed_temp: null }, "55"), { temp: 55, from: "stored" });
 assert.deepEqual(L.bmlSuggestTemp(null, null), { temp: 60, from: "default" });
+// Never above the bed's max_temp (100 °C on the U1).
+assert.deepEqual(L.bmlSuggestTemp({ bed_temp: 110, filename: "abs.gcode" }, null, 100), { temp: 100, from: "last", file: "abs.gcode" });
+assert.equal(L.bmlSuggestTemp(null, "105", 100).temp, 100);
+assert.equal(L.bmlSuggestTemp(null, null, 50).temp, 50);
+// Still measuring on the printer (a request that ended early): its leveling
+// runs, or the bed is still heated for it; done: neither.
+assert.equal(L.bmlStillMeasuring({ progress: { state: "probing" } }, 60), true);
+assert.equal(L.bmlStillMeasuring({ progress: { state: "idle" }, bed: { current: 58, target: 60 } }, 60), true, "heating or settling");
+assert.equal(L.bmlStillMeasuring({ progress: { state: "completed" }, bed: { current: 59, target: 0 } }, 60), false);
+assert.equal(L.bmlStillMeasuring({ progress: { state: "aborted" }, bed: { current: 59, target: 0 } }, 60), false);
+assert.equal(L.bmlStillMeasuring({ progress: { state: "idle" }, bed: { current: 24, target: 55 } }, 0), false, "no heating asked: the bed is not ours");
 assert.equal(L.bmlRecentPrint({ status: "completed", end: now - 25 * 60 }, now), 25);
 assert.equal(L.bmlRecentPrint({ status: "completed", end: now - 13 * 3600 }, now), null);
 assert.equal(L.bmlRecentPrint({ status: "cancelled", end: now - 60 }, now), null);

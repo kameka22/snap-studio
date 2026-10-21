@@ -1709,6 +1709,8 @@
   "bm.run.left": "About {t} left · {elapsed} elapsed",
   "bm.run.nomesh": "The printer gave no new mesh",
   "bm.send_banner": "Bed out of tolerance ({dev} mm)",
+  "bm.measure.other": "A measurement is under way on {name}",
+  "bm.run.following": "Connection to the printer lost: Snap Studio keeps following the measurement…",
   "bm.phase.preheat": "Preheat",
   "bm.phase.prescan": "Corners",
   "bm.run.soak_left": "Letting the bed settle: {t} left",

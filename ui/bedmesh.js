@@ -338,8 +338,10 @@ function bmToolbar() {
   const live = BM.live.get(pid);
   const run = BM.run?.pid === pid;
   const printing = bmPrinting(pid);
-  btn.disabled = !run && (printing || !live?.supported || bmlBusy(live));
-  btn.title = run ? tr("bm.measure.show") : printing ? tr("bm.measure.printing") : !live?.supported ? tr("bm.measure.unavailable") : tr("bm.measure.title");
+  // One measurement at a time: another printer's is under way.
+  const other = BM.run && BM.run.pid !== pid ? bmPrinter(BM.run.pid) : null;
+  btn.disabled = !run && (!!other || printing || !live?.supported || bmlBusy(live));
+  btn.title = run ? tr("bm.measure.show") : other ? tr("bm.measure.other", { name: other.name || other.host }) : printing ? tr("bm.measure.printing") : !live?.supported ? tr("bm.measure.unavailable") : tr("bm.measure.title");
   btn.classList.toggle("on", run);
   $("bm-measure-lbl").textContent = run ? bmRunLabel() : tr("bm.measure");
 }
@@ -932,7 +934,8 @@ function bmWizRender() {
 function bmPrepRender() {
   const w = BM.wiz, pid = w.pid, live = BM.live.get(pid), c = live?.config;
   const printing = bmPrinting(pid);
-  const why = !live ? tr("bm.offline") : !live.supported ? tr("bm.measure.unavailable") : printing ? tr("bm.measure.printing") : bmlBusy(live) ? tr("bm.measure.busy") : "";
+  const other = BM.run && BM.run.pid !== pid ? bmPrinter(BM.run.pid) : null;
+  const why = other ? tr("bm.measure.other", { name: other.name || other.host }) : !live ? tr("bm.offline") : !live.supported ? tr("bm.measure.unavailable") : printing ? tr("bm.measure.printing") : bmlBusy(live) ? tr("bm.measure.busy") : "";
   const ready = !why;
   $("bmm-ready-ic").className = `bm-check ${live ? (ready ? "ok" : "ko") : "wait"}`;
   $("bmm-ready-sub").textContent = !live && BM.loading ? tr("bm.reading") : why || tr(/x/.test(live.homed) && /y/.test(live.homed) && /z/.test(live.homed) ? "bm.prep.ready" : "bm.prep.ready_home");
@@ -943,9 +946,12 @@ function bmPrepRender() {
   if (recent != null) warn.textContent = tr("bm.prep.recent", { t: fmtDuration(Math.max(1, recent) * 60), file: live.last_job.filename || "" });
   else if (live?.state === "complete") warn.textContent = tr("bm.prep.recent_any");
   // The temperature: proposed once, then the user's.
-  const sug = bmlSuggestTemp(live?.last_job, localStorage.getItem(bmTempKey(pid)));
+  // Never above the bed's max_temp (100 °C on the U1).
+  const max = live?.config?.bed_max || 100;
+  $("bmm-temp").max = String(max);
+  const sug = bmlSuggestTemp(live?.last_job, localStorage.getItem(bmTempKey(pid)), max);
   if (!w.tempSet) $("bmm-temp").value = String(sug.temp);
-  const temp = Math.max(0, Math.min(110, +$("bmm-temp").value || 0));
+  const temp = Math.max(0, Math.min(max, +$("bmm-temp").value || 0));
   $("bmm-temp-v").textContent = temp > 0 ? `${fmtNum(temp)} °C` : tr("bm.prep.no_heat");
   $("bmm-temp-sub").textContent = sug.from === "last" ? tr("bm.prep.temp_last", { file: sug.file }) : sug.from === "stored" ? tr("bm.prep.temp_stored") : tr("bm.prep.temp_default");
   $("bmm-eta").textContent = tr("bm.prep.eta", { t: fmtDuration(bmEstimateFor(pid, temp)), n: c ? fmtNum(c.count[0] * c.count[1]) : "—" });
@@ -966,9 +972,9 @@ $("bmm-empty").addEventListener("change", bmPrepRender);
 async function bmStartMeasure() {
   const pid = BM.pid;
   if (BM.run || bmPrinting(pid) || !$("bmm-empty").checked) return;
-  const temp = Math.max(0, Math.min(110, Math.round(+$("bmm-temp").value || 0)));
-  localStorage.setItem(bmTempKey(pid), String(temp));
   const live = BM.live.get(pid);
+  const temp = Math.max(0, Math.min(live?.config?.bed_max || 100, Math.round(+$("bmm-temp").value || 0)));
+  localStorage.setItem(bmTempKey(pid), String(temp));
   const hist = BM.hist.get(pid) || [];
   const run = {
     pid, temp, start: Date.now(), probeStart: null, timer: 0, failed: null, stopped: false,
@@ -991,14 +997,40 @@ async function bmStartMeasure() {
     await invoke("bed_mesh_measure", { printerId: pid, temp });
   } catch (e) {
     run.failed = String(e);
+    // The request may have ended before the printer (45 min, a network
+    // drop): what the printer does decides.
+    await bmFollow(run);
   }
   await bmFinish(run);
 }
 
+/* Follows a measurement whose request ended early, until the printer is
+   done with it; unreachable for 10 min: given up. */
+async function bmFollow(run) {
+  if (run.stopped) return;
+  run.following = true;
+  let lastOk = Date.now();
+  while (BM.run === run && !run.stopped) {
+    const live = await invoke("bed_mesh_read", { printerId: run.pid, light: true }).catch(() => null);
+    if (live) {
+      lastOk = Date.now();
+      if (!bmlStillMeasuring(live, run.temp)) break;
+      // Still at it: the error was the connection's, not the printer's.
+      run.failed = null;
+    } else if (Date.now() - lastOk > 10 * 60 * 1000) break;
+    if (BM.wiz?.step === "run") bmRunRender();
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  run.following = false;
+}
+
 /* Following it: a light read (no printer configuration) every 2 s. */
 async function bmPoll(run) {
-  if (BM.run !== run) return;
+  // One read at a time: on a slow network, a tick waits for the last one.
+  if (BM.run !== run || run.polling) return;
+  run.polling = true;
   const live = await invoke("bed_mesh_read", { printerId: run.pid, light: true }).catch(() => null);
+  run.polling = false;
   if (BM.run !== run || !live) return;
   const prev = BM.live.get(run.pid);
   BM.live.set(run.pid, { ...live, config: live.config || prev?.config || null, last_job: prev?.last_job || null });
@@ -1017,7 +1049,9 @@ async function bmFinish(run) {
   const fresh = mesh && !mesh.partial && !(run.before && bmSame(mesh, run.before));
   const sheetOpen = !$("bmmeasure").classList.contains("hidden");
   let note;
-  if (fresh && !run.failed && !run.stopped && !run.aborted) {
+  // A new full mesh is the proof: a connection lost on the way does not
+  // make it a failure.
+  if (fresh && !run.stopped && !run.aborted) {
     // Its pace, for the next estimate.
     if (run.probeStart && live.progress?.total) {
       const pace = (Date.now() - run.probeStart.t) / 1000 / Math.max(1, live.progress.total - run.probeStart.n);
@@ -1070,7 +1104,7 @@ function bmRunRender() {
   bar.querySelector("i").style.width = ph.pct == null ? "" : `${(Math.min(1, ph.pct) * 100).toFixed(1)}%`;
   const eta = bmEstimateFor(run.pid, run.temp);
   const left = Math.max(60, eta - (Date.now() - run.start) / 1000);
-  $("bmm-left").textContent = tr("bm.run.left", { t: fmtDuration(left), elapsed: fmtDuration((Date.now() - run.start) / 1000) });
+  $("bmm-left").textContent = run.following ? tr("bm.run.following") : tr("bm.run.left", { t: fmtDuration(left), elapsed: fmtDuration((Date.now() - run.start) / 1000) });
   // Snapmaker's clean stop acts once its leveling began; before, only the
   // emergency stop can interrupt the heating and the soak.
   const clean = run.u1 && ["preheat", "prescan", "probe"].includes(ph.cur) && !run.aborted && !run.stopped;

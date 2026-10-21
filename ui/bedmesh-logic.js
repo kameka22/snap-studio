@@ -395,13 +395,20 @@ function bmlState(hist, s, ctx = {}) {
 }
 
 /* The bed temperature to propose: the last print's first layer, else the
-   one used last time, else 60 °C. */
-function bmlSuggestTemp(lastJob, stored) {
+   one used last time, else 60 °C; never above the bed's `max` (its
+   max_temp, 100 °C on the U1). */
+function bmlSuggestTemp(lastJob, stored, max = 100) {
   const t = lastJob?.bed_temp;
-  if (Number.isFinite(t) && t > 0 && t <= 110) return { temp: Math.round(t), from: "last", file: lastJob.filename || "" };
-  if (Number.isFinite(+stored) && stored !== null && stored !== "") return { temp: Math.max(0, Math.min(110, Math.round(+stored))), from: "stored" };
-  return { temp: 60, from: "default" };
+  if (Number.isFinite(t) && t > 0) return { temp: Math.min(max, Math.round(t)), from: "last", file: lastJob.filename || "" };
+  if (Number.isFinite(+stored) && stored !== null && stored !== "") return { temp: Math.max(0, Math.min(max, Math.round(+stored))), from: "stored" };
+  return { temp: Math.min(max, 60), from: "default" };
 }
+
+/* A measurement still under way on the printer: its leveling running, or
+   the bed still heated by it (the script turns it off at the end). For
+   following it when the app's request ended early (time out, network). */
+const bmlStillMeasuring = (live, temp) =>
+  ["preheating", "prescanning", "probing", "aborting"].includes(live?.progress?.state) || (temp > 0 && (live?.bed?.target || 0) > 0);
 
 /* A print ended a short while ago: its part may still be on the bed.
    Minutes since, or null. */
@@ -415,4 +422,4 @@ function bmlRecentPrint(lastJob, now = Date.now() / 1000, within = 12 * 3600) {
 const bmlTrend = (hist) => [...(hist || [])].filter((m) => !m.partial).sort((a, b) => a.at - b.at).map((m) => ({ at: m.at, dev: bmlStats(m)?.dev ?? 0 }));
 
 if (typeof module !== "undefined")
-  module.exports = { BML_SOAK, bmlRunSteps, bmlRunPhase, BML_DEFAULTS, BML_KEEPS, BML_LEVELS, BML_REMIND_DAYS, BML_REMIND_PRINTS, bmlLevelOf, bmlDelta, bmlShape, bmlReminder, bmlState, bmlSuggestTemp, bmlRecentPrint, bmlSettings, bmlStats, bmlStatus, bmlAlert, bmlXY, bmlSample, bmlUpsample, bmlDiff, bmlScale, bmlT, bmlColor, bmlInk, bmlEstimate, bmlPhase, bmlTrend };
+  module.exports = { BML_SOAK, bmlRunSteps, bmlRunPhase, BML_DEFAULTS, BML_KEEPS, BML_LEVELS, BML_REMIND_DAYS, BML_REMIND_PRINTS, bmlLevelOf, bmlDelta, bmlShape, bmlReminder, bmlState, bmlSuggestTemp, bmlStillMeasuring, bmlRecentPrint, bmlSettings, bmlStats, bmlStatus, bmlAlert, bmlXY, bmlSample, bmlUpsample, bmlDiff, bmlScale, bmlT, bmlColor, bmlInk, bmlEstimate, bmlPhase, bmlTrend };
