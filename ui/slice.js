@@ -774,6 +774,8 @@ function setSendMode(mode) {
 async function checkSendPrinter() {
   const p = sendPrinter();
   const el = $("snd-state");
+  // The bed out of tolerance: a discreet banner (Care & Tuning › Bed Leveling).
+  if (typeof bmSendBanner === "function") bmSendBanner(p?.id);
   $("snd-go").disabled = true;
   setSendMode("launch");
   $("snd-queue").classList.add("hidden");

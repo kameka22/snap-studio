@@ -1,0 +1,879 @@
+"use strict";
+/* Bed leveling tab of Care & Tuning: Klipper's bed_mesh read through
+   Moonraker (bedmesh.rs), its history stored by the app, a 3D surface and
+   a heat map, comparing two measurements, measuring now. The arithmetic
+   is in bedmesh-logic.js. */
+
+const BM = {
+  pid: null,
+  hist: new Map(), // pid → stored meshes, oldest first
+  live: new Map(), // pid → what the printer said last
+  err: new Map(), // pid → the last read's error
+  readAt: new Map(),
+  loading: false,
+  shown: null, // a stored mesh's `at`, "live", or null: the newest
+  mode: localStorage.getItem("snapstudio.bm.mode") === "map" ? "map" : "3d",
+  relief: +localStorage.getItem("snapstudio.bm.relief") || 100,
+  cam: { yaw: -0.55, pitch: 0.9, zoom: 1 },
+  run: null, // measurement in progress: { pid, temp, start, timer, done }
+  cmp: { a: null, b: null, view: "d", mode: "map" },
+  viewer: null,
+  cmpViewer: null,
+};
+
+/* ------------------------------------------------------------ settings */
+
+const bmSetKey = (pid) => `snapstudio.bedmesh.${pid}`;
+function bmSettingsOf(pid) {
+  try {
+    return bmlSettings(JSON.parse(localStorage.getItem(bmSetKey(pid)) || "null"));
+  } catch {
+    return bmlSettings(null);
+  }
+}
+const bmSaveSettings = (pid, s) => localStorage.setItem(bmSetKey(pid), JSON.stringify(bmlSettings(s)));
+
+/* The newest stored mesh out of tolerance (alert on): { dev, at } or null. */
+const bmAlertOf = (pid) => (pid ? bmlAlert(BM.hist.get(pid) || [], bmSettingsOf(pid)) : null);
+
+/* ------------------------------------------------------------ loading */
+
+/* History, then the printer's mesh; a new full-bed mesh is stored. During
+   a measurement from the app, it is stored when the measurement ends. */
+async function bmLoad(pid) {
+  const hist = await invoke("bed_mesh_history", { printerId: pid }).catch(() => null);
+  if (hist) BM.hist.set(pid, hist);
+  let live = null;
+  try {
+    live = await invoke("bed_mesh_read", { printerId: pid });
+    BM.live.set(pid, live);
+    BM.err.delete(pid);
+    BM.readAt.set(pid, Date.now());
+  } catch (e) {
+    BM.err.set(pid, String(e));
+  }
+  if (live?.mesh && !live.mesh.partial && BM.run?.pid !== pid) await bmRecord(pid, live.mesh, false);
+  return live;
+}
+
+async function bmRecord(pid, mesh, byApp) {
+  const h = await invoke("bed_mesh_record", { printerId: pid, mesh, keep: bmSettingsOf(pid).keep, byApp }).catch(() => null);
+  if (h) BM.hist.set(pid, h);
+  return h;
+}
+
+/* The stored entry of the printer's mesh, if it is one. */
+const bmStoredOf = (pid, mesh) => mesh && (BM.hist.get(pid) || []).find((m) => bmSame(m, mesh));
+function bmSame(a, b) {
+  if (!a || !b || a.points.length !== b.points.length) return false;
+  const near = (x, y, e) => Math.abs(x - y) < e;
+  return [0, 1].every((k) => near(a.min[k], b.min[k], 0.01) && near(a.max[k], b.max[k], 0.01)) &&
+    a.points.every((r, j) => r.length === b.points[j].length && r.every((v, i) => near(v, b.points[j][i], 1e-6)));
+}
+
+/* Opens the tab (Care & Tuning calls it); reads again when old. */
+function bmShow(pid) {
+  if (BM.pid !== pid) BM.shown = null;
+  BM.pid = pid;
+  bmRender();
+  const age = Date.now() - (BM.readAt.get(pid) || 0);
+  if (!MT.loading && age > 60000) {
+    BM.loading = true;
+    bmLoad(pid).finally(() => {
+      BM.loading = false;
+      if (BM.pid === pid) bmAfterChange();
+    });
+  }
+}
+
+function bmAfterChange() {
+  mtSideDots();
+  if (window.currentView === "maint" && MT.pid === BM.pid) {
+    if (MT.tab === "level") bmRender();
+    else mtRender();
+  }
+}
+
+/* ------------------------------------------------------------ formats */
+
+const bmMm = (v, n = 2) => fmtDec(v, n);
+const bmSigned = (v, n = 3) => {
+  const r = Math.round(v * 10 ** n) / 10 ** n;
+  return (r > 0 ? "+" : r < 0 ? "−" : "") + fmtDec(Math.abs(r), n);
+};
+/* "21 Oct, 14:02"; another year: "21 Oct 2025, 14:02". */
+function bmWhen(at) {
+  const d = new Date(at * 1000);
+  const year = d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {};
+  return d.toLocaleString(document.documentElement.lang || undefined, { day: "numeric", month: "short", ...year, hour: "2-digit", minute: "2-digit" });
+}
+const bmPrinter = (pid) => P.list.find((x) => x.id === pid);
+const bmPrinting = (pid) => ["printing", "paused"].includes(P.status.get(pid)?.state) || ["printing", "paused"].includes(BM.live.get(pid)?.state);
+
+/* The mesh shown: the one picked, otherwise the newest stored, otherwise
+   the printer's (adaptive) one. */
+function bmShownMesh(pid) {
+  const hist = BM.hist.get(pid) || [];
+  const live = BM.live.get(pid)?.mesh;
+  if (BM.shown === "live" && live) return { mesh: live, live: true };
+  const picked = BM.shown != null && hist.find((m) => m.at === BM.shown);
+  if (picked) return { mesh: picked };
+  const newest = hist[hist.length - 1];
+  if (newest) return { mesh: newest, newest: true };
+  if (live) return { mesh: live, live: true };
+  return null;
+}
+
+/* ------------------------------------------------------------ render */
+
+function bmRender() {
+  const pid = BM.pid;
+  const p = bmPrinter(pid);
+  if (!p || MT.tab !== "level") return;
+  const box = $("bm-body");
+  const st = bmSettingsOf(pid);
+  const live = BM.live.get(pid);
+  const err = BM.err.get(pid);
+  const hist = BM.hist.get(pid) || [];
+  bmToolbar();
+  const shown = bmShownMesh(pid);
+  const notices = [];
+  if (BM.loading && !live) notices.push(`<div class="mt-stale"><span class="spinner"></span>${esc(tr("bm.reading"))}</div>`);
+  else if (err) notices.push(`<div class="mt-stale"><span class="mt-stale-dot"></span><span>${esc(hist.length ? tr("bm.offline_hist") : tr("bm.offline"))}</span><button class="btn small" data-bm-retry>${esc(tr("printers.offline.retry"))}</button></div>`);
+  if (live && !live.supported) notices.push(`<div class="bm-notice">${esc(tr("bm.unsupported"))}</div>`);
+  if (live?.mesh?.partial && !shown?.live) {
+    const m = live.mesh;
+    notices.push(`<div class="bm-notice"><span>${esc(tr("bm.adaptive", { x: `${fmtNum(Math.round(m.min[0]))}–${fmtNum(Math.round(m.max[0]))}`, y: `${fmtNum(Math.round(m.min[1]))}–${fmtNum(Math.round(m.max[1]))}` }))}</span><button class="btn small" data-bm-show="live">${esc(tr("bm.show"))}</button></div>`);
+  }
+  if (!shown) {
+    box.innerHTML = `${notices.join("")}${BM.loading ? "" : `<div class="bm-empty">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l4-3h10l4 3v3H3zM6 12l3-6h6l3 6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <b>${esc(tr("bm.empty"))}</b><small>${esc(tr("bm.empty_hint"))}</small>
+        ${live?.supported ? `<button class="btn primary" data-bm-measure>${esc(tr("bm.measure"))}</button>` : ""}
+      </div>`}`;
+    bmViewerDetach();
+    return;
+  }
+  const m = shown.mesh;
+  const s = bmlStats(m);
+  const status = bmlStatus(s.dev, st);
+  const stored = shown.live ? bmStoredOf(pid, m) : m;
+  const when = stored ? tr(stored.by_app ? "bm.when_app" : "bm.when_seen", { d: bmWhen(stored.at) }) : tr("bm.when_live");
+  const area = m.partial ? tr("bm.area_partial") : tr("bm.area_full");
+  const isNewest = shown.newest || (stored && stored === hist[hist.length - 1]);
+  const head = `<div class="bm-head">
+      <div class="bm-dev ${status}"><b>${esc(bmMm(s.dev))}</b><span>mm</span><small>${esc(tr("bm.dev"))}</small></div>
+      <div class="bm-head-text">
+        <span class="bm-status ${status}"><i></i>${esc(tr(`bm.st.${status}`))}</span>
+        <div class="bm-when">${esc(when)}</div>
+        <div class="bm-sub">${esc(tr("bm.grid", { x: s.nx, y: s.ny }))} · ${esc(area)} · ${esc(tr("bm.limits", { good: bmMm(st.good), limit: bmMm(st.limit) }))}</div>
+      </div>
+      ${isNewest && !shown.live ? "" : `<button class="btn small" data-bm-show="">${esc(tr("bm.newest"))}</button>`}
+    </div>`;
+  const stats = [
+    [bmSigned(s.min), tr("bm.min")],
+    [bmSigned(s.max), tr("bm.max")],
+    [bmSigned(s.mean), tr("bm.mean")],
+    [`${s.nx} × ${s.ny}`, tr("bm.size")],
+  ].map(([v, k]) => `<span><b>${esc(v)}</b>${esc(k)}</span>`).join("");
+  const view = `<div class="bm-card">
+      <div class="bm-viewbar">
+        <div id="bm-modes" class="seg" role="group" aria-label="${esc(tr("bm.view"))}">
+          <button class="seg-btn labeled${BM.mode === "3d" ? " on" : ""}" data-bmode="3d" aria-pressed="${BM.mode === "3d"}">3D</button>
+          <button class="seg-btn labeled${BM.mode === "map" ? " on" : ""}" data-bmode="map" aria-pressed="${BM.mode === "map"}">${esc(tr("bm.view.map"))}</button>
+        </div>
+        <label class="bm-relief${BM.mode === "3d" ? "" : " hidden"}"><span>${esc(tr("bm.relief"))}</span><input id="bm-relief" type="range" min="20" max="800" step="10" value="${BM.relief}" /><b id="bm-relief-v">${fmtNum(BM.relief)}</b></label>
+        <span class="bm-hint">${esc(BM.mode === "3d" ? tr("bm.hint3d") : tr("bm.hintmap"))}</span>
+      </div>
+      <div class="bm-stage${BM.mode === "map" ? " map" : ""}"><canvas id="bm-canvas" aria-label="${esc(tr("bm.canvas", { dev: bmMm(s.dev) }))}" role="img"></canvas><div class="bm-hover hidden" id="bm-hover"></div></div>
+      <div class="bm-legend" id="bm-legend"></div>
+      <div class="mt-strip bm-stats">${stats}</div>
+    </div>`;
+  box.innerHTML = `${notices.join("")}${head}${view}${bmHistoryHtml(pid, m)}`;
+  bmViewerAttach(m, st);
+  bmDrawTrend(pid);
+}
+
+/* The toolbar's Measure button: its state follows the printer. */
+function bmToolbar() {
+  const pid = BM.pid;
+  const btn = $("bm-measure-btn");
+  const live = BM.live.get(pid);
+  const run = BM.run?.pid === pid;
+  const printing = bmPrinting(pid);
+  btn.disabled = !run && (printing || !live?.supported || bmlBusy(live));
+  btn.title = run ? tr("bm.measure.show") : printing ? tr("bm.measure.printing") : !live?.supported ? tr("bm.measure.unavailable") : tr("bm.measure.title");
+  btn.classList.toggle("on", run);
+  $("bm-measure-lbl").textContent = run ? bmRunLabel() : tr("bm.measure");
+}
+const bmlBusy = (live) => ["preheating", "prescanning", "probing", "aborting"].includes(live?.progress?.state);
+
+function bmHistoryHtml(pid, shownMesh) {
+  const st = bmSettingsOf(pid);
+  const hist = [...(BM.hist.get(pid) || [])].reverse();
+  if (!hist.length) return `<div class="vp-section">${esc(tr("bm.history"))}</div><p class="hv-note">${esc(tr("bm.history_empty"))}</p>`;
+  const rows = hist.map((m) => {
+    const dev = bmlStats(m)?.dev ?? 0;
+    const status = bmlStatus(dev, st);
+    const on = bmSame(m, shownMesh);
+    return `<div class="bm-hrow${on ? " on" : ""}" data-bm-show="${m.at}" tabindex="0" role="button" aria-pressed="${on}">
+      <span class="mt-dot-st ${status === "good" ? "ok" : status === "watch" ? "soon" : "due"}"></span>
+      <span class="bm-hname"><b>${esc(bmWhen(m.at))}</b><small>${esc(tr("bm.dev_mm", { v: bmMm(dev) }))} · ${esc(tr(`bm.st.${status}`))}${m.by_app ? ` · ${esc(tr("bm.by_app"))}` : ""}</small></span>
+      ${hist.length > 1 ? `<button class="btn small" data-bm-cmp="${m.at}">${esc(tr("bm.compare"))}</button>` : ""}
+      <button class="tb-btn danger" data-bm-del="${m.at}" title="${esc(tr("bm.delete"))}" aria-label="${esc(tr("bm.delete"))}"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg></button>
+    </div>`;
+  }).join("");
+  return `<div class="vp-section">${esc(tr("bm.history"))} <small class="bm-count">${esc(tr("bm.history_n", { n: hist.length, keep: st.keep }))}</small></div>
+    <div class="bm-card bm-trend-card"><svg id="bm-trend" class="bm-trend" role="img" aria-label="${esc(tr("bm.trend"))}"></svg></div>
+    <div class="group bm-hist">${rows}</div>`;
+}
+
+/* Deviation over time, with the alert threshold. */
+function bmDrawTrend(pid) {
+  const svg = $("bm-trend");
+  if (!svg) return;
+  const st = bmSettingsOf(pid);
+  const pts = bmlTrend(BM.hist.get(pid));
+  const w = Math.max(240, svg.clientWidth || 600), h = 130, pad = { l: 44, r: 12, t: 12, b: 22 };
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  if (pts.length < 2) {
+    svg.innerHTML = `<text class="bm-t-note" x="${w / 2}" y="${h / 2}" text-anchor="middle">${esc(tr("bm.trend_one"))}</text>`;
+    return;
+  }
+  const ymax = Math.max(st.limit, ...pts.map((p) => p.dev)) * 1.2;
+  const t0 = pts[0].at, t1 = pts[pts.length - 1].at;
+  const X = (at) => pad.l + ((w - pad.l - pad.r) * (at - t0)) / Math.max(1, t1 - t0);
+  const Y = (v) => h - pad.b - ((h - pad.t - pad.b) * v) / ymax;
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${X(p.at).toFixed(1)},${Y(p.dev).toFixed(1)}`).join(" ");
+  const ticks = [0, ymax / 2, ymax].map((v) => `<text class="bm-t-axis" x="${pad.l - 6}" y="${Y(v) + 3}" text-anchor="end">${esc(fmtDec(v, 2))}</text><line class="bm-t-grid" x1="${pad.l}" x2="${w - pad.r}" y1="${Y(v)}" y2="${Y(v)}"/>`).join("");
+  const dots = pts.map((p) => `<circle class="bm-t-dot ${bmlStatus(p.dev, st)}" cx="${X(p.at).toFixed(1)}" cy="${Y(p.dev).toFixed(1)}" r="3.5"><title>${esc(`${bmWhen(p.at)} · ${tr("bm.dev_mm", { v: bmMm(p.dev) })}`)}</title></circle>`).join("");
+  const dates = [pts[0], pts[pts.length - 1]].map((p, i) => `<text class="bm-t-axis" x="${X(p.at)}" y="${h - 6}" text-anchor="${i ? "end" : "start"}">${esc(mtDate(p.at))}</text>`).join("");
+  svg.innerHTML = `${ticks}<line class="bm-t-limit" x1="${pad.l}" x2="${w - pad.r}" y1="${Y(st.limit)}" y2="${Y(st.limit)}"/>
+    <text class="bm-t-limit-l" x="${w - pad.r}" y="${Y(st.limit) - 4}" text-anchor="end">${esc(tr("bm.threshold", { v: bmMm(st.limit) }))}</text>
+    <path class="bm-t-path" d="${line}"/>${dots}${dates}`;
+}
+
+/* ------------------------------------------------------------ the view */
+
+/* Colour stops from the theme (--mesh-low, --mesh-mid, --mesh-high). */
+function bmStops() {
+  const cs = getComputedStyle(document.documentElement);
+  const ctx = document.createElement("canvas").getContext("2d");
+  return ["--mesh-low", "--mesh-mid", "--mesh-high"].map((v) => {
+    ctx.fillStyle = "#888";
+    ctx.fillStyle = cs.getPropertyValue(v).trim() || "#888";
+    const c = ctx.fillStyle;
+    if (c.startsWith("#")) return [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+    return (c.match(/[\d.]+/g) || [136, 136, 136]).slice(0, 3).map(Number);
+  });
+}
+const bmCss = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* A mesh drawn on a canvas, as a 3D surface (drag to turn, wheel to zoom,
+   double-click to reset) or a heat map; the hovered point's value. */
+function bmMakeViewer(canvas, hover) {
+  const V = { mesh: null, fine: null, stats: null, scale: null, mode: "3d", relief: 100, k: 1, diff: false, quads: [], cells: [], mark: null, stops: null, ro: null };
+  const ctx = canvas.getContext("2d");
+  const dpr = () => window.devicePixelRatio || 1;
+
+  function resize() {
+    const r = canvas.parentElement.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.round(r.width * dpr()));
+    canvas.height = Math.max(1, Math.round(r.height * dpr()));
+    draw();
+  }
+
+  /* World: the mesh area in [-1, 1] (longest side), heights × relief. */
+  function project(x, y, v, W, H) {
+    const m = V.mesh, c = BM.cam;
+    const cx = (m.min[0] + m.max[0]) / 2, cy = (m.min[1] + m.max[1]) / 2;
+    const half = Math.max(m.max[0] - m.min[0], m.max[1] - m.min[1]) / 2 || 1;
+    const X = (x - cx) / half, Y = (y - cy) / half, Z = ((v - V.scale.center) * V.relief) / half;
+    const x1 = X * Math.cos(c.yaw) - Y * Math.sin(c.yaw);
+    const y1 = X * Math.sin(c.yaw) + Y * Math.cos(c.yaw);
+    const up = y1 * Math.sin(c.pitch) + Z * Math.cos(c.pitch);
+    const depth = y1 * Math.cos(c.pitch) - Z * Math.sin(c.pitch);
+    const f = 4.2 / (4.2 + depth);
+    const k = V.k * c.zoom;
+    return [W / 2 + x1 * f * k, H * 0.5 - up * f * k, depth];
+  }
+
+  /* Scale that fits the bed whatever the turn: its circle, the relief,
+     the nearest point's perspective. */
+  function fit(W, H) {
+    const m = V.mesh, p = BM.cam.pitch;
+    const half = Math.max(m.max[0] - m.min[0], m.max[1] - m.min[1]) / 2 || 1;
+    const R = Math.hypot((m.max[0] - m.min[0]) / 2, (m.max[1] - m.min[1]) / 2) / half;
+    const zr = (V.scale.span * 1.2 * V.relief) / half;
+    const fn = 4.2 / Math.max(1, 4.2 - R * Math.cos(p) - zr * Math.sin(p));
+    const vert = (R * Math.sin(p) + zr * Math.cos(p)) * fn + 0.12;
+    V.k = Math.min((W * 0.47) / (R * fn), (H * 0.58) / vert);
+  }
+
+  function colorOf(v) {
+    return bmlColor(bmlT(v, V.scale), V.stops);
+  }
+
+  function draw3d(W, H) {
+    fit(W, H);
+    const f = V.fine, p = f.points, ny = p.length, nx = p[0].length;
+    const P = p.map((r, j) => r.map((v, i) => (v == null ? null : project(...bmlXY(f, i, j), v, W, H))));
+    const quads = [];
+    for (let j = 0; j < ny - 1; j++)
+      for (let i = 0; i < nx - 1; i++) {
+        const c = [P[j][i], P[j][i + 1], P[j + 1][i + 1], P[j + 1][i]];
+        if (c.some((q) => !q)) continue;
+        const vs = [p[j][i], p[j][i + 1], p[j + 1][i + 1], p[j + 1][i]];
+        // Light from the top left: the slope darkens or lightens a little.
+        const sx = (vs[1] + vs[2] - vs[0] - vs[3]) / 2, sy = (vs[2] + vs[3] - vs[0] - vs[1]) / 2;
+        const shade = 1 + Math.max(-0.12, Math.min(0.12, (-sx + sy) * 40 * (V.relief / 200)));
+        quads.push({ c, i, j, d: (c[0][2] + c[1][2] + c[2][2] + c[3][2]) / 4, v: (vs[0] + vs[1] + vs[2] + vs[3]) / 4, shade });
+      }
+    quads.sort((a, b) => b.d - a.d);
+    // The bed's outline under the surface, and its front edge named.
+    const m = V.mesh, base = V.scale.center - V.scale.span * 1.15;
+    const corners = [[m.min[0], m.min[1]], [m.max[0], m.min[1]], [m.max[0], m.max[1]], [m.min[0], m.max[1]]].map(([x, y]) => project(x, y, base, W, H));
+    ctx.strokeStyle = bmCss("--separator") || "#888";
+    ctx.lineWidth = 1 * dpr();
+    ctx.beginPath();
+    corners.forEach((q, n) => (n ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])));
+    ctx.closePath();
+    ctx.stroke();
+    for (const q of quads) {
+      const rgb = colorOf(q.v).map((x) => Math.min(255, Math.round(x * q.shade)));
+      ctx.fillStyle = ctx.strokeStyle = `rgb(${rgb.join(",")})`;
+      ctx.lineWidth = 0.6 * dpr();
+      ctx.beginPath();
+      q.c.forEach((pt, n) => (n ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    V.quads = quads;
+    const front = project((m.min[0] + m.max[0]) / 2, m.min[1], base, W, H);
+    ctx.fillStyle = bmCss("--text-secondary") || "#888";
+    ctx.font = `${11 * dpr()}px ${bmCss("--font-ui") || "system-ui"}`;
+    ctx.textAlign = "center";
+    ctx.fillText(tr("bm.front"), front[0], front[1] + 16 * dpr());
+    if (V.mark) {
+      const [i, j] = V.mark;
+      const pt = project(...bmlXY(V.mesh, i, j), V.mesh.points[j][i], W, H);
+      ctx.beginPath();
+      ctx.arc(pt[0], pt[1], 4.5 * dpr(), 0, Math.PI * 2);
+      ctx.fillStyle = bmCss("--content-bg") || "#fff";
+      ctx.fill();
+      ctx.lineWidth = 2 * dpr();
+      ctx.strokeStyle = bmCss("--text") || "#000";
+      ctx.stroke();
+    }
+  }
+
+  function drawMap(W, H) {
+    const m = V.mesh, p = m.points, ny = p.length, nx = p[0].length;
+    const padB = 22 * dpr(), padT = 6 * dpr(), padL = 6 * dpr();
+    const aspect = (m.max[0] - m.min[0]) / Math.max(1e-6, m.max[1] - m.min[1]) || 1;
+    let gw = W - padL * 2, gh = gw / aspect;
+    if (gh > H - padB - padT) (gh = H - padB - padT), (gw = gh * aspect);
+    const x0 = (W - gw) / 2, y0 = padT + (H - padB - padT - gh) / 2;
+    const cw = gw / nx, ch = gh / ny;
+    const decimals = cw >= 52 * dpr() ? 3 : 2;
+    ctx.font = `${Math.max(8.5, Math.min(13, (cw / dpr()) * 0.24)) * dpr()}px ${bmCss("--font-mono") || "monospace"}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const cells = [];
+    for (let j = 0; j < ny; j++)
+      for (let i = 0; i < nx; i++) {
+        const v = p[j][i];
+        // Row 0 is the front (min y): at the bottom.
+        const x = x0 + i * cw, y = y0 + (ny - 1 - j) * ch;
+        cells.push({ i, j, x, y, w: cw, h: ch });
+        if (v == null) continue;
+        const rgb = colorOf(v);
+        ctx.fillStyle = `rgb(${rgb.join(",")})`;
+        ctx.fillRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
+        if (cw >= 26 * dpr() && ch >= 14 * dpr()) {
+          ctx.fillStyle = bmlInk(rgb);
+          ctx.fillText(bmSigned(v, decimals), x + cw / 2, y + ch / 2);
+        }
+      }
+    const mk = (at, color) => {
+      if (!at) return;
+      const c = cells.find((q) => q.i === at[0] && q.j === at[1]);
+      ctx.lineWidth = 2 * dpr();
+      ctx.strokeStyle = color;
+      ctx.strokeRect(c.x + 1.5, c.y + 1.5, c.w - 3, c.h - 3);
+    };
+    if (V.mark) mk(V.mark, bmCss("--text") || "#000");
+    V.cells = cells;
+    ctx.fillStyle = bmCss("--text-secondary") || "#888";
+    ctx.font = `${11 * dpr()}px ${bmCss("--font-ui") || "system-ui"}`;
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    ctx.fillText(`X ${fmtNum(Math.round(m.min[0]))}`, x0, y0 + gh + 15 * dpr());
+    ctx.textAlign = "right";
+    ctx.fillText(`${fmtNum(Math.round(m.max[0]))} mm`, x0 + gw, y0 + gh + 15 * dpr());
+    ctx.textAlign = "center";
+    ctx.fillText(tr("bm.front"), x0 + gw / 2, y0 + gh + 15 * dpr());
+  }
+
+  function draw() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    if (!V.mesh) return;
+    V.stops = V.stops || bmStops();
+    if (V.mode === "3d") draw3d(W, H);
+    else drawMap(W, H);
+  }
+
+  /* The probed point under the pointer: [i, j] of the mesh, or null. */
+  function pick(ev) {
+    const r = canvas.getBoundingClientRect();
+    const x = (ev.clientX - r.left) * dpr(), y = (ev.clientY - r.top) * dpr();
+    if (V.mode === "map") {
+      const c = V.cells.find((q) => x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h);
+      return c ? [c.i, c.j] : null;
+    }
+    const inside = (pt, poly) => {
+      let s = false;
+      for (let a = 0, b = poly.length - 1; a < poly.length; b = a++) {
+        const [xa, ya] = poly[a], [xb, yb] = poly[b];
+        if (ya > pt[1] !== yb > pt[1] && pt[0] < ((xb - xa) * (pt[1] - ya)) / (yb - ya) + xa) s = !s;
+      }
+      return s;
+    };
+    for (let n = V.quads.length - 1; n >= 0; n--) {
+      const q = V.quads[n];
+      if (!inside([x, y], q.c)) continue;
+      // Nearest probed point to the hovered cell's centre.
+      const f = V.fine, m = V.mesh;
+      const [fx, fy] = bmlXY(f, q.i + 0.5, q.j + 0.5);
+      const nx = m.points[0].length, ny = m.points.length;
+      const i = Math.round(((fx - m.min[0]) / (m.max[0] - m.min[0])) * (nx - 1));
+      const j = Math.round(((fy - m.min[1]) / (m.max[1] - m.min[1])) * (ny - 1));
+      return [Math.max(0, Math.min(nx - 1, i)), Math.max(0, Math.min(ny - 1, j))];
+    }
+    return null;
+  }
+
+  function showHover(at, ev) {
+    V.mark = at;
+    draw();
+    if (!at) return hover.classList.add("hidden");
+    const [x, y] = bmlXY(V.mesh, at[0], at[1]);
+    const v = V.mesh.points[at[1]][at[0]];
+    hover.textContent = `X ${fmtNum(Math.round(x))} · Y ${fmtNum(Math.round(y))} mm  ${v == null ? "—" : `${bmSigned(v, 3)} mm`}`;
+    hover.classList.remove("hidden");
+    const r = canvas.getBoundingClientRect();
+    hover.style.left = `${Math.min(r.width - 10, Math.max(10, ev.clientX - r.left))}px`;
+    hover.style.top = `${Math.max(0, ev.clientY - r.top - 34)}px`;
+  }
+
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    if (V.mode !== "3d") return;
+    drag = { x: e.clientX, y: e.clientY };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (drag) {
+      BM.cam.yaw -= (e.clientX - drag.x) * 0.008;
+      BM.cam.pitch = Math.max(0.15, Math.min(1.45, BM.cam.pitch + (e.clientY - drag.y) * 0.008));
+      drag = { x: e.clientX, y: e.clientY };
+      hover.classList.add("hidden");
+      V.mark = null;
+      draw();
+      return;
+    }
+    showHover(pick(e), e);
+  });
+  const stop = () => {
+    drag = null;
+    canvas.classList.remove("dragging");
+  };
+  canvas.addEventListener("pointerup", stop);
+  canvas.addEventListener("pointercancel", stop);
+  canvas.addEventListener("pointerleave", () => !drag && showHover(null));
+  canvas.addEventListener("wheel", (e) => {
+    if (V.mode !== "3d") return;
+    e.preventDefault();
+    BM.cam.zoom = Math.max(0.5, Math.min(3, BM.cam.zoom * Math.exp(-e.deltaY * 0.0015)));
+    draw();
+  }, { passive: false });
+  canvas.addEventListener("dblclick", () => {
+    BM.cam = { yaw: -0.55, pitch: 0.9, zoom: 1 };
+    draw();
+  });
+
+  V.ro = new ResizeObserver(resize);
+  V.ro.observe(canvas.parentElement);
+
+  return {
+    set(mesh, opts) {
+      V.mesh = mesh;
+      V.diff = !!opts.diff;
+      V.stats = bmlStats(mesh);
+      V.scale = bmlScale(V.stats, opts.settings, V.diff);
+      V.mode = opts.mode;
+      V.relief = opts.relief;
+      const n = Math.max(mesh.points.length, mesh.points[0].length);
+      V.fine = bmlUpsample(mesh, Math.max(1, Math.min(6, Math.round(36 / Math.max(1, n - 1)))));
+      V.stops = null;
+      V.mark = null;
+      resize();
+      return V;
+    },
+    draw,
+    restyle() {
+      V.stops = null;
+      draw();
+    },
+    detach() {
+      V.ro.disconnect();
+    },
+  };
+}
+
+/* The legend: the colour bar and the heights at its ends and middle. */
+function bmLegend(el, stats, settings, diff) {
+  const sc = bmlScale(stats, settings, diff);
+  const lo = sc.center - sc.span, hi = sc.center + sc.span;
+  el.innerHTML = `<span>${esc(bmSigned(lo, 2))}</span><i></i><span>${esc(bmSigned(hi, 2))} mm</span>
+    <small>${esc(diff ? tr("bm.legend_diff") : tr("bm.legend", { mean: bmSigned(stats.mean, 3) }))}</small>`;
+}
+
+function bmViewerDetach() {
+  BM.viewer?.detach();
+  BM.viewer = null;
+}
+function bmViewerAttach(mesh, st) {
+  bmViewerDetach();
+  BM.viewer = bmMakeViewer($("bm-canvas"), $("bm-hover"));
+  BM.viewer.set(mesh, { mode: BM.mode, relief: BM.relief, settings: st });
+  bmLegend($("bm-legend"), bmlStats(mesh), st, false);
+}
+
+/* ------------------------------------------------------------ compare */
+
+function bmOpenCompare(at) {
+  const hist = BM.hist.get(BM.pid) || [];
+  if (hist.length < 2) return;
+  const newest = hist[hist.length - 1];
+  BM.cmp.a = at === newest.at ? hist[hist.length - 2].at : at;
+  BM.cmp.b = newest.at;
+  BM.cmp.view = "d";
+  BM.cmp.mode = BM.mode;
+  const opts = [...hist].reverse().map((m) => `<option value="${m.at}">${esc(`${bmWhen(m.at)} · ${bmMm(bmlStats(m).dev)} mm`)}</option>`).join("");
+  $("bmc-a").innerHTML = opts;
+  $("bmc-b").innerHTML = opts;
+  openSheet($("bmcompare"));
+  requestAnimationFrame(bmRenderCompare);
+}
+
+function bmRenderCompare() {
+  const pid = BM.pid, st = bmSettingsOf(pid);
+  const hist = BM.hist.get(pid) || [];
+  const a = hist.find((m) => m.at === BM.cmp.a), b = hist.find((m) => m.at === BM.cmp.b);
+  $("bmc-a").value = String(BM.cmp.a);
+  $("bmc-b").value = String(BM.cmp.b);
+  document.querySelectorAll("#bmc-views [data-cv]").forEach((x) => x.classList.toggle("on", x.dataset.cv === BM.cmp.view));
+  document.querySelectorAll("#bmc-modes [data-bmode]").forEach((x) => x.classList.toggle("on", x.dataset.bmode === BM.cmp.mode));
+  if (!a || !b) return;
+  const da = bmlStats(a).dev, db = bmlStats(b).dev, delta = db - da;
+  const diff = bmlDiff(a, b);
+  const better = delta < -0.005 ? "good" : delta > 0.005 ? "out" : "watch";
+  $("bmc-sum").innerHTML = `<span class="bm-status ${bmlStatus(da, st)}"><i></i>${esc(bmMm(da))} mm</span><span class="bm-cmp-arrow">→</span>
+    <span class="bm-status ${bmlStatus(db, st)}"><i></i>${esc(bmMm(db))} mm</span>
+    <b class="bm-delta ${better}">${esc(bmSigned(delta, 2))} mm</b><small>${esc(tr(better === "good" ? "bm.compare.better" : better === "out" ? "bm.compare.worse" : "bm.compare.same"))}</small>`;
+  const mesh = BM.cmp.view === "a" ? a : BM.cmp.view === "b" ? b : diff;
+  $("bmc-views").querySelector('[data-cv="d"]').disabled = !diff;
+  if (!mesh) {
+    BM.cmp.view = "b";
+    return bmRenderCompare();
+  }
+  if (!BM.cmpViewer) BM.cmpViewer = bmMakeViewer($("bmc-canvas"), $("bmc-hover"));
+  BM.cmpViewer.set(mesh, { mode: BM.cmp.mode, relief: BM.relief, settings: st, diff: mesh === diff });
+  bmLegend($("bmc-legend"), bmlStats(mesh), st, mesh === diff);
+}
+
+$("bmc-a").addEventListener("change", (e) => ((BM.cmp.a = +e.target.value), bmRenderCompare()));
+$("bmc-b").addEventListener("change", (e) => ((BM.cmp.b = +e.target.value), bmRenderCompare()));
+$("bmc-views").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cv]");
+  if (b && !b.disabled) (BM.cmp.view = b.dataset.cv), bmRenderCompare();
+});
+$("bmc-modes").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-bmode]");
+  if (b) (BM.cmp.mode = b.dataset.bmode), bmRenderCompare();
+});
+$("bmc-close").addEventListener("click", () => closeSheet($("bmcompare")));
+
+/* ------------------------------------------------------------ settings sheet */
+
+function bmOpenSettings() {
+  const pid = BM.pid, s = bmSettingsOf(pid);
+  const p = bmPrinter(pid);
+  $("bms-printer").textContent = tr("bm.set.for", { name: p?.name || p?.host || "" });
+  $("bms-keep").innerHTML = BML_KEEPS.map((n) => `<option value="${n}">${fmtNum(n)}</option>`).join("");
+  bmFillSettings(s);
+  openSheet($("bmsettings"));
+}
+function bmFillSettings(s) {
+  $("bms-good").value = s.good;
+  $("bms-limit").value = s.limit;
+  $("bms-good-v").textContent = `${bmMm(s.good)} mm`;
+  $("bms-limit-v").textContent = `${bmMm(s.limit)} mm`;
+  $("bms-alert").checked = s.alert;
+  $("bms-keep").value = String(s.keep);
+}
+async function bmSettingsChanged(which) {
+  const pid = BM.pid, old = bmSettingsOf(pid);
+  let good = +$("bms-good").value, limit = +$("bms-limit").value;
+  // The two limits push each other: good never above the threshold.
+  if (which === "good" && good > limit) limit = good;
+  if (which === "limit" && limit < good) good = limit;
+  const s = bmlSettings({ good, limit, alert: $("bms-alert").checked, keep: +$("bms-keep").value });
+  bmSaveSettings(pid, s);
+  bmFillSettings(s);
+  if (s.keep < old.keep) {
+    const h = await invoke("bed_mesh_keep", { printerId: pid, keep: s.keep }).catch((e) => (toast(String(e), true), null));
+    if (h) BM.hist.set(pid, h);
+  }
+  bmAfterChange();
+}
+$("bms-good").addEventListener("input", () => bmSettingsChanged("good"));
+$("bms-limit").addEventListener("input", () => bmSettingsChanged("limit"));
+$("bms-alert").addEventListener("change", () => bmSettingsChanged("alert"));
+$("bms-keep").addEventListener("change", () => bmSettingsChanged("keep"));
+$("bms-reset").addEventListener("click", () => {
+  bmFillSettings(bmlSettings({ ...BML_DEFAULTS, keep: bmSettingsOf(BM.pid).keep }));
+  bmSettingsChanged("reset");
+});
+$("bms-done").addEventListener("click", () => closeSheet($("bmsettings")));
+$("bm-settings-btn").addEventListener("click", bmOpenSettings);
+
+/* ------------------------------------------------------------ measuring */
+
+const bmTempKey = (pid) => `snapstudio.bm.temp.${pid}`;
+const bmPaceKey = (pid) => `snapstudio.bm.pace.${pid}`;
+
+function bmEstimateFor(pid, temp) {
+  const live = BM.live.get(pid), c = live?.config;
+  return bmlEstimate({
+    points: c ? c.count[0] * c.count[1] : 169,
+    samples: c?.samples ?? 3,
+    preheat: c?.preheat ?? 60,
+    temp,
+    bed: live?.bed?.current ?? 25,
+    autoMacro: c ? c.auto_macro : true,
+    homed: live?.homed || "",
+    perPoint: +localStorage.getItem(bmPaceKey(pid)) || null,
+  });
+}
+
+function bmRunLabel() {
+  const r = BM.run;
+  const ph = bmlPhase(BM.live.get(r.pid), r.temp);
+  return ph.phase === "probing" ? tr("bm.run.point_short", { n: ph.current, total: ph.total }) : tr("bm.run.short");
+}
+
+async function bmOpenMeasure() {
+  const pid = BM.pid;
+  const p = bmPrinter(pid);
+  $("bmm-printer").textContent = p?.name || p?.host || "";
+  const running = BM.run?.pid === pid;
+  $("bmm-form").classList.toggle("hidden", running);
+  $("bmm-run").classList.toggle("hidden", !running);
+  $("bmm-go").classList.toggle("hidden", running);
+  $("bmm-cancel").textContent = tr(running ? "bm.run.hide" : "common.cancel");
+  $("bmm-msg").textContent = "";
+  if (!running) {
+    $("bmm-temp").value = localStorage.getItem(bmTempKey(pid)) || "55";
+    bmMeasureForm();
+  } else bmRunRender();
+  openSheet($("bmmeasure"));
+  // The printer's state and settings, fresh.
+  if (!running) {
+    await bmLoad(pid).catch(() => null);
+    if (BM.pid === pid && !BM.run) bmMeasureForm();
+  }
+}
+
+function bmMeasureForm() {
+  const pid = BM.pid, live = BM.live.get(pid), c = live?.config;
+  const temp = Math.max(0, Math.min(110, +$("bmm-temp").value || 0));
+  $("bmm-points").textContent = c ? `${c.count[0]} × ${c.count[1]} (${fmtNum(c.count[0] * c.count[1])})` : "—";
+  $("bmm-eta").textContent = `≈ ${fmtDuration(bmEstimateFor(pid, temp))}`;
+  const printing = bmPrinting(pid);
+  const why = !live ? tr("bm.offline") : !live.supported ? tr("bm.measure.unavailable") : printing ? tr("bm.measure.printing") : bmlBusy(live) ? tr("bm.measure.busy") : "";
+  $("bmm-go").disabled = !!why;
+  $("bmm-msg").textContent = why;
+}
+$("bmm-temp").addEventListener("input", bmMeasureForm);
+
+async function bmStartMeasure() {
+  const pid = BM.pid;
+  if (BM.run || bmPrinting(pid)) return;
+  const temp = Math.max(0, Math.min(110, Math.round(+$("bmm-temp").value || 0)));
+  localStorage.setItem(bmTempKey(pid), String(temp));
+  const before = BM.live.get(pid)?.mesh || null;
+  const run = { pid, temp, start: Date.now(), probeStart: null, timer: 0, before, failed: null };
+  BM.run = run;
+  $("bmm-form").classList.add("hidden");
+  $("bmm-run").classList.remove("hidden");
+  $("bmm-go").classList.add("hidden");
+  $("bmm-cancel").textContent = tr("bm.run.hide");
+  bmRunRender();
+  bmToolbar();
+  run.timer = setInterval(() => bmPoll(run), 2000);
+  try {
+    await invoke("bed_mesh_measure", { printerId: pid, temp });
+  } catch (e) {
+    run.failed = String(e);
+  }
+  await bmFinish(run);
+}
+
+async function bmPoll(run) {
+  if (BM.run !== run) return;
+  const live = await invoke("bed_mesh_read", { printerId: run.pid }).catch(() => null);
+  if (BM.run !== run || !live) return;
+  BM.live.set(run.pid, live);
+  if (live.progress?.state === "probing" && !run.probeStart) run.probeStart = { t: Date.now(), n: live.progress.current };
+  bmRunRender();
+  bmToolbar();
+}
+
+async function bmFinish(run) {
+  clearInterval(run.timer);
+  const live = await invoke("bed_mesh_read", { printerId: run.pid }).catch(() => null);
+  if (live) BM.live.set(run.pid, live);
+  BM.run = null;
+  const mesh = live?.mesh;
+  const fresh = mesh && !mesh.partial && !(run.before && bmSame(mesh, run.before));
+  if (fresh && !run.failed) {
+    // Its pace, for the next estimate.
+    if (run.probeStart && live.progress?.total) {
+      const pace = (Date.now() - run.probeStart.t) / 1000 / Math.max(1, live.progress.total - run.probeStart.n);
+      if (pace > 0.2 && pace < 20) localStorage.setItem(bmPaceKey(run.pid), pace.toFixed(2));
+    }
+    await bmRecord(run.pid, mesh, true);
+    if (BM.pid === run.pid) BM.shown = null;
+    const dev = bmlStats(mesh).dev;
+    toast(tr("bm.run.done", { dev: bmMm(dev), st: tr(`bm.st.${bmlStatus(dev, bmSettingsOf(run.pid))}`) }));
+    closeSheet($("bmmeasure"));
+  } else {
+    const msg = run.failed || (live?.progress?.state === "aborted" ? tr("bm.run.aborted") : tr("bm.run.nomesh"));
+    $("bmm-msg").textContent = msg;
+    $("bmm-cancel").textContent = tr("common.close");
+    if ($("bmmeasure").classList.contains("hidden")) toast(msg, true);
+  }
+  bmToolbar();
+  bmAfterChange();
+}
+
+function bmRunRender() {
+  const run = BM.run;
+  if (!run) return;
+  const live = BM.live.get(run.pid);
+  const ph = bmlPhase(live, run.temp);
+  let text, pct = null;
+  if (ph.phase === "probing") {
+    text = tr("bm.run.point", { n: ph.current, total: ph.total });
+    pct = ph.total ? (ph.current / ph.total) * 100 : null;
+  } else if (ph.phase === "preheat") {
+    text = tr("bm.run.preheat", { s: Math.round(ph.left) });
+    pct = ph.total ? ((ph.total - ph.left) / ph.total) * 100 : null;
+  } else if (ph.phase === "heating") {
+    text = tr("bm.run.heating", { t: fmtDec(ph.current, 0), target: ph.target });
+    pct = (ph.current / ph.target) * 100;
+  } else if (ph.phase === "prescan") text = tr("bm.run.prescan");
+  else if (ph.phase === "aborted") text = tr("bm.run.aborted");
+  else text = tr(run.temp > 0 ? "bm.run.soak" : "bm.run.start");
+  $("bmm-phase").textContent = text;
+  const bar = $("bmm-progress");
+  bar.classList.toggle("indeterminate", pct == null);
+  bar.querySelector("i").style.width = pct == null ? "" : `${Math.min(100, pct).toFixed(1)}%`;
+  const eta = bmEstimateFor(run.pid, run.temp);
+  const left = Math.max(60, eta - (Date.now() - run.start) / 1000);
+  $("bmm-left").textContent = tr("bm.run.left", { t: fmtDuration(left), elapsed: fmtDuration((Date.now() - run.start) / 1000) });
+}
+
+$("bmm-go").addEventListener("click", bmStartMeasure);
+$("bmm-cancel").addEventListener("click", () => closeSheet($("bmmeasure")));
+$("bm-measure-btn").addEventListener("click", bmOpenMeasure);
+
+/* ------------------------------------------------------------ events */
+
+$("bm-body").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-bm-retry]")) return maintShow(BM.pid);
+  if (e.target.closest("[data-bm-measure]")) return bmOpenMeasure();
+  const cmp = e.target.closest("[data-bm-cmp]");
+  if (cmp) return bmOpenCompare(+cmp.dataset.bmCmp);
+  const del = e.target.closest("[data-bm-del]");
+  if (del) {
+    const at = +del.dataset.bmDel;
+    const ok = await confirmDelete(tr("bm.delete_title"), tr("bm.delete_msg", { d: bmWhen(at) }));
+    if (!ok) return;
+    const h = await invoke("bed_mesh_remove", { printerId: BM.pid, at }).catch((err) => (toast(String(err), true), null));
+    if (h) BM.hist.set(BM.pid, h);
+    if (BM.shown === at) BM.shown = null;
+    return bmAfterChange();
+  }
+  const mode = e.target.closest("[data-bmode]");
+  if (mode && mode.dataset.bmode !== BM.mode) {
+    BM.mode = mode.dataset.bmode;
+    localStorage.setItem("snapstudio.bm.mode", BM.mode);
+    return bmRender();
+  }
+  const show = e.target.closest("[data-bm-show]");
+  if (show) {
+    const v = show.dataset.bmShow;
+    BM.shown = v === "" ? null : v === "live" ? "live" : +v;
+    bmRender();
+  }
+});
+$("bm-body").addEventListener("keydown", (e) => {
+  const row = e.target.closest(".bm-hrow");
+  if (row && (e.key === "Enter" || e.key === " ") && e.target === row) {
+    e.preventDefault();
+    row.click();
+  }
+});
+$("bm-body").addEventListener("input", (e) => {
+  if (e.target.id !== "bm-relief") return;
+  BM.relief = +e.target.value;
+  $("bm-relief-v").textContent = fmtNum(BM.relief);
+  localStorage.setItem("snapstudio.bm.relief", String(BM.relief));
+  if (BM.viewer) {
+    const s = bmShownMesh(BM.pid);
+    if (s) BM.viewer.set(s.mesh, { mode: BM.mode, relief: BM.relief, settings: bmSettingsOf(BM.pid) });
+  }
+});
+window.addEventListener("themechange", () => {
+  BM.viewer?.restyle();
+  BM.cmpViewer?.restyle();
+});
+window.addEventListener("resize", () => window.currentView === "maint" && MT.tab === "level" && bmDrawTrend(BM.pid));
+
+/* ------------------------------------------------------------ print launch */
+
+/* The send sheet's banner: the printer chosen is out of tolerance. */
+async function bmSendBanner(pid) {
+  const el = $("snd-bed");
+  if (!pid) return el.classList.add("hidden");
+  if (!BM.hist.has(pid)) {
+    const h = await invoke("bed_mesh_history", { printerId: pid }).catch(() => null);
+    if (h) BM.hist.set(pid, h);
+  }
+  if (typeof sendPrinter === "function" && sendPrinter()?.id !== pid) return;
+  const a = bmAlertOf(pid);
+  el.classList.toggle("hidden", !a);
+  el.dataset.pid = pid;
+  if (a) $("snd-bed-text").textContent = tr("bm.send_banner", { dev: bmMm(a.dev) });
+}
+$("snd-bed-go").addEventListener("click", () => {
+  const pid = $("snd-bed").dataset.pid;
+  closeSheet($("sendmodal"));
+  if (pid) maintShow(pid, "level");
+});
