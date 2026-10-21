@@ -3582,7 +3582,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .tab-warn { margin-left: 5px; color: var(--warning-text, var(--warning)); font-size: 11px; line-height: 1; }
 
 /* ---------- Bed leveling ---------- */
-.bm { max-width: 980px; }
+/* Full width, as Care. */
+.bm { max-width: none; }
 .bm-head { display: flex; align-items: center; gap: 18px; padding: 14px 16px; border-radius: var(--radius-card); background: var(--card-bg); border: 1px solid var(--card-border); box-shadow: var(--card-shadow); }
 .bm-dev { display: grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 4px; flex: none; }
 .bm-dev b { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
