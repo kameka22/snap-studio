@@ -88,16 +88,19 @@ function plInside(box, bed) {
    gap left by an object put back on the bed is used again. */
 function plParkSpot(parked, bed, bw, bd, gap = 10) {
   const x0 = bed.w + 20, x1 = x0 + bed.w;
-  const near = parked.filter((b) => b.x1 > x0 - gap);
-  const free = (x, y) => near.every((b) => x + bw + gap <= b.x0 || b.x1 + gap <= x || y + bd + gap <= b.y0 || b.y1 + gap <= y);
+  const near = parked.filter((b) => b.x1 > x0 - gap).sort((a, b) => a.x0 - b.x0);
   const ys = [...new Set([0, ...near.map((b) => b.y1 + gap)])].filter((y) => y >= 0).sort((a, b) => a - b);
-  const xs = [...new Set([x0, ...near.map((b) => b.x1 + gap)])].filter((x) => x >= x0).sort((a, b) => a - b);
   for (const y of ys) {
-    for (const x of xs) {
-      // Within the area's width (a box wider than it starts a row alone).
-      if (x + bw > x1 && x > x0) break;
-      if (free(x, y)) return [x, y];
+    // Leftmost free place in the row: only the boxes of this band count,
+    // swept left to right (fast with hundreds of objects).
+    let x = x0;
+    for (const b of near) {
+      if (y + bd + gap <= b.y0 || b.y1 + gap <= y || b.x1 + gap <= x) continue;
+      if (x + bw + gap <= b.x0) break;
+      x = b.x1 + gap;
     }
+    // Within the area's width (a box wider than it starts a row alone).
+    if (x === x0 || x + bw <= x1) return [x, y];
   }
   return [x0, ys[ys.length - 1] ?? 0];
 }
