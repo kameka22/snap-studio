@@ -73,7 +73,7 @@ recherchent, s'épinglent, se renomment, se dupliquent ; voir
 ### 🖨 Imprimantes
 Trouvées seules sur le réseau ; état en direct, températures des quatre
 têtes, bobines chargées, leurs [fichiers et timelapses](#-fichiers-et-timelapses-de-limprimante)
-et leur [maintenance](#-maintenance). Fonctionne avec toute imprimante Klipper.
+et leur [entretien et nivellement](#-entretien-et-réglages). Fonctionne avec toute imprimante Klipper.
 
 <img src="docs/screenshots/printer.png" alt="L'imprimante et ses bobines" />
 
@@ -113,10 +113,12 @@ barre latérale.
 </tr>
 </table>
 
-### 🔧 Maintenance
+### 🔧 Entretien et réglages
 
-Chaque imprimante a sa vue maintenance, construite à partir de ce que
-l'imprimante compte et du guide de maintenance Snapmaker :
+Chaque imprimante a sa vue Entretien et réglages, en deux onglets.
+
+**Entretien**, construit à partir de ce que l'imprimante compte et du guide
+de maintenance Snapmaker :
 
 - **Utilisation** : temps d'impression, nombre d'impressions, filament
   consommé, plus longue impression.
@@ -138,6 +140,29 @@ des valeurs prudentes, Snapmaker n'en donne pas. Sur une autre imprimante
 Klipper, la vue garde l'utilisation et les entretiens à l'heure.
 
 <img src="docs/screenshots/maintenance.png" alt="La vue maintenance" />
+
+**Nivellement** : le maillage du plateau, lu sur l'imprimante, gardé dans
+le temps.
+
+- Une carte dit l'état du plateau et la seule chose à faire : bon (compensé
+  par le maillage de l'imprimante), à surveiller, hors tolérance, ou à
+  remesurer. Les seuils par défaut (0,5 / 1 mm, trois niveaux) sont adaptés
+  au U1, dont le maillage compense ce qui est en dessous ; il ne demande un
+  nivellement manuel qu'au-delà de 2 mm.
+- La surface en 3D ou en carte avec la hauteur de chaque point ;
+  historique, tendance et comparaison de deux mesures.
+- **Mesurer** avec un assistant : plateau confirmé dégagé (une impression
+  qui vient de finir est signalée), température proposée d'après la
+  dernière impression, puis chaque étape du U1 — chauffe, stabilisation de
+  2 min, préchauffe, contrôle des coins, palpage — un arrêt propre ou
+  d'urgence, et le résultat comparé à la mesure précédente.
+- Quand le plateau demande de l'attention, sa forme est nommée et montrée
+  sur la carte (côté qui penche, coin plus haut, plateau creux ou bombé,
+  point isolé), avec quoi faire — sur un U1, les molettes sous le plateau
+  et le nivellement manuel de l'imprimante — puis « J'ai corrigé :
+  remesurer ».
+- Un rappel dans Entretien après 30 jours ou 50 impressions, et « Mesurer
+  d'abord » dans la fenêtre d'envoi quand le plateau est hors tolérance.
 
 ### 📂 Fichiers et timelapses de l'imprimante
 
@@ -317,7 +342,6 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Impression objet par objet** — un objet après l'autre, avec contrôle de collision pour la tête de la U1 et un ordre réglable | [#22](https://github.com/kameka22/snap-studio/pull/22) |
 | **Alertes plateau et matière** — un plateau et un filament incompatibles signalés avant d'imprimer, et un conseil quand la colle est recommandée | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Assistant de calibration** — les calibrations Klipper pas à pas, depuis un menu Calibration | [#17](https://github.com/kameka22/snap-studio/pull/17) |
-| **Carte du maillage du plateau** — le maillage de nivellement en 3D, son évolution, une alerte au-delà d'un seuil | [#21](https://github.com/kameka22/snap-studio/pull/21) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Espace Snapmaker** — Snapmaker Space, Store, Wiki, Forum et compte dans un menu, modèles ouverts directement dans Préparer | [#23](https://github.com/kameka22/snap-studio/pull/23) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
