@@ -27,6 +27,15 @@ with its packages for macOS, Windows and Linux. What comes next:
   - the toolbar only shows buttons that can act;
   - a loading indicator while a large file is read and its objects load;
     messages show at the top of the view.
+- **Display settings** ([#24](https://github.com/kameka22/snap-studio/pull/24)):
+  - light, dark or system appearance; a forced mode also sets the window's
+    own (title bar);
+  - eleven themes, each light and dark, with live previews: Snap Studio,
+    Snapmaker Space, High contrast, Graphite, Deep Night, Studio Light,
+    Nord, Solarized, Colour-blind safe, Filament (accent from the spool on
+    T0) and macOS (Tahoe-style glass layout);
+  - accent color: the theme's, the system's, eight presets or a custom one;
+  - the 3D views and terminals follow the theme.
 
 ### Fixed
 - The app's window comes to the front at launch on macOS

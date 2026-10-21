@@ -59,6 +59,10 @@ tests), whose real behavior remains to be checked.
 - **Prepare** (unreleased): with objects set aside off the plate, only
   those on it are printed; a dense file (as "10+Pumpkins") shows its
   loading and prints with the full mesh.
+- **Display** (unreleased, on the Mac): back to System after a forced
+  light or dark mode, the app takes the system's mode without staying on
+  the forced one; in the macOS theme, the window buttons sit well in the
+  floating sidebar.
 - **AI sandbox**: if a sandbox restarts while idle, the exit code shown in
   the Terminal tab and the `[chat] Claude ended…` console line say why.
 

@@ -757,7 +757,10 @@ function displayNative() {
   displayNativeMode = want;
   try {
     const win = window.__TAURI__?.window?.getCurrentWindow?.();
-    win?.setTheme?.(want)?.catch?.(() => {});
+    // Back to System: until the window has dropped the forced appearance,
+    // prefers-color-scheme still reports it, so the mode resolved just
+    // before may be the forced one. Resolve it again once it is done.
+    win?.setTheme?.(want)?.then?.(() => want === null && displayApply())?.catch?.(() => {});
   } catch {}
 }
 

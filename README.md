@@ -182,6 +182,16 @@ sheet shows one row per color with the heads you can print it with:
 
 The check can be turned off in Settings → Prepare.
 
+### 🌓 Display
+
+Settings → Display: light, dark or as the system; eleven themes, each with
+a light and a dark version and a live preview — Snap Studio, Snapmaker
+Space, High contrast, Graphite, Deep Night, Studio Light, Nord, Solarized,
+Colour-blind safe (states never told apart by red and green alone),
+Filament (the accent takes the color of the spool on T0) and macOS (a
+Tahoe-style layout in glass) — and the accent color: the theme's, the
+system's, a preset or your own.
+
 ## Download
 
 | System | File, from the [latest release](https://github.com/kameka22/snap-studio/releases/latest) |
@@ -288,7 +298,6 @@ with its pull request (drafts, approved or under discussion):
 | **Bed mesh map** — the bed leveling mesh in 3D, its evolution, an alert above a threshold | [#21](https://github.com/kameka22/snap-studio/pull/21) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Snapmaker hub** — Snapmaker Space, Store, Wiki, Forum and account in one menu, models opened straight in Prepare | [#23](https://github.com/kameka22/snap-studio/pull/23) |
-| **Display settings** — light / dark / system mode and themes | [#24](https://github.com/kameka22/snap-studio/pull/24) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
 
