@@ -1225,7 +1225,8 @@ body.dragover #stage::after {
 /* Prepare's empty state: over the drawn bed, a translucent panel at the top
    of the view rather than text laid on the logo. */
 #p-empty {
-  inset: 16px auto auto 50%;
+  /* Below the loading pill (.p-loading), shown at the top while a file loads. */
+  inset: 60px auto auto 50%;
   transform: translateX(-50%);
   width: max-content;
   max-width: calc(100% - 32px);
