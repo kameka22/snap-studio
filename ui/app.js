@@ -103,11 +103,9 @@ function thumbUrl(f, px) {
 
 /* ------------------------------------------------------------------ theme */
 
-/* Light or dark: only the system setting decides. Surfaces drawn outside
-   CSS (WebGL, terminal) listen to the "themechange" event. */
-const darkScheme = matchMedia("(prefers-color-scheme: dark)");
-const isDark = () => darkScheme.matches;
-darkScheme.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+/* Light or dark, theme and accent: themes.js (loaded in <head>) resolves
+   them, exposes isDark() and fires "themechange"; surfaces drawn outside
+   CSS (WebGL, terminal) listen to it and read the tokens. */
 
 /* ------------------------------------------------------- native menus */
 

@@ -44,10 +44,12 @@ visionneuse 3D et trajectoires G-code couche par couche.
 <td width="50%" valign="top">
 
 ### 🧩 Préparer
-Le plateau U1 comme dans Orca : déplacer, pivoter, mettre à l'échelle,
-dupliquer, poser sur une face, orienter et disposer automatiquement,
-annuler — puis découper. Chaque objet liste ses couleurs, peintes
-comprises, et envoie chacune vers la tête de votre choix.
+Le plateau U1 comme dans Orca : déplacer, pivoter, mettre à l'échelle
+(aussi axe par axe) avec des curseurs, dupliquer, poser sur une face,
+orienter et disposer automatiquement, annuler — puis découper. Des objets
+peuvent être mis de côté hors du plateau (non découpés) et remis d'un clic.
+Chaque objet liste ses couleurs, peintes comprises, et envoie chacune vers
+la tête de votre choix.
 
 <img src="docs/screenshots/prepare.png" alt="Préparer" />
 
@@ -195,6 +197,17 @@ couleur avec les têtes possibles :
 
 La vérification se désactive dans Réglages → Préparer.
 
+### 🌓 Affichage
+
+Réglages → Affichage : clair, sombre ou comme le système ; dix thèmes,
+chacun en version claire et sombre avec un aperçu en direct — Snap Studio,
+Snapmaker Space (barre latérale bleu nuit), Contraste élevé, Graphite, Nuit
+profonde, Papier, Nord, Solarized, Filament (l'app prend la couleur de la
+bobine sur T0) et macOS (une mise en page façon Tahoe, en verre) ; la
+couleur d'accent : celle du thème, du système, une couleur prédéfinie ou la
+vôtre ; et des couleurs adaptées au daltonisme, avec tous les thèmes (les
+états ne se distinguent jamais par le seul rouge / vert).
+
 ## Télécharger
 
 | Système | Fichier, dans la [dernière version](https://github.com/kameka22/snap-studio/releases/latest) |
@@ -283,7 +296,9 @@ imprimantes, favoris et conversations sont repris au premier lancement.
 | ⌘, | Réglages |
 
 Dans Préparer : R pivoter, F poser sur une face, Q orienter (⇧Q : tout),
-A disposer, ⌘D dupliquer, flèches 1 mm (⇧ : 10 mm), ⌘Z / ⇧⌘Z.
+A disposer, ⌘D dupliquer, flèches 1 mm (⇧ : 10 mm), ⌘Z / ⇧⌘Z ; ⌘ + glisser
+depuis le vide sélectionne avec un rectangle, ⇧-clic dans la liste
+sélectionne une plage.
 
 Dans la liste de l'IA : ⌘F rechercher, ↑ / ↓ et ⏎ ouvrir, F2 renommer,
 ⌫ supprimer. Dans une conversation : ⌘⏎ envoyer, Échap arrêter Claude.
@@ -299,14 +314,12 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | Fonction | |
 |---|---|
 | **Plusieurs plateaux dans Préparer** — onglets de plateaux, agencement automatique sur plusieurs plateaux, tout découper et l'envoyer dans la file ; les 3MF multi-plateaux gardés tels quels | [#18](https://github.com/kameka22/snap-studio/pull/18) |
-| **Préparer, plus simple** — curseurs pour la position, la rotation et l'échelle, objets hors plateau, mise en page et corrections d'affichage des 3MF | [#28](https://github.com/kameka22/snap-studio/pull/28) |
 | **Impression objet par objet** — un objet après l'autre, avec contrôle de collision pour la tête de la U1 et un ordre réglable | [#22](https://github.com/kameka22/snap-studio/pull/22) |
 | **Alertes plateau et matière** — un plateau et un filament incompatibles signalés avant d'imprimer, et un conseil quand la colle est recommandée | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Assistant de calibration** — les calibrations Klipper pas à pas, depuis un menu Calibration | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Carte du maillage du plateau** — le maillage de nivellement en 3D, son évolution, une alerte au-delà d'un seuil | [#21](https://github.com/kameka22/snap-studio/pull/21) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Espace Snapmaker** — Snapmaker Space, Store, Wiki, Forum et compte dans un menu, modèles ouverts directement dans Préparer | [#23](https://github.com/kameka22/snap-studio/pull/23) |
-| **Réglages d'affichage** — mode clair / sombre / système et thèmes | [#24](https://github.com/kameka22/snap-studio/pull/24) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **D'autres agents IA** — OpenCode à côté de Claude Code (OpenAI, Google, Mistral, modèles locaux…), un seul actif à la fois | [plan](docs/plans/ai-agents.md) |
 

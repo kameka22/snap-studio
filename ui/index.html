@@ -6,6 +6,7 @@
 <title>Snap Studio</title>
 <link rel="stylesheet" href="vendor/xterm.css" />
 <link rel="stylesheet" href="style.css" />
+<script src="themes.js"></script>
 </head>
 <body>
 <div class="window">
@@ -712,6 +713,7 @@
   <div class="settings">
   <nav id="set-menu" class="set-menu">
     <button class="set-cat" data-cat="app"><span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span><span class="lbl" data-i18n="settings.app">Application</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="display"><span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2v14a7 7 0 0 1 0-14"/></svg></span><span class="lbl" data-i18n="settings.display">Display</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="nav3d"><span class="glyph" style="color: #5AC8FA"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6"/><path fill-rule="evenodd" transform="rotate(-28 12 12)" d="M12 7C5.9 7 1.5 9.2 1.5 12s4.4 5 10.5 5 10.5-2.2 10.5-5-4.4-5-10.5-5m0 1.7c5 0 8.8 1.6 8.8 3.3s-3.8 3.3-8.8 3.3-8.8-1.6-8.8-3.3 3.8-3.3 8.8-3.3"/></svg></span><span class="lbl" data-i18n="settings.nav3d">3D navigation</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="files"><span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="lbl" data-i18n="nav.files">Files</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="prepare"><span class="glyph" style="color: #5856D6"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span><span class="lbl" data-i18n="nav.prepare">Prepare</span><i class="set-dot"></i></button>
@@ -752,6 +754,45 @@
           <span class="sub" data-i18n="settings.welcome.sub">Choose a models folder, find a printer on the network</span>
         </span>
         <button id="w-again" class="btn small" data-i18n="settings.welcome.again">Show Welcome</button>
+      </div>
+    </div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="display">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="settings.display">Display</h2>
+    <div class="group">
+      <div class="grow-row">
+        <span class="k"><span data-i18n="display.mode">Appearance</span>
+          <span class="sub" data-i18n="display.mode.sub">System follows the light or dark setting of the computer</span>
+        </span>
+        <div id="disp-mode" class="seg" role="radiogroup" aria-label="Appearance" data-i18n-aria="display.mode">
+          <button type="button" class="seg-btn" role="radio" data-mode-pick="light" data-i18n="display.mode.light">Light</button>
+          <button type="button" class="seg-btn" role="radio" data-mode-pick="dark" data-i18n="display.mode.dark">Dark</button>
+          <button type="button" class="seg-btn" role="radio" data-mode-pick="system" data-i18n="display.mode.system">System</button>
+        </div>
+      </div>
+    </div>
+    <div class="vp-section disp-head" data-i18n="display.theme">Theme</div>
+    <div id="disp-themes" class="disp-themes" role="radiogroup" aria-label="Theme" data-i18n-aria="display.theme"></div>
+    <div class="group">
+      <div class="grow-row disp-accent-row">
+        <span class="k"><span data-i18n="display.accent">Accent color</span>
+          <span class="sub" id="disp-accent-sub"></span>
+        </span>
+        <div id="disp-accents" class="disp-accents" role="radiogroup" aria-label="Accent color" data-i18n-aria="display.accent"></div>
+      </div>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="display.cvd">Color-blind safe colors</span>
+          <span class="sub" data-i18n="display.cvd.sub">States in blue, orange and purple, never red / green — in every theme</span>
+        </span>
+        <input type="checkbox" id="disp-cvd" class="sw" role="switch" />
+      </label>
+      <div class="grow-row">
+        <span class="k"><span data-i18n="display.reset">Default display</span>
+          <span class="sub" data-i18n="display.reset.sub">System appearance, Snap Studio theme, theme accent</span>
+        </span>
+        <button id="disp-reset" class="btn small" data-i18n="display.reset.btn">Restore</button>
       </div>
     </div>
       </div>

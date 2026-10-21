@@ -395,7 +395,7 @@ function prDraw() {
   }
   gl.viewport(0, 0, w, h);
   const light = !isDark();
-  gl.clearColor(...(light ? [0.953, 0.953, 0.961, 1] : [0.118, 0.118, 0.125, 1]));
+  gl.clearColor(...prClearColor(), 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
   const { view, proj } = prCamera(w, h);
@@ -424,9 +424,9 @@ function prDraw() {
     gl.uniformMatrix4fv(uMVP, false, m4.mul(vp, model));
     gl.uniformMatrix4fv(uMV, false, m4.mul(view, model));
     const tint =
-      st === "partial" ? [1, 0.23, 0.19, 0.45]
+      st === "partial" ? [...prTok("--danger", [1, 0.23, 0.19]), 0.45]
       : selected ? [...accent, 0.28]
-      : overlap.has(o.id) ? [1, 0.58, 0, 0.4]
+      : overlap.has(o.id) ? [...prTok("--warning", [1, 0.58, 0]), 0.4]
       : st === "out" ? [0.56, 0.56, 0.58, 0.55]
       : [0, 0, 0, 0];
     gl.uniform4fv(uTint, tint);
@@ -532,7 +532,22 @@ const prSchedule = () => {
     prDraw();
   });
 };
-window.addEventListener("themechange", prSchedule);
+/* Theme colors the 3D view draws with, as 0-1 components: its
+   background, and the states (sticking out, overlapping) — the
+   colour-blind theme changes those. */
+let PR_TOK = {};
+function prTok(name, fallback) {
+  if (!PR_TOK[name]) {
+    const m = cssColor(`var(${name})`).match(/[\d.]+/g) || [];
+    PR_TOK[name] = m.length >= 3 ? m.slice(0, 3).map((x) => +x / 255) : fallback;
+  }
+  return PR_TOK[name];
+}
+const prClearColor = () => prTok("--viewport-bg", [0.953, 0.953, 0.961]);
+window.addEventListener("themechange", () => {
+  PR_TOK = {};
+  prSchedule();
+});
 addEventListener("resize", () => window.currentView === "prepare" && prSchedule());
 
 /* Resolved accent color (AccentColor included), as 0–1 components. */
