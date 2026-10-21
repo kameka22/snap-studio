@@ -12,7 +12,7 @@ const MT = { pid: null, tab: "care", usage: null, log: [], stale: null, loading:
 
 /* Tabs; the last one open is remembered per printer. Calibration (#17)
    is not offered yet. */
-const MT_TABS = ["care", "level"];
+const MT_TABS = ["care", "level", "control"];
 const mtTabKey = (pid) => `snapstudio.mtab.${pid}`;
 const mtTabOf = (pid) => {
   const t = localStorage.getItem(mtTabKey(pid));
@@ -148,11 +148,15 @@ function mtSetTab(tab) {
   });
   $("mt-body").classList.toggle("hidden", MT.tab !== "care");
   $("bm-body").classList.toggle("hidden", MT.tab !== "level");
+  $("ct-body").classList.toggle("hidden", MT.tab !== "control");
   ["bm-measure-btn", "bm-settings-btn"].forEach((id) => $(id).classList.toggle("hidden", MT.tab !== "level"));
-  $("mt-refresh").title = tr(MT.tab === "level" ? "bm.refresh" : "maint.refresh");
+  $("mt-refresh").title = tr(MT.tab === "level" ? "bm.refresh" : MT.tab === "control" ? "ctl.refresh" : "maint.refresh");
   mtTabMarks();
   mtRender();
   if (MT.tab === "level") bmShow(MT.pid);
+  // Control reads the printer while it is shown, and only then.
+  if (MT.tab === "control") ctShow(MT.pid);
+  else ctLeave();
 }
 
 async function maintShow(pid, tab) {
@@ -391,7 +395,11 @@ $("mt-body").addEventListener("click", (e) => {
     row.parentElement.querySelector(".mt-chev");
   }
 });
-$("mt-refresh").addEventListener("click", () => MT.pid && maintShow(MT.pid));
+$("mt-refresh").addEventListener("click", () => {
+  if (!MT.pid) return;
+  if (MT.tab === "control") return ctRead(true);
+  maintShow(MT.pid);
+});
 $("mt-tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-mtab]");
   if (b && b.dataset.mtab !== MT.tab) mtSetTab(b.dataset.mtab);

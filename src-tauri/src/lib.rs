@@ -4,6 +4,7 @@ mod access;
 mod auth;
 mod bedmesh;
 mod chat;
+mod control;
 mod discover;
 mod engine;
 mod favorites;
@@ -1269,6 +1270,22 @@ async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
     bedmesh::measure(&p.host, p.port, temp).await.map_err(|e| e.to_string())
 }
 
+/// Care & Tuning › Control: the printer's state, with its configuration
+/// when asked (`config`, once per opening).
+#[tauri::command]
+async fn control_read(printer_id: String, config: Option<bool>) -> Result<serde_json::Value, String> {
+    let p = printer_by_id(&printer_id)?;
+    let (state, cfg) = control::read(&p.host, p.port, config.unwrap_or(false)).await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "state": state, "config": cfg }))
+}
+
+/// Carries out one of Control's actions (never raw G-code: `control::Action`).
+#[tauri::command]
+async fn control_run(printer_id: String, action: control::Action) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    control::run(&p.host, p.port, &action).await.map_err(|e| e.to_string())
+}
+
 /// Stops the probing cleanly (the U1, once its leveling has begun).
 #[tauri::command]
 async fn bed_mesh_abort(printer_id: String) -> Result<(), String> {
@@ -2042,6 +2059,8 @@ pub fn run() {
             bed_mesh_measure,
             bed_mesh_stop,
             bed_mesh_abort,
+            control_read,
+            control_run,
             app_notify,
             printers_watch_start,
             printers_watch_stop,

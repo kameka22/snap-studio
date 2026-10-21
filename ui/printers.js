@@ -30,6 +30,8 @@ function switchView(v) {
     stopLive();
     camStop();
   }
+  // Leaving Care & Tuning stops Control's reads and camera.
+  if (v !== "maint" && typeof ctLeave === "function") ctLeave();
   // Leaving a printer's files stops its video.
   if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
   if (v === "prints") pjRender();
@@ -852,6 +854,8 @@ $("prn-add").addEventListener("click", () => openForm(null));
 $("prn-add2").addEventListener("click", () => openForm(null));
 $("prn-add3").addEventListener("click", () => openForm(null));
 $("prn-edit").addEventListener("click", () => openForm(current()));
+// The printer card's shortcut to Care & Tuning › Control.
+$("prn-control").addEventListener("click", () => current() && maintShow(current().id, "control"));
 $("prn-del").addEventListener("click", () => askRemove());
 $("prn-refresh").addEventListener("click", () => { refreshSelected(); startLive(); });
 $("prn-offline-retry").addEventListener("click", () => { refreshSelected(); startLive(); });
