@@ -106,6 +106,28 @@
   <div class="tb-actions tb-add" data-for="printers">
     <button id="prn-add3" class="tb-btn labeled" title="Add a Printer" data-i18n-title="printers.add"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="printers.add_short">Add Printer</span></button>
   </div>
+  <!-- Tabs: on the left, right after the title, so they never move when
+       an action appears on the right. -->
+  <div class="tb-actions tb-tabs" data-for="pfiles">
+    <div id="pfl-tabs" class="seg" role="group" aria-label="Files of the printer" data-i18n-aria="pfiles.title">
+      <button class="seg-btn labeled" data-tab="files" data-i18n="pfiles.tab.files">Print Files</button>
+      <button class="seg-btn labeled" data-tab="videos" data-i18n="pfiles.tab.videos">Timelapses</button>
+    </div>
+  </div>
+  <div class="tb-actions tb-tabs" data-for="ia">
+    <div id="ia-views" class="seg hidden" role="group" aria-label="View" data-i18n-aria="chat.view">
+      <button class="seg-btn" data-iaview="chat" data-i18n="chat.view.chat">Conversation</button>
+      <button class="seg-btn" data-iaview="term" data-i18n="chat.view.term">Terminal</button>
+    </div>
+  </div>
+  <div class="tb-actions tb-tabs" data-for="maint">
+    <div id="mt-tabs" class="seg" role="group" aria-label="Care &amp; Tuning" data-i18n-aria="maint.title">
+      <button class="seg-btn labeled" data-mtab="care"><span data-i18n="maint.tab.care">Care</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+      <button class="seg-btn labeled" data-mtab="level"><span data-i18n="maint.tab.level">Bed Leveling</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+      <!-- Calibration: #17's assistant; hidden until it lands. -->
+      <button class="seg-btn labeled hidden" data-mtab="calib"><span data-i18n="maint.tab.calib">Calibration</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+    </div>
+  </div>
   <div class="tb-spacer" data-tauri-drag-region></div>
   <div class="tb-actions" data-for="files">
     <input id="tile" type="range" min="140" max="360" step="10" title="Thumbnail size" data-i18n-title="files.tile_size" />
@@ -127,10 +149,6 @@
   <div class="tb-actions" data-for="ia">
     <span id="ia-engine-tag" class="ia-tag"></span>
     <div id="ia-dacts" class="tb-group hidden">
-      <div id="ia-views" class="seg" role="group" aria-label="View" data-i18n-aria="chat.view">
-        <button class="seg-btn" data-iaview="chat" data-i18n="chat.view.chat">Conversation</button>
-        <button class="seg-btn" data-iaview="term" data-i18n="chat.view.term">Terminal</button>
-      </div>
       <button id="ia-folder" class="tb-btn" title="Show the working folder" data-i18n-title="ia.show_workspace"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
       <button id="ia-delete" class="btn ia-delete-btn" title="Delete the conversation and its Claude session" data-i18n-title="ia.delete.button_title"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg><span data-i18n="ia.delete.button">Delete Conversation</span></button>
     </div>
@@ -166,10 +184,6 @@
     <button id="hv-refresh" class="tb-btn" title="Read the spools again" data-i18n-title="heads.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
   </div>
   <div class="tb-actions" data-for="pfiles">
-    <div id="pfl-tabs" class="seg" role="group" aria-label="Files of the printer" data-i18n-aria="pfiles.title">
-      <button class="seg-btn labeled" data-tab="files" data-i18n="pfiles.tab.files">Print Files</button>
-      <button class="seg-btn labeled" data-tab="videos" data-i18n="pfiles.tab.videos">Timelapses</button>
-    </div>
     <button id="pfl-sort" class="tb-btn" title="Sort" data-i18n-title="files.sort"><svg viewBox="0 0 24 24"><path d="M7 4l4 5H8v11H6V9H3zm10 16l-4-5h3V4h2v11h3z"/></svg></button>
     <div id="pfl-layout" class="seg" role="group" aria-label="Display" data-i18n-aria="files.display">
       <button class="seg-btn" data-layout="grid" title="Thumbnails" data-i18n-title="pfiles.layout.grid"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z"/></svg></button>
@@ -183,7 +197,9 @@
     </label>
   </div>
   <div class="tb-actions" data-for="maint">
-    <button id="mt-refresh" class="tb-btn" title="Read the counters again" data-i18n-title="maint.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+    <button id="bm-measure-btn" class="tb-btn labeled hidden" title="Probe the bed now" data-i18n-title="bm.measure.title"><svg viewBox="0 0 24 24"><path d="M9 2h6v4.5l-2 3V13h-2V9.5l-2-3zM3 18.5h18V21H3zM4 15.5h2v1.6H4zm4.67 0h2v1.6h-2zm4.66 0h2v1.6h-2zM18 15.5h2v1.6h-2z"/></svg><span id="bm-measure-lbl" data-i18n="bm.measure">Measure Now</span></button>
+    <button id="bm-settings-btn" class="tb-btn hidden" title="Bed leveling settings" data-i18n-title="bm.settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7" transform="translate(-1 0)"/></svg></button>
+    <button id="mt-refresh" class="tb-btn" title="Read the counters again" data-i18n-title="maint.refresh_any"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
   </div>
   <div class="tb-actions" data-for="printers">
     <div id="prn-tools" class="tb-group hidden">
@@ -544,6 +560,7 @@
 <section id="view-maint" class="view hidden">
   <div class="prn">
     <section class="prn-main hv mt" id="mt-body"></section>
+    <section class="prn-main hv bm hidden" id="bm-body"></section>
   </div>
 </section>
 <section id="view-heads" class="view hidden">
@@ -1343,6 +1360,7 @@
       <div id="snd-printer" class="pj-printers" role="radiogroup" aria-labelledby="snd-for-label"></div>
     </div>
     <div id="snd-state" class="pf-test"></div>
+    <div id="snd-bed" class="snd-bed hidden" role="status"><span id="snd-bed-text"></span> · <button id="snd-bed-go" class="bm-link" data-i18n="bm.measure_first">Measure First</button></div>
 
     <div class="set-section" data-i18n="send.before">Before printing</div>
     <div class="group">
@@ -1366,6 +1384,135 @@
       <button id="snd-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
       <button id="snd-queue" class="btn left hidden" data-i18n="send.queue">Add to Queue</button>
       <button id="snd-go" class="btn primary" data-i18n="send.go">Start Print</button>
+    </div>
+  </div>
+</div>
+
+<div id="bmmeasure" class="modal hidden">
+  <div class="modal-box bm-sheet bm-wiz">
+    <h3 data-i18n="bm.measure.sheet">Measure the Bed</h3>
+    <p class="det-sub" id="bmm-printer"></p>
+    <ol class="bm-steps" id="bmm-steps">
+      <li data-step="prep"><i></i><span data-i18n="bm.step.prep">Prepare</span></li>
+      <li data-step="run"><i></i><span data-i18n="bm.step.run">Measure</span></li>
+      <li data-step="done"><i></i><span data-i18n="bm.step.done">Result</span></li>
+    </ol>
+    <div id="bmm-form">
+      <div id="bmm-recent" class="bm-warn hidden" role="alert"></div>
+      <div class="group">
+        <div class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.printer">Printer ready</span><span class="sub" id="bmm-ready-sub"></span></span>
+          <span class="bm-check wait" id="bmm-ready-ic" aria-hidden="true"></span>
+        </div>
+        <label class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.empty">The bed is clear</span><span class="sub" data-i18n="bm.prep.empty_sub">No part, no tool on it: the probe touches the whole surface</span></span>
+          <input type="checkbox" id="bmm-empty" class="sw" role="switch" />
+        </label>
+        <label class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.clean">The plate is clean and well seated</span><span class="sub" data-i18n="bm.prep.clean_sub">Advised: dirt under the plate skews the measurement</span></span>
+          <input type="checkbox" id="bmm-clean" class="sw" role="switch" />
+        </label>
+      </div>
+      <div class="group">
+        <label class="grow-row bm-slider-block">
+          <span class="k"><span data-i18n="bm.measure.temp">Bed temperature</span><span class="sub" id="bmm-temp-sub"></span></span>
+          <input id="bmm-temp" type="range" min="0" max="110" step="1" aria-label="Bed temperature" data-i18n-aria="bm.measure.temp" />
+          <span class="val" id="bmm-temp-v"></span>
+        </label>
+        <div class="grow-row"><span class="k" data-i18n="bm.measure.duration">Estimated duration</span><span class="val" id="bmm-eta"></span></div>
+      </div>
+    </div>
+    <div id="bmm-run" class="hidden">
+      <ol class="bm-phases" id="bmm-phases"></ol>
+      <div class="bm-phase" id="bmm-phase"></div>
+      <div class="bm-note bm-why" id="bmm-phase-why"></div>
+      <div class="progress" id="bmm-progress"><i></i></div>
+      <div class="bm-note" id="bmm-left"></div>
+      <p class="bm-note" id="bmm-stop-note"></p>
+    </div>
+    <div id="bmm-done" class="hidden"></div>
+    <div id="bmm-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="bmm-stop" class="btn danger left hidden" data-i18n="bm.stop.button">Emergency Stop</button>
+      <button id="bmm-abort" class="btn hidden" data-i18n="bm.abort.button">Stop Measuring</button>
+      <button id="bmm-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="bmm-alt" class="btn hidden"></button>
+      <button id="bmm-go" class="btn primary" data-i18n="bm.measure.go">Measure</button>
+    </div>
+  </div>
+</div>
+
+<div id="bmsettings" class="modal hidden">
+  <div class="modal-box bm-sheet">
+    <h3 data-i18n="bm.settings">Bed Leveling Settings</h3>
+    <p class="det-sub" id="bms-printer"></p>
+    <div class="set-section" data-i18n="bm.set.tolerance">Tolerance</div>
+    <div id="bms-level" class="seg bm-seg" role="radiogroup" aria-label="Tolerance" data-i18n-aria="bm.set.tolerance"></div>
+    <p class="bm-note" id="bms-level-sub"></p>
+    <details class="bm-adv">
+      <summary data-i18n="bm.set.advanced">Advanced: limits in mm</summary>
+      <div class="group">
+        <label class="grow-row bm-slider-row">
+          <span class="k"><span data-i18n="bm.set.good">Good up to</span><span class="sub" data-i18n="bm.set.good_sub">Deviation shown in green</span></span>
+          <input id="bms-good" type="range" min="0.05" max="2" step="0.05" />
+          <span class="val" id="bms-good-v"></span>
+        </label>
+        <label class="grow-row bm-slider-row">
+          <span class="k"><span data-i18n="bm.set.limit">Alert threshold</span><span class="sub" data-i18n="bm.set.limit_sub">Above it, the bed is out of tolerance</span></span>
+          <input id="bms-limit" type="range" min="0.05" max="2" step="0.05" />
+          <span class="val" id="bms-limit-v"></span>
+        </label>
+      </div>
+    </details>
+    <div class="set-section" data-i18n="bm.set.reminders">Alerts and reminders</div>
+    <div class="group">
+      <label class="grow-row">
+        <span class="k"><span data-i18n="bm.set.alert">Alert when out of tolerance</span><span class="sub" data-i18n="bm.set.alert_sub">A Bed Leveling task in Care, and the sidebar dot</span></span>
+        <input type="checkbox" id="bms-alert" class="sw" role="switch" />
+      </label>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="bm.set.remind">Remind me to measure</span><span class="sub" data-i18n="bm.set.remind_sub">A task in Care when the last measurement gets old</span></span>
+        <input type="checkbox" id="bms-remind" class="sw" role="switch" />
+      </label>
+      <div class="grow-row bm-seg-row" id="bms-days-row"><span class="k" data-i18n="bm.set.after_days">After</span><div id="bms-days" class="seg bm-seg" role="radiogroup" aria-label="After" data-i18n-aria="bm.set.after_days"></div></div>
+      <div class="grow-row bm-seg-row" id="bms-prints-row"><span class="k" data-i18n="bm.set.after_prints">Or after, in prints</span><div id="bms-prints" class="seg bm-seg" role="radiogroup" aria-label="Or after, in prints" data-i18n-aria="bm.set.after_prints"></div></div>
+    </div>
+    <div class="group">
+      <div class="grow-row bm-seg-row">
+        <span class="k"><span data-i18n="bm.set.keep">Measurements kept</span><span class="sub" data-i18n="bm.set.keep_sub">The oldest go first</span></span>
+        <div id="bms-keep" class="seg bm-seg" role="radiogroup" aria-label="Measurements kept" data-i18n-aria="bm.set.keep"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="bms-reset" class="btn left" data-i18n="bm.set.reset">Defaults</button>
+      <button id="bms-done" class="btn primary" data-cancel data-i18n="bm.set.done">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="bmcompare" class="modal hidden">
+  <div class="modal-box bm-sheet wide">
+    <h3 data-i18n="bm.compare.title">Compare Two Measurements</h3>
+    <div class="bm-cmp-pick">
+      <div class="bm-cmp-side"><span data-i18n="bm.compare.before">Before</span><div id="bmc-a" class="bm-chips" role="radiogroup" aria-label="Before" data-i18n-aria="bm.compare.before"></div></div>
+      <div class="bm-cmp-side"><span data-i18n="bm.compare.after">After</span><div id="bmc-b" class="bm-chips" role="radiogroup" aria-label="After" data-i18n-aria="bm.compare.after"></div></div>
+    </div>
+    <div class="bm-cmp-sum" id="bmc-sum"></div>
+    <div class="bm-viewbar">
+      <div id="bmc-views" class="seg" role="group" aria-label="View" data-i18n-aria="bm.compare.title">
+        <button class="seg-btn labeled" data-cv="a" data-i18n="bm.compare.before">Before</button>
+        <button class="seg-btn labeled" data-cv="b" data-i18n="bm.compare.after">After</button>
+        <button class="seg-btn labeled" data-cv="d" data-i18n="bm.compare.diff">Difference</button>
+      </div>
+      <div id="bmc-modes" class="seg" role="group" aria-label="3D or map" data-i18n-aria="bm.view">
+        <button class="seg-btn labeled" data-bmode="3d">3D</button>
+        <button class="seg-btn labeled" data-bmode="map" data-i18n="bm.view.map">Map</button>
+      </div>
+    </div>
+    <div class="bm-stage small"><canvas id="bmc-canvas"></canvas><div class="bm-hover hidden" id="bmc-hover"></div></div>
+    <div class="bm-legend" id="bmc-legend"></div>
+    <div class="modal-actions">
+      <button id="bmc-close" class="btn primary" data-cancel data-i18n="common.close">Close</button>
     </div>
   </div>
 </div>
@@ -1670,7 +1817,9 @@
 <script src="prepare.js"></script>
 <script src="heads.js"></script>
 <script src="spoolcheck.js"></script>
+<script src="bedmesh-logic.js"></script>
 <script src="maint.js"></script>
+<script src="bedmesh.js"></script>
 <script src="pfiles-logic.js"></script>
 <script src="printer-files.js"></script>
 <script src="pfiles-share.js"></script>

@@ -38,6 +38,25 @@ with its packages for macOS, Windows and Linux. What comes next:
   - color-blind safe colors, over any theme;
   - the 3D views and terminals follow the theme.
 
+- **Care & Tuning**: Maintenance becomes a view with tabs, Care and **Bed
+  Leveling** ([#21](https://github.com/kameka22/snap-studio/pull/21)):
+  - the bed's mesh read from the printer and kept over time: 3D view and
+    map, history, trend, comparing two measurements;
+  - one card with the bed's state and the one thing to do; limits suited
+    to the U1 (0.5 / 1 mm by default, three levels), a good bed said to be
+    compensated by the mesh;
+  - measuring with an assistant: the bed confirmed clear, a temperature
+    proposed from the last print (never above the bed's maximum), each of
+    the U1's steps with a countdown for the 2 min settle, a clean stop and
+    an emergency stop, the result against the previous measurement; the
+    bed is turned off if it fails, and a lost connection does not lose the
+    measurement;
+  - the bed's shape named and shown on the map, with what to do (the knobs
+    under a U1's bed), and "I've fixed it: measure again";
+  - reminders after 30 days or 50 prints; "Measure first" in the send
+    sheet; the tabs of a printer's Files and of an AI conversation sit on
+    the left.
+
 ### Fixed
 - The app's window comes to the front at launch on macOS
   ([#28](https://github.com/kameka22/snap-studio/pull/28)).

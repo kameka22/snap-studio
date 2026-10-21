@@ -264,9 +264,14 @@ pub fn check_map(tools: &[u8], map: &[(u8, u8)]) -> Result<()> {
 
 /// Runs a G-code script; the error reports Klipper's answer.
 pub async fn gcode_script(host: &str, port: u16, script: &str) -> Result<()> {
+    gcode_script_for(host, port, script, Duration::from_secs(30)).await
+}
+
+/// The same, for a script that lasts (Moonraker answers when it is done).
+pub async fn gcode_script_for(host: &str, port: u16, script: &str, timeout: Duration) -> Result<()> {
     let r = long_client()
         .post(format!("{}/printer/gcode/script", base(host, port)))
-        .timeout(Duration::from_secs(30))
+        .timeout(timeout)
         .json(&serde_json::json!({ "script": script }))
         .send()
         .await?;
@@ -289,6 +294,16 @@ pub fn is_unknown_command(err: &anyhow::Error) -> bool {
 }
 
 /// Pause, resume or cancel the running print.
+/// A bare POST to Moonraker (`/printer/emergency_stop`…): its `result`
+/// (Null when there is none).
+pub(crate) async fn post_path(host: &str, port: u16, path: &str) -> Result<Value> {
+    let r = client().post(format!("{}{path}", base(host, port))).send().await?;
+    if !r.status().is_success() {
+        return Err(anyhow!(crate::t!("err.printer_refuses", status = r.status())));
+    }
+    Ok(r.json::<Value>().await.map(|v| v["result"].clone()).unwrap_or(Value::Null))
+}
+
 pub async fn print_action(host: &str, port: u16, action: &str) -> Result<()> {
     let action = match action {
         "pause" | "resume" | "cancel" => action,

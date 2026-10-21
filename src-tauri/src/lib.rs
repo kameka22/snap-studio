@@ -2,6 +2,7 @@ mod menu;
 mod migrate;
 mod access;
 mod auth;
+mod bedmesh;
 mod chat;
 mod discover;
 mod engine;
@@ -1231,6 +1232,65 @@ fn maintenance_remove(printer_id: String, task: String, at: u64) -> Result<Vec<m
     maintenance::remove(&printer_id, &task, at).map_err(|e| e.to_string())
 }
 
+/// A printer's bed mesh now, with its settings and progress.
+#[tauri::command]
+async fn bed_mesh_read(printer_id: String, light: Option<bool>) -> Result<bedmesh::Live, String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::read(&p.host, p.port, light.unwrap_or(false)).await.map_err(|e| e.to_string())
+}
+
+/// The meshes stored for a printer, oldest first.
+#[tauri::command]
+fn bed_mesh_history(printer_id: String) -> Vec<bedmesh::Mesh> {
+    bedmesh::history(&printer_id)
+}
+
+/// Stores a full-bed mesh not seen yet; returns the history.
+#[tauri::command]
+fn bed_mesh_record(printer_id: String, mesh: bedmesh::Mesh, keep: usize, by_app: bool) -> Result<Vec<bedmesh::Mesh>, String> {
+    bedmesh::record(&printer_id, mesh, keep, by_app).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn bed_mesh_remove(printer_id: String, at: u64) -> Result<Vec<bedmesh::Mesh>, String> {
+    bedmesh::remove(&printer_id, at).map_err(|e| e.to_string())
+}
+
+/// Keeps only the `keep` newest meshes.
+#[tauri::command]
+fn bed_mesh_keep(printer_id: String, keep: usize) -> Result<Vec<bedmesh::Mesh>, String> {
+    bedmesh::keep(&printer_id, keep).map_err(|e| e.to_string())
+}
+
+/// Measures the bed; returns when the printer is done.
+#[tauri::command]
+async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::measure(&p.host, p.port, temp).await.map_err(|e| e.to_string())
+}
+
+/// Stops the probing cleanly (the U1, once its leveling has begun).
+#[tauri::command]
+async fn bed_mesh_abort(printer_id: String) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::abort(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+/// Emergency stop of a measurement going wrong (then Klipper restarts).
+#[tauri::command]
+async fn bed_mesh_stop(printer_id: String) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::stop(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+/// A system notification (the end of a measurement while the app is
+/// elsewhere).
+#[tauri::command]
+fn app_notify(app: tauri::AppHandle, title: String, body: String) {
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder().title(title).body(body).show();
+}
+
 /// Opens the live feeds (Printers tab shown).
 #[tauri::command]
 fn printers_watch_start(app: tauri::AppHandle) {
@@ -1974,6 +2034,15 @@ pub fn run() {
             maintenance_log,
             maintenance_done,
             maintenance_remove,
+            bed_mesh_read,
+            bed_mesh_history,
+            bed_mesh_record,
+            bed_mesh_remove,
+            bed_mesh_keep,
+            bed_mesh_measure,
+            bed_mesh_stop,
+            bed_mesh_abort,
+            app_notify,
             printers_watch_start,
             printers_watch_stop,
             cache_info,

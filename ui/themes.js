@@ -37,6 +37,10 @@ const CVD_TOKENS = {
     "--success": "#0072b2",
     "--success-text": "#005b8f",
     "--warning-text": "#8a5800",
+    // Bed mesh scale: blue → yellow → vermilion, told apart without red / green.
+    "--mesh-low": "#0072b2",
+    "--mesh-mid": "#f0e442",
+    "--mesh-high": "#d55e00",
   },
   dark: {
     "--danger": "#e08fc6",
@@ -44,6 +48,9 @@ const CVD_TOKENS = {
     "--success": "#56b4e9",
     "--success-text": "#56b4e9",
     "--warning-text": "#f0b429",
+    "--mesh-low": "#56b4e9",
+    "--mesh-mid": "#f0e442",
+    "--mesh-high": "#d55e00",
   },
 };
 

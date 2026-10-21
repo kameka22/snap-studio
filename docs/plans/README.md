@@ -63,6 +63,13 @@ tests), whose real behavior remains to be checked.
   light or dark mode, the app takes the system's mode without staying on
   the forced one; in the macOS theme, the window buttons sit well in the
   floating sidebar.
+- **Bed leveling** (unreleased, #21): a measurement from the app on a U1
+  (AUTO_BED_MESH_CALIBRATE: the 2 min settle countdown against the
+  machine, the probe's preheat, the corner check); the clean stop
+  (`bed_mesh/abort_probe_mesh`) ends the probing and the bed is turned
+  off; the emergency stop brings the printer back to ready; the
+  temperature proposed from Moonraker's history; the shape diagnosis on
+  real beds; a lost connection followed until the end.
 - **AI sandbox**: if a sandbox restarts while idle, the exit code shown in
   the Terminal tab and the `[chat] Claude ended…` console line say why.
 

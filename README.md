@@ -69,7 +69,7 @@ duplicated; see [Design with AI](#design-with-ai).
 ### 🖨 Printers
 Found on the network on their own; live state, the four heads'
 temperatures, the spools loaded in each, their [files and timelapses](#-printer-files-and-timelapses)
-and their [maintenance](#-maintenance). Works with any Klipper printer.
+and their [care and bed leveling](#-care--tuning). Works with any Klipper printer.
 
 <img src="docs/screenshots/printer.png" alt="Printer and its spools" />
 
@@ -107,10 +107,11 @@ downloads land in Files; favorites in the sidebar.
 </tr>
 </table>
 
-### 🔧 Maintenance
+### 🔧 Care & Tuning
 
-Each printer has its maintenance view, from what the printer counts and
-Snapmaker's maintenance guide:
+Each printer has its Care & Tuning view, in two tabs.
+
+**Care**, from what the printer counts and Snapmaker's maintenance guide:
 
 - **Usage**: print time, prints, filament used, longest print.
 - **Heads** (U1): tool changes, how far each is from the contacts' cleaning
@@ -129,6 +130,26 @@ defaults, Snapmaker gives none. On another Klipper printer, the view keeps
 usage and the hour-based tasks.
 
 <img src="docs/screenshots/maintenance.png" alt="The maintenance view" />
+
+**Bed Leveling**: the bed's mesh, read from the printer, kept over time.
+
+- One card says how the bed is and the one thing to do: good (compensated
+  by the printer's mesh), to watch, out of tolerance, or measure again.
+  The default limits (0.5 / 1 mm, three levels) suit the U1, whose mesh
+  compensates what is below; it asks for manual leveling only above 2 mm.
+- The surface in 3D or as a map with every point's height; history,
+  trend and the comparison of two measurements.
+- **Measure** with an assistant: the bed confirmed clear (a print that has
+  just ended is pointed out), a temperature proposed from the last print,
+  then each of the U1's steps — heating, the 2 min settle, preheat, the
+  corner check, probing — a clean stop or an emergency stop, and the
+  result against the previous measurement.
+- When the bed asks for attention, its shape is named and shown on the map
+  (a tilted side, a raised corner, a hollow or domed bed, one point apart),
+  with what to do — on a U1, the knobs under the bed and the printer's
+  manual leveling — then "I've fixed it: measure again".
+- A reminder in Care after 30 days or 50 prints, and "Measure first" in
+  the send sheet when the bed is out of tolerance.
 
 ### 📂 Printer files and timelapses
 
@@ -295,7 +316,6 @@ with its pull request (drafts, approved or under discussion):
 | **Print by object** — one object after the other, with collision checks for the U1's head and an adjustable order | [#22](https://github.com/kameka22/snap-studio/pull/22) |
 | **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Calibration assistant** — step-by-step Klipper calibrations from a Calibration menu | [#17](https://github.com/kameka22/snap-studio/pull/17) |
-| **Bed mesh map** — the bed leveling mesh in 3D, its evolution, an alert above a threshold | [#21](https://github.com/kameka22/snap-studio/pull/21) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Snapmaker hub** — Snapmaker Space, Store, Wiki, Forum and account in one menu, models opened straight in Prepare | [#23](https://github.com/kameka22/snap-studio/pull/23) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |

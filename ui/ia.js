@@ -230,6 +230,7 @@ function iaRender() {
   $("ia-engine-tag").classList.toggle("hidden", detail);
   $("ia-new").classList.toggle("hidden", detail);
   $("ia-dacts").classList.toggle("hidden", !detail);
+  $("ia-views").classList.toggle("hidden", !detail);
   $("ia-back").classList.toggle("hidden", !detail);
   if (!detail) $("ia-engine-tag").textContent = iaEngineLabel();
   iaApplyAi();
