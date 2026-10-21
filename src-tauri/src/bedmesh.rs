@@ -69,6 +69,19 @@ pub struct Temp {
     pub target: f64,
 }
 
+/// The printer's last print (Moonraker's history): the bed temperature it
+/// used suggests the measurement's, its end warns a part may be on the bed.
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct LastJob {
+    pub filename: String,
+    /// completed | cancelled | error | klippy_shutdown | in_progress …
+    pub status: String,
+    /// Unix seconds, 0 while printing.
+    pub end: f64,
+    /// `first_layer_bed_temp` from the file's metadata, when the slicer wrote it.
+    pub bed_temp: Option<f64>,
+}
+
 /// What the printer says now.
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
 pub struct Live {
@@ -81,6 +94,8 @@ pub struct Live {
     pub state: String,
     pub homed: String,
     pub bed: Option<Temp>,
+    /// Only in a full read (not while following a measurement).
+    pub last_job: Option<LastJob>,
 }
 
 /// `[3, 3]`, `"3, 3"` or `"3,3"`.
@@ -167,17 +182,39 @@ pub fn parse(status: &Value) -> Live {
         state: status["print_stats"]["state"].as_str().unwrap_or("").to_string(),
         homed: status["toolhead"]["homed_axes"].as_str().unwrap_or("").to_string(),
         bed: hb["temperature"].as_f64().map(|current| Temp { current, target: hb["target"].as_f64().unwrap_or(0.0) }),
+        last_job: None,
     }
 }
 
-/// Reads the mesh, its settings, the print state and the bed.
-pub async fn read(host: &str, port: u16) -> Result<Live> {
+/// The newest job of `/server/history/list` (`result`).
+pub fn parse_last_job(history: &Value) -> Option<LastJob> {
+    let j = history["jobs"].as_array()?.first()?;
+    Some(LastJob {
+        filename: j["filename"].as_str().unwrap_or("").to_string(),
+        status: j["status"].as_str().unwrap_or("").to_string(),
+        end: j["end_time"].as_f64().unwrap_or(0.0),
+        bed_temp: j["metadata"]["first_layer_bed_temp"].as_f64().filter(|t| t.is_finite() && *t > 0.0),
+    })
+}
+
+/// Reads the mesh, its settings, the print state, the bed and the last
+/// print. `light`: only what a measurement in progress needs (no printer
+/// configuration, no history), for a read every 2 s.
+pub async fn read(host: &str, port: u16, light: bool) -> Result<Live> {
     let base = crate::printers::base(host, port);
+    let config = if light { "" } else { "&configfile=settings" };
     let v = crate::printers::get_json(&format!(
-        "{base}/printer/objects/query?bed_mesh&print_stats=state&toolhead=homed_axes&heater_bed&configfile=settings"
+        "{base}/printer/objects/query?bed_mesh&print_stats=state&toolhead=homed_axes&heater_bed{config}"
     ))
     .await?;
-    Ok(parse(&v["result"]["status"]))
+    let mut live = parse(&v["result"]["status"]);
+    if !light {
+        // Without the history component, no last print: not an error.
+        if let Ok(h) = crate::printers::get_json(&format!("{base}/server/history/list?limit=1&order=desc")).await {
+            live.last_job = parse_last_job(&h["result"]);
+        }
+    }
+    Ok(live)
 }
 
 /// Mesh probing in progress.
@@ -209,7 +246,7 @@ pub fn measure_script(homed: &str, auto_macro: bool, temp: f64) -> String {
 
 /// Measures the bed now; returns when the printer is done.
 pub async fn measure(host: &str, port: u16, temp: f64) -> Result<()> {
-    let live = read(host, port).await?;
+    let live = read(host, port, false).await?;
     if !live.supported {
         return Err(anyhow!(crate::t!("err.no_bed_mesh")));
     }
@@ -221,7 +258,22 @@ pub async fn measure(host: &str, port: u16, temp: f64) -> Result<()> {
     }
     let auto = live.config.as_ref().is_some_and(|c| c.auto_macro);
     let script = measure_script(&live.homed, auto, temp);
-    crate::printers::gcode_script_for(host, port, &script, Duration::from_secs(45 * 60)).await
+    let r = crate::printers::gcode_script_for(host, port, &script, Duration::from_secs(45 * 60)).await;
+    if r.is_err() && temp > 0.0 {
+        // Klipper stops a script at its first error: the bed would stay hot
+        // (until its idle timeout). Turned off here, whatever happened.
+        let _ = crate::printers::gcode_script(host, port, "M140 S0").await;
+    }
+    r
+}
+
+/// Stops the printer at once (a measurement going wrong: a part left on
+/// the bed…): Klipper's emergency stop, then its restart, which takes it
+/// back to ready in a few seconds. Heaters and motors are off.
+pub async fn stop(host: &str, port: u16) -> Result<()> {
+    crate::printers::post_path(host, port, "/printer/emergency_stop").await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    crate::printers::post_path(host, port, "/printer/firmware_restart").await
 }
 
 // ------------------------------------------------------------ history
@@ -396,6 +448,22 @@ mod tests {
     }
 
     #[test]
+    fn the_last_print_from_the_history() {
+        let h = serde_json::json!({ "count": 12, "jobs": [
+            { "filename": "Benchy.gcode", "status": "completed", "end_time": 1761050000.5, "metadata": { "first_layer_bed_temp": 65.0 } },
+            { "filename": "old.gcode", "status": "completed", "end_time": 1.0 }
+        ] });
+        let j = parse_last_job(&h).unwrap();
+        assert_eq!((j.filename.as_str(), j.status.as_str(), j.end, j.bed_temp), ("Benchy.gcode", "completed", 1761050000.5, Some(65.0)));
+        // No metadata, a running job; no job at all.
+        let h = serde_json::json!({ "jobs": [{ "filename": "a.gcode", "status": "in_progress", "end_time": null, "metadata": {} }] });
+        let j = parse_last_job(&h).unwrap();
+        assert_eq!((j.end, j.bed_temp), (0.0, None));
+        assert!(parse_last_job(&serde_json::json!({ "jobs": [] })).is_none());
+        assert!(parse_last_job(&serde_json::json!({})).is_none());
+    }
+
+    #[test]
     fn the_measurement_script() {
         assert_eq!(measure_script("xyz", true, 55.0), "AUTO_BED_MESH_CALIBRATE TEMP=55\nM140 S0");
         assert_eq!(measure_script("", true, 60.4), "G28\nAUTO_BED_MESH_CALIBRATE TEMP=60\nM140 S0");
@@ -455,7 +523,7 @@ mod tests {
     #[ignore]
     fn real_printer() {
         let host = std::env::var("MESH_HOST").expect("MESH_HOST");
-        let l = tauri::async_runtime::block_on(read(&host, 7125)).unwrap();
+        let l = tauri::async_runtime::block_on(read(&host, 7125, false)).unwrap();
         println!("{}", serde_json::to_string_pretty(&l).unwrap());
         assert!(l.supported);
     }

@@ -23,7 +23,7 @@ SRC = ROOT / "src-tauri" / "src"
 # Keys assembled at run time: any key starting with one of these is used.
 DYNAMIC = (
     "ais.item.", "ais.mode.", "welcome.ai.chosen.", "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
-    "prints.state.", "slice.pstate.", "style.", "maint.t.", "maint.nozzle.", "maint.in.", "maint.late.", "bm.st.",
+    "prints.state.", "slice.pstate.", "style.", "maint.t.", "maint.nozzle.", "maint.in.", "maint.late.", "bm.st.", "bm.done.", "bm.f.", "bm.level.", "bm.phase.", "bm.set.level_", "bm.side.",
 )
 
 # French that may legitimately stay in the code (names, data matching).

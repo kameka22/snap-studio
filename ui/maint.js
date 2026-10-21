@@ -112,8 +112,10 @@ async function mtCheckAll() {
   await Promise.all(P.list.map((p) => mtLoad(p.id).catch(() => null)));
 }
 
-/* Due tasks of a printer: Care's, and the bed out of tolerance. */
-const mtDueAll = (pid) => (MT.due.get(pid) || 0) + (typeof bmAlertOf === "function" && bmAlertOf(pid) ? 1 : 0);
+/* Due tasks of a printer: Care's, and the bed (out of tolerance, or a
+   measurement due). */
+const mtBedDue = (pid) => (typeof bmDueOf === "function" ? bmDueOf(pid) : null);
+const mtDueAll = (pid) => (MT.due.get(pid) || 0) + (mtBedDue(pid) ? 1 : 0);
 
 function mtSideDots() {
   document.querySelectorAll("#side-printers [data-maint]").forEach((b) => {
@@ -127,11 +129,11 @@ function mtSideDots() {
 /* The ⚠ of a tab that asks for something. */
 function mtTabMarks() {
   if (!MT.pid) return;
-  const warn = { care: mtDueAll(MT.pid) > 0, level: typeof bmAlertOf === "function" && !!bmAlertOf(MT.pid) };
+  const warn = { care: mtDueAll(MT.pid) > 0, level: !!mtBedDue(MT.pid) };
   document.querySelectorAll("#mt-tabs [data-mtab]").forEach((b) => {
     const w = !!warn[b.dataset.mtab];
     b.querySelector(".tab-warn").classList.toggle("hidden", !w);
-    if (w) b.title = b.dataset.mtab === "level" ? tr("bm.alert_tab") : tr("maint.due_n", { n: mtDueAll(MT.pid) });
+    if (w) b.title = b.dataset.mtab === "level" ? tr(mtBedDue(MT.pid)?.kind === "out" ? "bm.alert_tab" : "bm.due_tab") : tr("maint.due_n", { n: mtDueAll(MT.pid) });
     else b.removeAttribute("title");
   });
 }
@@ -202,7 +204,7 @@ function mtRender() {
     .filter((x) => x.pr)
     .map((x) => ({ ...x, st: mtState(x.pr.ratio) }))
     .sort((a, b) => order[a.st] - order[b.st] || b.pr.ratio - a.pr.ratio);
-  const level = bmAlertOf(MT.pid);
+  const level = mtBedDue(MT.pid);
   const pending = tasks.filter((x) => x.st !== "ok");
   const due = pending.length + (level ? 1 : 0);
 
@@ -228,9 +230,13 @@ function mtRender() {
   const levelRow = level
     ? `<div class="mt-task" data-mt-task="level">
       <div class="mt-row" data-mt-level>
-        <span class="mt-chev"></span><span class="mt-dot-st due"></span>
-        <span class="mt-name"><b>${esc(tr("maint.tab.level"))}</b><small class="due">${esc(tr("bm.task_sub", { dev: fmtDec(level.dev, 2), limit: fmtDec(bmSettingsOf(MT.pid).limit, 2), d: mtDate(level.at) }))}</small></span>
-        <span class="mt-mini due"><i class="full"></i></span>
+        <span class="mt-chev"></span><span class="mt-dot-st ${level.kind === "out" ? "due" : "soon"}"></span>
+        <span class="mt-name"><b>${esc(tr("maint.tab.level"))}</b><small class="${level.kind === "out" ? "due" : "soon"}">${esc(
+          level.kind === "out" ? tr("bm.task_sub", { dev: fmtDec(level.dev, 2), limit: fmtDec(bmSettingsOf(MT.pid).limit, 2), d: mtDate(level.at) })
+          : level.remind.reason === "prints" ? tr("bm.task_stale_prints", { n: level.remind.prints })
+          : tr("bm.task_stale_days", { n: level.remind.days })
+        )}</small></span>
+        <span class="mt-mini ${level.kind === "out" ? "due" : "soon"}"><i class="full"></i></span>
         <button class="btn small primary" data-mt-level>${esc(tr("bm.open"))}</button>
       </div>
     </div>`

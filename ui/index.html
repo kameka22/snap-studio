@@ -197,7 +197,7 @@
     </label>
   </div>
   <div class="tb-actions" data-for="maint">
-    <button id="bm-measure-btn" class="tb-btn labeled hidden" title="Probe the bed now" data-i18n-title="bm.measure.title"><svg viewBox="0 0 24 24"><path d="M11 2h2v7.2l2.6-2.6 1.4 1.4-5 5-5-5 1.4-1.4L11 9.2zM3 17l4-3h10l4 3v3H3z"/></svg><span id="bm-measure-lbl" data-i18n="bm.measure">Measure Now</span></button>
+    <button id="bm-measure-btn" class="tb-btn labeled hidden" title="Probe the bed now" data-i18n-title="bm.measure.title"><svg viewBox="0 0 24 24"><path d="M9 2h6v4.5l-2 3V13h-2V9.5l-2-3zM3 18.5h18V21H3zM4 15.5h2v1.6H4zm4.67 0h2v1.6h-2zm4.66 0h2v1.6h-2zM18 15.5h2v1.6h-2z"/></svg><span id="bm-measure-lbl" data-i18n="bm.measure">Measure Now</span></button>
     <button id="bm-settings-btn" class="tb-btn hidden" title="Bed leveling settings" data-i18n-title="bm.settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7" transform="translate(-1 0)"/></svg></button>
     <button id="mt-refresh" class="tb-btn" title="Read the counters again" data-i18n-title="maint.refresh_any"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
   </div>
@@ -1360,7 +1360,7 @@
       <div id="snd-printer" class="pj-printers" role="radiogroup" aria-labelledby="snd-for-label"></div>
     </div>
     <div id="snd-state" class="pf-test"></div>
-    <div id="snd-bed" class="snd-bed hidden" role="status"><span id="snd-bed-text"></span> · <button id="snd-bed-go" class="bm-link" data-i18n="bm.measure_short">Measure</button></div>
+    <div id="snd-bed" class="snd-bed hidden" role="status"><span id="snd-bed-text"></span> · <button id="snd-bed-go" class="bm-link" data-i18n="bm.measure_first">Measure First</button></div>
 
     <div class="set-section" data-i18n="send.before">Before printing</div>
     <div class="group">
@@ -1389,28 +1389,51 @@
 </div>
 
 <div id="bmmeasure" class="modal hidden">
-  <div class="modal-box bm-sheet">
+  <div class="modal-box bm-sheet bm-wiz">
     <h3 data-i18n="bm.measure.sheet">Measure the Bed</h3>
     <p class="det-sub" id="bmm-printer"></p>
+    <ol class="bm-steps" id="bmm-steps">
+      <li data-step="prep"><i></i><span data-i18n="bm.step.prep">Prepare</span></li>
+      <li data-step="run"><i></i><span data-i18n="bm.step.run">Measure</span></li>
+      <li data-step="done"><i></i><span data-i18n="bm.step.done">Result</span></li>
+    </ol>
     <div id="bmm-form">
-      <p class="bm-note" data-i18n="bm.measure.what">The printer homes if needed, heats the bed, lets it settle, then probes every point of the mesh. Clear the plate first.</p>
+      <div id="bmm-recent" class="bm-warn hidden" role="alert"></div>
+      <div class="group">
+        <div class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.printer">Printer ready</span><span class="sub" id="bmm-ready-sub"></span></span>
+          <span class="bm-check wait" id="bmm-ready-ic" aria-hidden="true"></span>
+        </div>
+        <label class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.empty">The bed is clear</span><span class="sub" data-i18n="bm.prep.empty_sub">No part, no tool on it: the probe touches the whole surface</span></span>
+          <input type="checkbox" id="bmm-empty" class="sw" role="switch" />
+        </label>
+        <label class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.clean">The plate is clean and well seated</span><span class="sub" data-i18n="bm.prep.clean_sub">Advised: dirt under the plate skews the measurement</span></span>
+          <input type="checkbox" id="bmm-clean" class="sw" role="switch" />
+        </label>
+      </div>
       <div class="group">
         <label class="grow-row">
-          <span class="k"><span data-i18n="bm.measure.temp">Bed temperature</span><span class="sub" data-i18n="bm.measure.temp_sub">Measure at the temperature you print at</span></span>
-          <span class="val"><input id="bmm-temp" class="field bm-num" type="number" min="0" max="110" step="5" /> °C</span>
+          <span class="k"><span data-i18n="bm.measure.temp">Bed temperature</span><span class="sub" id="bmm-temp-sub"></span></span>
+          <span class="val"><input id="bmm-temp" class="field bm-num" type="number" min="0" max="110" step="5" title="0: no heating" data-i18n-title="bm.prep.temp_zero" /> °C</span>
         </label>
-        <div class="grow-row"><span class="k" data-i18n="bm.measure.points">Points</span><span class="val" id="bmm-points"></span></div>
         <div class="grow-row"><span class="k" data-i18n="bm.measure.duration">Estimated duration</span><span class="val" id="bmm-eta"></span></div>
       </div>
     </div>
     <div id="bmm-run" class="hidden">
+      <ol class="bm-phases" id="bmm-phases"></ol>
       <div class="bm-phase" id="bmm-phase"></div>
       <div class="progress" id="bmm-progress"><i></i></div>
       <div class="bm-note" id="bmm-left"></div>
+      <p class="bm-note" data-i18n="bm.run.stop_note">Something wrong (a part left on the bed, an odd noise)? The emergency stop cuts everything at once.</p>
     </div>
+    <div id="bmm-done" class="hidden"></div>
     <div id="bmm-msg" class="pf-test"></div>
     <div class="modal-actions">
+      <button id="bmm-stop" class="btn danger left hidden" data-i18n="bm.stop.button">Emergency Stop</button>
       <button id="bmm-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="bmm-alt" class="btn hidden"></button>
       <button id="bmm-go" class="btn primary" data-i18n="bm.measure.go">Measure</button>
     </div>
   </div>
@@ -1420,25 +1443,42 @@
   <div class="modal-box bm-sheet">
     <h3 data-i18n="bm.settings">Bed Leveling Settings</h3>
     <p class="det-sub" id="bms-printer"></p>
+    <div class="set-section" data-i18n="bm.set.tolerance">Tolerance</div>
+    <div id="bms-level" class="seg bm-seg" role="radiogroup" aria-label="Tolerance" data-i18n-aria="bm.set.tolerance"></div>
+    <p class="bm-note" id="bms-level-sub"></p>
+    <details class="bm-adv">
+      <summary data-i18n="bm.set.advanced">Advanced: limits in mm</summary>
+      <div class="group">
+        <label class="grow-row bm-slider-row">
+          <span class="k"><span data-i18n="bm.set.good">Good up to</span><span class="sub" data-i18n="bm.set.good_sub">Deviation shown in green</span></span>
+          <input id="bms-good" type="range" min="0.05" max="1" step="0.01" />
+          <span class="val" id="bms-good-v"></span>
+        </label>
+        <label class="grow-row bm-slider-row">
+          <span class="k"><span data-i18n="bm.set.limit">Alert threshold</span><span class="sub" data-i18n="bm.set.limit_sub">Above it, the bed is out of tolerance</span></span>
+          <input id="bms-limit" type="range" min="0.05" max="1" step="0.01" />
+          <span class="val" id="bms-limit-v"></span>
+        </label>
+      </div>
+    </details>
+    <div class="set-section" data-i18n="bm.set.reminders">Alerts and reminders</div>
     <div class="group">
-      <label class="grow-row bm-slider-row">
-        <span class="k"><span data-i18n="bm.set.good">Good up to</span><span class="sub" data-i18n="bm.set.good_sub">Deviation shown in green</span></span>
-        <input id="bms-good" type="range" min="0.05" max="1" step="0.01" />
-        <span class="val" id="bms-good-v"></span>
-      </label>
-      <label class="grow-row bm-slider-row">
-        <span class="k"><span data-i18n="bm.set.limit">Alert threshold</span><span class="sub" data-i18n="bm.set.limit_sub">Above it, the bed is out of tolerance</span></span>
-        <input id="bms-limit" type="range" min="0.05" max="1" step="0.01" />
-        <span class="val" id="bms-limit-v"></span>
-      </label>
       <label class="grow-row">
         <span class="k"><span data-i18n="bm.set.alert">Alert when out of tolerance</span><span class="sub" data-i18n="bm.set.alert_sub">A Bed Leveling task in Care, and the sidebar dot</span></span>
         <input type="checkbox" id="bms-alert" class="sw" role="switch" />
       </label>
       <label class="grow-row">
-        <span class="k"><span data-i18n="bm.set.keep">Measurements kept</span><span class="sub" data-i18n="bm.set.keep_sub">The oldest go first</span></span>
-        <select id="bms-keep" class="field bm-select"></select>
+        <span class="k"><span data-i18n="bm.set.remind">Remind me to measure</span><span class="sub" data-i18n="bm.set.remind_sub">A task in Care when the last measurement gets old</span></span>
+        <input type="checkbox" id="bms-remind" class="sw" role="switch" />
       </label>
+      <div class="grow-row bm-seg-row" id="bms-days-row"><span class="k" data-i18n="bm.set.after_days">After</span><div id="bms-days" class="seg bm-seg" role="radiogroup" aria-label="After" data-i18n-aria="bm.set.after_days"></div></div>
+      <div class="grow-row bm-seg-row" id="bms-prints-row"><span class="k" data-i18n="bm.set.after_prints">Or after, in prints</span><div id="bms-prints" class="seg bm-seg" role="radiogroup" aria-label="Or after, in prints" data-i18n-aria="bm.set.after_prints"></div></div>
+    </div>
+    <div class="group">
+      <div class="grow-row bm-seg-row">
+        <span class="k"><span data-i18n="bm.set.keep">Measurements kept</span><span class="sub" data-i18n="bm.set.keep_sub">The oldest go first</span></span>
+        <div id="bms-keep" class="seg bm-seg" role="radiogroup" aria-label="Measurements kept" data-i18n-aria="bm.set.keep"></div>
+      </div>
     </div>
     <div class="modal-actions">
       <button id="bms-reset" class="btn left" data-i18n="bm.set.reset">Defaults</button>
@@ -1451,9 +1491,8 @@
   <div class="modal-box bm-sheet wide">
     <h3 data-i18n="bm.compare.title">Compare Two Measurements</h3>
     <div class="bm-cmp-pick">
-      <label><span data-i18n="bm.compare.before">Before</span><select id="bmc-a" class="field bm-select"></select></label>
-      <span class="bm-cmp-arrow" aria-hidden="true">→</span>
-      <label><span data-i18n="bm.compare.after">After</span><select id="bmc-b" class="field bm-select"></select></label>
+      <div class="bm-cmp-side"><span data-i18n="bm.compare.before">Before</span><div id="bmc-a" class="bm-chips" role="radiogroup" aria-label="Before" data-i18n-aria="bm.compare.before"></div></div>
+      <div class="bm-cmp-side"><span data-i18n="bm.compare.after">After</span><div id="bmc-b" class="bm-chips" role="radiogroup" aria-label="After" data-i18n-aria="bm.compare.after"></div></div>
     </div>
     <div class="bm-cmp-sum" id="bmc-sum"></div>
     <div class="bm-viewbar">

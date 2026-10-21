@@ -6,8 +6,12 @@
    A mesh, as bedmesh.rs gives it: { at, min: [x, y], max: [x, y],
    points: rows from min y to max y, each from min x to max x (mm) }. */
 
-const BML_DEFAULTS = { good: 0.2, limit: 0.3, alert: true, keep: 20 };
+const BML_DEFAULTS = { good: 0.2, limit: 0.3, alert: true, keep: 20, remind: true, remindDays: 30, remindPrints: 50 };
 const BML_KEEPS = [5, 10, 20, 50, 100];
+const BML_REMIND_DAYS = [15, 30, 60, 90];
+const BML_REMIND_PRINTS = [0, 25, 50, 100]; // 0: not by prints
+/* Tolerance in three words; the values stay open in "Advanced". */
+const BML_LEVELS = { tolerant: { good: 0.3, limit: 0.45 }, standard: { good: 0.2, limit: 0.3 }, strict: { good: 0.1, limit: 0.2 } };
 
 const bmlRound = (x, n = 3) => Math.round(x * 10 ** n) / 10 ** n;
 
@@ -18,8 +22,26 @@ function bmlSettings(raw) {
   const limit = bmlRound(num(r.limit, BML_DEFAULTS.limit, 0.05, 1), 2);
   const good = bmlRound(Math.min(limit, num(r.good, BML_DEFAULTS.good, 0.02, 1)), 2);
   const keep = BML_KEEPS.includes(+r.keep) ? +r.keep : BML_DEFAULTS.keep;
-  return { good, limit, alert: r.alert === undefined ? BML_DEFAULTS.alert : !!r.alert, keep };
+  return {
+    good,
+    limit,
+    alert: r.alert === undefined ? BML_DEFAULTS.alert : !!r.alert,
+    keep,
+    remind: r.remind === undefined ? BML_DEFAULTS.remind : !!r.remind,
+    remindDays: BML_REMIND_DAYS.includes(+r.remindDays) ? +r.remindDays : BML_DEFAULTS.remindDays,
+    remindPrints: BML_REMIND_PRINTS.includes(+r.remindPrints) ? +r.remindPrints : BML_DEFAULTS.remindPrints,
+  };
 }
+
+/* The level the limits match, or "custom". */
+function bmlLevelOf(s) {
+  const { good, limit } = bmlSettings(s);
+  return Object.keys(BML_LEVELS).find((k) => BML_LEVELS[k].good === good && BML_LEVELS[k].limit === limit) || "custom";
+}
+
+/* The change from one deviation to another, on the values shown (to the
+   hundredth): 0.10 → 0.16 reads +0.06, never +0.05. */
+const bmlDelta = (from, to) => bmlRound(bmlRound(to, 2) - bmlRound(from, 2), 2);
 
 /* Min, max, mean, deviation (max − min), grid size, where the extremes are. */
 function bmlStats(mesh) {
@@ -189,8 +211,148 @@ function bmlPhase(live, temp) {
   return { phase: "soak" };
 }
 
+/* ------------------------------------------------------------ diagnosis */
+
+/* What shape the bed has, as findings a person can act on, biggest first:
+   - tilt: one side higher ({ side: "right" | "back-left" …, amount });
+   - corner: one corner up or down ({ corner, high, amount });
+   - bowl (edges up) or dome (centre up) ({ amount });
+   - bump: one point apart from its surroundings ({ at: [i, j], high, amount }).
+   Each with `zone`: the probed points [i, j] to show on the map. `amount`
+   is the height (mm) that shape accounts for across the bed. Found by
+   matching the shapes one after the other on what is left to explain;
+   nothing under 0.03 mm, nor what explains too little of the bed. */
+function bmlShape(mesh) {
+  const st = bmlStats(mesh);
+  if (!st || st.nx < 3 || st.ny < 3) return [];
+  const nx = st.nx, ny = st.ny;
+  const pts = [];
+  mesh.points.forEach((r, j) => r.forEach((z, i) => z != null && Number.isFinite(z) && pts.push({ i, j, u: (2 * i) / (nx - 1) - 1, w: (2 * j) / (ny - 1) - 1, z })));
+  const n = pts.length;
+  const centred = (f) => {
+    const v = pts.map(f), m = v.reduce((a, b) => a + b, 0) / n;
+    return v.map((x) => x - m);
+  };
+  const dot = (a, b) => a.reduce((s, x, k) => s + x * b[k], 0);
+  const span = (v) => Math.max(...v) - Math.min(...v);
+  let e = centred((p) => p.z);
+  const total = dot(e, e);
+  if (total < 1e-12) return [];
+  const U = centred((p) => p.u), W = centred((p) => p.w), Q = centred((p) => p.u * p.u + p.w * p.w);
+  const corners = [[-1, -1, "front-left"], [1, -1, "front-right"], [-1, 1, "back-left"], [1, 1, "back-right"]].map(([su, sw, name]) => ({
+    name, su, sw, v: centred((p) => Math.max(0, su * p.u) * Math.max(0, sw * p.w)),
+  }));
+  const findings = [];
+  const used = new Set();
+  for (let round = 0; round < 3; round++) {
+    const cands = [];
+    if (!used.has("tilt")) {
+      const b = dot(e, U) / dot(U, U), c = dot(e, W) / dot(W, W);
+      const fit = U.map((x, k) => b * x + c * W[k]);
+      cands.push({ kind: "tilt", fit, gain: dot(fit, fit), b, c });
+    }
+    if (!used.has("q")) {
+      const d = dot(e, Q) / dot(Q, Q), fit = Q.map((x) => d * x);
+      cands.push({ kind: d > 0 ? "bowl" : "dome", key: "q", fit, gain: dot(fit, fit), d });
+    }
+    for (const cn of corners) {
+      if (used.has("corner")) break;
+      const k = dot(e, cn.v) / dot(cn.v, cn.v), fit = cn.v.map((x) => k * x);
+      cands.push({ kind: "corner", key: "corner", fit, gain: dot(fit, fit), cn, k });
+    }
+    cands.sort((a, b) => b.gain - a.gain);
+    const best = cands[0];
+    const amount = span(best.fit);
+    // Worth saying: a real height, and a real part of the bed's shape.
+    if (!best || amount < 0.03 || best.gain < 0.2 * total) break;
+    used.add(best.key || best.kind);
+    e = e.map((x, k) => x - best.fit[k]);
+    if (best.kind === "tilt") {
+      const { b, c } = best;
+      const x = Math.abs(b) > 0.4 * Math.abs(c) ? (b > 0 ? "right" : "left") : "";
+      const y = Math.abs(c) > 0.4 * Math.abs(b) ? (c > 0 ? "back" : "front") : "";
+      const side = [y, x].filter(Boolean).join("-");
+      const zone = pts.filter((p) => b * p.u + c * p.w >= 0.6 * (Math.abs(b) + Math.abs(c))).map((p) => [p.i, p.j]);
+      findings.push({ kind: "tilt", side, amount: bmlRound(amount, 3), zone });
+    } else if (best.kind === "corner") {
+      const { cn, k } = best;
+      const zone = pts.filter((p) => Math.max(0, cn.su * p.u) * Math.max(0, cn.sw * p.w) >= 0.25).map((p) => [p.i, p.j]);
+      findings.push({ kind: "corner", corner: cn.name, high: k > 0, amount: bmlRound(amount, 3), zone });
+    } else {
+      // Bowl: the edges are up; dome: the centre is.
+      const r2 = (p) => p.u * p.u + p.w * p.w;
+      const zone = pts.filter((p) => (best.kind === "dome" ? r2(p) <= 0.5 : r2(p) >= 1.2)).map((p) => [p.i, p.j]);
+      findings.push({ kind: best.kind, amount: bmlRound(amount, 3), zone });
+    }
+  }
+  // One point apart from the rest once the shapes are taken out.
+  const abs = e.map(Math.abs).sort((a, b) => a - b);
+  const mad = abs[Math.floor(abs.length / 2)] || 0;
+  let worst = 0;
+  e.forEach((x, k) => Math.abs(x) > Math.abs(e[worst]) && (worst = k));
+  const out = e[worst];
+  if (Math.abs(out) >= Math.max(0.04, 4 * 1.4826 * mad, 0.3 * st.dev)) {
+    const p = pts[worst];
+    findings.push({ kind: "bump", at: [p.i, p.j], high: out > 0, amount: bmlRound(Math.abs(out), 3), zone: [[p.i, p.j]] });
+  }
+  return findings.sort((a, b) => b.amount - a.amount);
+}
+
+/* ------------------------------------------------------------ state */
+
+/* When to measure again: never measured, the last one too old (days) or
+   too many prints since (`jobsAtLast`: the printer's job count when it was
+   stored). Null when nothing is asked. */
+function bmlReminder({ last = null, now = Date.now() / 1000, jobsNow = null, jobsAtLast = null } = {}, s) {
+  const st = bmlSettings(s);
+  if (!last) return { reason: "never" };
+  if (!st.remind) return null;
+  const days = Math.floor((now - last) / 86400);
+  if (days >= st.remindDays) return { reason: "days", days };
+  const prints = jobsNow != null && jobsAtLast != null ? jobsNow - jobsAtLast : null;
+  if (st.remindPrints && prints != null && prints >= st.remindPrints) return { reason: "prints", prints };
+  return null;
+}
+
+/* The page's state, for its card and its one action:
+   none (never measured), out, watch (with how it moved since the previous
+   one), stale (asks to measure again), good. */
+function bmlState(hist, s, ctx = {}) {
+  const st = bmlSettings(s);
+  const list = [...(hist || [])].filter((m) => !m.partial).sort((a, b) => a.at - b.at);
+  const last = list[list.length - 1];
+  if (!last) return { kind: "none" };
+  const dev = bmlStats(last).dev;
+  const prev = list[list.length - 2];
+  const change = prev ? { delta: bmlDelta(bmlStats(prev).dev, dev), at: prev.at } : null;
+  const status = bmlStatus(dev, st);
+  const remind = bmlReminder({ ...ctx, last: last.at }, st);
+  const base = { dev, at: last.at, status, change, remind };
+  if (status === "out") return { kind: "out", ...base };
+  if (remind) return { kind: "stale", ...base };
+  if (status === "watch") return { kind: "watch", ...base };
+  return { kind: "good", ...base };
+}
+
+/* The bed temperature to propose: the last print's first layer, else the
+   one used last time, else 60 °C. */
+function bmlSuggestTemp(lastJob, stored) {
+  const t = lastJob?.bed_temp;
+  if (Number.isFinite(t) && t > 0 && t <= 110) return { temp: Math.round(t), from: "last", file: lastJob.filename || "" };
+  if (Number.isFinite(+stored) && stored !== null && stored !== "") return { temp: Math.max(0, Math.min(110, Math.round(+stored))), from: "stored" };
+  return { temp: 60, from: "default" };
+}
+
+/* A print ended a short while ago: its part may still be on the bed.
+   Minutes since, or null. */
+function bmlRecentPrint(lastJob, now = Date.now() / 1000, within = 12 * 3600) {
+  if (!lastJob || lastJob.status !== "completed" || !(lastJob.end > 0)) return null;
+  const s = now - lastJob.end;
+  return s >= 0 && s <= within ? Math.round(s / 60) : null;
+}
+
 /* The deviation over time: [{ at, dev }], oldest first. */
 const bmlTrend = (hist) => [...(hist || [])].filter((m) => !m.partial).sort((a, b) => a.at - b.at).map((m) => ({ at: m.at, dev: bmlStats(m)?.dev ?? 0 }));
 
 if (typeof module !== "undefined")
-  module.exports = { BML_DEFAULTS, BML_KEEPS, bmlSettings, bmlStats, bmlStatus, bmlAlert, bmlXY, bmlSample, bmlUpsample, bmlDiff, bmlScale, bmlT, bmlColor, bmlInk, bmlEstimate, bmlPhase, bmlTrend };
+  module.exports = { BML_DEFAULTS, BML_KEEPS, BML_LEVELS, BML_REMIND_DAYS, BML_REMIND_PRINTS, bmlLevelOf, bmlDelta, bmlShape, bmlReminder, bmlState, bmlSuggestTemp, bmlRecentPrint, bmlSettings, bmlStats, bmlStatus, bmlAlert, bmlXY, bmlSample, bmlUpsample, bmlDiff, bmlScale, bmlT, bmlColor, bmlInk, bmlEstimate, bmlPhase, bmlTrend };

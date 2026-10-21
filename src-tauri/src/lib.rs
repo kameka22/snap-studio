@@ -1234,9 +1234,9 @@ fn maintenance_remove(printer_id: String, task: String, at: u64) -> Result<Vec<m
 
 /// A printer's bed mesh now, with its settings and progress.
 #[tauri::command]
-async fn bed_mesh_read(printer_id: String) -> Result<bedmesh::Live, String> {
+async fn bed_mesh_read(printer_id: String, light: Option<bool>) -> Result<bedmesh::Live, String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::read(&p.host, p.port).await.map_err(|e| e.to_string())
+    bedmesh::read(&p.host, p.port, light.unwrap_or(false)).await.map_err(|e| e.to_string())
 }
 
 /// The meshes stored for a printer, oldest first.
@@ -1267,6 +1267,21 @@ fn bed_mesh_keep(printer_id: String, keep: usize) -> Result<Vec<bedmesh::Mesh>, 
 async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
     bedmesh::measure(&p.host, p.port, temp).await.map_err(|e| e.to_string())
+}
+
+/// Emergency stop of a measurement going wrong (then Klipper restarts).
+#[tauri::command]
+async fn bed_mesh_stop(printer_id: String) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::stop(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+/// A system notification (the end of a measurement while the app is
+/// elsewhere).
+#[tauri::command]
+fn app_notify(app: tauri::AppHandle, title: String, body: String) {
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder().title(title).body(body).show();
 }
 
 /// Opens the live feeds (Printers tab shown).
@@ -2018,6 +2033,8 @@ pub fn run() {
             bed_mesh_remove,
             bed_mesh_keep,
             bed_mesh_measure,
+            bed_mesh_stop,
+            app_notify,
             printers_watch_start,
             printers_watch_stop,
             cache_info,

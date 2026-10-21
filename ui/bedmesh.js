@@ -16,6 +16,9 @@ const BM = {
   relief: +localStorage.getItem("snapstudio.bm.relief") || 100,
   cam: { yaw: -0.55, pitch: 0.9, zoom: 1 },
   run: null, // measurement in progress: { pid, temp, start, timer, done }
+  wiz: null, // the measuring assistant: { pid, step, resume, fix, result }
+  zone: null, // { at, n }: the finding shown on the map
+  moreOpen: localStorage.getItem("snapstudio.bm.more") === "1",
   cmp: { a: null, b: null, view: "d", mode: "map" },
   viewer: null,
   cmpViewer: null,
@@ -36,6 +39,46 @@ const bmSaveSettings = (pid, s) => localStorage.setItem(bmSetKey(pid), JSON.stri
 /* The newest stored mesh out of tolerance (alert on): { dev, at } or null. */
 const bmAlertOf = (pid) => (pid ? bmlAlert(BM.hist.get(pid) || [], bmSettingsOf(pid)) : null);
 
+/* ------------------------------------------------------------ reminders */
+
+/* The printer's job count (Care reads it), or null. */
+function bmJobsNow(pid) {
+  const c = typeof mtCached === "function" ? mtCached(pid)?.usage?.jobs : null;
+  if (c != null) return c;
+  return MT.pid === pid && MT.usage ? MT.usage.jobs : null;
+}
+/* The job count when the newest measurement was stored: prints since. */
+const bmJobsKey = (pid) => `snapstudio.bm.jobs.${pid}`;
+function bmJobsMark(pid) {
+  try {
+    return JSON.parse(localStorage.getItem(bmJobsKey(pid)) || "null");
+  } catch {
+    return null;
+  }
+}
+function bmMarkJobs(pid) {
+  const hist = BM.hist.get(pid) || [];
+  const newest = hist[hist.length - 1], jobs = bmJobsNow(pid);
+  if (!newest || jobs == null || bmJobsMark(pid)?.at === newest.at) return;
+  localStorage.setItem(bmJobsKey(pid), JSON.stringify({ at: newest.at, jobs }));
+}
+
+/* The page's state (bmlState): its card, its action, what Care asks. */
+function bmStateOf(pid) {
+  const hist = BM.hist.get(pid) || [];
+  const newest = hist[hist.length - 1], mark = bmJobsMark(pid);
+  return bmlState(hist, bmSettingsOf(pid), { now: Date.now() / 1000, jobsNow: bmJobsNow(pid), jobsAtLast: newest && mark?.at === newest.at ? mark.jobs : null });
+}
+
+/* What Care asks about the bed: out of tolerance (alert on), or a
+   measurement due; null otherwise. */
+function bmDueOf(pid) {
+  if (!pid) return null;
+  const s = bmStateOf(pid);
+  if (s.kind === "out" && bmSettingsOf(pid).alert) return s;
+  return s.kind === "stale" ? s : null;
+}
+
 /* ------------------------------------------------------------ loading */
 
 /* History, then the printer's mesh; a new full-bed mesh is stored. During
@@ -43,6 +86,7 @@ const bmAlertOf = (pid) => (pid ? bmlAlert(BM.hist.get(pid) || [], bmSettingsOf(
 async function bmLoad(pid) {
   const hist = await invoke("bed_mesh_history", { printerId: pid }).catch(() => null);
   if (hist) BM.hist.set(pid, hist);
+  bmMarkJobs(pid);
   let live = null;
   try {
     live = await invoke("bed_mesh_read", { printerId: pid });
@@ -59,6 +103,7 @@ async function bmLoad(pid) {
 async function bmRecord(pid, mesh, byApp) {
   const h = await invoke("bed_mesh_record", { printerId: pid, mesh, keep: bmSettingsOf(pid).keep, byApp }).catch(() => null);
   if (h) BM.hist.set(pid, h);
+  bmMarkJobs(pid);
   return h;
 }
 
@@ -107,6 +152,12 @@ function bmWhen(at) {
   const year = d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {};
   return d.toLocaleString(document.documentElement.lang || undefined, { day: "numeric", month: "short", ...year, hour: "2-digit", minute: "2-digit" });
 }
+/* "15 Oct"; another year: "15 Oct 2025". */
+function bmDay(at) {
+  const d = new Date(at * 1000);
+  const year = d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {};
+  return d.toLocaleDateString(document.documentElement.lang || undefined, { day: "numeric", month: "short", ...year });
+}
 const bmPrinter = (pid) => P.list.find((x) => x.id === pid);
 const bmPrinting = (pid) => ["printing", "paused"].includes(P.status.get(pid)?.state) || ["printing", "paused"].includes(BM.live.get(pid)?.state);
 
@@ -146,11 +197,8 @@ function bmRender() {
     notices.push(`<div class="bm-notice"><span>${esc(tr("bm.adaptive", { x: `${fmtNum(Math.round(m.min[0]))}–${fmtNum(Math.round(m.max[0]))}`, y: `${fmtNum(Math.round(m.min[1]))}–${fmtNum(Math.round(m.max[1]))}` }))}</span><button class="btn small" data-bm-show="live">${esc(tr("bm.show"))}</button></div>`);
   }
   if (!shown) {
-    box.innerHTML = `${notices.join("")}${BM.loading ? "" : `<div class="bm-empty">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l4-3h10l4 3v3H3zM6 12l3-6h6l3 6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-        <b>${esc(tr("bm.empty"))}</b><small>${esc(tr("bm.empty_hint"))}</small>
-        ${live?.supported ? `<button class="btn primary" data-bm-measure>${esc(tr("bm.measure"))}</button>` : ""}
-      </div>`}`;
+    const can = live?.supported;
+    box.innerHTML = `${notices.join("")}${BM.loading ? "" : bmHero({ kind: "none" }, st, can)}`;
     bmViewerDetach();
     return;
   }
@@ -158,18 +206,29 @@ function bmRender() {
   const s = bmlStats(m);
   const status = bmlStatus(s.dev, st);
   const stored = shown.live ? bmStoredOf(pid, m) : m;
-  const when = stored ? tr(stored.by_app ? "bm.when_app" : "bm.when_seen", { d: bmWhen(stored.at) }) : tr("bm.when_live");
-  const area = m.partial ? tr("bm.area_partial") : tr("bm.area_full");
-  const isNewest = shown.newest || (stored && stored === hist[hist.length - 1]);
-  const head = `<div class="bm-head">
+  const isNewest = !shown.live && (shown.newest || stored === hist[hist.length - 1]);
+  // The newest measurement: a card that says what to do. Another one
+  // (picked in the history, the printer's adaptive mesh): what it is.
+  let head;
+  if (isNewest) head = bmHero(bmStateOf(pid), st, live?.supported);
+  else {
+    const when = stored ? tr(stored.by_app ? "bm.when_app" : "bm.when_seen", { d: bmWhen(stored.at) }) : tr("bm.when_live");
+    const area = m.partial ? tr("bm.area_partial") : tr("bm.area_full");
+    head = `<div class="bm-head">
       <div class="bm-dev ${status}"><b>${esc(bmMm(s.dev))}</b><span>mm</span><small>${esc(tr("bm.dev"))}</small></div>
       <div class="bm-head-text">
         <span class="bm-status ${status}"><i></i>${esc(tr(`bm.st.${status}`))}</span>
         <div class="bm-when">${esc(when)}</div>
-        <div class="bm-sub">${esc(tr("bm.grid", { x: s.nx, y: s.ny }))} · ${esc(area)} · ${esc(tr("bm.limits", { good: bmMm(st.good), limit: bmMm(st.limit) }))}</div>
+        <div class="bm-sub">${esc(tr("bm.grid", { x: s.nx, y: s.ny }))} · ${esc(area)}</div>
       </div>
-      ${isNewest && !shown.live ? "" : `<button class="btn small" data-bm-show="">${esc(tr("bm.newest"))}</button>`}
+      <button class="btn small" data-bm-show="">${esc(tr("bm.newest"))}</button>
     </div>`;
+  }
+  // What the shape says, when the bed asks for attention.
+  const findings = status === "good" || m.partial ? [] : bmlShape(m);
+  const zoneKey = shown.live ? "live" : m.at;
+  if (BM.zone?.at !== zoneKey) BM.zone = { at: zoneKey, n: findings.length && status === "out" ? 0 : null };
+  const diag = status === "good" || m.partial ? "" : bmDiagHtml(m, findings, status, isNewest);
   const stats = [
     [bmSigned(s.min), tr("bm.min")],
     [bmSigned(s.max), tr("bm.max")],
@@ -189,9 +248,85 @@ function bmRender() {
       <div class="bm-legend" id="bm-legend"></div>
       <div class="mt-strip bm-stats">${stats}</div>
     </div>`;
-  box.innerHTML = `${notices.join("")}${head}${view}${bmHistoryHtml(pid, m)}`;
-  bmViewerAttach(m, st);
+  box.innerHTML = `${notices.join("")}${head}${diag}${view}${bmHistoryHtml(pid, m)}`;
+  bmViewerAttach(m, st, findings[BM.zone.n]?.zone);
   bmDrawTrend(pid);
+}
+
+/* The card on top: the bed's state in a sentence, and the one thing to do. */
+function bmHero(state, st, canMeasure) {
+  const btn = (label, attr, primary) => `<button class="btn${primary ? " primary" : ""}" ${attr}>${esc(label)}</button>`;
+  const measure = (label, primary = true) => (canMeasure ? btn(label, "data-bm-measure", primary) : "");
+  const level = tr(`bm.level.${bmlLevelOf(st)}`);
+  const limits = tr("bm.limits_level", { level, good: bmMm(st.good), limit: bmMm(st.limit) });
+  if (state.kind === "none") {
+    return `<div class="bm-hero none">
+      <span class="bm-hero-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l4-3h10l4 3v3H3zM6 12l3-6h6l3 6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+      <div class="bm-hero-text"><b>${esc(tr("bm.hero.none"))}</b><small>${esc(tr(canMeasure ? "bm.hero.none_sub" : "bm.empty_hint"))}</small></div>
+      <div class="bm-hero-acts">${measure(tr("bm.measure.sheet"))}</div>
+    </div>`;
+  }
+  const dev = bmMm(state.dev);
+  const when = tr("bm.hero.when", { d: bmWhen(state.at) });
+  const ch = state.change;
+  const vs = !ch ? "" : ch.delta < 0 ? tr("bm.hero.better", { d: bmDay(ch.at), v: bmMm(-ch.delta) }) : ch.delta > 0 ? tr("bm.hero.worse", { d: bmDay(ch.at), v: bmMm(ch.delta) }) : tr("bm.hero.same", { d: bmDay(ch.at) });
+  let cls = state.status, title, sub, acts;
+  if (state.kind === "out") {
+    title = tr("bm.hero.out", { dev });
+    sub = tr("bm.hero.out_sub", { limit: bmMm(st.limit) });
+    acts = btn(tr("bm.hero.cause"), "data-bm-cause", true) + measure(tr("bm.hero.again"), false);
+  } else if (state.kind === "stale") {
+    cls = "stale";
+    title = state.remind.reason === "prints" ? tr("bm.hero.stale_prints", { n: state.remind.prints }) : tr("bm.hero.stale_days", { n: state.remind.days });
+    sub = tr("bm.hero.stale_sub", { st: tr(`bm.st.${state.status}`).toLowerCase(), dev });
+    acts = measure(tr("bm.hero.again"));
+  } else if (state.kind === "watch") {
+    title = tr("bm.hero.watch", { dev });
+    sub = [tr("bm.hero.watch_sub", { limit: bmMm(st.limit) }), vs].filter(Boolean).join(" · ");
+    acts = measure(tr("bm.hero.check"));
+  } else {
+    title = tr("bm.hero.good", { dev });
+    sub = [when, vs].filter(Boolean).join(" · ");
+    acts = measure(tr("bm.hero.again"), false);
+  }
+  const icon = cls === "good" ? '<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
+    : cls === "stale" ? '<path d="M12 6v6l4 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/>'
+    : '<path d="M12 7v6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17" r="1.4" fill="currentColor"/>';
+  return `<div class="bm-hero ${cls}">
+      <span class="bm-hero-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg></span>
+      <div class="bm-hero-text"><b>${esc(title)}</b><small>${esc(sub)}</small><small class="bm-hero-lim">${esc(state.kind === "good" || state.kind === "stale" ? limits : when + " · " + limits)}</small></div>
+      <div class="bm-hero-acts">${acts}</div>
+    </div>`;
+}
+
+/* A finding in words: what it is and what to do. */
+function bmFindingText(f, mesh) {
+  const v = bmMm(f.amount);
+  if (f.kind === "tilt") return { title: tr("bm.f.tilt", { side: tr(`bm.side.${f.side}`), v }), tip: tr("bm.f.tilt_tip") };
+  if (f.kind === "corner") return { title: tr(f.high ? "bm.f.corner_up" : "bm.f.corner_down", { corner: tr(`bm.side.${f.corner}`), v }), tip: tr(f.high ? "bm.f.corner_up_tip" : "bm.f.corner_down_tip") };
+  if (f.kind === "bowl" || f.kind === "dome") return { title: tr(`bm.f.${f.kind}`, { v }), tip: tr("bm.f.curve_tip") };
+  const [x, y] = bmlXY(mesh, f.at[0], f.at[1]);
+  return { title: tr(f.high ? "bm.f.bump_up" : "bm.f.bump_down", { v, x: fmtNum(Math.round(x)), y: fmtNum(Math.round(y)) }), tip: tr("bm.f.bump_tip") };
+}
+
+/* "What the measurement shows": each shape found, where it is (shown on
+   the map on request), what to do; then measure again to check. */
+function bmDiagHtml(mesh, findings, status, isNewest) {
+  const rows = findings.length
+    ? findings.map((f, n) => {
+        const t = bmFindingText(f, mesh), on = BM.zone?.n === n;
+        return `<div class="bm-find${on ? " on" : ""}">
+          <span class="bm-find-n">${n + 1}</span>
+          <div class="bm-find-text"><b>${esc(t.title)}</b><small>${esc(t.tip)}</small></div>
+          <button class="btn small${on ? " on" : ""}" data-bm-zone="${n}" aria-pressed="${on}">${esc(tr(on ? "bm.diag.hide" : "bm.diag.show"))}</button>
+        </div>`;
+      }).join("")
+    : `<div class="bm-find"><div class="bm-find-text"><b>${esc(tr("bm.f.none"))}</b><small>${esc(tr("bm.f.none_tip"))}</small></div></div>`;
+  const again = isNewest && BM.live.get(BM.pid)?.supported ? `<div class="bm-diag-foot"><span>${esc(tr("bm.diag.after"))}</span><button class="btn primary" data-bm-fixed>${esc(tr("bm.diag.fixed"))}</button></div>` : "";
+  return `<div class="bm-card bm-diag ${status}" id="bm-diag">
+      <div class="bm-diag-head">${esc(tr("bm.diag.title"))}</div>
+      ${rows}${again}
+    </div>`;
 }
 
 /* The toolbar's Measure button: its state follows the printer. */
@@ -211,7 +346,7 @@ const bmlBusy = (live) => ["preheating", "prescanning", "probing", "aborting"].i
 function bmHistoryHtml(pid, shownMesh) {
   const st = bmSettingsOf(pid);
   const hist = [...(BM.hist.get(pid) || [])].reverse();
-  if (!hist.length) return `<div class="vp-section">${esc(tr("bm.history"))}</div><p class="hv-note">${esc(tr("bm.history_empty"))}</p>`;
+  if (!hist.length) return "";
   const rows = hist.map((m) => {
     const dev = bmlStats(m)?.dev ?? 0;
     const status = bmlStatus(dev, st);
@@ -223,9 +358,12 @@ function bmHistoryHtml(pid, shownMesh) {
       <button class="tb-btn danger" data-bm-del="${m.at}" title="${esc(tr("bm.delete"))}" aria-label="${esc(tr("bm.delete"))}"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg></button>
     </div>`;
   }).join("");
-  return `<div class="vp-section">${esc(tr("bm.history"))} <small class="bm-count">${esc(tr("bm.history_n", { n: hist.length, keep: st.keep }))}</small></div>
-    <div class="bm-card bm-trend-card"><svg id="bm-trend" class="bm-trend" role="img" aria-label="${esc(tr("bm.trend"))}"></svg></div>
-    <div class="group bm-hist">${rows}</div>`;
+  // Folded by default: the card on top says what matters.
+  return `<details class="bm-more" id="bm-more"${BM.moreOpen ? " open" : ""}>
+      <summary>${esc(tr("bm.more"))} <small class="bm-count">${esc(tr("bm.history_n", { n: hist.length, keep: st.keep }))}</small></summary>
+      <div class="bm-card bm-trend-card"><svg id="bm-trend" class="bm-trend" role="img" aria-label="${esc(tr("bm.trend"))}"></svg></div>
+      <div class="group bm-hist">${rows}</div>
+    </details>`;
 }
 
 /* Deviation over time, with the alert threshold. */
@@ -272,7 +410,8 @@ const bmCss = (v) => getComputedStyle(document.documentElement).getPropertyValue
 /* A mesh drawn on a canvas, as a 3D surface (drag to turn, wheel to zoom,
    double-click to reset) or a heat map; the hovered point's value. */
 function bmMakeViewer(canvas, hover) {
-  const V = { mesh: null, fine: null, stats: null, scale: null, mode: "3d", relief: 100, k: 1, diff: false, quads: [], cells: [], mark: null, stops: null, ro: null };
+  const V = { mesh: null, fine: null, stats: null, scale: null, mode: "3d", relief: 100, k: 1, diff: false, quads: [], cells: [], mark: null, zone: null, stops: null, ro: null };
+  const accent = () => (typeof cssColor === "function" && cssColor("var(--accent)")) || "#007aff";
   const ctx = canvas.getContext("2d");
   const dpr = () => window.devicePixelRatio || 1;
 
@@ -355,6 +494,19 @@ function bmMakeViewer(canvas, hover) {
     ctx.font = `${11 * dpr()}px ${bmCss("--font-ui") || "system-ui"}`;
     ctx.textAlign = "center";
     ctx.fillText(tr("bm.front"), front[0], front[1] + 16 * dpr());
+    // A finding's points: rings in the accent.
+    if (V.zone) {
+      ctx.strokeStyle = accent();
+      ctx.lineWidth = 2.5 * dpr();
+      for (const [i, j] of V.zone) {
+        const v = V.mesh.points[j]?.[i];
+        if (v == null) continue;
+        const pt = project(...bmlXY(V.mesh, i, j), v, W, H);
+        ctx.beginPath();
+        ctx.arc(pt[0], pt[1], 7 * dpr(), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
     if (V.mark) {
       const [i, j] = V.mark;
       const pt = project(...bmlXY(V.mesh, i, j), V.mesh.points[j][i], W, H);
@@ -403,6 +555,13 @@ function bmMakeViewer(canvas, hover) {
       ctx.strokeStyle = color;
       ctx.strokeRect(c.x + 1.5, c.y + 1.5, c.w - 3, c.h - 3);
     };
+    if (V.zone) {
+      // A finding's cells: outlined in the accent, the rest a little faded.
+      const inZone = new Set(V.zone.map(([i, j]) => `${i},${j}`));
+      ctx.fillStyle = "rgba(128, 128, 128, 0.35)";
+      for (const c of cells) if (!inZone.has(`${c.i},${c.j}`)) ctx.fillRect(c.x + 0.5, c.y + 0.5, c.w - 1, c.h - 1);
+      for (const at of V.zone) mk(at, accent());
+    }
     if (V.mark) mk(V.mark, bmCss("--text") || "#000");
     V.cells = cells;
     ctx.fillStyle = bmCss("--text-secondary") || "#888";
@@ -520,8 +679,14 @@ function bmMakeViewer(canvas, hover) {
       V.fine = bmlUpsample(mesh, Math.max(1, Math.min(6, Math.round(36 / Math.max(1, n - 1)))));
       V.stops = null;
       V.mark = null;
+      // A new relief keeps the finding shown.
+      if (opts.zone !== undefined) V.zone = opts.zone || null;
       resize();
       return V;
+    },
+    zone(z) {
+      V.zone = z || null;
+      draw();
     },
     draw,
     restyle() {
@@ -546,10 +711,10 @@ function bmViewerDetach() {
   BM.viewer?.detach();
   BM.viewer = null;
 }
-function bmViewerAttach(mesh, st) {
+function bmViewerAttach(mesh, st, zone) {
   bmViewerDetach();
   BM.viewer = bmMakeViewer($("bm-canvas"), $("bm-hover"));
-  BM.viewer.set(mesh, { mode: BM.mode, relief: BM.relief, settings: st });
+  BM.viewer.set(mesh, { mode: BM.mode, relief: BM.relief, settings: st, zone });
   bmLegend($("bm-legend"), bmlStats(mesh), st, false);
 }
 
@@ -563,9 +728,6 @@ function bmOpenCompare(at) {
   BM.cmp.b = newest.at;
   BM.cmp.view = "d";
   BM.cmp.mode = BM.mode;
-  const opts = [...hist].reverse().map((m) => `<option value="${m.at}">${esc(`${bmWhen(m.at)} · ${bmMm(bmlStats(m).dev)} mm`)}</option>`).join("");
-  $("bmc-a").innerHTML = opts;
-  $("bmc-b").innerHTML = opts;
   openSheet($("bmcompare"));
   requestAnimationFrame(bmRenderCompare);
 }
@@ -574,14 +736,20 @@ function bmRenderCompare() {
   const pid = BM.pid, st = bmSettingsOf(pid);
   const hist = BM.hist.get(pid) || [];
   const a = hist.find((m) => m.at === BM.cmp.a), b = hist.find((m) => m.at === BM.cmp.b);
-  $("bmc-a").value = String(BM.cmp.a);
-  $("bmc-b").value = String(BM.cmp.b);
+  // The measurements as chips, newest first: date, deviation, status.
+  const chips = (pick) => [...hist].reverse().map((m) => {
+    const dev = bmlStats(m).dev, on = m.at === pick;
+    return `<button type="button" class="bm-chip${on ? " on" : ""}" role="radio" aria-checked="${on}" data-at="${m.at}"><i class="${bmlStatus(dev, st)}"></i><b>${esc(bmWhen(m.at))}</b><small>${esc(bmMm(dev))} mm</small></button>`;
+  }).join("");
+  $("bmc-a").innerHTML = chips(BM.cmp.a);
+  $("bmc-b").innerHTML = chips(BM.cmp.b);
+  for (const id of ["bmc-a", "bmc-b"]) $(id).querySelector(".on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
   document.querySelectorAll("#bmc-views [data-cv]").forEach((x) => x.classList.toggle("on", x.dataset.cv === BM.cmp.view));
   document.querySelectorAll("#bmc-modes [data-bmode]").forEach((x) => x.classList.toggle("on", x.dataset.bmode === BM.cmp.mode));
   if (!a || !b) return;
-  const da = bmlStats(a).dev, db = bmlStats(b).dev, delta = db - da;
+  const da = bmlStats(a).dev, db = bmlStats(b).dev, delta = bmlDelta(da, db);
   const diff = bmlDiff(a, b);
-  const better = delta < -0.005 ? "good" : delta > 0.005 ? "out" : "watch";
+  const better = delta < 0 ? "good" : delta > 0 ? "out" : "watch";
   $("bmc-sum").innerHTML = `<span class="bm-status ${bmlStatus(da, st)}"><i></i>${esc(bmMm(da))} mm</span><span class="bm-cmp-arrow">→</span>
     <span class="bm-status ${bmlStatus(db, st)}"><i></i>${esc(bmMm(db))} mm</span>
     <b class="bm-delta ${better}">${esc(bmSigned(delta, 2))} mm</b><small>${esc(tr(better === "good" ? "bm.compare.better" : better === "out" ? "bm.compare.worse" : "bm.compare.same"))}</small>`;
@@ -596,8 +764,12 @@ function bmRenderCompare() {
   bmLegend($("bmc-legend"), bmlStats(mesh), st, mesh === diff);
 }
 
-$("bmc-a").addEventListener("change", (e) => ((BM.cmp.a = +e.target.value), bmRenderCompare()));
-$("bmc-b").addEventListener("change", (e) => ((BM.cmp.b = +e.target.value), bmRenderCompare()));
+for (const [id, side] of [["bmc-a", "a"], ["bmc-b", "b"]]) {
+  $(id).addEventListener("click", (e) => {
+    const c = e.target.closest("[data-at]");
+    if (c) (BM.cmp[side] = +c.dataset.at), bmRenderCompare();
+  });
+}
 $("bmc-views").addEventListener("click", (e) => {
   const b = e.target.closest("[data-cv]");
   if (b && !b.disabled) (BM.cmp.view = b.dataset.cv), bmRenderCompare();
@@ -611,28 +783,46 @@ $("bmc-close").addEventListener("click", () => closeSheet($("bmcompare")));
 /* ------------------------------------------------------------ settings sheet */
 
 function bmOpenSettings() {
-  const pid = BM.pid, s = bmSettingsOf(pid);
+  const pid = BM.pid;
   const p = bmPrinter(pid);
   $("bms-printer").textContent = tr("bm.set.for", { name: p?.name || p?.host || "" });
-  $("bms-keep").innerHTML = BML_KEEPS.map((n) => `<option value="${n}">${fmtNum(n)}</option>`).join("");
-  bmFillSettings(s);
+  // Choices as segments: the values offered, nothing to type.
+  const seg = (id, key, values, label) => ($(id).innerHTML = values.map((v) => `<button type="button" class="seg-btn labeled" role="radio" data-${key}="${v}">${esc(label(v))}</button>`).join(""));
+  seg("bms-level", "level", Object.keys(BML_LEVELS), (k) => tr(`bm.level.${k}`));
+  seg("bms-days", "days", BML_REMIND_DAYS, (n) => tr("bm.set.days_n", { n }));
+  seg("bms-prints", "prints", BML_REMIND_PRINTS, (n) => (n ? fmtNum(n) : tr("bm.set.prints_off")));
+  seg("bms-keep", "keep", BML_KEEPS, (n) => fmtNum(n));
+  bmFillSettings(bmSettingsOf(pid));
   openSheet($("bmsettings"));
 }
 function bmFillSettings(s) {
+  const level = bmlLevelOf(s);
+  const on = (id, key, v) => document.querySelectorAll(`#${id} [data-${key}]`).forEach((b) => {
+    const yes = b.dataset[key] === String(v);
+    b.classList.toggle("on", yes);
+    b.setAttribute("aria-checked", String(yes));
+  });
+  on("bms-level", "level", level);
+  on("bms-days", "days", s.remindDays);
+  on("bms-prints", "prints", s.remindPrints);
+  on("bms-keep", "keep", s.keep);
+  $("bms-level-sub").textContent = tr(level === "custom" ? "bm.set.level_custom" : `bm.set.level_${level}`, { good: bmMm(s.good), limit: bmMm(s.limit) });
   $("bms-good").value = s.good;
   $("bms-limit").value = s.limit;
   $("bms-good-v").textContent = `${bmMm(s.good)} mm`;
   $("bms-limit-v").textContent = `${bmMm(s.limit)} mm`;
   $("bms-alert").checked = s.alert;
-  $("bms-keep").value = String(s.keep);
+  $("bms-remind").checked = s.remind;
+  ["bms-days-row", "bms-prints-row"].forEach((id) => $(id).classList.toggle("off", !s.remind));
 }
-async function bmSettingsChanged(which) {
+/* Saves a change; `patch` from a segment, or the sliders and switches. */
+async function bmSettingsChanged(which, patch = {}) {
   const pid = BM.pid, old = bmSettingsOf(pid);
   let good = +$("bms-good").value, limit = +$("bms-limit").value;
   // The two limits push each other: good never above the threshold.
   if (which === "good" && good > limit) limit = good;
   if (which === "limit" && limit < good) good = limit;
-  const s = bmlSettings({ good, limit, alert: $("bms-alert").checked, keep: +$("bms-keep").value });
+  const s = bmlSettings({ ...old, good, limit, alert: $("bms-alert").checked, remind: $("bms-remind").checked, ...patch });
   bmSaveSettings(pid, s);
   bmFillSettings(s);
   if (s.keep < old.keep) {
@@ -644,15 +834,26 @@ async function bmSettingsChanged(which) {
 $("bms-good").addEventListener("input", () => bmSettingsChanged("good"));
 $("bms-limit").addEventListener("input", () => bmSettingsChanged("limit"));
 $("bms-alert").addEventListener("change", () => bmSettingsChanged("alert"));
-$("bms-keep").addEventListener("change", () => bmSettingsChanged("keep"));
-$("bms-reset").addEventListener("click", () => {
-  bmFillSettings(bmlSettings({ ...BML_DEFAULTS, keep: bmSettingsOf(BM.pid).keep }));
-  bmSettingsChanged("reset");
+$("bms-remind").addEventListener("change", () => bmSettingsChanged("remind"));
+$("bmsettings").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-level], [data-days], [data-prints], [data-keep]");
+  if (!b) return;
+  const d = b.dataset;
+  if (d.level) return bmSettingsChanged("level", BML_LEVELS[d.level]);
+  if (d.days) return bmSettingsChanged("days", { remindDays: +d.days });
+  if (d.prints) return bmSettingsChanged("prints", { remindPrints: +d.prints });
+  if (d.keep) return bmSettingsChanged("keep", { keep: +d.keep });
 });
+$("bms-reset").addEventListener("click", () => bmSettingsChanged("reset", { ...BML_DEFAULTS, keep: bmSettingsOf(BM.pid).keep }));
 $("bms-done").addEventListener("click", () => closeSheet($("bmsettings")));
 $("bm-settings-btn").addEventListener("click", bmOpenSettings);
 
 /* ------------------------------------------------------------ measuring */
+
+/* The assistant: ① prepare (a checklist the app fills in where it can, the
+   bed confirmed empty, a temperature proposed), ② measure (each phase,
+   an emergency stop), ③ the result (in words, against the previous
+   measurement, what to do next). Its state: BM.wiz. */
 
 const bmTempKey = (pid) => `snapstudio.bm.temp.${pid}`;
 const bmPaceKey = (pid) => `snapstudio.bm.pace.${pid}`;
@@ -677,53 +878,103 @@ function bmRunLabel() {
   return ph.phase === "probing" ? tr("bm.run.point_short", { n: ph.current, total: ph.total }) : tr("bm.run.short");
 }
 
-async function bmOpenMeasure() {
+/* Opens the assistant on the printer shown. `resume`: the view to go back
+   to and the send sheet to reopen afterwards; `fix`: measuring again after
+   a correction (the result says whether it worked). */
+async function bmOpenMeasure(opts = {}) {
   const pid = BM.pid;
   const p = bmPrinter(pid);
   $("bmm-printer").textContent = p?.name || p?.host || "";
   const running = BM.run?.pid === pid;
-  $("bmm-form").classList.toggle("hidden", running);
-  $("bmm-run").classList.toggle("hidden", !running);
-  $("bmm-go").classList.toggle("hidden", running);
-  $("bmm-cancel").textContent = tr(running ? "bm.run.hide" : "common.cancel");
-  $("bmm-msg").textContent = "";
-  if (!running) {
-    $("bmm-temp").value = localStorage.getItem(bmTempKey(pid)) || "55";
-    bmMeasureForm();
-  } else bmRunRender();
+  if (!running || !BM.wiz || BM.wiz.pid !== pid) BM.wiz = { pid, step: running ? "run" : "prep", resume: opts.resume || null, fix: !!opts.fix, result: null, tempSet: false };
+  else if (opts.resume) BM.wiz.resume = opts.resume;
+  if (BM.wiz.step === "prep") {
+    $("bmm-empty").checked = false;
+    $("bmm-clean").checked = false;
+  }
+  bmWizRender();
   openSheet($("bmmeasure"));
-  // The printer's state and settings, fresh.
-  if (!running) {
+  // The printer's state, settings and last print, fresh.
+  if (BM.wiz.step === "prep") {
     await bmLoad(pid).catch(() => null);
-    if (BM.pid === pid && !BM.run) bmMeasureForm();
+    if (BM.wiz?.pid === pid && BM.wiz.step === "prep") bmWizRender();
   }
 }
 
-function bmMeasureForm() {
-  const pid = BM.pid, live = BM.live.get(pid), c = live?.config;
-  const temp = Math.max(0, Math.min(110, +$("bmm-temp").value || 0));
-  $("bmm-points").textContent = c ? `${c.count[0]} × ${c.count[1]} (${fmtNum(c.count[0] * c.count[1])})` : "—";
-  $("bmm-eta").textContent = `≈ ${fmtDuration(bmEstimateFor(pid, temp))}`;
+function bmWizRender() {
+  const w = BM.wiz;
+  if (!w) return;
+  const order = ["prep", "run", "done"];
+  document.querySelectorAll("#bmm-steps [data-step]").forEach((li) => {
+    const k = order.indexOf(li.dataset.step), cur = order.indexOf(w.step);
+    li.classList.toggle("on", k === cur);
+    li.classList.toggle("done", k < cur);
+  });
+  $("bmm-form").classList.toggle("hidden", w.step !== "prep");
+  $("bmm-run").classList.toggle("hidden", w.step !== "run");
+  $("bmm-done").classList.toggle("hidden", w.step !== "done");
+  $("bmm-stop").classList.toggle("hidden", w.step !== "run");
+  $("bmm-alt").classList.add("hidden");
+  $("bmm-cancel").classList.remove("hidden");
+  $("bmm-msg").textContent = "";
+  if (w.step === "prep") bmPrepRender();
+  else if (w.step === "run") {
+    $("bmm-go").classList.add("hidden");
+    $("bmm-cancel").textContent = tr("bm.run.hide");
+    bmRunRender();
+  } else bmDoneRender();
+}
+
+/* ① The checklist. */
+function bmPrepRender() {
+  const w = BM.wiz, pid = w.pid, live = BM.live.get(pid), c = live?.config;
   const printing = bmPrinting(pid);
   const why = !live ? tr("bm.offline") : !live.supported ? tr("bm.measure.unavailable") : printing ? tr("bm.measure.printing") : bmlBusy(live) ? tr("bm.measure.busy") : "";
-  $("bmm-go").disabled = !!why;
-  $("bmm-msg").textContent = why;
+  const ready = !why;
+  $("bmm-ready-ic").className = `bm-check ${live ? (ready ? "ok" : "ko") : "wait"}`;
+  $("bmm-ready-sub").textContent = !live && BM.loading ? tr("bm.reading") : why || tr(/x/.test(live.homed) && /y/.test(live.homed) && /z/.test(live.homed) ? "bm.prep.ready" : "bm.prep.ready_home");
+  // A print just ended: its part may be on the bed.
+  const recent = bmlRecentPrint(live?.last_job);
+  const warn = $("bmm-recent");
+  warn.classList.toggle("hidden", recent == null && live?.state !== "complete");
+  if (recent != null) warn.textContent = tr("bm.prep.recent", { t: fmtDuration(Math.max(1, recent) * 60), file: live.last_job.filename || "" });
+  else if (live?.state === "complete") warn.textContent = tr("bm.prep.recent_any");
+  // The temperature: proposed once, then the user's.
+  const sug = bmlSuggestTemp(live?.last_job, localStorage.getItem(bmTempKey(pid)));
+  if (!w.tempSet) $("bmm-temp").value = String(sug.temp);
+  const temp = Math.max(0, Math.min(110, +$("bmm-temp").value || 0));
+  $("bmm-temp-sub").textContent = sug.from === "last" ? tr("bm.prep.temp_last", { file: sug.file }) : sug.from === "stored" ? tr("bm.prep.temp_stored") : tr("bm.prep.temp_default");
+  $("bmm-eta").textContent = tr("bm.prep.eta", { t: fmtDuration(bmEstimateFor(pid, temp)), n: c ? fmtNum(c.count[0] * c.count[1]) : "—" });
+  const empty = $("bmm-empty").checked;
+  const go = $("bmm-go");
+  go.classList.remove("hidden");
+  go.textContent = tr("bm.measure.go");
+  go.disabled = !ready || !empty;
+  $("bmm-cancel").textContent = tr("common.cancel");
+  $("bmm-msg").textContent = ready && !empty ? tr("bm.prep.confirm_empty") : "";
 }
-$("bmm-temp").addEventListener("input", bmMeasureForm);
+$("bmm-temp").addEventListener("input", () => {
+  if (BM.wiz) BM.wiz.tempSet = true;
+  bmPrepRender();
+});
+$("bmm-empty").addEventListener("change", bmPrepRender);
 
 async function bmStartMeasure() {
   const pid = BM.pid;
-  if (BM.run || bmPrinting(pid)) return;
+  if (BM.run || bmPrinting(pid) || !$("bmm-empty").checked) return;
   const temp = Math.max(0, Math.min(110, Math.round(+$("bmm-temp").value || 0)));
   localStorage.setItem(bmTempKey(pid), String(temp));
-  const before = BM.live.get(pid)?.mesh || null;
-  const run = { pid, temp, start: Date.now(), probeStart: null, timer: 0, before, failed: null };
+  const live = BM.live.get(pid);
+  const hist = BM.hist.get(pid) || [];
+  const run = {
+    pid, temp, start: Date.now(), probeStart: null, timer: 0, failed: null, stopped: false,
+    before: live?.mesh || null,
+    prev: hist[hist.length - 1] || null, // the measurement this one is compared with
+    homedAtStart: /x/.test(live?.homed || "") && /y/.test(live?.homed || "") && /z/.test(live?.homed || ""),
+  };
   BM.run = run;
-  $("bmm-form").classList.add("hidden");
-  $("bmm-run").classList.remove("hidden");
-  $("bmm-go").classList.add("hidden");
-  $("bmm-cancel").textContent = tr("bm.run.hide");
-  bmRunRender();
+  BM.wiz.step = "run";
+  bmWizRender();
   bmToolbar();
   run.timer = setInterval(() => bmPoll(run), 2000);
   try {
@@ -734,13 +985,15 @@ async function bmStartMeasure() {
   await bmFinish(run);
 }
 
+/* Following it: a light read (no printer configuration) every 2 s. */
 async function bmPoll(run) {
   if (BM.run !== run) return;
-  const live = await invoke("bed_mesh_read", { printerId: run.pid }).catch(() => null);
+  const live = await invoke("bed_mesh_read", { printerId: run.pid, light: true }).catch(() => null);
   if (BM.run !== run || !live) return;
-  BM.live.set(run.pid, live);
+  const prev = BM.live.get(run.pid);
+  BM.live.set(run.pid, { ...live, config: live.config || prev?.config || null, last_job: prev?.last_job || null });
   if (live.progress?.state === "probing" && !run.probeStart) run.probeStart = { t: Date.now(), n: live.progress.current };
-  bmRunRender();
+  if (BM.wiz?.step === "run") bmRunRender();
   bmToolbar();
 }
 
@@ -751,7 +1004,9 @@ async function bmFinish(run) {
   BM.run = null;
   const mesh = live?.mesh;
   const fresh = mesh && !mesh.partial && !(run.before && bmSame(mesh, run.before));
-  if (fresh && !run.failed) {
+  const sheetOpen = !$("bmmeasure").classList.contains("hidden");
+  let note;
+  if (fresh && !run.failed && !run.stopped) {
     // Its pace, for the next estimate.
     if (run.probeStart && live.progress?.total) {
       const pace = (Date.now() - run.probeStart.t) / 1000 / Math.max(1, live.progress.total - run.probeStart.n);
@@ -759,29 +1014,44 @@ async function bmFinish(run) {
     }
     await bmRecord(run.pid, mesh, true);
     if (BM.pid === run.pid) BM.shown = null;
+    const st = bmSettingsOf(run.pid);
     const dev = bmlStats(mesh).dev;
-    toast(tr("bm.run.done", { dev: bmMm(dev), st: tr(`bm.st.${bmlStatus(dev, bmSettingsOf(run.pid))}`) }));
-    closeSheet($("bmmeasure"));
+    const status = bmlStatus(dev, st);
+    const result = { ok: true, mesh, dev, status, prev: run.prev, findings: status === "good" ? [] : bmlShape(mesh) };
+    if (BM.wiz?.pid === run.pid) Object.assign(BM.wiz, { step: "done", result });
+    note = tr("bm.run.done", { dev: bmMm(dev), st: tr(`bm.st.${status}`) });
   } else {
-    const msg = run.failed || (live?.progress?.state === "aborted" ? tr("bm.run.aborted") : tr("bm.run.nomesh"));
-    $("bmm-msg").textContent = msg;
-    $("bmm-cancel").textContent = tr("common.close");
-    if ($("bmmeasure").classList.contains("hidden")) toast(msg, true);
+    const msg = run.stopped ? tr("bm.run.stopped") : run.failed || (live?.progress?.state === "aborted" ? tr("bm.run.aborted") : tr("bm.run.nomesh"));
+    if (BM.wiz?.pid === run.pid) Object.assign(BM.wiz, { step: "done", result: { ok: false, msg } });
+    note = msg;
   }
+  if (BM.wiz?.pid === run.pid) bmWizRender();
+  // Elsewhere in the app, or in another app: said there.
+  if (!sheetOpen) toast(note, !BM.wiz?.result?.ok);
+  if (!document.hasFocus()) invoke("app_notify", { title: tr("bm.notify_title", { name: bmPrinter(run.pid)?.name || "" }), body: note }).catch(() => {});
   bmToolbar();
   bmAfterChange();
 }
 
+/* ② Each phase, the one under way, the progress. */
 function bmRunRender() {
   const run = BM.run;
   if (!run) return;
   const live = BM.live.get(run.pid);
   const ph = bmlPhase(live, run.temp);
+  const homed = /x/.test(live?.homed || "") && /y/.test(live?.homed || "") && /z/.test(live?.homed || "");
+  const steps = [...(run.homedAtStart ? [] : ["home"]), ...(run.temp > 0 ? ["heat", "soak"] : []), "probe"];
+  let cur = ph.phase === "probing" ? "probe" : ph.phase === "heating" ? "heat" : run.temp > 0 ? "soak" : "probe";
+  if (!run.homedAtStart && !homed) cur = "home";
+  if (ph.phase === "prescan" && run.temp <= 0) cur = "probe";
+  const ci = steps.indexOf(cur);
+  $("bmm-phases").innerHTML = steps.map((k, n) => `<li class="${n < ci ? "done" : n === ci ? "on" : ""}"><i></i>${esc(tr(`bm.phase.${k}`))}</li>`).join("");
   let text, pct = null;
   if (ph.phase === "probing") {
     text = tr("bm.run.point", { n: ph.current, total: ph.total });
     pct = ph.total ? (ph.current / ph.total) * 100 : null;
-  } else if (ph.phase === "preheat") {
+  } else if (cur === "home") text = tr("bm.run.home");
+  else if (ph.phase === "preheat") {
     text = tr("bm.run.preheat", { s: Math.round(ph.left) });
     pct = ph.total ? ((ph.total - ph.left) / ph.total) * 100 : null;
   } else if (ph.phase === "heating") {
@@ -797,17 +1067,107 @@ function bmRunRender() {
   const eta = bmEstimateFor(run.pid, run.temp);
   const left = Math.max(60, eta - (Date.now() - run.start) / 1000);
   $("bmm-left").textContent = tr("bm.run.left", { t: fmtDuration(left), elapsed: fmtDuration((Date.now() - run.start) / 1000) });
+  $("bmm-stop").disabled = run.stopped;
 }
 
-$("bmm-go").addEventListener("click", bmStartMeasure);
+/* Emergency stop: everything off at once, Klipper restarts. */
+async function bmStop() {
+  const run = BM.run;
+  if (!run || run.stopped) return;
+  const ok = await confirmDelete(tr("bm.stop.title"), tr("bm.stop.msg"), tr("bm.stop.ok"));
+  if (!ok || BM.run !== run) return;
+  run.stopped = true;
+  bmRunRender();
+  await invoke("bed_mesh_stop", { printerId: run.pid }).catch((e) => toast(String(e), true));
+}
+
+/* ③ The result in words, against the measurement before. */
+function bmDoneRender() {
+  const w = BM.wiz, r = w.result, go = $("bmm-go"), alt = $("bmm-alt"), cancel = $("bmm-cancel");
+  go.classList.remove("hidden");
+  go.disabled = false;
+  if (!r.ok) {
+    $("bmm-done").innerHTML = `<div class="bm-verdict fail"><b>${esc(tr("bm.done.fail"))}</b><small>${esc(r.msg)}</small></div>`;
+    go.textContent = tr("bm.done.retry");
+    cancel.textContent = tr("common.close");
+  } else {
+    const prev = r.prev && bmlStats(r.prev);
+    let vs = "";
+    if (prev) {
+      const delta = bmlDelta(prev.dev, r.dev);
+      const k = w.fix && r.status === "good" && delta < 0 ? "fixed" : delta < 0 ? "better" : delta > 0 ? "worse" : "same";
+      vs = tr(`bm.done.${k}`, { d: bmDay(r.prev.at), from: bmMm(prev.dev), to: bmMm(r.dev) });
+    }
+    const what = r.status === "good" ? tr("bm.done.good_sub") : r.findings.length ? tr("bm.done.found", { n: r.findings.length }) : tr("bm.done.look");
+    const list = r.findings.slice(0, 3).map((f) => `<li>${esc(bmFindingText(f, r.mesh).title)}</li>`).join("");
+    $("bmm-done").innerHTML = `<div class="bm-verdict ${r.status}">
+        <div class="bm-dev ${r.status}"><b>${esc(bmMm(r.dev))}</b><span>mm</span></div>
+        <div class="bm-verdict-text"><span class="bm-status ${r.status}"><i></i>${esc(tr(`bm.st.${r.status}`))}</span>${vs ? `<small>${esc(vs)}</small>` : ""}</div>
+      </div>
+      <p class="bm-note">${esc(what)}</p>${list ? `<ul class="bm-vlist">${list}</ul>` : ""}`;
+    if (r.status === "good") {
+      go.textContent = tr("bm.done.ok");
+      cancel.classList.add("hidden");
+    } else {
+      go.textContent = tr("bm.done.cause");
+      cancel.textContent = tr("common.close");
+    }
+  }
+  if (w.resume) {
+    alt.classList.remove("hidden");
+    alt.textContent = tr("bm.done.resume");
+  }
+}
+
+$("bmm-go").addEventListener("click", () => {
+  const w = BM.wiz;
+  if (!w) return;
+  if (w.step === "prep") return bmStartMeasure();
+  if (w.step !== "done") return;
+  if (!w.result.ok) {
+    w.step = "prep";
+    $("bmm-empty").checked = false;
+    return bmWizRender();
+  }
+  closeSheet($("bmmeasure"));
+  if (w.result.status !== "good") bmShowCause();
+});
+$("bmm-alt").addEventListener("click", () => {
+  const back = BM.wiz?.resume;
+  closeSheet($("bmmeasure"));
+  if (!back) return;
+  // Back where the print was being sent, its sheet as it was.
+  if (back.view && back.view !== window.currentView) switchView(back.view);
+  openSheet($("sendmodal"));
+  if (typeof checkSendPrinter === "function") checkSendPrinter();
+});
+$("bmm-stop").addEventListener("click", bmStop);
 $("bmm-cancel").addEventListener("click", () => closeSheet($("bmmeasure")));
-$("bm-measure-btn").addEventListener("click", bmOpenMeasure);
+$("bm-measure-btn").addEventListener("click", () => bmOpenMeasure());
+
+/* The diagnosis in view, its first finding shown on the map. */
+function bmShowCause() {
+  if (MT.tab !== "level") mtSetTab("level");
+  BM.shown = null;
+  BM.zone = null;
+  bmRender();
+  requestAnimationFrame(() => $("bm-diag")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
 
 /* ------------------------------------------------------------ events */
 
 $("bm-body").addEventListener("click", async (e) => {
   if (e.target.closest("[data-bm-retry]")) return maintShow(BM.pid);
   if (e.target.closest("[data-bm-measure]")) return bmOpenMeasure();
+  if (e.target.closest("[data-bm-fixed]")) return bmOpenMeasure({ fix: true });
+  if (e.target.closest("[data-bm-cause]")) return $("bm-diag")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const zone = e.target.closest("[data-bm-zone]");
+  if (zone) {
+    // One finding at a time on the map; again: none.
+    const n = +zone.dataset.bmZone;
+    BM.zone = { ...BM.zone, n: BM.zone?.n === n ? null : n };
+    return bmRender();
+  }
   const cmp = e.target.closest("[data-bm-cmp]");
   if (cmp) return bmOpenCompare(+cmp.dataset.bmCmp);
   const del = e.target.closest("[data-bm-del]");
@@ -833,6 +1193,12 @@ $("bm-body").addEventListener("click", async (e) => {
     bmRender();
   }
 });
+$("bm-body").addEventListener("toggle", (e) => {
+  if (e.target.id !== "bm-more") return;
+  BM.moreOpen = e.target.open;
+  localStorage.setItem("snapstudio.bm.more", BM.moreOpen ? "1" : "0");
+  if (BM.moreOpen) bmDrawTrend(BM.pid);
+}, true);
 $("bm-body").addEventListener("keydown", (e) => {
   const row = e.target.closest(".bm-hrow");
   if (row && (e.key === "Enter" || e.key === " ") && e.target === row) {
@@ -872,8 +1238,13 @@ async function bmSendBanner(pid) {
   el.dataset.pid = pid;
   if (a) $("snd-bed-text").textContent = tr("bm.send_banner", { dev: bmMm(a.dev) });
 }
+/* "Measure first": the assistant, then back to the send sheet as it was. */
 $("snd-bed-go").addEventListener("click", () => {
   const pid = $("snd-bed").dataset.pid;
+  if (!pid) return;
+  const view = window.currentView;
   closeSheet($("sendmodal"));
-  if (pid) maintShow(pid, "level");
+  // The tab opens at once; the printer's answer follows.
+  maintShow(pid, "level");
+  bmOpenMeasure({ resume: { view } });
 });
