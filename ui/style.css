@@ -3702,6 +3702,16 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ct-card { padding: 14px 16px; border-radius: var(--radius-card); background: var(--card-bg); border: 1px solid var(--card-border); box-shadow: var(--card-shadow); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .ct-card-head { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
 .ct-card-head .sw { margin-left: auto; }
+.ct-help { flex: none; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid var(--control-border); background: var(--control-bg); color: var(--text-secondary); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0; cursor: pointer; }
+.ct-help:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--control-border)); }
+.ct-help:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ct-help-sheet { width: min(600px, 92vw); }
+.ct-help-list { display: flex; flex-direction: column; border-radius: 10px; background: var(--card-bg); border: 1px solid var(--card-border); overflow: hidden; }
+.ct-help-row { display: grid; grid-template-columns: 120px 1fr; column-gap: 14px; row-gap: 3px; padding: 10px 14px; border-top: 1px solid var(--separator); font-size: 12.5px; line-height: 1.45; }
+.ct-help-row:first-child { border-top: 0; }
+.ct-help-row b { grid-row: span 2; font-weight: 600; }
+.ct-help-row small { color: var(--text-secondary); font-size: 11.5px; }
+.ct-help-notes { margin: 12px 0 2px; padding-left: 18px; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
 .ct-pos { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0; text-transform: none; color: var(--text); white-space: pre; }
 /* The jog pad: XY as a cross, Z beside it. */
 .ct-move-body { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 4px 0; }

@@ -15,6 +15,7 @@ const CT = {
   cfg: null,
   err: null,
   busy: null, // { label } while an action runs
+  homedSeen: false, // homed earlier in this visit: a loss is Klipper's standby
   step: +localStorage.getItem("snapstudio.ctl.step") || 10,
   timer: 0,
   reading: false,
@@ -30,7 +31,7 @@ const ctMm = (v) => fmtDec(v, 1);
 async function ctShow(pid) {
   if (CT.pid !== pid) {
     ctCamStop();
-    Object.assign(CT, { pid, st: null, cfg: null, err: null, busy: null, built: null });
+    Object.assign(CT, { pid, st: null, cfg: null, err: null, busy: null, built: null, homedSeen: false });
   }
   ctBuild();
   ctUpdate();
@@ -154,7 +155,7 @@ function ctBuild() {
         </div>
       </section>
       <section class="ct-card ct-heads">
-        <div class="ct-card-head">${esc(tr("ctl.heads"))}</div>
+        <div class="ct-card-head"><button class="ct-help" data-ct-help title="${esc(tr("ctl.help.title"))}" aria-label="${esc(tr("ctl.help.title"))}">?</button>${esc(tr("ctl.heads"))}</div>
         <div class="ct-head-grid">${heads.length ? heads.map(headCard).join("") : `<p class="ct-empty">${esc(tr(CT.err ? "ctl.offline" : "ctl.reading"))}</p>`}</div>
       </section>
     </div>
@@ -225,6 +226,10 @@ function ctUpdate() {
   $("ct-lock").classList.toggle("hidden", !lock);
   if (lock) $("ct-lock").textContent = tr(lock);
   $("ct-nohome").classList.toggle("hidden", !st || homed || !!lock);
+  // Homed a moment ago, not any more, nothing moved: Klipper's standby
+  // (5 min without a command) turned the motors off. Said as such.
+  if (homed) CT.homedSeen = true;
+  $("ct-nohome").querySelector("span").textContent = tr(CT.homedSeen && !homed && st?.idle === "Idle" ? "ctl.not_homed_idle" : "ctl.not_homed");
   $("ct-pos").textContent = st && homed ? `X ${ctMm(st.position[0])}  Y ${ctMm(st.position[1])}  Z ${ctMm(st.position[2])}` : "";
   document.querySelectorAll("#ct-steps [data-step]").forEach((b) => {
     const on = +b.dataset.step === CT.step;
@@ -333,6 +338,7 @@ function ctLabel(kind, n, extra) {
 }
 
 $("ct-body").addEventListener("click", (e) => {
+  if (e.target.closest("[data-ct-help]")) return ctHelp();
   if (e.target.closest("[data-ct-retry]")) {
     CT.err = null;
     ctUpdate();
@@ -381,6 +387,22 @@ $("ct-body").addEventListener("change", (e) => {
   if (r.id === "ct-purifier") return ctRun({ kind: "purifier", on: r.checked }, tr("ctl.doing.purifier"));
   if (r.id === "ct-cam-sw") return r.checked ? ctCamStart() : ctCamStop();
 });
+
+/* ------------------------------------------------------------ help */
+
+/* The heads' buttons explained: what each does, the U1 command, when it
+   is greyed out; then what holds for all of them. */
+function ctHelp() {
+  const rows = ["temp", "tool", "load", "unload", "extrude", "retract"].map((k) => `<div class="ct-help-row">
+      <b>${esc(tr(`ctl.help.${k}_t`))}</b>
+      <span>${esc(tr(`ctl.help.${k}`))}</span>
+      <small>${esc(tr(`ctl.help.${k}_when`))}</small>
+    </div>`).join("");
+  const notes = ["greyed", "one", "idle", "commands"].map((k) => `<li>${esc(tr(`ctl.help.note_${k}`))}</li>`).join("");
+  $("cthelp-body").innerHTML = `<div class="ct-help-list">${rows}</div><ul class="ct-help-notes">${notes}</ul>`;
+  openSheet($("cthelp"));
+}
+$("cthelp-close").addEventListener("click", () => closeSheet($("cthelp")));
 
 /* ------------------------------------------------------------ camera */
 
