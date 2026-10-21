@@ -1847,7 +1847,9 @@ pub fn run() {
                     );
                 }
                 // Created invisible to avoid the white flash before the first render.
+                // Showing it does not bring the app forward on macOS: focus it too.
                 let _ = window.show();
+                let _ = window.set_focus();
             }
             Ok(())
         })
