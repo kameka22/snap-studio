@@ -86,7 +86,7 @@
   "files.analyze": "Analyze Geometry",
   "prepare.empty.title": "Empty plate",
   "prepare.empty.text": "Choose a model in Files, then “Prepare” — or add it with +.",
-  "prepare.hint": "drag: move · ⌥ drag: rotate · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo",
+  "prepare.hint": "drag: move · ⌥ drag: rotate · ⌘ drag from an empty spot: select an area · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo",
   "prepare.objects": "Objects",
   "prepare.placement": "Placement",
   "prepare.pos_x": "Position X",
@@ -751,7 +751,6 @@
   "prepare.off_count": "{n} off the plate",
   "prepare.tag.over": "sticks out",
   "prepare.tag.plate": "plate {n}",
-  "prepare.tag.off": "off the plate",
   "prepare.tag.overlap": "overlaps",
   "prepare.selected": {
     "one": "{n} object selected",
@@ -1549,5 +1548,41 @@
   "slice.sum.speed_edited": {
     "one": "speed: {n} set by hand",
     "other": "speed: {n} set by hand"
-  }
+  },
+  "prepare.on_bed": "On the plate ({n})",
+  "prepare.off_bed": "Off the plate ({n})",
+  "prepare.off_note": {
+    "one": "Not sliced. Use + to put it back on the plate.",
+    "other": "Not sliced. Use + to put them back on the plate."
+  },
+  "prepare.drop_off": "Drop here to take it off the plate",
+  "prepare.put": "Put on the plate",
+  "prepare.put_all": "Add All",
+  "prepare.fix.title": "Sticks out of the plate: recenter or exclude",
+  "prepare.fix.in": "Recenter on the Plate",
+  "prepare.fix.out": "Exclude from the Plate",
+  "prepare.slice_n": {
+    "one": "Slice {n} Object",
+    "other": "Slice {n} Objects"
+  },
+  "prepare.tip.partial": {
+    "one": "{n} object sticks out of the plate: fix it before slicing",
+    "other": "{n} objects stick out of the plate: fix them before slicing"
+  },
+  "prepare.tip.off": {
+    "one": "{n} object off the plate will not be sliced",
+    "other": "{n} objects off the plate will not be sliced"
+  },
+  "prepare.mode.text": "Type the value",
+  "prepare.mode.slider": "Use a slider",
+  "prepare.val_hint": "Double-click to type the value",
+  "prepare.list.show": "Show the list",
+  "prepare.list.hide": "Hide the list",
+  "prepare.park_all": "Take All Off",
+  "prepare.park_all.title": "Move every object beside the plate (not sliced)",
+  "prepare.scale.split": "Scale each axis (X, Y, Z)",
+  "prepare.scale.join": "One scale, proportions kept",
+  "prepare.list.hint": "Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it",
+  "prepare.loading.file": "Reading {name}…",
+  "prepare.loading.objects": "Loading objects… {done} / {n}"
 }

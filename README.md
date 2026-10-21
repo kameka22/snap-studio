@@ -42,9 +42,11 @@ and layer-by-layer G-code toolpaths.
 <td width="50%" valign="top">
 
 ### 🧩 Prepare
-The U1 plate as in Orca: move, rotate, scale, duplicate, lay on face,
-auto-orient, auto-arrange, undo — then slice. Each object lists its
-colors, painted ones included, and sends each to the head you pick.
+The U1 plate as in Orca: move, rotate, scale (per axis too) with sliders,
+duplicate, lay on face, auto-orient, auto-arrange, undo — then slice.
+Objects can be set aside off the plate (not sliced) and put back in a
+click. Each object lists its colors, painted ones included, and sends each
+to the head you pick.
 
 <img src="docs/screenshots/prepare.png" alt="Prepare" />
 
@@ -263,7 +265,8 @@ printers, favorites and conversations are carried over on first launch.
 | ⌘, | Settings |
 
 In Prepare: R rotate, F lay on face, Q orient (⇧Q: all), A arrange,
-⌘D duplicate, arrows 1 mm (⇧: 10 mm), ⌘Z / ⇧⌘Z.
+⌘D duplicate, arrows 1 mm (⇧: 10 mm), ⌘Z / ⇧⌘Z; ⌘ + drag from an empty
+spot selects with a rectangle, ⇧-click in the list selects a range.
 
 In the AI list: ⌘F search, ↑ / ↓ and ⏎ open, F2 rename, ⌫ delete. In a
 conversation: ⌘⏎ send, Esc stop Claude.
@@ -279,7 +282,6 @@ with its pull request (drafts, approved or under discussion):
 | Feature | |
 |---|---|
 | **Several plates in Prepare** — plate tabs, auto-arrange across plates, slice them all and queue them; multi-plate 3MF files kept as such | [#18](https://github.com/kameka22/snap-studio/pull/18) |
-| **Prepare, easier** — sliders for position, rotation and scale, objects off the bed, layout and 3MF display fixes | [#28](https://github.com/kameka22/snap-studio/pull/28) |
 | **Print by object** — one object after the other, with collision checks for the U1's head and an adjustable order | [#22](https://github.com/kameka22/snap-studio/pull/22) |
 | **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Calibration assistant** — step-by-step Klipper calibrations from a Calibration menu | [#17](https://github.com/kameka22/snap-studio/pull/17) |
