@@ -3723,9 +3723,9 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ct-warn { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; font-size: 12.5px; color: var(--warning-text, var(--warning)); background: color-mix(in srgb, var(--warning) 11%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
 .ct-warn span { flex: 1; }
 /* Head cards, edged with their spool's colour. */
-.ct-head-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 1380px) { .ct-head-grid { grid-template-columns: 1fr; } }
-.ct-head { --spool: var(--separator); display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--spool) 5%, var(--control-bg)); border: 1px solid color-mix(in srgb, var(--spool) 45%, var(--card-border)); border-left: 4px solid var(--spool); }
+/* Always 2 × 2: four heads in two rows, whatever the width. */
+.ct-head-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ct-head { --spool: var(--separator); display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--spool) 5%, var(--control-bg)); border: 1px solid color-mix(in srgb, var(--spool) 45%, var(--card-border)); border-left: 4px solid var(--spool); }
 .ct-head.active { box-shadow: 0 0 0 2px var(--accent) inset; }
 .ct-head.empty { opacity: 0.85; }
 .ct-head-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -3735,12 +3735,17 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ct-badge { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--accent); }
 .ct-head-mid { display: flex; align-items: center; gap: 14px; }
 .ct-head-set { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.ct-head-acts { display: flex; gap: 6px; flex-wrap: wrap; }
-.ct-head-acts .btn { flex: 1; min-width: 0; padding-left: 6px; padding-right: 6px; }
+.ct-head-acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.ct-head-acts .btn { min-width: 0; padding-left: 4px; padding-right: 4px; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-head-mid { gap: 12px; }
+/* A narrow card: its four actions on two rows rather than cut. */
+.ct-head { container-type: inline-size; }
+@container (max-width: 340px) { .ct-head-acts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ct-gauge b { font-size: 15px; }
 /* A round gauge: the temperature as an arc, the target as a tick. */
-.ct-gauge { --p: 0; --t: 0; --c: var(--text-tertiary); flex: none; position: relative; width: 74px; height: 74px; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--p) * 1turn), color-mix(in srgb, var(--text) 9%, transparent) 0); display: grid; place-items: center; }
+.ct-gauge { --p: 0; --t: 0; --c: var(--text-tertiary); --gs: 66px; flex: none; position: relative; width: var(--gs); height: var(--gs); border-radius: 50%; background: conic-gradient(var(--c) calc(var(--p) * 1turn), color-mix(in srgb, var(--text) 9%, transparent) 0); display: grid; place-items: center; }
 .ct-gauge::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--card-bg); }
-.ct-gauge::after { content: ""; position: absolute; top: 0; left: calc(50% - 1px); width: 2px; height: 9px; background: var(--text); border-radius: 1px; transform-origin: 1px 37px; transform: rotate(calc(var(--t) * 1turn)); opacity: calc(min(1, var(--t) * 100)); }
+.ct-gauge::after { content: ""; position: absolute; top: 0; left: calc(50% - 1px); width: 2px; height: 9px; background: var(--text); border-radius: 1px; transform-origin: 1px calc(var(--gs) / 2); transform: rotate(calc(var(--t) * 1turn)); opacity: calc(min(1, var(--t) * 100)); }
 .ct-gauge span { position: relative; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
 .ct-gauge b { font-size: 16px; font-variant-numeric: tabular-nums; }
 .ct-gauge small { font-size: 10.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }

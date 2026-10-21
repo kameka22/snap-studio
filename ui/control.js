@@ -123,6 +123,7 @@ function ctBuild() {
       <span class="ct-busy hidden" id="ct-busy" role="status"><span class="spinner small"></span><span id="ct-busy-t"></span></span>
       <button class="ct-estop" id="ct-estop" data-act="emergency_stop">${ctIcon("power")}<span>${esc(tr("ctl.estop"))}</span></button>
     </div>
+    <div class="mt-stale hidden" id="ct-conn" role="status"></div>
     <div class="ct-lock hidden" id="ct-lock" role="status"></div>
     <div class="ct-top">
       <section class="ct-card ct-move">
@@ -198,8 +199,10 @@ function ctBuild() {
 function ctUpdate() {
   const box = $("ct-body");
   if (!box.firstElementChild) return;
-  const { st, cfg } = CT;
-  const state = CT.err ? "offline" : ctlStateOf(st);
+  const { cfg } = CT;
+  // Not answering: nothing can run (the last state read is not the printer's now).
+  const st = CT.err ? null : CT.st;
+  const state = CT.err ? "offline" : !st ? "reading" : ctlStateOf(st);
   const stateText = state === "printing" ? tr("ctl.st.printing", { p: fmtNum(Math.round((st.progress || 0) * 100)) })
     : state === "busy" ? tr("ctl.st.busy", { state: st.main_state }) : tr(`ctl.st.${state}`);
   $("ct-state").className = `ct-state ${state}`;
@@ -210,10 +213,17 @@ function ctUpdate() {
   $("ct-active").textContent = st?.active != null ? tr("ctl.active_head", { n: st.active }) : "";
   $("ct-busy").classList.toggle("hidden", !CT.busy);
   $("ct-busy-t").textContent = CT.busy?.label || "";
+  // Reading the printer, or it does not answer: said plainly, with a retry.
+  const conn = $("ct-conn");
+  conn.classList.toggle("hidden", state !== "reading" && state !== "offline");
+  if (state === "reading") conn.innerHTML = `<span class="spinner"></span><span>${esc(tr("ctl.reading"))}</span>`;
+  else if (state === "offline") conn.innerHTML = `<span class="mt-stale-dot"></span><span>${esc(tr("ctl.offline_err", { err: CT.err }))}</span><button class="btn small" data-ct-retry>${esc(tr("printers.offline.retry"))}</button>`;
+  // The heads' box before the printer's configuration is known.
+  box.querySelector(".ct-empty")?.replaceChildren(tr(state === "offline" ? "ctl.offline" : "ctl.reading"));
   // Printing or a U1 procedure: what stays possible is said.
-  const lock = state === "printing" || state === "paused" ? "ctl.lock.printing" : state === "busy" ? "ctl.lock.busy" : state === "offline" ? "ctl.lock.offline" : "";
+  const lock = state === "printing" || state === "paused" ? "ctl.lock.printing" : state === "busy" ? "ctl.lock.busy" : "";
   $("ct-lock").classList.toggle("hidden", !lock);
-  if (lock) $("ct-lock").textContent = tr(lock, { err: CT.err || "" });
+  if (lock) $("ct-lock").textContent = tr(lock);
   $("ct-nohome").classList.toggle("hidden", !st || homed || !!lock);
   $("ct-pos").textContent = st && homed ? `X ${ctMm(st.position[0])}  Y ${ctMm(st.position[1])}  Z ${ctMm(st.position[2])}` : "";
   document.querySelectorAll("#ct-steps [data-step]").forEach((b) => {
@@ -323,6 +333,11 @@ function ctLabel(kind, n, extra) {
 }
 
 $("ct-body").addEventListener("click", (e) => {
+  if (e.target.closest("[data-ct-retry]")) {
+    CT.err = null;
+    ctUpdate();
+    return ctRead(true);
+  }
   const step = e.target.closest("[data-step]");
   if (step) {
     CT.step = +step.dataset.step;
