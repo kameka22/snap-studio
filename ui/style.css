@@ -754,6 +754,18 @@ body.dragover #stage::after {
 .toast .ok { color: var(--success); }
 .toast .ko { color: var(--danger); }
 @keyframes pop { from { opacity: 0; transform: translateY(12px); } }
+/* In Prepare the bottom of the view holds the tool hints: messages show at
+   the top of the view, in the loading pill's place, or below it while it
+   shows. */
+body:has(#view-prepare:not(.hidden)) .toasts {
+  top: calc(var(--titlebar-height) + 14px);
+  bottom: auto;
+  left: calc(50% + var(--sidebar-width) / 2);
+}
+body:has(#view-prepare:not(.hidden) #p-loading:not(.hidden)) .toasts { top: calc(var(--titlebar-height) + 56px); }
+body:has(#view-prepare:not(.hidden)) .toast { animation-name: pop-down; }
+body:has(#view-prepare:not(.hidden)) .toast.out { transform: translateY(-12px); }
+@keyframes pop-down { from { opacity: 0; transform: translateY(-12px); } }
 
 #sentinel { height: 1px; }
 
