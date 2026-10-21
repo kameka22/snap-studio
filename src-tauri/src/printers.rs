@@ -264,9 +264,14 @@ pub fn check_map(tools: &[u8], map: &[(u8, u8)]) -> Result<()> {
 
 /// Runs a G-code script; the error reports Klipper's answer.
 pub async fn gcode_script(host: &str, port: u16, script: &str) -> Result<()> {
+    gcode_script_for(host, port, script, Duration::from_secs(30)).await
+}
+
+/// The same, for a script that lasts (Moonraker answers when it is done).
+pub async fn gcode_script_for(host: &str, port: u16, script: &str, timeout: Duration) -> Result<()> {
     let r = long_client()
         .post(format!("{}/printer/gcode/script", base(host, port)))
-        .timeout(Duration::from_secs(30))
+        .timeout(timeout)
         .json(&serde_json::json!({ "script": script }))
         .send()
         .await?;
