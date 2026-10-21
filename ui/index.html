@@ -1414,9 +1414,10 @@
         </label>
       </div>
       <div class="group">
-        <label class="grow-row">
+        <label class="grow-row bm-slider-block">
           <span class="k"><span data-i18n="bm.measure.temp">Bed temperature</span><span class="sub" id="bmm-temp-sub"></span></span>
-          <span class="val"><input id="bmm-temp" class="field bm-num" type="number" min="0" max="110" step="5" title="0: no heating" data-i18n-title="bm.prep.temp_zero" /> °C</span>
+          <input id="bmm-temp" type="range" min="0" max="110" step="1" aria-label="Bed temperature" data-i18n-aria="bm.measure.temp" />
+          <span class="val" id="bmm-temp-v"></span>
         </label>
         <div class="grow-row"><span class="k" data-i18n="bm.measure.duration">Estimated duration</span><span class="val" id="bmm-eta"></span></div>
       </div>

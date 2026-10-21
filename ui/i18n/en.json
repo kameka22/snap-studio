@@ -1775,7 +1775,7 @@
   "bm.prep.temp_last": "As your last print ({file})",
   "bm.prep.temp_stored": "As your last measurement",
   "bm.prep.temp_default": "A usual temperature for PLA",
-  "bm.prep.temp_zero": "0: no heating",
+  "bm.prep.no_heat": "No heating",
   "bm.prep.eta": "≈ {t} · {n} points",
   "bm.prep.confirm_empty": "Confirm the bed is clear to start.",
   "bm.phase.home": "Homing",

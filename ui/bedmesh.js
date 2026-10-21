@@ -943,6 +943,7 @@ function bmPrepRender() {
   const sug = bmlSuggestTemp(live?.last_job, localStorage.getItem(bmTempKey(pid)));
   if (!w.tempSet) $("bmm-temp").value = String(sug.temp);
   const temp = Math.max(0, Math.min(110, +$("bmm-temp").value || 0));
+  $("bmm-temp-v").textContent = temp > 0 ? `${fmtNum(temp)} °C` : tr("bm.prep.no_heat");
   $("bmm-temp-sub").textContent = sug.from === "last" ? tr("bm.prep.temp_last", { file: sug.file }) : sug.from === "stored" ? tr("bm.prep.temp_stored") : tr("bm.prep.temp_default");
   $("bmm-eta").textContent = tr("bm.prep.eta", { t: fmtDuration(bmEstimateFor(pid, temp)), n: c ? fmtNum(c.count[0] * c.count[1]) : "—" });
   const empty = $("bmm-empty").checked;

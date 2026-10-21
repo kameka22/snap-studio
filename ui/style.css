@@ -3653,8 +3653,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .bm-sheet { width: 440px; }
 .bm-sheet.wide { width: min(720px, 92vw); }
 .bm-note { color: var(--text-secondary); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
-.bm-num { width: 64px; text-align: right; }
 .bm-select { width: auto; min-width: 90px; }
+/* A slider under its label, its value on the right (the assistant). */
+.bm-slider-block { flex-wrap: wrap; row-gap: 6px; }
+.bm-sheet .bm-slider-block .k { flex: 1 1 100%; }
+.bm-slider-block input[type=range] { flex: 1; min-width: 0; }
+.bm-slider-block .val { min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
 .bm-slider-row input[type=range] { flex: 1; min-width: 90px; margin-left: auto; }
 .bm-slider-row .val { min-width: 62px; margin-left: 8px; }
 .bm-phase { font-size: 14px; font-weight: 500; margin: 6px 0 10px; font-variant-numeric: tabular-nums; }

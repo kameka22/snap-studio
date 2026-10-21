@@ -1778,7 +1778,7 @@
   "bm.prep.temp_last": "Comme votre dernière impression ({file})",
   "bm.prep.temp_stored": "Comme votre dernière mesure",
   "bm.prep.temp_default": "Une température courante pour le PLA",
-  "bm.prep.temp_zero": "0 : sans chauffe",
+  "bm.prep.no_heat": "Sans chauffe",
   "bm.prep.eta": "≈ {t} · {n} points",
   "bm.prep.confirm_empty": "Confirmez que le plateau est dégagé pour lancer la mesure.",
   "bm.phase.home": "Origine",
