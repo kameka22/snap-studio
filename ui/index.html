@@ -1425,14 +1425,16 @@
     <div id="bmm-run" class="hidden">
       <ol class="bm-phases" id="bmm-phases"></ol>
       <div class="bm-phase" id="bmm-phase"></div>
+      <div class="bm-note bm-why" id="bmm-phase-why"></div>
       <div class="progress" id="bmm-progress"><i></i></div>
       <div class="bm-note" id="bmm-left"></div>
-      <p class="bm-note" data-i18n="bm.run.stop_note">Something wrong (a part left on the bed, an odd noise)? The emergency stop cuts everything at once.</p>
+      <p class="bm-note" id="bmm-stop-note"></p>
     </div>
     <div id="bmm-done" class="hidden"></div>
     <div id="bmm-msg" class="pf-test"></div>
     <div class="modal-actions">
       <button id="bmm-stop" class="btn danger left hidden" data-i18n="bm.stop.button">Emergency Stop</button>
+      <button id="bmm-abort" class="btn hidden" data-i18n="bm.abort.button">Stop Measuring</button>
       <button id="bmm-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
       <button id="bmm-alt" class="btn hidden"></button>
       <button id="bmm-go" class="btn primary" data-i18n="bm.measure.go">Measure</button>
@@ -1452,12 +1454,12 @@
       <div class="group">
         <label class="grow-row bm-slider-row">
           <span class="k"><span data-i18n="bm.set.good">Good up to</span><span class="sub" data-i18n="bm.set.good_sub">Deviation shown in green</span></span>
-          <input id="bms-good" type="range" min="0.05" max="1" step="0.01" />
+          <input id="bms-good" type="range" min="0.05" max="2" step="0.05" />
           <span class="val" id="bms-good-v"></span>
         </label>
         <label class="grow-row bm-slider-row">
           <span class="k"><span data-i18n="bm.set.limit">Alert threshold</span><span class="sub" data-i18n="bm.set.limit_sub">Above it, the bed is out of tolerance</span></span>
-          <input id="bms-limit" type="range" min="0.05" max="1" step="0.01" />
+          <input id="bms-limit" type="range" min="0.05" max="2" step="0.05" />
           <span class="val" id="bms-limit-v"></span>
         </label>
       </div>

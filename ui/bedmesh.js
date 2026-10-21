@@ -286,7 +286,7 @@ function bmHero(state, st, canMeasure) {
     acts = measure(tr("bm.hero.check"));
   } else {
     title = tr("bm.hero.good", { dev });
-    sub = [when, vs].filter(Boolean).join(" · ");
+    sub = [tr("bm.hero.comp"), when, vs].filter(Boolean).join(" · ");
     acts = measure(tr("bm.hero.again"), false);
   }
   const icon = cls === "good" ? '<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
@@ -302,8 +302,10 @@ function bmHero(state, st, canMeasure) {
 /* A finding in words: what it is and what to do. */
 function bmFindingText(f, mesh) {
   const v = bmMm(f.amount);
-  if (f.kind === "tilt") return { title: tr("bm.f.tilt", { side: tr(`bm.side.${f.side}`), v }), tip: tr("bm.f.tilt_tip") };
-  if (f.kind === "corner") return { title: tr(f.high ? "bm.f.corner_up" : "bm.f.corner_down", { corner: tr(`bm.side.${f.corner}`), v }), tip: tr(f.high ? "bm.f.corner_up_tip" : "bm.f.corner_down_tip") };
+  // A U1 has a knob under each corner, and its screen guides their setting.
+  const knobs = !!BM.live.get(BM.pid)?.config?.auto_macro;
+  if (f.kind === "tilt") return { title: tr("bm.f.tilt", { side: tr(`bm.side.${f.side}`), v }), tip: tr(knobs ? "bm.f.tilt_tip_knobs" : "bm.f.tilt_tip") };
+  if (f.kind === "corner") return { title: tr(f.high ? "bm.f.corner_up" : "bm.f.corner_down", { corner: tr(`bm.side.${f.corner}`), v }), tip: knobs ? tr("bm.f.corner_tip_knobs", { corner: tr(`bm.side.${f.corner}`) }) : tr(f.high ? "bm.f.corner_up_tip" : "bm.f.corner_down_tip") };
   if (f.kind === "bowl" || f.kind === "dome") return { title: tr(`bm.f.${f.kind}`, { v }), tip: tr("bm.f.curve_tip") };
   const [x, y] = bmlXY(mesh, f.at[0], f.at[1]);
   return { title: tr(f.high ? "bm.f.bump_up" : "bm.f.bump_down", { v, x: fmtNum(Math.round(x)), y: fmtNum(Math.round(y)) }), tip: tr("bm.f.bump_tip") };
@@ -914,6 +916,7 @@ function bmWizRender() {
   $("bmm-run").classList.toggle("hidden", w.step !== "run");
   $("bmm-done").classList.toggle("hidden", w.step !== "done");
   $("bmm-stop").classList.toggle("hidden", w.step !== "run");
+  if (w.step !== "run") $("bmm-abort").classList.add("hidden");
   $("bmm-alt").classList.add("hidden");
   $("bmm-cancel").classList.remove("hidden");
   $("bmm-msg").textContent = "";
@@ -972,6 +975,12 @@ async function bmStartMeasure() {
     before: live?.mesh || null,
     prev: hist[hist.length - 1] || null, // the measurement this one is compared with
     homedAtStart: /x/.test(live?.homed || "") && /y/.test(live?.homed || "") && /z/.test(live?.homed || ""),
+    // The U1's macro: a 2 min soak, the bed's preheat, its corner check.
+    u1: !!live?.config?.auto_macro,
+    preheat: live?.config?.preheat ?? 60,
+    soakStart: null, // when the bed reached its temperature (ms)
+    seen: false, // the printer's own leveling began (preheat, corners, probing)
+    aborted: false,
   };
   BM.run = run;
   BM.wiz.step = "run";
@@ -994,6 +1003,7 @@ async function bmPoll(run) {
   const prev = BM.live.get(run.pid);
   BM.live.set(run.pid, { ...live, config: live.config || prev?.config || null, last_job: prev?.last_job || null });
   if (live.progress?.state === "probing" && !run.probeStart) run.probeStart = { t: Date.now(), n: live.progress.current };
+  if (["preheating", "prescanning", "probing"].includes(live.progress?.state)) run.seen = true;
   if (BM.wiz?.step === "run") bmRunRender();
   bmToolbar();
 }
@@ -1007,7 +1017,7 @@ async function bmFinish(run) {
   const fresh = mesh && !mesh.partial && !(run.before && bmSame(mesh, run.before));
   const sheetOpen = !$("bmmeasure").classList.contains("hidden");
   let note;
-  if (fresh && !run.failed && !run.stopped) {
+  if (fresh && !run.failed && !run.stopped && !run.aborted) {
     // Its pace, for the next estimate.
     if (run.probeStart && live.progress?.total) {
       const pace = (Date.now() - run.probeStart.t) / 1000 / Math.max(1, live.progress.total - run.probeStart.n);
@@ -1022,7 +1032,7 @@ async function bmFinish(run) {
     if (BM.wiz?.pid === run.pid) Object.assign(BM.wiz, { step: "done", result });
     note = tr("bm.run.done", { dev: bmMm(dev), st: tr(`bm.st.${status}`) });
   } else {
-    const msg = run.stopped ? tr("bm.run.stopped") : run.failed || (live?.progress?.state === "aborted" ? tr("bm.run.aborted") : tr("bm.run.nomesh"));
+    const msg = run.stopped ? tr("bm.run.stopped") : run.aborted ? tr("bm.run.aborted_app") : run.failed || (live?.progress?.state === "aborted" ? tr("bm.run.aborted") : tr("bm.run.nomesh"));
     if (BM.wiz?.pid === run.pid) Object.assign(BM.wiz, { step: "done", result: { ok: false, msg } });
     note = msg;
   }
@@ -1034,41 +1044,54 @@ async function bmFinish(run) {
   bmAfterChange();
 }
 
-/* ② Each phase, the one under way, the progress. */
+/* ② Each step (the U1's: soak, preheat, corners), the one under way, its
+   countdown or progress; the stops that can act now. */
 function bmRunRender() {
   const run = BM.run;
   if (!run) return;
   const live = BM.live.get(run.pid);
-  const ph = bmlPhase(live, run.temp);
-  const homed = /x/.test(live?.homed || "") && /y/.test(live?.homed || "") && /z/.test(live?.homed || "");
-  const steps = [...(run.homedAtStart ? [] : ["home"]), ...(run.temp > 0 ? ["heat", "soak"] : []), "probe"];
-  let cur = ph.phase === "probing" ? "probe" : ph.phase === "heating" ? "heat" : run.temp > 0 ? "soak" : "probe";
-  if (!run.homedAtStart && !homed) cur = "home";
-  if (ph.phase === "prescan" && run.temp <= 0) cur = "probe";
-  const ci = steps.indexOf(cur);
-  $("bmm-phases").innerHTML = steps.map((k, n) => `<li class="${n < ci ? "done" : n === ci ? "on" : ""}"><i></i>${esc(tr(`bm.phase.${k}`))}</li>`).join("");
-  let text, pct = null;
-  if (ph.phase === "probing") {
-    text = tr("bm.run.point", { n: ph.current, total: ph.total });
-    pct = ph.total ? (ph.current / ph.total) * 100 : null;
-  } else if (cur === "home") text = tr("bm.run.home");
-  else if (ph.phase === "preheat") {
-    text = tr("bm.run.preheat", { s: Math.round(ph.left) });
-    pct = ph.total ? ((ph.total - ph.left) / ph.total) * 100 : null;
-  } else if (ph.phase === "heating") {
-    text = tr("bm.run.heating", { t: fmtDec(ph.current, 0), target: ph.target });
-    pct = (ph.current / ph.target) * 100;
-  } else if (ph.phase === "prescan") text = tr("bm.run.prescan");
-  else if (ph.phase === "aborted") text = tr("bm.run.aborted");
-  else text = tr(run.temp > 0 ? "bm.run.soak" : "bm.run.start");
+  const ph = bmlRunPhase(live, run);
+  if (ph.soakStart && !run.soakStart) run.soakStart = ph.soakStart;
+  const steps = bmlRunSteps(run);
+  const ci = steps.indexOf(ph.cur);
+  $("bmm-phases").innerHTML = steps.map((k, n) => `<li class="${ci < 0 ? "" : n < ci ? "done" : n === ci ? "on" : ""}"><i></i>${esc(tr(`bm.phase.${k}`))}</li>`).join("");
+  const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
+  const text = ph.cur === "probe" ? (ph.total ? tr("bm.run.point", { n: ph.n, total: ph.total }) : tr("bm.run.start"))
+    : ph.cur === "home" ? tr("bm.run.home")
+    : ph.cur === "heat" ? tr("bm.run.heating", { t: ph.t == null ? "—" : fmtDec(ph.t, 0), target: ph.target })
+    : ph.cur === "soak" ? tr("bm.run.soak_left", { t: clock(Math.ceil(ph.left)) })
+    : ph.cur === "preheat" ? tr("bm.run.preheat", { s: Math.round(ph.left) })
+    : ph.cur === "prescan" ? tr("bm.run.prescan")
+    : tr("bm.run.aborted");
   $("bmm-phase").textContent = text;
+  $("bmm-phase-why").textContent = ph.cur === "soak" ? tr("bm.run.soak_why") : ph.cur === "preheat" ? tr("bm.run.preheat_why") : ph.cur === "prescan" ? tr("bm.run.prescan_why") : "";
   const bar = $("bmm-progress");
-  bar.classList.toggle("indeterminate", pct == null);
-  bar.querySelector("i").style.width = pct == null ? "" : `${Math.min(100, pct).toFixed(1)}%`;
+  bar.classList.toggle("indeterminate", ph.pct == null);
+  bar.querySelector("i").style.width = ph.pct == null ? "" : `${(Math.min(1, ph.pct) * 100).toFixed(1)}%`;
   const eta = bmEstimateFor(run.pid, run.temp);
   const left = Math.max(60, eta - (Date.now() - run.start) / 1000);
   $("bmm-left").textContent = tr("bm.run.left", { t: fmtDuration(left), elapsed: fmtDuration((Date.now() - run.start) / 1000) });
+  // Snapmaker's clean stop acts once its leveling began; before, only the
+  // emergency stop can interrupt the heating and the soak.
+  const clean = run.u1 && ["preheat", "prescan", "probe"].includes(ph.cur) && !run.aborted && !run.stopped;
+  $("bmm-abort").classList.toggle("hidden", !clean);
   $("bmm-stop").disabled = run.stopped;
+  $("bmm-stop-note").textContent = tr(clean ? "bm.run.stop_note_clean" : run.u1 ? "bm.run.stop_note_wait" : "bm.run.stop_note");
+}
+
+/* Stops the probing cleanly (the U1): the script then turns the bed off. */
+async function bmAbort() {
+  const run = BM.run;
+  if (!run || run.aborted || run.stopped) return;
+  const ok = await confirmDelete(tr("bm.abort.title"), tr("bm.abort.msg"), tr("bm.abort.ok"));
+  if (!ok || BM.run !== run) return;
+  run.aborted = true;
+  bmRunRender();
+  await invoke("bed_mesh_abort", { printerId: run.pid }).catch((e) => {
+    run.aborted = false;
+    toast(String(e), true);
+    bmRunRender();
+  });
 }
 
 /* Emergency stop: everything off at once, Klipper restarts. */
@@ -1143,6 +1166,7 @@ $("bmm-alt").addEventListener("click", () => {
   if (typeof checkSendPrinter === "function") checkSendPrinter();
 });
 $("bmm-stop").addEventListener("click", bmStop);
+$("bmm-abort").addEventListener("click", bmAbort);
 $("bmm-cancel").addEventListener("click", () => closeSheet($("bmmeasure")));
 $("bm-measure-btn").addEventListener("click", () => bmOpenMeasure());
 

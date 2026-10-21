@@ -3661,6 +3661,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .bm-slider-block .val { min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
 .bm-slider-row input[type=range] { flex: 1; min-width: 90px; margin-left: auto; }
 .bm-slider-row .val { min-width: 62px; margin-left: 8px; }
+.bm-why { margin: -6px 0 10px; }
 .bm-phase { font-size: 14px; font-weight: 500; margin: 6px 0 10px; font-variant-numeric: tabular-nums; }
 #bmm-run .progress { height: 8px; border-radius: 4px; }
 #bmm-run .bm-note { margin-top: 8px; }

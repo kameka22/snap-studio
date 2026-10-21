@@ -6,23 +6,36 @@
    A mesh, as bedmesh.rs gives it: { at, min: [x, y], max: [x, y],
    points: rows from min y to max y, each from min x to max x (mm) }. */
 
-const BML_DEFAULTS = { good: 0.2, limit: 0.3, alert: true, keep: 20, remind: true, remindDays: 30, remindPrints: 50 };
+/* Tolerances for a bed the printer's mesh compensates for: the Snapmaker U1
+   asks for manual leveling only above 2 mm between its corners, and its
+   knob assistant aims at 0.05 mm. Under 0.5 mm the mesh takes it all;
+   above 1 mm it is worth turning the knobs. (Before v2, the limits were
+   generic Klipper ones, 0.20 / 0.30 mm: too strict for the U1.) */
+const BML_DEFAULTS = { good: 0.5, limit: 1, alert: true, keep: 20, remind: true, remindDays: 30, remindPrints: 50 };
 const BML_KEEPS = [5, 10, 20, 50, 100];
 const BML_REMIND_DAYS = [15, 30, 60, 90];
 const BML_REMIND_PRINTS = [0, 25, 50, 100]; // 0: not by prints
 /* Tolerance in three words; the values stay open in "Advanced". */
-const BML_LEVELS = { tolerant: { good: 0.3, limit: 0.45 }, standard: { good: 0.2, limit: 0.3 }, strict: { good: 0.1, limit: 0.2 } };
+const BML_LEVELS = { tolerant: { good: 0.8, limit: 1.5 }, standard: { good: 0.5, limit: 1 }, strict: { good: 0.3, limit: 0.6 } };
+/* The levels before v2: settings saved with one of them take the same
+   level now. */
+const BML_LEVELS_V1 = { tolerant: { good: 0.3, limit: 0.45 }, standard: { good: 0.2, limit: 0.3 }, strict: { good: 0.1, limit: 0.2 } };
 
 const bmlRound = (x, n = 3) => Math.round(x * 10 ** n) / 10 ** n;
 
 /* Settings read back: defaults, bounds, "good" never above the limit. */
 function bmlSettings(raw) {
-  const r = raw && typeof raw === "object" ? raw : {};
+  let r = raw && typeof raw === "object" ? raw : {};
+  if (r.v !== 2) {
+    const old = Object.keys(BML_LEVELS_V1).find((k) => BML_LEVELS_V1[k].good === +r.good && BML_LEVELS_V1[k].limit === +r.limit);
+    if (old) r = { ...r, ...BML_LEVELS[old] };
+  }
   const num = (v, d, lo, hi) => (Number.isFinite(+v) && v !== null && v !== "" ? Math.min(hi, Math.max(lo, +v)) : d);
-  const limit = bmlRound(num(r.limit, BML_DEFAULTS.limit, 0.05, 1), 2);
-  const good = bmlRound(Math.min(limit, num(r.good, BML_DEFAULTS.good, 0.02, 1)), 2);
+  const limit = bmlRound(num(r.limit, BML_DEFAULTS.limit, 0.05, 2), 2);
+  const good = bmlRound(Math.min(limit, num(r.good, BML_DEFAULTS.good, 0.02, 2)), 2);
   const keep = BML_KEEPS.includes(+r.keep) ? +r.keep : BML_DEFAULTS.keep;
   return {
+    v: 2,
     good,
     limit,
     alert: r.alert === undefined ? BML_DEFAULTS.alert : !!r.alert,
@@ -139,15 +152,16 @@ function bmlDiff(before, after) {
 }
 
 /* Where a height sits on the colour scale, 0 (low) … 1 (high): around the
-   mean, over at least the "good" band so a flat bed stays mid-scale. A
+   mean, over at least ±0.1 mm so a flat bed stays mid-scale. A
    difference: around zero, over at least 0.02 mm. */
 function bmlScale(stats, s, diff = false) {
   if (diff) {
     const span = Math.max(Math.abs(stats.min), Math.abs(stats.max), 0.02);
     return { center: 0, span };
   }
-  const { good } = bmlSettings(s);
-  return { center: stats.mean, span: Math.max(stats.max - stats.mean, stats.mean - stats.min, good / 2) };
+  // At least 0.1 mm: a flat bed stays mid-scale, and the shape still
+  // shows on a bed the tolerance calls good.
+  return { center: stats.mean, span: Math.max(stats.max - stats.mean, stats.mean - stats.min, 0.1) };
 }
 const bmlT = (v, sc) => Math.min(1, Math.max(0, 0.5 + (v - sc.center) / (2 * sc.span)));
 
@@ -193,10 +207,56 @@ function bmlEstimate({ points = 169, samples = 3, preheat = 60, temp = 55, bed =
   let s = /x/.test(homed) && /y/.test(homed) && /z/.test(homed) ? 0 : 40;
   if (temp > 0) {
     s += Math.max(0, temp - bed) / 0.5; // ~0.5 °C/s
-    if (autoMacro) s += 120 + preheat; // AUTO_BED_MESH_CALIBRATE: 2 min, then the probe's preheat
+    if (autoMacro) s += BML_SOAK + preheat; // AUTO_BED_MESH_CALIBRATE: 2 min, then the probe's preheat
   }
+  if (autoMacro) s += 25; // the U1's check of its 4 corners
   s += points * (perPoint || 0.8 + 0.6 * samples);
   return Math.round(s);
+}
+
+/* AUTO_BED_MESH_CALIBRATE (Snapmaker U1): M140, M190, then G4 P120000 —
+   the bed left 2 min to settle — then BED_MESH_CALIBRATE, which preheats
+   the probe (`preheat_duration`, a countdown in bed_mesh.progress), checks
+   the 4 corners (prescanning), then probes. */
+const BML_SOAK = 120;
+
+/* The steps of a measurement, in order. `u1`: the printer has
+   AUTO_BED_MESH_CALIBRATE (soak, probe preheat, corner check). */
+function bmlRunSteps({ temp, u1, preheat = 60, homedAtStart }) {
+  return [
+    ...(homedAtStart ? [] : ["home"]),
+    ...(temp > 0 ? ["heat"] : []),
+    ...(temp > 0 && u1 ? ["soak"] : []),
+    ...(temp > 0 && u1 && preheat > 0 ? ["preheat"] : []),
+    ...(u1 ? ["prescan"] : []),
+    "probe",
+  ];
+}
+
+/* Where a measurement stands: the step under way, what to say, how far
+   (`pct` 0–1 or null). `run`: { temp, u1, homedAtStart, soakStart (ms),
+   seen (the printer's own leveling began) }. The soak has no state on the
+   printer: it starts when the bed reaches its temperature and lasts
+   BML_SOAK. A state left from an earlier measurement (completed,
+   aborted) counts only once this one's leveling began. */
+function bmlRunPhase(live, run, now = Date.now()) {
+  const p = live?.progress, bed = live?.bed, st = p?.state;
+  if (st === "probing") return { cur: "probe", n: p.current, total: p.total, pct: p.total ? p.current / p.total : null };
+  if (st === "prescanning") return { cur: "prescan", pct: null };
+  if (st === "preheating") return { cur: "preheat", left: p.preheat_left, pct: p.preheat_total ? (p.preheat_total - p.preheat_left) / p.preheat_total : null };
+  if (run.seen && (st === "aborting" || st === "aborted")) return { cur: "aborted", pct: null };
+  if (run.seen && st === "completed") return { cur: "probe", n: p.total, total: p.total, pct: 1 };
+  const h = live?.homed || "";
+  if (!run.homedAtStart && !(/x/.test(h) && /y/.test(h) && /z/.test(h))) return { cur: "home", pct: null };
+  if (run.temp > 0 && !run.soakStart && !(bed && bed.current >= run.temp - 1)) {
+    return { cur: "heat", t: bed?.current ?? null, target: run.temp, pct: bed ? Math.min(1, bed.current / run.temp) : null };
+  }
+  if (run.temp > 0 && run.u1) {
+    const start = run.soakStart || now;
+    const left = Math.max(0, BML_SOAK - (now - start) / 1000);
+    return { cur: "soak", left, soakStart: start, pct: 1 - left / BML_SOAK };
+  }
+  return { cur: run.u1 ? "prescan" : "probe", pct: null };
 }
 
 /* What the printer is doing during a measurement, from bed_mesh.progress
@@ -355,4 +415,4 @@ function bmlRecentPrint(lastJob, now = Date.now() / 1000, within = 12 * 3600) {
 const bmlTrend = (hist) => [...(hist || [])].filter((m) => !m.partial).sort((a, b) => a.at - b.at).map((m) => ({ at: m.at, dev: bmlStats(m)?.dev ?? 0 }));
 
 if (typeof module !== "undefined")
-  module.exports = { BML_DEFAULTS, BML_KEEPS, BML_LEVELS, BML_REMIND_DAYS, BML_REMIND_PRINTS, bmlLevelOf, bmlDelta, bmlShape, bmlReminder, bmlState, bmlSuggestTemp, bmlRecentPrint, bmlSettings, bmlStats, bmlStatus, bmlAlert, bmlXY, bmlSample, bmlUpsample, bmlDiff, bmlScale, bmlT, bmlColor, bmlInk, bmlEstimate, bmlPhase, bmlTrend };
+  module.exports = { BML_SOAK, bmlRunSteps, bmlRunPhase, BML_DEFAULTS, BML_KEEPS, BML_LEVELS, BML_REMIND_DAYS, BML_REMIND_PRINTS, bmlLevelOf, bmlDelta, bmlShape, bmlReminder, bmlState, bmlSuggestTemp, bmlRecentPrint, bmlSettings, bmlStats, bmlStatus, bmlAlert, bmlXY, bmlSample, bmlUpsample, bmlDiff, bmlScale, bmlT, bmlColor, bmlInk, bmlEstimate, bmlPhase, bmlTrend };

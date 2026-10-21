@@ -1269,6 +1269,13 @@ async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
     bedmesh::measure(&p.host, p.port, temp).await.map_err(|e| e.to_string())
 }
 
+/// Stops the probing cleanly (the U1, once its leveling has begun).
+#[tauri::command]
+async fn bed_mesh_abort(printer_id: String) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::abort(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
 /// Emergency stop of a measurement going wrong (then Klipper restarts).
 #[tauri::command]
 async fn bed_mesh_stop(printer_id: String) -> Result<(), String> {
@@ -2034,6 +2041,7 @@ pub fn run() {
             bed_mesh_keep,
             bed_mesh_measure,
             bed_mesh_stop,
+            bed_mesh_abort,
             app_notify,
             printers_watch_start,
             printers_watch_stop,

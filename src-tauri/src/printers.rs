@@ -294,13 +294,14 @@ pub fn is_unknown_command(err: &anyhow::Error) -> bool {
 }
 
 /// Pause, resume or cancel the running print.
-/// A bare POST to Moonraker (`/printer/emergency_stop`…).
-pub(crate) async fn post_path(host: &str, port: u16, path: &str) -> Result<()> {
+/// A bare POST to Moonraker (`/printer/emergency_stop`…): its `result`
+/// (Null when there is none).
+pub(crate) async fn post_path(host: &str, port: u16, path: &str) -> Result<Value> {
     let r = client().post(format!("{}{path}", base(host, port))).send().await?;
     if !r.status().is_success() {
         return Err(anyhow!(crate::t!("err.printer_refuses", status = r.status())));
     }
-    Ok(())
+    Ok(r.json::<Value>().await.map(|v| v["result"].clone()).unwrap_or(Value::Null))
 }
 
 pub async fn print_action(host: &str, port: u16, action: &str) -> Result<()> {

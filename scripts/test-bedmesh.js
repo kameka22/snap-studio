@@ -8,16 +8,22 @@ const m3 = mesh([[0.05, -0.02, 0.01], [0.0, 0.03, -0.04], [0.12, 0.02, -0.06]]);
 
 // Settings: defaults 0.20 / 0.30 mm, alert on, 20 kept; bounds; good ≤ limit.
 const R = { remind: true, remindDays: 30, remindPrints: 50 };
-assert.deepEqual(L.bmlSettings(null), { good: 0.2, limit: 0.3, alert: true, keep: 20, ...R });
-assert.deepEqual(L.bmlSettings({ good: 0.5, limit: 0.25, alert: false, keep: 7 }), { good: 0.25, limit: 0.25, alert: false, keep: 20, ...R });
-assert.deepEqual(L.bmlSettings({ good: "x", limit: 9, keep: 50 }), { good: 0.2, limit: 1, alert: true, keep: 50, ...R });
-assert.deepEqual(L.bmlSettings({ remind: false, remindDays: 60, remindPrints: 0 }), { ...L.BML_DEFAULTS, remind: false, remindDays: 60, remindPrints: 0 });
+// Defaults for a bed the U1's mesh compensates for: good ≤ 0.5, alert > 1 mm.
+assert.deepEqual(L.bmlSettings(null), { v: 2, good: 0.5, limit: 1, alert: true, keep: 20, ...R });
+assert.deepEqual(L.bmlSettings({ v: 2, good: 0.5, limit: 0.25, alert: false, keep: 7 }), { v: 2, good: 0.25, limit: 0.25, alert: false, keep: 20, ...R });
+assert.deepEqual(L.bmlSettings({ v: 2, good: "x", limit: 9, keep: 50 }), { v: 2, good: 0.5, limit: 2, alert: true, keep: 50, ...R });
+// Saved before v2 with one of the old levels: the same level now; custom limits stay.
+assert.deepEqual([L.bmlSettings({ good: 0.2, limit: 0.3 }).good, L.bmlSettings({ good: 0.2, limit: 0.3 }).limit], [0.5, 1]);
+assert.deepEqual([L.bmlSettings({ good: 0.1, limit: 0.2 }).good, L.bmlSettings({ good: 0.1, limit: 0.2 }).limit], [0.3, 0.6]);
+assert.deepEqual([L.bmlSettings({ good: 0.25, limit: 0.4 }).good, L.bmlSettings({ good: 0.25, limit: 0.4 }).limit], [0.25, 0.4]);
+assert.deepEqual([L.bmlSettings({ v: 2, good: 0.2, limit: 0.3 }).good], [0.2], "a v2 setting is kept as is");
+assert.deepEqual(L.bmlSettings({ remind: false, remindDays: 60, remindPrints: 0 }), { v: 2, ...L.BML_DEFAULTS, remind: false, remindDays: 60, remindPrints: 0 });
 assert.deepEqual([L.bmlSettings({ remindDays: 7 }).remindDays, L.bmlSettings({ remindPrints: 33 }).remindPrints], [30, 50], "only the offered values");
 // Tolerance levels; anything else is custom.
 assert.equal(L.bmlLevelOf(null), "standard");
 assert.equal(L.bmlLevelOf(L.BML_LEVELS.strict), "strict");
-assert.equal(L.bmlLevelOf({ good: 0.3, limit: 0.45 }), "tolerant");
-assert.equal(L.bmlLevelOf({ good: 0.15, limit: 0.3 }), "custom");
+assert.equal(L.bmlLevelOf({ v: 2, good: 0.8, limit: 1.5 }), "tolerant");
+assert.equal(L.bmlLevelOf({ v: 2, good: 0.15, limit: 0.3 }), "custom");
 // The change between two deviations, as shown: 0.10 → 0.16 is +0.06.
 assert.equal(L.bmlDelta(0.1047, 0.1597), 0.06);
 assert.equal(L.bmlDelta(0.3, 0.3049), 0);
@@ -36,18 +42,18 @@ assert.equal(L.bmlStats({ points: [[]] }), null);
 assert.equal(L.bmlStats(mesh([[null, 0.1], [0.3, null]])).dev.toFixed(2), "0.20");
 
 // Status: Good ≤ 0.20, Watch ≤ 0.30, Out above; at the hundredth shown.
-assert.equal(L.bmlStatus(0.18), "good");
-assert.equal(L.bmlStatus(0.2), "good");
-assert.equal(L.bmlStatus(0.2004), "good");
-assert.equal(L.bmlStatus(0.21), "watch");
-assert.equal(L.bmlStatus(0.3), "watch");
-assert.equal(L.bmlStatus(0.34), "out");
-assert.equal(L.bmlStatus(0.25, { good: 0.1, limit: 0.2 }), "out");
+assert.equal(L.bmlStatus(0.37), "good", "0.37 mm: compensated by the mesh");
+assert.equal(L.bmlStatus(0.5), "good");
+assert.equal(L.bmlStatus(0.5004), "good");
+assert.equal(L.bmlStatus(0.51), "watch");
+assert.equal(L.bmlStatus(1), "watch");
+assert.equal(L.bmlStatus(1.04), "out");
+assert.equal(L.bmlStatus(0.25, { v: 2, good: 0.1, limit: 0.2 }), "out");
 assert.equal(L.bmlStatus(null), null);
 
 // Alert: the newest full mesh only, and only when the alert is on.
-const out = mesh([[0, 0.34], [0, 0]], 10), ok = mesh([[0, 0.1], [0, 0]], 20);
-assert.deepEqual(L.bmlAlert([out], {}), { dev: 0.34, at: 10 });
+const out = mesh([[0, 1.34], [0, 0]], 10), ok = mesh([[0, 0.1], [0, 0]], 20);
+assert.deepEqual(L.bmlAlert([out], {}), { dev: 1.34, at: 10 });
 assert.equal(L.bmlAlert([out, ok], {}), null, "a new mesh back under the threshold clears it");
 assert.equal(L.bmlAlert([ok, out].reverse(), {}), null, "order does not matter");
 assert.equal(L.bmlAlert([out], { alert: false }), null);
@@ -114,10 +120,10 @@ assert.equal(L.bmlInk([255, 255, 255]), "#000");
 assert.equal(L.bmlInk([0, 0, 120]), "#fff");
 assert.equal(L.bmlInk([240, 228, 66]), "#000");
 
-// Estimate: homing, heating, the U1 macro's soak and preheat, the points.
+// Estimate: homing, heating, the U1 macro's soak and preheat, its corner check, the points.
 const e = L.bmlEstimate({ points: 169, samples: 3, preheat: 60, temp: 55, bed: 25, autoMacro: true, homed: "xyz" });
-assert.equal(e, Math.round(60 + 180 + 169 * 2.6));
-assert.equal(L.bmlEstimate({ points: 49, samples: 1, temp: 0, homed: "" }), Math.round(40 + 49 * 1.4));
+assert.equal(e, Math.round(60 + 180 + 25 + 169 * 2.6));
+assert.equal(L.bmlEstimate({ points: 49, samples: 1, temp: 0, homed: "" }), Math.round(40 + 25 + 49 * 1.4));
 assert.equal(L.bmlEstimate({ points: 100, temp: 60, bed: 70, autoMacro: false, homed: "xyz", perPoint: 2 }), 200);
 
 // Phase of a running measurement.
@@ -129,7 +135,7 @@ assert.equal(L.bmlPhase({ progress: { state: "aborted" } }, 55).phase, "aborted"
 assert.equal(L.bmlPhase(null, 0).phase, "soak");
 
 // Trend: full meshes, oldest first.
-assert.deepEqual(L.bmlTrend([ok, out, { ...out, at: 5, partial: true }]).map((x) => [x.at, x.dev.toFixed(2)]), [[10, "0.34"], [20, "0.10"]]);
+assert.deepEqual(L.bmlTrend([ok, out, { ...out, at: 5, partial: true }]).map((x) => [x.at, x.dev.toFixed(2)]), [[10, "1.34"], [20, "0.10"]]);
 
 // Left-aligned tabs: right after the title, before the flexible spacer, for
 // these three only; the other segmented controls stay on the right.
@@ -171,15 +177,47 @@ assert.equal(L.bmlReminder({ last: now - 40 * day, now }, { remindDays: 60 }), n
 // The page's state: its card and action.
 const devMesh = (dev, at) => mesh([[0, dev], [0, 0]], at);
 assert.equal(L.bmlState([], null).kind, "none");
-let S = L.bmlState([devMesh(0.18, now - 9 * day), devMesh(0.12, now - day)], null, { now });
+let S = L.bmlState([devMesh(0.43, now - 9 * day), devMesh(0.37, now - day)], null, { now });
 assert.deepEqual([S.kind, S.status, S.change.delta], ["good", "good", -0.06]);
-S = L.bmlState([devMesh(0.14, now - 40 * day), devMesh(0.25, now - day)], null, { now });
-assert.deepEqual([S.kind, S.change.delta], ["watch", 0.11]);
-assert.equal(L.bmlState([devMesh(0.4, now - day)], null, { now }).kind, "out");
-assert.equal(L.bmlState([devMesh(0.4, now - 90 * day)], null, { now }).kind, "out", "out of tolerance wins over old");
+S = L.bmlState([devMesh(0.4, now - 40 * day), devMesh(0.8, now - day)], null, { now });
+assert.deepEqual([S.kind, S.change.delta], ["watch", 0.4]);
+assert.equal(L.bmlState([devMesh(1.2, now - day)], null, { now }).kind, "out");
+assert.equal(L.bmlState([devMesh(1.2, now - 90 * day)], null, { now }).kind, "out", "out of tolerance wins over old");
 S = L.bmlState([devMesh(0.1, now - 45 * day)], null, { now });
 assert.deepEqual([S.kind, S.remind.reason, S.change], ["stale", "days", null]);
 assert.equal(L.bmlState([{ ...devMesh(0.5, now), partial: true }], null, { now }).kind, "none", "adaptive meshes do not count");
+
+// The measurement's steps: the U1 soaks 2 min, preheats its probe and
+// checks its corners; another Klipper only heats and probes.
+assert.deepEqual(L.bmlRunSteps({ temp: 60, u1: true, homedAtStart: false }), ["home", "heat", "soak", "preheat", "prescan", "probe"]);
+assert.deepEqual(L.bmlRunSteps({ temp: 0, u1: true, homedAtStart: true }), ["prescan", "probe"]);
+assert.deepEqual(L.bmlRunSteps({ temp: 60, u1: false, homedAtStart: true }), ["heat", "probe"]);
+assert.deepEqual(L.bmlRunSteps({ temp: 60, u1: true, preheat: 0, homedAtStart: true }), ["heat", "soak", "prescan", "probe"]);
+// Where it stands.
+const run = { temp: 60, u1: true, homedAtStart: false, soakStart: null, seen: false };
+const at = (bed, state = "idle", homed = "xyz", extra = {}) => ({ bed: { current: bed, target: 60 }, homed, progress: { state, current: 0, total: 169, preheat_total: 60, preheat_left: 0, ...extra } });
+assert.equal(L.bmlRunPhase(at(24, "idle", ""), run).cur, "home");
+let ph = L.bmlRunPhase(at(30), run);
+assert.deepEqual([ph.cur, ph.pct], ["heat", 0.5]);
+// At temperature: the soak counts down from that moment, 2 min.
+ph = L.bmlRunPhase(at(59.5), run, 1_000_000);
+assert.deepEqual([ph.cur, ph.left, ph.soakStart], ["soak", 120, 1_000_000]);
+ph = L.bmlRunPhase(at(58.2), { ...run, soakStart: 1_000_000 }, 1_080_000);
+assert.deepEqual([ph.cur, Math.round(ph.left), +ph.pct.toFixed(2)], ["soak", 40, 0.67], "the bed dipping under its target does not go back to heating");
+assert.equal(L.bmlRunPhase(at(60), { ...run, soakStart: 1_000_000 }, 1_200_000).left, 0);
+ph = L.bmlRunPhase(at(60, "preheating", "xyz", { preheat_left: 15 }), run);
+assert.deepEqual([ph.cur, ph.left, ph.pct], ["preheat", 15, 0.75]);
+assert.equal(L.bmlRunPhase(at(60, "prescanning"), run).cur, "prescan");
+ph = L.bmlRunPhase(at(60, "probing", "xyz", { current: 42 }), run);
+assert.deepEqual([ph.cur, ph.n, ph.total], ["probe", 42, 169]);
+// A state left by an earlier measurement means nothing until this one's leveling begins.
+assert.equal(L.bmlRunPhase(at(30, "aborted"), run).cur, "heat");
+assert.equal(L.bmlRunPhase(at(60, "aborted"), { ...run, seen: true }).cur, "aborted");
+assert.equal(L.bmlRunPhase(at(60, "completed"), { ...run, seen: true }).pct, 1);
+// Without heating nor U1: straight to probing.
+assert.equal(L.bmlRunPhase(at(24), { temp: 0, u1: false, homedAtStart: true }).cur, "probe");
+// The estimate counts the soak, the probe's preheat and the corner check.
+assert.equal(L.bmlEstimate({ points: 169, samples: 3, preheat: 60, temp: 60, bed: 60, autoMacro: true, homed: "xyz", perPoint: 2 }), 120 + 60 + 25 + 338);
 
 // Temperature proposed; a print just ended.
 assert.deepEqual(L.bmlSuggestTemp({ bed_temp: 64.6, filename: "a.gcode" }, "55"), { temp: 65, from: "last", file: "a.gcode" });

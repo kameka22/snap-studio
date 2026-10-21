@@ -267,13 +267,26 @@ pub async fn measure(host: &str, port: u16, temp: f64) -> Result<()> {
     r
 }
 
+/// Stops the probing cleanly (the U1: Snapmaker's `bed_mesh/abort_probe_mesh`
+/// endpoint). It acts while the probe preheats, checks the corners or
+/// probes; before that (heating, the 2 min soak) only the emergency stop
+/// can. The measurement script then goes on to turn the bed off.
+pub async fn abort(host: &str, port: u16) -> Result<()> {
+    let r = crate::printers::post_path(host, port, "/printer/bed_mesh/abort_probe_mesh").await?;
+    if r["state"].as_str() == Some("error") {
+        return Err(anyhow!(r["message"].as_str().unwrap_or("abort_probe_mesh").to_string()));
+    }
+    Ok(())
+}
+
 /// Stops the printer at once (a measurement going wrong: a part left on
 /// the bed…): Klipper's emergency stop, then its restart, which takes it
 /// back to ready in a few seconds. Heaters and motors are off.
 pub async fn stop(host: &str, port: u16) -> Result<()> {
     crate::printers::post_path(host, port, "/printer/emergency_stop").await?;
     tokio::time::sleep(Duration::from_secs(2)).await;
-    crate::printers::post_path(host, port, "/printer/firmware_restart").await
+    crate::printers::post_path(host, port, "/printer/firmware_restart").await?;
+    Ok(())
 }
 
 // ------------------------------------------------------------ history
