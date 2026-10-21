@@ -121,7 +121,8 @@ for (const t of T.THEMES) {
   for (const mode of ["light", "dark"]) {
     const tok = { ...(mode === "dark" ? DARK : LIGHT), ...t.tokens[mode] };
     for (const surface of ["--content-bg", "--card-bg", "--sheet-bg"]) {
-      const bg = opaque(tok[surface], [0, 0, 0, 1]);
+      // See-through surfaces (macOS cards) are judged over the page.
+      const bg = opaque(tok[surface], opaque(tok["--content-bg"], [0, 0, 0, 1]));
       const ratio = (k) => T.contrastRatio(opaque(tok[k], bg), bg);
       const where = `${t.id}/${mode} on ${surface}`;
       assert.ok(ratio("--text") >= (t.id === "contrast" ? 15 : 7), `${where}: text ${ratio("--text").toFixed(2)}`);
@@ -187,9 +188,53 @@ for (const mode of ["light", "dark"]) {
 }
 // The macOS theme rounds cards and controls through the radius tokens
 // only, and its glass falls back to the defaults elsewhere.
-assert.ok("--radius-card" in LIGHT && "--glass-blur" in LIGHT && "--sheet-blur" in LIGHT);
-assert.strictEqual(LIGHT["--sheet-blur"], "none");
+assert.ok("--radius-card" in LIGHT && "--glass-blur" in LIGHT);
 assert.ok(parseFloat(T.themeById("macos").tokens.light["--radius-card"]) > parseFloat(LIGHT["--radius-card"]));
+
+// macOS: its structure (floating sidebar, capsules, glass) lives in one
+// block at the end of style.css, every rule scoped to the theme (or its
+// preview tile); nothing else in the stylesheet selects on a theme.
+const MAC_AT = css.indexOf("macOS theme (macOS 26 Tahoe");
+assert.ok(MAC_AT > 0, "macOS block");
+const SCOPES = [':root[data-theme="macos"]', '.disp-mock[data-mock="macos"]'];
+const macRules = [...css.slice(css.indexOf("*/", MAC_AT) + 2).matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => m[1].replace(/\/\*[\s\S]*?\*\//g, "").trim());
+assert.ok(macRules.length > 30, `macOS rules: ${macRules.length}`);
+for (const sel of macRules) {
+  for (const one of sel.split(",").map((x) => x.trim())) {
+    assert.ok(SCOPES.some((sc) => one.startsWith(sc)), `macOS block: unscoped selector ${one}`);
+  }
+}
+assert.ok(!/data-theme=|data-mock=/.test(css.slice(0, MAC_AT)), "no theme-specific rule outside the macOS block");
+const macRule = (sel) => macRules.some((r) => r.split(",").map((x) => x.trim()).includes(sel));
+for (const sel of [".sidebar", ".tb-btn", ".search", ".seg", ".seg-btn.on", ".side-item.on", "input.sw", ".modal-box", ".window"]) {
+  assert.ok(macRule(`:root[data-theme="macos"] ${sel}`), `macOS restyles ${sel}`);
+}
+
+// Its glass and wallpaper keep text readable: the wallpaper's stops, the
+// glass tints and the cards (see-through) over each stop, the selected
+// sidebar row (accent tint, system blue assumed).
+const macVars = (head) => block(head);
+const MV = { light: macVars(':root[data-theme="macos"],\n.disp-mock[data-mock="macos"] {') };
+MV.dark = { ...MV.light, ...macVars(':root[data-theme="macos"][data-scheme="dark"],\n.disp-mock[data-mock="macos"][data-scheme="dark"] {') };
+for (const mode of ["light", "dark"]) {
+  const tok = { ...(mode === "dark" ? DARK : LIGHT), ...T.themeById("macos").tokens[mode] };
+  const v = MV[mode];
+  for (const stop of ["--mt-wall-a", "--mt-wall-b", "--mt-wall-c"]) {
+    const wall = T.parseColor(v[stop]);
+    const layers = {
+      wallpaper: wall,
+      glass: T.blendOver(T.parseColor(v["--mt-glass"]), wall),
+      "glass-strong": T.blendOver(T.parseColor(v["--mt-glass-strong"]), wall),
+      card: T.blendOver(T.parseColor(tok["--card-bg"]), wall),
+    };
+    layers.selected = T.blendOver([0, 122, 255, 0.2], layers.glass);
+    for (const [name, bg] of Object.entries(layers)) {
+      const r = (k) => T.contrastRatio(opaque(tok[k], bg), bg);
+      assert.ok(r("--text") >= 7, `macos/${mode} text on ${name} over ${stop}: ${r("--text").toFixed(2)}`);
+      assert.ok(r("--text-secondary") >= 4.5, `macos/${mode} secondary on ${name} over ${stop}: ${r("--text-secondary").toFixed(2)}`);
+    }
+  }
+}
 assert.ok(/:root:not\(\.mac\) \.sidebar \{ background: var\(--sidebar-opaque\); \}/.test(css), "no vibrancy: opaque sidebar");
 
 // The page's scripts share one global scope: themes.js (loaded first)

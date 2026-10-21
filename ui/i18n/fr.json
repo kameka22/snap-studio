@@ -1634,7 +1634,7 @@
   "display.theme.cvd": "Daltonien",
   "display.theme.cvd.sub": "États en bleu, orange et violet, jamais rouge / vert",
   "display.theme.macos": "macOS",
-  "display.theme.macos.sub": "Panneaux en verre, coins arrondis, accent du système",
+  "display.theme.macos.sub": "Liquid Glass : barre latérale flottante, capsules de verre, accent du système",
   "display.accent.spool": "La couleur de la bobine sur T0 ({color})",
   "display.accent.spool.none": "Aucune bobine lue sur T0 : accent neutre"
 }

@@ -77,12 +77,10 @@
   --warning-text: #a05a00;
   /* Glass of the floating panels (Prepare, preview, loading) and sheets:
      how much of the sheet color covers what is behind, the blur, and a
-     light edge on top (none here; the macOS theme sets one). */
+     light edge on top (none here). */
   --glass-mix: 88%;
   --glass-blur: blur(20px) saturate(180%);
   --glass-edge: 0 0 0 0 transparent;
-  --sheet-mix: 100%;
-  --sheet-blur: none;
 }
 
 @supports (color: AccentColor) {
@@ -742,9 +740,7 @@ body.dragover #stage::after {
   gap: 12px;
   padding: 18px 20px 16px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--sheet-bg) var(--sheet-mix), transparent);
-  -webkit-backdrop-filter: var(--sheet-blur);
-  backdrop-filter: var(--sheet-blur);
+  background: var(--sheet-bg);
   box-shadow: var(--glass-edge), var(--sheet-shadow);
   animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -4045,12 +4041,14 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
   gap: 4px;
   padding: 6px;
   border-radius: calc(var(--radius-card) / 3);
-  background: color-mix(in srgb, var(--sheet-bg) var(--sheet-mix), transparent);
-  -webkit-backdrop-filter: var(--sheet-blur);
-  backdrop-filter: var(--sheet-blur);
+  background: var(--sheet-bg);
   box-shadow: var(--glass-edge), var(--sheet-shadow);
 }
 .dm-sheet b { align-self: flex-end; }
+/* Toolbar capsules: only the macOS tile shows them. */
+.dm-pills { display: none; position: absolute; top: 6px; right: 8px; gap: 4px; }
+.dm-pills i { width: 26px; height: 11px; border-radius: 999px; background: var(--mt-glass-strong); box-shadow: var(--mt-edge), 0 1px 3px rgba(0, 0, 0, 0.12); }
+.dm-pills i + i { width: 16px; }
 /* Accent swatches. */
 .disp-accent-row { flex-wrap: wrap; }
 .disp-accents { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
@@ -4073,3 +4071,190 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .disp-sw.custom input { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); opacity: 0; cursor: pointer; }
 .disp-sw.custom:focus-within { box-shadow: var(--focus-ring); }
 .disp-sep { width: 1px; height: 16px; background: var(--separator); margin: 0 2px; }
+
+/* ======================================================================
+   macOS theme (macOS 26 Tahoe, Liquid Glass). Structure, not only colors:
+   every rule below is scoped to :root[data-theme="macos"] (or to its
+   preview tile), so no other theme is touched (scripts/test-themes.js
+   checks it). The app's window gets a soft wallpaper; the sidebar floats
+   over it as a glass panel inset from the edges, the toolbar's controls
+   sit in glass capsules, controls are capsules, panels and sheets glass
+   with concentric radii. backdrop-filter blurs what is in the window, so
+   the glass looks the same on Windows and Linux (no vibrancy needed).
+   ====================================================================== */
+:root[data-theme="macos"],
+.disp-mock[data-mock="macos"] {
+  --mt-wall-a: #d7e4f6;
+  --mt-wall-b: #e9e4f5;
+  --mt-wall-c: #f6e8e0;
+  --mt-wall: linear-gradient(145deg, var(--mt-wall-a) 0%, var(--mt-wall-b) 52%, var(--mt-wall-c) 100%);
+  /* Glass: tint, blur, inner light border and top highlight, shadow. */
+  --mt-glass: rgba(255, 255, 255, 0.52);
+  --mt-glass-strong: rgba(255, 255, 255, 0.72);
+  --mt-blur: blur(28px) saturate(190%);
+  --mt-edge: inset 0 0 0 1px rgba(255, 255, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --mt-shadow: 0 10px 34px rgba(30, 40, 80, 0.14), 0 1px 3px rgba(30, 40, 80, 0.08);
+  --mt-lozenge: #ffffff;
+  --mt-gap: 10px;
+  --mt-radius: 22px;
+}
+:root[data-theme="macos"][data-scheme="dark"],
+.disp-mock[data-mock="macos"][data-scheme="dark"] {
+  --mt-wall-a: #141c2c;
+  --mt-wall-b: #1d1a2c;
+  --mt-wall-c: #261d1c;
+  --mt-glass: rgba(46, 46, 52, 0.5);
+  --mt-glass-strong: rgba(60, 60, 66, 0.64);
+  --mt-edge: inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --mt-shadow: 0 10px 34px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --mt-lozenge: rgba(255, 255, 255, 0.2);
+}
+
+/* The window: a wallpaper behind everything; the content is see-through,
+   so it runs on behind and around the floating sidebar. */
+:root[data-theme="macos"] .window { background: var(--mt-wall); }
+:root[data-theme="macos"] .content { background: transparent; }
+
+/* Floating glass sidebar. */
+:root[data-theme="macos"] .sidebar {
+  margin: var(--mt-gap) 0 var(--mt-gap) var(--mt-gap);
+  border: 0;
+  border-radius: var(--mt-radius);
+  background: var(--mt-glass);
+  -webkit-backdrop-filter: var(--mt-blur);
+  backdrop-filter: var(--mt-blur);
+  box-shadow: var(--mt-edge), var(--mt-shadow);
+  overflow: hidden;
+}
+:root[data-theme="macos"] .sidebar .titlebar { height: calc(var(--titlebar-height) - var(--mt-gap)); }
+:root[data-theme="macos"]:not(.mac) .sidebar .titlebar { height: 12px; }
+:root[data-theme="macos"] .side-nav { gap: 3px; padding: 0 8px; }
+:root[data-theme="macos"] .side-item { padding: 7px 10px; border-radius: 999px; }
+/* Selection: a translucent capsule tinted with the accent; the icon takes
+   the accent (through --accent-text, which the base rule gives it). */
+:root[data-theme="macos"] .side-item.on {
+  --accent-text: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--text);
+}
+:root[data-theme="macos"] .side-item.on .count { color: var(--text-secondary); opacity: 1; }
+:root[data-theme="macos"] .set-cat { border-radius: 999px; }
+:root[data-theme="macos"] .set-cat.on {
+  --accent-text: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--text);
+}
+:root[data-theme="macos"] .sidebar.inactive .side-item.on { background: color-mix(in srgb, var(--text) 9%, transparent); }
+:root[data-theme="macos"] .side-footer { border-top: 0; }
+
+/* Toolbar: no bar; its groups float as glass capsules. */
+:root[data-theme="macos"] .toolbar { border-bottom: 0; padding-left: 18px; }
+:root[data-theme="macos"] .tb-actions { gap: 8px; }
+:root[data-theme="macos"] .tb-actions > .tb-group,
+:root[data-theme="macos"] .tb-actions > .tb-group:not(.hidden) ~ .tb-group:not(.hidden) {
+  gap: 2px;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mt-glass-strong);
+  -webkit-backdrop-filter: var(--mt-blur);
+  backdrop-filter: var(--mt-blur);
+  box-shadow: var(--mt-edge), var(--mt-shadow);
+}
+:root[data-theme="macos"] .tb-btn {
+  height: 32px;
+  min-width: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mt-glass-strong);
+  -webkit-backdrop-filter: var(--mt-blur);
+  backdrop-filter: var(--mt-blur);
+  box-shadow: var(--mt-edge), var(--mt-shadow);
+}
+:root[data-theme="macos"] .tb-group .tb-btn { height: 30px; min-width: 30px; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-theme="macos"] .tb-btn:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+:root[data-theme="macos"] .tb-btn.on { background: var(--accent); color: var(--accent-text); }
+/* Icons only in the groups (their tooltips say what they do); the Add
+   buttons keep their word. */
+:root[data-theme="macos"] .tb-actions:not(.tb-add) .tb-group .tb-btn.labeled { width: 30px; padding: 0; }
+:root[data-theme="macos"] .tb-actions:not(.tb-add) .tb-group .tb-btn.labeled span { display: none; }
+:root[data-theme="macos"] .tb-add .tb-btn.labeled { padding: 0 14px 0 10px; }
+
+/* Capsule controls. */
+:root[data-theme="macos"] .btn { border-radius: 999px; padding: 5px 16px; }
+:root[data-theme="macos"] .btn.icon { padding: 5px 8px; }
+:root[data-theme="macos"] .btn.small { padding: 3px 12px; }
+:root[data-theme="macos"] .toolbar .btn.primary { min-height: 32px; padding: 6px 18px; box-shadow: var(--mt-shadow); }
+:root[data-theme="macos"] .search {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mt-glass-strong);
+  -webkit-backdrop-filter: var(--mt-blur);
+  backdrop-filter: var(--mt-blur);
+  box-shadow: var(--mt-edge), var(--mt-shadow);
+}
+:root[data-theme="macos"] .search:focus-within { box-shadow: var(--mt-edge), var(--focus-ring); }
+:root[data-theme="macos"] .seg {
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mt-glass-strong);
+  -webkit-backdrop-filter: var(--mt-blur);
+  backdrop-filter: var(--mt-blur);
+  box-shadow: var(--mt-edge), var(--mt-shadow);
+}
+:root[data-theme="macos"] .toolbar .seg { height: 32px; }
+:root[data-theme="macos"] .seg-btn { border-radius: 999px; padding: 0 12px; transition: background 180ms ease, box-shadow 180ms ease, color 120ms ease; }
+:root[data-theme="macos"] .seg-btn.on { background: var(--mt-lozenge); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.5); }
+/* Switches: Tahoe's wider capsule with a capsule knob (still a checkbox). */
+:root[data-theme="macos"] input.sw { width: 44px; height: 24px; border-radius: 12px; }
+:root[data-theme="macos"] input.sw::after { width: 26px; height: 20px; border-radius: 10px; }
+:root[data-theme="macos"] input.sw:checked::after { transform: translateX(14px); }
+:root[data-theme="macos"] input.sw.small { width: 34px; height: 20px; border-radius: 10px; }
+:root[data-theme="macos"] input.sw.small::after { width: 20px; height: 16px; border-radius: 8px; }
+:root[data-theme="macos"] input.sw.small:checked::after { transform: translateX(10px); }
+
+/* Glass panels, sheets and inspectors, with concentric radii. */
+:root[data-theme="macos"] .p-float,
+:root[data-theme="macos"] .v-panel {
+  border-radius: var(--mt-radius);
+  background: var(--mt-glass-strong);
+  -webkit-backdrop-filter: var(--mt-blur);
+  backdrop-filter: var(--mt-blur);
+  box-shadow: var(--mt-edge), var(--mt-shadow);
+}
+:root[data-theme="macos"] .modal-box {
+  border-radius: 26px;
+  background: var(--mt-glass-strong);
+  -webkit-backdrop-filter: var(--mt-blur);
+  backdrop-filter: var(--mt-blur);
+  box-shadow: var(--mt-edge), var(--sheet-shadow);
+}
+:root[data-theme="macos"] .w-card { border-radius: 28px; }
+:root[data-theme="macos"] .details {
+  margin: 0 var(--mt-gap) var(--mt-gap) 0;
+  border: 0;
+  border-radius: var(--mt-radius);
+  background: var(--mt-glass);
+  -webkit-backdrop-filter: var(--mt-blur);
+  backdrop-filter: var(--mt-blur);
+  box-shadow: var(--mt-edge), var(--mt-shadow);
+}
+:root[data-theme="macos"] .card { box-shadow: var(--mt-edge), var(--card-shadow); }
+
+/* Its preview tile: wallpaper, floating sidebar, toolbar capsules. */
+.disp-mock[data-mock="macos"] { background: var(--mt-wall); }
+.disp-mock[data-mock="macos"] .dm-side {
+  margin: 5px 0 5px 5px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--mt-glass);
+  box-shadow: var(--mt-edge), var(--mt-shadow);
+}
+.disp-mock[data-mock="macos"] .dm-side i.on { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.disp-mock[data-mock="macos"] .dm-main { padding-top: 24px; }
+.disp-mock[data-mock="macos"] .dm-card { border: 0; box-shadow: var(--mt-edge); }
+.disp-mock[data-mock="macos"] .dm-sheet { background: var(--mt-glass-strong); border-radius: 10px; box-shadow: var(--mt-edge), var(--mt-shadow); }
+.disp-mock[data-mock="macos"] .dm-pills { display: flex; }

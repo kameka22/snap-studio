@@ -133,7 +133,8 @@ function dispRender() {
   $("disp-themes").innerHTML = THEMES.map((t) => {
     const on = t.id === DISPLAY.theme;
     return `<button type="button" class="disp-theme${on ? " on" : ""}" role="radio" aria-checked="${on}" tabindex="${on ? 0 : -1}" data-theme-pick="${t.id}">
-      <span class="disp-mock" data-scheme="${mode}" style="${esc(dispMockStyle(t.id, mode))}" aria-hidden="true">
+      <span class="disp-mock" data-scheme="${mode}" data-mock="${t.id}" style="${esc(dispMockStyle(t.id, mode))}" aria-hidden="true">
+        <span class="dm-pills"><i></i><i></i></span>
         <span class="dm-side"><i class="on"></i><i></i><i></i></span>
         <span class="dm-main"><span class="dm-card"><i></i><i class="s"></i><b></b></span><span class="dm-card"><i></i><i class="s"></i></span></span>
         <span class="dm-sheet"><i></i><i class="s"></i><b></b></span>

@@ -1631,7 +1631,7 @@
   "display.theme.cvd": "Color-blind safe",
   "display.theme.cvd.sub": "States in blue, orange and purple, never red / green",
   "display.theme.macos": "macOS",
-  "display.theme.macos.sub": "Glass panels, rounder corners, system accent",
+  "display.theme.macos.sub": "Liquid Glass: floating sidebar, glass capsules, system accent",
   "display.accent.spool": "The color of the spool on T0 ({color})",
   "display.accent.spool.none": "No spool read on T0: a neutral accent"
 }
