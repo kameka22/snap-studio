@@ -26,6 +26,7 @@ function setCategory(cat, animate = true) {
   next.getAnimations().forEach((a) => a.cancel());
   tbSet("settings", tr("nav.settings"), tr(next.querySelector(".set-title").dataset.i18n));
   if (cat === "ai") setAiRender();
+  if (cat === "display") dispRender();
   if (cat === "about") aboutLoad();
   if (!old) {
     panes.forEach((p) => p.classList.toggle("on", p === next));
@@ -105,6 +106,113 @@ window.addEventListener("langchange", () => {
   if (setCurrent) tbSet("settings", tr("nav.settings"), tr(`${document.querySelector(`#set-stage .set-pane[data-cat="${setCurrent}"] .set-title`).dataset.i18n}`));
   if (setCurrent === "ai") setAiRender();
 });
+
+/* ------------------------------------------------------------ display */
+
+/* Appearance, theme and accent (themes.js). Each theme is shown as a small
+   window in the resolved mode with the chosen accent, so the tiles are the
+   live preview; the whole app changes at once too. */
+function dispMockStyle(themeId, mode) {
+  const s = { ...DISPLAY, theme: themeId };
+  const tokens = displayTokens(s, mode);
+  const accent = tokens["--accent"] || (CSS.supports("color", "AccentColor") ? "AccentColor" : "#007aff");
+  const rgb = parseColor(cssColor(accent)) || [0, 122, 255];
+  return Object.entries({ ...tokens, "--accent": accent, "--accent-text": accentTextFor(rgb) })
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("; ");
+}
+
+function dispRender() {
+  const mode = isDark() ? "dark" : "light";
+  document.querySelectorAll("#disp-mode [data-mode-pick]").forEach((b) => {
+    const on = b.dataset.modePick === DISPLAY.mode;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", on);
+    b.tabIndex = on ? 0 : -1;
+  });
+  $("disp-themes").innerHTML = THEMES.map((t) => {
+    const on = t.id === DISPLAY.theme;
+    return `<button type="button" class="disp-theme${on ? " on" : ""}" role="radio" aria-checked="${on}" tabindex="${on ? 0 : -1}" data-theme-pick="${t.id}">
+      <span class="disp-mock" data-scheme="${mode}" style="${esc(dispMockStyle(t.id, mode))}" aria-hidden="true">
+        <span class="dm-side"><i class="on"></i><i></i><i></i></span>
+        <span class="dm-main"><span class="dm-card"><i></i><i class="s"></i><b></b></span><span class="dm-card"><i></i><i class="s"></i></span></span>
+        <span class="dm-sheet"><i></i><i class="s"></i><b></b></span>
+      </span>
+      <span class="disp-name">${esc(tr(t.name))}</span>
+      <span class="disp-sub">${esc(tr(t.sub))}</span>
+    </button>`;
+  }).join("");
+  // Accent: the theme's own, the system's, a preset or a picked color.
+  const theme = themeById(DISPLAY.theme);
+  const own = theme.accent?.[mode];
+  const custom = DISPLAY.accent.startsWith("#") ? DISPLAY.accent : "";
+  const sw = (id, label, style, cls = "") => {
+    const on = DISPLAY.accent === id;
+    return `<button type="button" class="disp-sw${cls}${on ? " on" : ""}" role="radio" aria-checked="${on}" tabindex="${on ? 0 : -1}" data-accent="${id}" title="${esc(label)}" aria-label="${esc(label)}" style="${style}"></button>`;
+  };
+  $("disp-accents").innerHTML =
+    sw("theme", tr("display.accent.theme"), own ? `--c: ${own}` : "", own ? "" : " sys") +
+    sw("system", tr("display.accent.system"), "", " sys") +
+    '<span class="disp-sep"></span>' +
+    ACCENTS.map((a) => sw(a.id, tr(a.name), `--c: ${a.hex}`)).join("") +
+    `<label class="disp-sw custom${custom ? " on" : ""}" title="${esc(tr("display.accent.custom"))}"${custom ? ` style="--c: ${custom}"` : ""}>` +
+    `<input type="color" id="disp-color" value="${custom || own || "#007aff"}" aria-label="${esc(tr("display.accent.custom"))}" /></label>`;
+  const preset = ACCENTS.find((a) => a.id === DISPLAY.accent);
+  $("disp-accent-sub").textContent =
+    DISPLAY.accent === "theme" ? tr(own ? "display.accent.theme.own" : "display.accent.theme.system", { name: tr(theme.name) })
+    : DISPLAY.accent === "system" ? tr("display.accent.system.sub")
+    : preset ? tr(preset.name)
+    : tr("display.accent.custom") + " " + custom.toUpperCase();
+}
+
+const dispSet = (patch) => {
+  displaySet(patch);
+  dispRender();
+};
+$("disp-mode").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-mode-pick]");
+  if (b) dispSet({ mode: b.dataset.modePick });
+});
+$("disp-themes").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-theme-pick]");
+  if (b) dispSet({ theme: b.dataset.themePick });
+});
+$("disp-accents").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-accent]");
+  if (b) dispSet({ accent: b.dataset.accent });
+});
+// The color picker: the app follows live while it moves (the pane is not
+// rebuilt under the open picker), the color is kept when it closes.
+let dispPicking = false;
+$("disp-accents").addEventListener("input", (e) => {
+  if (e.target.id !== "disp-color") return;
+  dispPicking = true;
+  displayApply({ ...DISPLAY, accent: e.target.value });
+});
+$("disp-accents").addEventListener("change", (e) => {
+  if (e.target.id !== "disp-color") return;
+  dispPicking = false;
+  dispSet({ accent: e.target.value });
+});
+$("disp-reset").addEventListener("click", () => dispSet({ ...DISPLAY_DEFAULT }));
+
+/* Arrow keys move the choice inside each group, as in a radio group. */
+for (const [id, sel, key] of [["disp-mode", "[data-mode-pick]", "modePick"], ["disp-themes", "[data-theme-pick]", "themePick"], ["disp-accents", "button[data-accent]", "accent"]]) {
+  $(id).addEventListener("keydown", (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    const items = [...$(id).querySelectorAll(sel)];
+    const i = items.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const next = items[(i + step + items.length) % items.length];
+    dispSet({ [key === "modePick" ? "mode" : key === "themePick" ? "theme" : "accent"]: next.dataset[key] });
+    $(id).querySelector(`${sel.replace("]", `="${next.dataset[key]}"]`)}`)?.focus();
+  });
+}
+
+window.addEventListener("themechange", () => setCurrent === "display" && !dispPicking && dispRender());
+window.addEventListener("langchange", () => setCurrent === "display" && dispRender());
 
 /* ------------------------------------------------------------ about */
 
