@@ -35,8 +35,22 @@ async function ctShow(pid) {
   }
   ctBuild();
   ctUpdate();
+  // Opened straight here: the spools are not known yet (the printer's page
+  // reads them); the tab reads them itself.
+  ctSlots();
   await ctRead(true);
   ctPoll();
+}
+
+/* The heads' spools (colour, material), read from the printer: on opening,
+   every 30 s while shown, after a load or an unload. */
+let ctSlotsAt = 0;
+async function ctSlots() {
+  const pid = CT.pid;
+  if (!pid || typeof headsRefreshSlots !== "function") return;
+  ctSlotsAt = Date.now();
+  await headsRefreshSlots(pid);
+  if (CT.pid === pid && ctOn()) ctUpdate();
 }
 
 function ctLeave() {
@@ -50,6 +64,7 @@ function ctPoll() {
   if (!ctOn()) return;
   CT.timer = setTimeout(async () => {
     await ctRead(!CT.cfg);
+    if (Date.now() - ctSlotsAt > 30000) ctSlots();
     ctPoll();
   }, 1500);
 }
@@ -328,6 +343,8 @@ async function ctRun(action, label) {
     if (CT.pid === pid) {
       await ctRead();
       ctUpdate();
+      // A spool went in or out.
+      if (action.kind === "load" || action.kind === "unload") ctSlots();
     }
   }
 }
