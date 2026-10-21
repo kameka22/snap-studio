@@ -754,7 +754,6 @@
   "prepare.off_count": "{n} hors plateau",
   "prepare.tag.over": "dépasse",
   "prepare.tag.plate": "plateau {n}",
-  "prepare.tag.off": "hors plateau",
   "prepare.tag.overlap": "chevauche",
   "prepare.selected": {
     "one": "{n} objet sélectionné",
@@ -1552,5 +1551,34 @@
   "slice.sum.speed_edited": {
     "one": "vitesse : {n} réglée à la main",
     "other": "vitesse : {n} réglées à la main"
-  }
+  },
+  "prepare.on_bed": "Sur le plateau ({n})",
+  "prepare.off_bed": "Hors plateau ({n})",
+  "prepare.off_note": {
+    "one": "Non découpé. + pour le remettre sur le plateau.",
+    "other": "Non découpés. + pour les remettre sur le plateau."
+  },
+  "prepare.drop_off": "Déposer ici pour le sortir du plateau",
+  "prepare.put": "Mettre sur le plateau",
+  "prepare.put_all": "Tout ajouter",
+  "prepare.fix.title": "Dépasse du plateau : recentrer ou exclure",
+  "prepare.fix.in": "Recentrer sur le plateau",
+  "prepare.fix.out": "Exclure du plateau",
+  "prepare.slice_n": {
+    "one": "Découper {n} objet",
+    "other": "Découper {n} objets"
+  },
+  "prepare.tip.partial": {
+    "one": "{n} objet dépasse du plateau : à corriger avant de découper",
+    "other": "{n} objets dépassent du plateau : à corriger avant de découper"
+  },
+  "prepare.tip.off": {
+    "one": "{n} objet hors plateau ne sera pas découpé",
+    "other": "{n} objets hors plateau ne seront pas découpés"
+  },
+  "prepare.mode.text": "Saisir la valeur",
+  "prepare.mode.slider": "Utiliser un curseur",
+  "prepare.val_hint": "Double-clic pour saisir la valeur",
+  "prepare.list.show": "Afficher la liste",
+  "prepare.list.hide": "Masquer la liste"
 }

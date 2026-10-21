@@ -213,15 +213,7 @@ function worldCenter(o) {
 }
 
 /* On the bed: "in", "partial" (sticks out) or "out" (beside it). */
-function bedState(o) {
-  const pts = footprint(o);
-  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const e = 0.1, { w, d } = PR.bed;
-  if (x1 < -e || y1 < -e || x0 > w + e || y0 > d + e) return "out";
-  if (x0 < -e || y0 < -e || x1 > w + e || y1 > d + e) return "partial";
-  return "in";
-}
+const bedState = (o) => plBedState(footprint(o), PR.bed);
 
 /* Ordered convex footprint (for overlap tests). */
 const footprintPoly = (o) => convexHull(footprint(o));
@@ -385,7 +377,8 @@ function prDraw() {
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-  // Objects: red when sticking out, dimmed when beside the plate, tinted
+  // Objects: red when sticking out, grey and faded when beside the plate
+  // (not sliced), tinted
   // with the accent color when selected.
   const accent = accentRgb();
   gl.useProgram(PR.prog);
@@ -405,6 +398,7 @@ function prDraw() {
       st === "partial" ? [1, 0.23, 0.19, 0.45]
       : selected ? [...accent, 0.28]
       : overlap.has(o.id) ? [1, 0.58, 0, 0.4]
+      : st === "out" ? [0.56, 0.56, 0.58, 0.55]
       : [0, 0, 0, 0];
     gl.uniform4fv(uTint, tint);
     gl.uniform1f(uAlpha, st === "out" ? 0.45 : 1);
@@ -759,6 +753,10 @@ function prBindInteractions(canvas) {
       prSchedule();
       return;
     }
+    if (d.mode === "move" && d.moved) {
+      $("p-objects").classList.add("dragging");
+      prDropHover(e);
+    }
     const p = prBedPoint(e);
     if (!p || !d.moved) return;
     if (!d.remembered) {
@@ -778,10 +776,20 @@ function prBindInteractions(canvas) {
     prRenderProps();
     prSchedule();
   });
-  addEventListener("mouseup", () => {
+  addEventListener("mouseup", (e) => {
     const d = PR.drag;
     PR.drag = null;
     if (!d || window.currentView !== "prepare") return;
+    // Objects dragged from the plate onto the list's off-plate group are
+    // taken off it, within the same undo step as the move.
+    if (d.mode === "move" && d.moved) {
+      const off = prDropOff(document.elementFromPoint(e.clientX, e.clientY));
+      prDropEnd();
+      if (off) {
+        if (!d.remembered) prRemember(d.before);
+        prPark(d.orig.map((x) => x.o).filter((o) => PR.objects.includes(o)));
+      }
+    }
     if (d.mode === "pan") {
       PR.lastPan = { at: Date.now(), moved: d.moved };
       if (d.menu && !d.moved) prObjectMenu(d.menu);
@@ -878,7 +886,8 @@ function prPan(dx, dy) {
 
 function prStatus() {
   const n = PR.objects.length;
-  const out = PR.objects.filter((o) => bedState(o) !== "in").length;
+  const g = prGroups();
+  const out = n - g.sliced;
   sideCount("prepare", n);
   tbSet("prepare", tr("slice.plate"), n ? tr("prepare.count", { n }) + (out ? " · " + tr("prepare.off_count", { n: out }) : "") : "");
   $("p-empty").classList.toggle("hidden", n > 0);
@@ -888,8 +897,41 @@ function prStatus() {
   $("p-save").disabled = $("p-clear").disabled = n === 0;
   $("p-arrange").disabled = !PR.objects.some((o) => bedState(o) !== "out");
   $("p-orient").disabled = PR.orienting || !PR.objects.length;
-  $("p-slice").disabled = n === 0;
+  // Only the objects fully on the plate are sliced: the button says how
+  // many, and why the others are not.
+  const slice = $("p-slice");
+  slice.textContent = g.sliced ? tr("prepare.slice_n", { n: g.sliced }) : tr("prepare.slice");
+  slice.disabled = g.sliced === 0 && g.partial === 0;
+  slice.title = [
+    g.partial ? tr("prepare.tip.partial", { n: g.partial }) : "",
+    g.off.length ? tr("prepare.tip.off", { n: g.off.length }) : "",
+  ].filter(Boolean).join("\n");
 }
+
+/* Object list, floating over the plate: the objects on it (sliced) and,
+   apart, dimmed, those beside it (not sliced) with a way back. The list is
+   one plate's: with several plates, one such list per plate. */
+const PR_ICON = {
+  plus: '<svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>',
+  warn: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.5 23 21.5H1zM11 9.5v6h2v-6zm0 8v2h2v-2z"/></svg>',
+  keys: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1m1 2v8h16V8zm1 1h2v2H5zm3 0h2v2H8zm3 0h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2zM7 13h10v2H7z"/></svg>',
+  slider: '<svg viewBox="0 0 24 24"><path d="M3 11h5.2a3 3 0 0 1 5.6 0H21v2h-7.2a3 3 0 0 1-5.6 0H3z"/></svg>',
+};
+
+/* Remembered look of the panels: fields typed rather than slid, list and
+   off-plate group open or folded. */
+const PRUI_KEY = "snapstudio.prep.ui";
+const PRUI = (() => {
+  let s = {};
+  try {
+    s = JSON.parse(localStorage.getItem(PRUI_KEY) || "{}") || {};
+  } catch {}
+  return { typing: new Set(Array.isArray(s.typing) ? s.typing : []), listFolded: !!s.listFolded, offFolded: !!s.offFolded };
+})();
+const pruiSave = () =>
+  localStorage.setItem(PRUI_KEY, JSON.stringify({ typing: [...PRUI.typing], listFolded: PRUI.listFolded, offFolded: PRUI.offFolded }));
+
+const prGroups = () => plGroups(PR.objects, bedState);
 
 function prRenderInspector() {
   const overlap = prOverlaps();
@@ -897,66 +939,131 @@ function prRenderInspector() {
   const pid = live ? headsActive() : "";
   const slots = live ? headsSlots(pid) : [];
   const n = live ? headsCount(pid) : 0;
-  $("p-list").innerHTML = PR.objects
-    .map((o) => {
-      const st = bedState(o);
-      const tag =
-        st === "partial" ? `<span class="tag bad">${esc(tr("prepare.tag.over"))}</span>`
-        : st === "out" ? `<span class="tag">${esc(o.plate > 1 ? tr("prepare.tag.plate", { n: o.plate }) : tr("prepare.tag.off"))}</span>`
-        : overlap.has(o.id) ? `<span class="tag warn">${esc(tr("prepare.tag.overlap"))}</span>`
-        : "";
-      const open = !PR.fold.has(o.id);
-      const heads = live ? prHeads(o, pid, slots, n) : {};
-      const spool = (h) => slots.find((x) => x.index === h);
-      const dots = [...new Set(Object.values(heads).map((x) => x.h))]
-        .map((h) => spool(h)?.present && spool(h).color ? `<i style="background:${esc(spool(h).color)}"></i>` : "")
-        .join("");
-      const row = `<button class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}">
-        <span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>
-        <span class="k">${esc(o.name)}</span>${tag}<span class="p-dots">${dots}</span></button>`;
-      if (!open || !live) return row;
-      const model = headsModelNow(o.path);
-      return row + prColors(o).map((ext) => {
-        const f = model?.filaments?.find((x) => x.index === ext);
-        const tokens = Array.from({ length: n }, (_, h) => {
-          const s = spool(h);
-          const c = s?.present && s.color ? s.color : "";
-          const title = `T${h}${s ? (s.present ? ` · ${[s.kind, s.color].filter(Boolean).join(" · ")}` : " · " + tr("printers.empty_tag")) : ""}`;
-          return `<button class="sl-token${heads[ext]?.h === h ? " on" : ""}${s && !s.present ? " is-empty" : ""}" data-obj="${o.id}" data-ext="${ext}" data-h="${h}" title="${esc(title)}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${h}</button>`;
-        }).join("");
-        const label = tr("slice.color_n", { n: ext });
-        return `<div class="p-color" title="${esc([label, f?.kind, f?.color].filter(Boolean).join(" · "))}">
-          <span class="p-sw" style="background:${esc(f?.color || "#999")}"></span>
-          <span class="p-color-lbl">${esc(label)}</span>
-          <span class="p-toks">${tokens}</span>
-        </div>`;
+  const row = (o) => {
+    const st = bedState(o);
+    const tag =
+      st === "partial" ? `<span class="tag bad">${esc(tr("prepare.tag.over"))}</span>`
+      : st === "out" ? (o.plate > 1 ? `<span class="tag">${esc(tr("prepare.tag.plate", { n: o.plate }))}</span>` : "")
+      : overlap.has(o.id) ? `<span class="tag warn">${esc(tr("prepare.tag.overlap"))}</span>`
+      : "";
+    const act =
+      st === "partial" ? `<button type="button" class="p-ico p-warn" data-fix="${o.id}" title="${esc(tr("prepare.fix.title"))}">${PR_ICON.warn}</button>`
+      : st === "out" ? `<button type="button" class="p-ico" data-put="${o.id}" title="${esc(tr("prepare.put"))}">${PR_ICON.plus}</button>`
+      : "";
+    const open = !PR.fold.has(o.id);
+    const heads = live ? prHeads(o, pid, slots, n) : {};
+    const spool = (h) => slots.find((x) => x.index === h);
+    const dots = [...new Set(Object.values(heads).map((x) => x.h))]
+      .map((h) => spool(h)?.present && spool(h).color ? `<i style="background:${esc(spool(h).color)}"></i>` : "")
+      .join("");
+    const head = `<div class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}" role="button" tabindex="0">
+      <span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>
+      <span class="k">${esc(o.name)}</span>${tag}<span class="p-dots">${dots}</span>${act}</div>`;
+    if (!open || !live) return head;
+    const model = headsModelNow(o.path);
+    return head + prColors(o).map((ext) => {
+      const f = model?.filaments?.find((x) => x.index === ext);
+      const tokens = Array.from({ length: n }, (_, h) => {
+        const s = spool(h);
+        const c = s?.present && s.color ? s.color : "";
+        const title = `T${h}${s ? (s.present ? ` · ${[s.kind, s.color].filter(Boolean).join(" · ")}` : " · " + tr("printers.empty_tag")) : ""}`;
+        return `<button class="sl-token${heads[ext]?.h === h ? " on" : ""}${s && !s.present ? " is-empty" : ""}" data-obj="${o.id}" data-ext="${ext}" data-h="${h}" title="${esc(title)}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${h}</button>`;
       }).join("");
-    })
-    .join("");
+      const label = tr("slice.color_n", { n: ext });
+      return `<div class="p-color" title="${esc([label, f?.kind, f?.color].filter(Boolean).join(" · "))}">
+        <span class="p-sw" style="background:${esc(f?.color || "#999")}"></span>
+        <span class="p-color-lbl">${esc(label)}</span>
+        <span class="p-toks">${tokens}</span>
+      </div>`;
+    }).join("");
+  };
+  const g = prGroups();
+  const offOpen = !PRUI.offFolded;
+  $("p-list").innerHTML = `
+    <div class="p-grp p-on">
+      <div class="p-grp-head"><span class="k">${esc(tr("prepare.on_bed", { n: g.on.length }))}</span></div>
+      ${g.on.length ? `<div class="group">${g.on.map(row).join("")}</div>` : `<div class="vp-sub">${esc(tr("prepare.nothing"))}</div>`}
+    </div>
+    <div class="p-grp p-off${g.off.length ? "" : " none"}${offOpen ? "" : " folded"}" data-drop="off">
+      <div class="p-grp-head">
+        <span class="p-tw" data-offfold>${offOpen ? "▾" : "▸"}</span>
+        <span class="k">${esc(tr("prepare.off_bed", { n: g.off.length }))}</span>
+        ${g.off.length ? `<button type="button" class="btn" data-putall>${esc(tr("prepare.put_all"))}</button>` : ""}
+      </div>
+      ${g.off.length ? `<div class="vp-sub">${esc(tr("prepare.off_note", { n: g.off.length }))}</div>` : ""}
+      ${g.off.length ? `<div class="group">${g.off.map(row).join("")}</div>` : ""}
+      <div class="p-drop-note">${esc(tr("prepare.drop_off"))}</div>
+    </div>`;
+  const panel = $("p-objects");
+  panel.classList.toggle("hidden", PR.objects.length === 0);
+  panel.classList.toggle("folded", PRUI.listFolded);
+  // Folded, the list's head takes the objects dropped off the plate.
+  if (PRUI.listFolded) $("p-objects-head").dataset.drop = "off";
+  else delete $("p-objects-head").dataset.drop;
+  const fold = $("p-objects-fold");
+  fold.textContent = PRUI.listFolded ? "▸" : "▾";
+  fold.title = tr(PRUI.listFolded ? "prepare.list.show" : "prepare.list.hide");
+  // Several selected: they are counted here, the inspector is for one.
+  $("p-objects-n").textContent = PR.sel.size > 1 ? tr("prepare.selected", { n: PR.sel.size }) : PR.objects.length ? fmtNum(PR.objects.length) : "";
   prRenderPrinter();
   prRenderProps();
   prStatus();
 }
 
+/* Inspector fields. Each one is a slider (live, one undo step per drag)
+   or, on request, a typed value; double-clicking the slider's value types
+   it once. */
+const PF = {
+  "p-x": { kind: "pos", axis: 0, get: (o) => o.pos[0], put: (o, v) => (o.pos = [v, o.pos[1]]) },
+  "p-y": { kind: "pos", axis: 1, get: (o) => o.pos[1], put: (o, v) => (o.pos = [o.pos[0], v]) },
+  "p-rx": { kind: "rot", get: (o) => o.rot[0], put: (o, v) => (o.rot = [normDeg(v), o.rot[1], o.rot[2]]) },
+  "p-ry": { kind: "rot", get: (o) => o.rot[1], put: (o, v) => (o.rot = [o.rot[0], normDeg(v), o.rot[2]]) },
+  "p-rz": { kind: "rot", get: (o) => o.rot[2], put: (o, v) => (o.rot = [o.rot[0], o.rot[1], normDeg(v)]) },
+  "p-scale": {
+    kind: "scale",
+    get: (o) => o.scale[0] * 100,
+    put: (o, v) => {
+      const s = Math.max(1, v) / 100;
+      o.scale = [s, s, s];
+    },
+  },
+  "p-sx": { kind: "scale", get: (o) => o.scale[0] * 100, put: (o, v) => (o.scale = [Math.max(1, v) / 100, o.scale[1], o.scale[2]]) },
+  "p-sy": { kind: "scale", get: (o) => o.scale[1] * 100, put: (o, v) => (o.scale = [o.scale[0], Math.max(1, v) / 100, o.scale[2]]) },
+  "p-sz": { kind: "scale", get: (o) => o.scale[2] * 100, put: (o, v) => (o.scale = [o.scale[0], o.scale[1], Math.max(1, v) / 100]) },
+};
+const pfText = (f, v) => {
+  const r = Math.round(v * 10) / 10;
+  return f.kind === "pos" || !Number.isInteger(r) ? fmtDec(r, 1) : fmtNum(r);
+};
+
 function prRenderProps() {
   const sel = PR.objects.filter((o) => PR.sel.has(o.id));
+  // The inspector only shows for one selected object.
+  $("p-insp").classList.toggle("hidden", sel.length !== 1);
   $("p-props").classList.toggle("hidden", sel.length !== 1);
-  $("p-multi").classList.toggle("hidden", sel.length < 2);
-  $("p-multi").textContent = tr("prepare.selected", { n: sel.length });
   if (sel.length !== 1) return;
   const o = sel[0];
-  const set = (id, v) => {
-    if (document.activeElement !== $(id)) $(id).value = v;
-  };
-  set("p-x", Math.round(o.pos[0] * 10) / 10);
-  set("p-y", Math.round(o.pos[1] * 10) / 10);
-  set("p-rx", Math.round(o.rot[0] * 10) / 10);
-  set("p-ry", Math.round(o.rot[1] * 10) / 10);
-  set("p-rz", Math.round(o.rot[2] * 10) / 10);
-  set("p-scale", Math.round(o.scale[0] * 1000) / 10);
-  set("p-sx", Math.round(o.scale[0] * 1000) / 10);
-  set("p-sy", Math.round(o.scale[1] * 1000) / 10);
-  set("p-sz", Math.round(o.scale[2] * 1000) / 10);
+  $("p-insp-name").textContent = o.name;
+  $("p-insp-name").title = o.name;
+  for (const [id, f] of Object.entries(PF)) {
+    const v = f.get(o);
+    if (document.activeElement !== f.el) f.el.value = Math.round(v * 10) / 10;
+    // Not touched while sliding: the browser would drop the drag.
+    if (!f.sliding) {
+      const r = plRange(f.kind, PR.bed, f.axis);
+      f.range.min = r.min;
+      f.range.max = r.max;
+      f.range.step = r.step;
+      f.range.value = Math.min(r.max, Math.max(r.min, v));
+    }
+    f.out.textContent = pfText(f, v);
+    const typing = PRUI.typing.has(id) || !!f.temp;
+    f.row.classList.toggle("typing", typing);
+    f.mode.innerHTML = PRUI.typing.has(id) ? PR_ICON.slider : PR_ICON.keys;
+    f.mode.title = tr(PRUI.typing.has(id) ? "prepare.mode.slider" : "prepare.mode.text");
+    f.mode.setAttribute("aria-label", f.mode.title);
+    f.range.setAttribute("aria-label", f.row.querySelector(".k").textContent);
+  }
   // Proportions: lock on the object, open as soon as the scale is not uniform.
   const uniform = o.scale[0] === o.scale[1] && o.scale[1] === o.scale[2];
   if (!uniform) o.free = true;
@@ -969,14 +1076,24 @@ function prRenderProps() {
   $("p-dims").textContent = `${dims.join(" × ")} mm${o.plate > 1 ? " · " + tr("prepare.file_plate", { n: o.plate }) : ""}`;
 }
 
-/* Inspector fields: applied live, saved on commit. */
-function prBindField(id, apply) {
-  const el = $(id);
-  const run = (commit) => {
-    const o = PR.objects.find((x) => PR.sel.has(x.id));
-    const v = parseFloat(String(el.value).replace(",", "."));
+/* ⇧ held: no magnetic notches while sliding a rotation. */
+let prShift = false;
+addEventListener("keydown", (e) => (prShift = e.shiftKey), true);
+addEventListener("keyup", (e) => (prShift = e.shiftKey), true);
+
+function prBindField(id) {
+  const f = PF[id];
+  f.el = $(id);
+  f.row = f.el.closest(".p-field");
+  f.range = f.row.querySelector(".p-range");
+  f.out = f.row.querySelector(".p-val");
+  f.mode = f.row.querySelector(".p-mode");
+  const { el, range } = f;
+  const target = () => PR.objects.find((x) => PR.sel.has(x.id));
+  const apply = (v, commit) => {
+    const o = target();
     if (!o || !isFinite(v)) return;
-    apply(o, v);
+    f.put(o, v);
     prSchedule();
     if (commit) {
       prSave();
@@ -985,23 +1102,119 @@ function prBindField(id, apply) {
       prRenderProps();
     }
   };
+  // Typed value: live, one undo step per commit, Esc puts it back.
   let before = null;
   el.addEventListener("focus", () => (before = prSnap()));
-  el.addEventListener("input", () => run(false));
+  el.addEventListener("input", () => apply(parseFloat(String(el.value).replace(",", ".")), false));
   el.addEventListener("change", () => {
     if (before) prRemember(before);
     before = prSnap();
-    run(true);
+    apply(parseFloat(String(el.value).replace(",", ".")), true);
+  });
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") el.blur();
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (before) {
+      const ids = new Set(PR.sel);
+      PR.objects = JSON.parse(before);
+      PR.sel = new Set([...ids].filter((i) => PR.objects.some((o) => o.id === i)));
+    }
+    const o = target();
+    if (o) el.value = Math.round(f.get(o) * 10) / 10;
+    el.blur();
+    prSave();
+    prRenderInspector();
+    prSchedule();
+  });
+  el.addEventListener("blur", () => {
+    if (!f.temp) return;
+    f.temp = false;
+    prRenderProps();
+  });
+  // Slider: the 3D view follows, the drag is one undo step.
+  let slide = null;
+  const begin = (e) => {
+    if (e) prShift = e.shiftKey;
+    if (!slide) slide = prSnap();
+    f.sliding = true;
+  };
+  range.addEventListener("pointerdown", begin);
+  range.addEventListener("pointermove", (e) => (prShift = e.shiftKey));
+  range.addEventListener("input", () => {
+    begin();
+    let v = +range.value;
+    if (f.kind === "rot") {
+      v = plSnapAngle(v, prShift);
+      range.value = v;
+    }
+    apply(v, false);
+  });
+  range.addEventListener("change", () => {
+    f.sliding = false;
+    if (slide) prRemember(slide);
+    slide = null;
+    prSave();
+    prRenderInspector();
+  });
+  const end = () => {
+    // A press without a move: nothing changed, nothing remembered.
+    f.sliding = false;
+    slide = null;
+  };
+  range.addEventListener("pointerup", () => setTimeout(end, 0));
+  range.addEventListener("pointercancel", end);
+  // Fine steps (wheel, arrows), ⇧ for bigger ones. A burst is one undo step.
+  let at = 0, acc = 0;
+  const step = (dir, coarse) => {
+    const o = target();
+    if (!o) return;
+    const now = Date.now();
+    if (now - at > 700) prRemember();
+    at = now;
+    f.put(o, plNudge(f.kind, f.get(o), dir, coarse, PR.bed, f.axis));
+    prSave();
+    prRenderInspector();
+    prSchedule();
+  };
+  range.addEventListener("keydown", (e) => {
+    const dir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 1, PageDown: -1 }[e.key];
+    if (!dir) return;
+    e.preventDefault();
+    e.stopPropagation();
+    step(dir, e.shiftKey || e.key.startsWith("Page"));
+  });
+  range.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      // ⇧ turns a mouse wheel horizontal on macOS.
+      const d = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * (e.deltaMode === 1 ? 40 : 1);
+      acc += d;
+      if (Math.abs(acc) < 40) return;
+      step(acc < 0 ? 1 : -1, e.shiftKey);
+      acc = 0;
+    },
+    { passive: false }
+  );
+  // Double-click the value: type it once.
+  f.out.addEventListener("dblclick", () => {
+    f.temp = true;
+    f.row.classList.add("typing");
+    el.focus();
+    el.select();
+  });
+  f.mode.addEventListener("click", () => {
+    PRUI.typing.has(id) ? PRUI.typing.delete(id) : PRUI.typing.add(id);
+    f.temp = false;
+    pruiSave();
+    prRenderProps();
+    (PRUI.typing.has(id) ? el : range).focus();
   });
 }
-prBindField("p-x", (o, v) => (o.pos = [v, o.pos[1]]));
-prBindField("p-y", (o, v) => (o.pos = [o.pos[0], v]));
-prBindField("p-rx", (o, v) => (o.rot = [normDeg(v), o.rot[1], o.rot[2]]));
-prBindField("p-ry", (o, v) => (o.rot = [o.rot[0], normDeg(v), o.rot[2]]));
-prBindField("p-rz", (o, v) => (o.rot = [o.rot[0], o.rot[1], normDeg(v)]));
-prBindField("p-sx", (o, v) => (o.scale = [Math.max(1, v) / 100, o.scale[1], o.scale[2]]));
-prBindField("p-sy", (o, v) => (o.scale = [o.scale[0], Math.max(1, v) / 100, o.scale[2]]));
-prBindField("p-sz", (o, v) => (o.scale = [o.scale[0], o.scale[1], Math.max(1, v) / 100]));
+for (const id of Object.keys(PF)) prBindField(id);
+
 $("p-lock").addEventListener("change", () => {
   const o = PR.objects.find((x) => PR.sel.has(x.id));
   if (!o) return;
@@ -1013,17 +1226,110 @@ $("p-lock").addEventListener("change", () => {
   prRenderInspector();
   prSchedule();
 });
-prBindField("p-scale", (o, v) => {
-  const s = Math.max(1, v) / 100;
-  o.scale = [s, s, s];
+
+/* ------------------------------------------------- on and off the plate */
+
+/* Puts objects beside the plate (on its right, below those already
+   there): they stay in the list, are not sliced. */
+function prPark(list) {
+  const ids = new Set(list.map((o) => o.id));
+  const parked = PR.objects.filter((o) => !ids.has(o.id) && bedState(o) === "out").map((o) => groupBox([o]));
+  for (const o of list) {
+    const b = groupBox([o]);
+    const [x, y] = plParkSpot(parked, PR.bed, b.x1 - b.x0, b.y1 - b.y0);
+    o.pos = [o.pos[0] + x - b.x0, o.pos[1] + y - b.y0];
+    parked.push(groupBox([o]));
+  }
+}
+
+/* Off-plate objects back on it, each at the first free spot. One undo
+   step; those that find no room stay where they are. */
+function prPutOnBed(ids) {
+  const list = PR.objects.filter((o) => ids.includes(o.id) && bedState(o) === "out");
+  if (!list.length) return;
+  const before = prSnap();
+  let placed = 0;
+  for (const o of list) {
+    const b = groupBox([o]);
+    const spot = freeSpot(b.x1 - b.x0, b.y1 - b.y0, o.id);
+    if (!spot) continue;
+    o.pos = [o.pos[0] + spot[0] - b.x0, o.pos[1] + spot[1] - b.y0];
+    placed++;
+  }
+  if (placed) {
+    prRemember(before);
+    PR.sel = new Set(list.filter((o) => bedState(o) !== "out").map((o) => o.id));
+    prSave();
+    prRenderInspector();
+    prSchedule();
+  }
+  if (placed < list.length) toast(tr("prepare.no_fit", { n: list.length - placed }), true);
+}
+
+/* An object sticking out: brought fully on the plate by the smallest
+   move, or taken off it. */
+function prFix(id, how) {
+  const o = PR.objects.find((x) => x.id === id);
+  if (!o || bedState(o) !== "partial") return;
+  if (how === "in") {
+    const mv = plInside(groupBox([o]), PR.bed);
+    if (!mv) {
+      toast(tr("prepare.no_fit", { n: 1 }), true);
+      return;
+    }
+    prRemember();
+    o.pos = [o.pos[0] + mv[0], o.pos[1] + mv[1]];
+  } else {
+    prRemember();
+    prPark([o]);
+  }
+  prSave();
+  prRenderInspector();
+  prSchedule();
+}
+
+function prFixMenu(id, x, y) {
+  PR.fixId = id;
+  nativeMenu([
+    { id: "prep:fixin", label: tr("prepare.fix.in") },
+    { id: "prep:fixout", label: tr("prepare.fix.out") },
+  ], x, y);
+}
+
+$("p-objects-fold").addEventListener("click", () => {
+  PRUI.listFolded = !PRUI.listFolded;
+  pruiSave();
+  prRenderInspector();
 });
 
 $("p-list").addEventListener("click", (e) => {
+  if (PR.rowDrag?.done) return;
   const fold = e.target.closest("[data-fold]");
   if (fold) {
     const id = +fold.dataset.fold;
     PR.fold.has(id) ? PR.fold.delete(id) : PR.fold.add(id);
     prRenderInspector();
+    return;
+  }
+  if (e.target.closest("[data-offfold]")) {
+    PRUI.offFolded = !PRUI.offFolded;
+    pruiSave();
+    prRenderInspector();
+    return;
+  }
+  if (e.target.closest("[data-putall]")) {
+    prPutOnBed(prGroups().off.map((o) => o.id));
+    return;
+  }
+  const put = e.target.closest("[data-put]");
+  if (put) {
+    prPutOnBed([+put.dataset.put]);
+    return;
+  }
+  const fix = e.target.closest("[data-fix]");
+  if (fix) {
+    const r = fix.getBoundingClientRect();
+    prFixMenu(+fix.dataset.fix, r.left, r.bottom + 2);
     return;
   }
   const tok = e.target.closest("[data-h]");
@@ -1033,6 +1339,83 @@ $("p-list").addEventListener("click", (e) => {
   }
   const row = e.target.closest(".p-obj");
   if (row) prSelect([+row.dataset.id], e.metaKey || e.ctrlKey);
+});
+$("p-list").addEventListener("keydown", (e) => {
+  const row = e.target.closest?.(".p-obj");
+  if (!row || e.target !== row || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  prSelect([+row.dataset.id], e.metaKey || e.ctrlKey);
+});
+
+/* Dragging a row: onto the plate (placed under the pointer) or into the
+   off-plate group (taken off). Pointer events, not HTML drag and drop:
+   the window's file drop would take it. */
+const prDropOff = (el) => el?.closest?.('[data-drop="off"]') || null;
+function prDropHover(e) {
+  const t = prDropOff(document.elementFromPoint(e.clientX, e.clientY));
+  for (const z of document.querySelectorAll('#view-prepare [data-drop="off"]')) z.classList.toggle("drop", z === t);
+  return t;
+}
+function prDropEnd() {
+  for (const z of document.querySelectorAll("#view-prepare .drop")) z.classList.remove("drop");
+  $("p-objects").classList.remove("dragging");
+  $("view-prepare").querySelector(".prep-stage").classList.remove("drop-bed");
+  $("p-ghost").classList.add("hidden");
+}
+$("p-list").addEventListener("pointerdown", (e) => {
+  const row = e.target.closest(".p-obj");
+  if (!row || e.button !== 0 || e.target.closest("button, [data-fold]")) return;
+  PR.rowDrag = { id: +row.dataset.id, x: e.clientX, y: e.clientY, on: false, done: false };
+});
+addEventListener("pointermove", (e) => {
+  const d = PR.rowDrag;
+  if (!d || d.done) return;
+  if (!d.on && Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) < 6) return;
+  const o = PR.objects.find((x) => x.id === d.id);
+  if (!o) return;
+  if (!d.on) {
+    d.on = true;
+    $("p-objects").classList.add("dragging");
+    $("p-ghost").textContent = o.name;
+    $("p-ghost").classList.remove("hidden");
+  }
+  const g = $("p-ghost");
+  g.style.left = e.clientX + "px";
+  g.style.top = e.clientY + "px";
+  const over = document.elementFromPoint(e.clientX, e.clientY);
+  prDropHover(e);
+  $("view-prepare").querySelector(".prep-stage").classList.toggle("drop-bed", over === $("p-canvas"));
+});
+addEventListener("pointerup", (e) => {
+  const d = PR.rowDrag;
+  if (!d) return;
+  if (!d.on) {
+    PR.rowDrag = null;
+    return;
+  }
+  d.done = true;
+  // The click that follows the release is not a selection.
+  setTimeout(() => (PR.rowDrag = null), 0);
+  const over = document.elementFromPoint(e.clientX, e.clientY);
+  const off = prDropOff(over);
+  prDropEnd();
+  const o = PR.objects.find((x) => x.id === d.id);
+  if (!o) return;
+  if (off) {
+    if (bedState(o) === "out") return;
+    prRemember();
+    prPark([o]);
+  } else if (over === $("p-canvas")) {
+    const p = prBedPoint(e);
+    if (!p) return;
+    prRemember();
+    const b = groupBox([o]);
+    o.pos = [o.pos[0] + p[0] - (b.x0 + b.x1) / 2, o.pos[1] + p[1] - (b.y0 + b.y1) / 2];
+  } else return;
+  PR.sel = new Set([o.id]);
+  prSave();
+  prRenderInspector();
+  prSchedule();
 });
 
 /* ------------------------------------------------------------ adding */
@@ -1575,7 +1958,7 @@ async function prepareShow() {
 
 /* Scene handed to slicing: objects on the plate only. */
 function prepareScene() {
-  const on = PR.objects.filter((o) => bedState(o) === "in");
+  const on = plSliced(PR.objects, bedState);
   const partial = PR.objects.filter((o) => bedState(o) === "partial");
   if (partial.length) {
     toast(tr("prepare.sticks_out", { names: partial.map((o) => o.name).join(", "), n: partial.length }), true);
@@ -1607,6 +1990,8 @@ onMenu("prep", async (what) => {
   if (what === "resetrot") prResetRotation();
   if (what === "arrange") prArrange();
   if (what === "del") prRemoveSelection();
+  if (what === "fixin") prFix(PR.fixId, "in");
+  if (what === "fixout") prFix(PR.fixId, "out");
   if (what === "orient") prOrient(false);
   if (what === "facetool") prSetTool("face");
   if (what === "save") prSavePlate();
