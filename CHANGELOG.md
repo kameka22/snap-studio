@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-21
+
 ### Added
 - **Prepare, reworked** ([#28](https://github.com/kameka22/snap-studio/pull/28)):
   - placement, rotation and scale as sliders (live 3D, one undo step per
@@ -253,7 +255,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/kameka22/snap-studio/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kameka22/snap-studio/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/kameka22/snap-studio/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/kameka22/snap-studio/compare/v0.8.2...v0.9.0
