@@ -139,7 +139,7 @@ Les contacts suivent le chiffre de Snapmaker ; les autres intervalles sont
 des valeurs prudentes, Snapmaker n'en donne pas. Sur une autre imprimante
 Klipper, la vue garde l'utilisation et les entretiens à l'heure.
 
-<img src="docs/screenshots/maintenance.png" alt="La vue maintenance" />
+<img src="docs/screenshots/maintenance.png" alt="Entretien et réglages : entretiens et compteurs des têtes" />
 
 **Nivellement** : le maillage du plateau, lu sur l'imprimante, gardé dans
 le temps.
@@ -182,6 +182,8 @@ Sous chaque imprimante, **Fichiers** montre ce qui y est stocké, lu en direct :
   téléphone sur le même Wi-Fi (un lien local qui s'arrête après 15 minutes ou
   à la fermeture de la fenêtre), le fichier dans le presse-papiers, ou
   Enregistrer sous.
+
+<img src="docs/screenshots/printer-files.png" alt="Les fichiers d'une imprimante, en grille de vignettes" />
 
 ### ✂️ Découpe
 
@@ -232,6 +234,8 @@ bobine sur T0) et macOS (une mise en page façon Tahoe, en verre) ; la
 couleur d'accent : celle du thème, du système, une couleur prédéfinie ou la
 vôtre ; et des couleurs adaptées au daltonisme, avec tous les thèmes (les
 états ne se distinguent jamais par le seul rouge / vert).
+
+<img src="docs/screenshots/display.png" alt="Réglages › Affichage : apparence et les dix thèmes" />
 
 ## Télécharger
 

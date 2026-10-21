@@ -129,7 +129,7 @@ Contacts follow Snapmaker's figure; the other intervals are prudent
 defaults, Snapmaker gives none. On another Klipper printer, the view keeps
 usage and the hour-based tasks.
 
-<img src="docs/screenshots/maintenance.png" alt="The maintenance view" />
+<img src="docs/screenshots/maintenance.png" alt="Care &amp; Tuning: maintenance tasks and the heads' counters" />
 
 **Bed Leveling**: the bed's mesh, read from the printer, kept over time.
 
@@ -167,6 +167,8 @@ Under each printer, **Files** shows what is stored on it, read live:
   Mail…), a QR code to download it on your phone on the same Wi-Fi (a local
   link that stops after 15 minutes or when the sheet closes), the file on the
   clipboard, or Save As.
+
+<img src="docs/screenshots/printer-files.png" alt="A printer's files, as a grid of thumbnails" />
 
 ### ✂️ Slicing
 
@@ -212,6 +214,8 @@ Solarized, Filament (the app takes the color of the spool on T0) and macOS
 (a Tahoe-style layout in glass); the accent color: the theme's, the
 system's, a preset or your own; and color-blind safe colors over any theme
 (states never told apart by red and green alone).
+
+<img src="docs/screenshots/display.png" alt="Settings › Display: appearance and the ten themes" />
 
 ## Download
 
