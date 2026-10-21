@@ -114,7 +114,7 @@ window.addEventListener("langchange", () => {
    live preview; the whole app changes at once too. */
 function dispMockStyle(themeId, mode) {
   const s = { ...DISPLAY, theme: themeId };
-  const tokens = displayTokens(s, mode);
+  const tokens = displayTokens(s, mode, DISPLAY_SPOOL);
   const accent = tokens["--accent"] || (CSS.supports("color", "AccentColor") ? "AccentColor" : "#007aff");
   const rgb = parseColor(cssColor(accent)) || [0, 122, 255];
   return Object.entries({ ...tokens, "--accent": accent, "--accent-text": accentTextFor(rgb) })
@@ -144,7 +144,7 @@ function dispRender() {
   }).join("");
   // Accent: the theme's own, the system's, a preset or a picked color.
   const theme = themeById(DISPLAY.theme);
-  const own = theme.accent?.[mode];
+  const own = displayAccent({ ...DISPLAY, accent: "theme" }, mode, DISPLAY_SPOOL);
   const custom = DISPLAY.accent.startsWith("#") ? DISPLAY.accent : "";
   const sw = (id, label, style, cls = "") => {
     const on = DISPLAY.accent === id;
@@ -159,7 +159,9 @@ function dispRender() {
     `<input type="color" id="disp-color" value="${custom || own || "#007aff"}" aria-label="${esc(tr("display.accent.custom"))}" /></label>`;
   const preset = ACCENTS.find((a) => a.id === DISPLAY.accent);
   $("disp-accent-sub").textContent =
-    DISPLAY.accent === "theme" ? tr(own ? "display.accent.theme.own" : "display.accent.theme.system", { name: tr(theme.name) })
+    DISPLAY.accent === "theme" && theme.accentFrom === "spool"
+      ? DISPLAY_SPOOL ? tr("display.accent.spool", { color: DISPLAY_SPOOL.toUpperCase() }) : tr("display.accent.spool.none")
+    : DISPLAY.accent === "theme" ? tr(own ? "display.accent.theme.own" : "display.accent.theme.system", { name: tr(theme.name) })
     : DISPLAY.accent === "system" ? tr("display.accent.system.sub")
     : preset ? tr(preset.name)
     : tr("display.accent.custom") + " " + custom.toUpperCase();
@@ -199,13 +201,20 @@ $("disp-reset").addEventListener("click", () => dispSet({ ...DISPLAY_DEFAULT }))
 /* Arrow keys move the choice inside each group, as in a radio group. */
 for (const [id, sel, key] of [["disp-mode", "[data-mode-pick]", "modePick"], ["disp-themes", "[data-theme-pick]", "themePick"], ["disp-accents", "button[data-accent]", "accent"]]) {
   $(id).addEventListener("keydown", (e) => {
-    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    // In the theme grid, up / down move by a row (as many as its columns).
+    const cols = id === "disp-themes" ? getComputedStyle($(id)).gridTemplateColumns.split(" ").filter(Boolean).length || 1 : 1;
+    const step = { ArrowRight: 1, ArrowDown: cols, ArrowLeft: -1, ArrowUp: -cols, Home: -Infinity, End: Infinity }[e.key];
     if (!step) return;
     const items = [...$(id).querySelectorAll(sel)];
     const i = items.indexOf(document.activeElement);
     if (i < 0) return;
     e.preventDefault();
-    const next = items[(i + step + items.length) % items.length];
+    const next =
+      step === -Infinity ? items[0]
+      : step === Infinity ? items[items.length - 1]
+      : Math.abs(step) > 1 ? items[Math.min(items.length - 1, Math.max(0, i + step))]
+      : items[(i + step + items.length) % items.length];
+    if (next === items[i]) return;
     dispSet({ [key === "modePick" ? "mode" : key === "themePick" ? "theme" : "accent"]: next.dataset[key] });
     $(id).querySelector(`${sel.replace("]", `="${next.dataset[key]}"]`)}`)?.focus();
   });

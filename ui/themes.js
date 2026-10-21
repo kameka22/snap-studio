@@ -151,6 +151,428 @@ const THEMES = [
         "--term-selection": "#1f4a8a",
       },
     },
+  },  {
+    // Workshop: neutral anthracite (no blue), a very dark sidebar, cards a
+    // step lighter, a discreet Snapmaker orange. Light: warm grey.
+    id: "graphite",
+    name: "display.theme.graphite",
+    sub: "display.theme.graphite.sub",
+    accent: { light: "#b4500f", dark: "#e8803a" },
+    tokens: {
+      light: {
+        "--content-bg": "#ebe9e6",
+        "--card-bg": "#f7f6f4",
+        "--card-border": "rgba(60, 50, 40, 0.1)",
+        "--sidebar-bg": "rgba(222, 219, 214, 0.72)",
+        "--sidebar-opaque": "#dedbd6",
+        "--text": "#1c1b1a",
+        "--text-secondary": "#5b5853",
+        "--text-tertiary": "#9a958f",
+        "--separator": "#d5d1cb",
+        "--control-bg": "#f7f6f4",
+        "--control-border": "#cdc9c2",
+        "--field-bg": "#fbfaf8",
+        "--field-border": "#cac5be",
+        "--sheet-bg": "#f2f0ed",
+        "--seg-on": "#fbfaf8",
+        "--danger": "#d8301f",
+        "--thumb-bg": "linear-gradient(160deg, #f4f2ef 0%, #e4e1dc 100%)",
+        "--term-selection": "#f1d0b5",
+      },
+      dark: {
+        "--content-bg": "#1f1f1f",
+        "--card-bg": "#2a2a2a",
+        "--card-border": "rgba(255, 255, 255, 0.05)",
+        "--sidebar-bg": "rgba(18, 18, 18, 0.82)",
+        "--sidebar-opaque": "#131313",
+        "--sidebar-item-hover": "rgba(255, 255, 255, 0.06)",
+        "--text": "#ececec",
+        "--text-secondary": "#a6a6a6",
+        "--text-tertiary": "#6e6e6e",
+        "--separator": "#383838",
+        "--control-bg": "rgba(255, 255, 255, 0.06)",
+        "--control-border": "#3d3d3d",
+        "--field-bg": "#181818",
+        "--field-border": "#474747",
+        "--sheet-bg": "#262626",
+        "--seg-on": "#3a3a3a",
+        "--toast-bg": "rgba(42, 42, 42, 0.96)",
+        "--thumb-bg": "linear-gradient(160deg, #2f2f2f 0%, #232323 100%)",
+        "--term-selection": "#4d3523",
+      },
+    },
+  },
+  {
+    // OLED: near-black, cards barely lighter, no borders, cyan. Light: a
+    // very bright neutral with a deep cyan (the bright one would not read).
+    id: "night",
+    name: "display.theme.night",
+    sub: "display.theme.night.sub",
+    accent: { light: "#0e7490", dark: "#22d3ee" },
+    tokens: {
+      light: {
+        "--content-bg": "#fbfbfc",
+        "--card-bg": "#ffffff",
+        "--card-border": "rgba(0, 0, 0, 0)",
+        "--card-shadow": "0 1px 2px rgba(0, 0, 0, 0.05), 0 3px 12px rgba(0, 0, 0, 0.05)",
+        "--sidebar-bg": "rgba(243, 244, 246, 0.7)",
+        "--sidebar-opaque": "#f3f4f6",
+        "--text": "#0f1012",
+        "--text-secondary": "#55585e",
+        "--text-tertiary": "#a0a3a8",
+        "--separator": "#e6e7ea",
+        "--control-bg": "#ffffff",
+        "--control-border": "#dfe1e5",
+        "--field-bg": "#ffffff",
+        "--field-border": "#d9dce1",
+        "--sheet-bg": "#f6f6f7",
+        "--seg-on": "#ffffff",
+        "--thumb-bg": "linear-gradient(160deg, #fdfdfe 0%, #f0f1f3 100%)",
+        "--term-selection": "#bfeaf3",
+      },
+      dark: {
+        "--content-bg": "#000000",
+        "--card-bg": "#0b0b0c",
+        "--card-border": "rgba(0, 0, 0, 0)",
+        "--card-shadow": "0 0 0 0 transparent",
+        "--card-shadow-hover": "0 0 0 1px rgba(255, 255, 255, 0.08)",
+        "--sidebar-bg": "rgba(0, 0, 0, 0.82)",
+        "--sidebar-opaque": "#050505",
+        "--sidebar-item-hover": "rgba(255, 255, 255, 0.06)",
+        "--text": "#e8e8ea",
+        "--text-secondary": "#9c9ca3",
+        "--text-tertiary": "#5c5c62",
+        "--separator": "#1c1c1f",
+        "--control-bg": "#111113",
+        "--control-border": "#26262a",
+        "--field-bg": "#0b0b0c",
+        "--field-border": "#2c2c31",
+        "--sheet-bg": "#0e0e10",
+        "--sheet-shadow": "0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.07)",
+        "--seg-on": "#222226",
+        "--toast-bg": "rgba(28, 28, 30, 0.96)",
+        "--thumb-bg": "linear-gradient(160deg, #0f0f11 0%, #060607 100%)",
+        "--term-selection": "#0f3a44",
+        "--modal-dim": "rgba(0, 0, 0, 0.6)",
+      },
+    },
+  },
+  {
+    // Warm off-white, soft shadows rather than borders, blue (Bambu
+    // Studio / Fusion). Dark: warm dark grey.
+    id: "studiolight",
+    name: "display.theme.studiolight",
+    sub: "display.theme.studiolight.sub",
+    accent: { light: "#1769c2", dark: "#4b9bf0" },
+    tokens: {
+      light: {
+        "--content-bg": "#f6f3ee",
+        "--card-bg": "#fffdfa",
+        "--card-border": "rgba(0, 0, 0, 0)",
+        "--card-shadow": "0 1px 2px rgba(60, 40, 20, 0.06), 0 4px 14px rgba(60, 40, 20, 0.08)",
+        "--card-shadow-hover": "0 3px 8px rgba(60, 40, 20, 0.1), 0 12px 28px rgba(60, 40, 20, 0.12)",
+        "--sidebar-bg": "rgba(239, 235, 228, 0.72)",
+        "--sidebar-opaque": "#efebe4",
+        "--text": "#1f1c18",
+        "--text-secondary": "#5f5a52",
+        "--text-tertiary": "#a39d93",
+        "--separator": "#e6e0d6",
+        "--control-bg": "#fffdfa",
+        "--control-border": "#ddd6ca",
+        "--field-bg": "#fffdfa",
+        "--field-border": "#d8d1c4",
+        "--sheet-bg": "#fbf8f3",
+        "--sheet-shadow": "0 20px 60px rgba(60, 40, 20, 0.22), 0 2px 8px rgba(60, 40, 20, 0.08)",
+        "--seg-on": "#fffdfa",
+        "--thumb-bg": "linear-gradient(160deg, #fbf8f3 0%, #eee8df 100%)",
+        "--term-selection": "#c8dcf3",
+      },
+      dark: {
+        "--content-bg": "#23211e",
+        "--card-bg": "#2d2a26",
+        "--card-border": "rgba(0, 0, 0, 0)",
+        "--card-shadow": "0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.3)",
+        "--card-shadow-hover": "0 3px 8px rgba(0, 0, 0, 0.4), 0 12px 28px rgba(0, 0, 0, 0.4)",
+        "--sidebar-bg": "rgba(28, 26, 24, 0.76)",
+        "--sidebar-opaque": "#1c1a18",
+        "--sidebar-item-hover": "rgba(255, 255, 255, 0.06)",
+        "--text": "#f1ede6",
+        "--text-secondary": "#aaa398",
+        "--text-tertiary": "#6f695f",
+        "--separator": "#3b3732",
+        "--control-bg": "rgba(255, 255, 255, 0.06)",
+        "--control-border": "#3f3a34",
+        "--field-bg": "#1f1d1a",
+        "--field-border": "#4a443d",
+        "--sheet-bg": "#2a2723",
+        "--sheet-shadow": "0 20px 60px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3)",
+        "--seg-on": "#403b35",
+        "--toast-bg": "rgba(48, 45, 41, 0.96)",
+        "--thumb-bg": "linear-gradient(160deg, #322e2a 0%, #26231f 100%)",
+        "--term-selection": "#2f4766",
+      },
+    },
+  },
+  {
+    // Nord: polar night, snow storm, frost; the glacier blue as accent,
+    // aurora colors for the states.
+    id: "nord",
+    name: "display.theme.nord",
+    sub: "display.theme.nord.sub",
+    accent: { light: "#4c6f99", dark: "#88c0d0" },
+    tokens: {
+      light: {
+        "--content-bg": "#e5e9f0",
+        "--card-bg": "#eceff4",
+        "--card-border": "rgba(46, 52, 64, 0.1)",
+        "--sidebar-bg": "rgba(216, 222, 233, 0.72)",
+        "--sidebar-opaque": "#d8dee9",
+        "--text": "#2e3440",
+        "--text-secondary": "#4c566a",
+        "--text-tertiary": "#7b88a1",
+        "--separator": "#cdd4df",
+        "--control-bg": "#eceff4",
+        "--control-border": "#c3cbd8",
+        "--field-bg": "#f4f6f9",
+        "--field-border": "#c3cbd8",
+        "--sheet-bg": "#eceff4",
+        "--seg-on": "#f4f6f9",
+        "--toast-bg": "rgba(46, 52, 64, 0.94)",
+        "--danger": "#bf616a",
+        "--warning": "#d08770",
+        "--success": "#a3be8c",
+        "--success-text": "#4f6b3c",
+        "--warning-text": "#8c5a12",
+        "--thumb-bg": "linear-gradient(160deg, #eceff4 0%, #dde2ea 100%)",
+        "--term-selection": "#c6d6e8",
+      },
+      dark: {
+        "--content-bg": "#2e3440",
+        "--card-bg": "#3b4252",
+        "--card-border": "rgba(236, 239, 244, 0.06)",
+        "--sidebar-bg": "rgba(39, 44, 54, 0.78)",
+        "--sidebar-opaque": "#272c36",
+        "--sidebar-item-hover": "rgba(236, 239, 244, 0.07)",
+        "--text": "#eceff4",
+        "--text-secondary": "#c0c8d6",
+        "--text-tertiary": "#7b88a1",
+        "--separator": "#434c5e",
+        "--control-bg": "#3b4252",
+        "--control-border": "#4c566a",
+        "--field-bg": "#2e3440",
+        "--field-border": "#4c566a",
+        "--sheet-bg": "#353c4a",
+        "--seg-on": "#4c566a",
+        "--toast-bg": "rgba(59, 66, 82, 0.96)",
+        "--danger": "#d9808a",
+        "--warning": "#ebcb8b",
+        "--success": "#a3be8c",
+        "--success-text": "#a3be8c",
+        "--warning-text": "#ebcb8b",
+        "--thumb-bg": "linear-gradient(160deg, #3b4252 0%, #323845 100%)",
+        "--term-selection": "#434c5e",
+      },
+    },
+  },
+  {
+    // Solarized (Ethan Schoonover). The body text is one step more
+    // emphasized than the original's (base02 / base2 rather than base00 /
+    // base0, which stay under 7:1) and the light secondary text a shade
+    // darker than base01.
+    id: "solarized",
+    name: "display.theme.solarized",
+    sub: "display.theme.solarized.sub",
+    accent: { light: "#cb4b16", dark: "#b58900" },
+    tokens: {
+      light: {
+        "--content-bg": "#eee8d5",
+        "--card-bg": "#fdf6e3",
+        "--card-border": "rgba(88, 110, 117, 0.16)",
+        "--sidebar-bg": "rgba(238, 232, 213, 0.75)",
+        "--sidebar-opaque": "#e6dfca",
+        "--text": "#073642",
+        "--text-secondary": "#4a5f66",
+        "--text-tertiary": "#93a1a1",
+        "--separator": "#ddd6c1",
+        "--control-bg": "#fdf6e3",
+        "--control-border": "#d3cbb4",
+        "--field-bg": "#fdf6e3",
+        "--field-border": "#cfc7af",
+        "--sheet-bg": "#f6efdc",
+        "--seg-on": "#fdf6e3",
+        "--toast-bg": "rgba(7, 54, 66, 0.95)",
+        "--toast-text": "#eee8d5",
+        "--danger": "#dc322f",
+        "--warning": "#b58900",
+        "--success": "#859900",
+        "--success-text": "#5c6a00",
+        "--warning-text": "#7f6000",
+        "--thumb-bg": "linear-gradient(160deg, #fdf6e3 0%, #ebe4cf 100%)",
+        "--term-selection": "#e3d9b9",
+      },
+      dark: {
+        "--content-bg": "#002b36",
+        "--card-bg": "#073642",
+        "--card-border": "rgba(147, 161, 161, 0.1)",
+        "--sidebar-bg": "rgba(0, 33, 42, 0.8)",
+        "--sidebar-opaque": "#00212a",
+        "--sidebar-item-hover": "rgba(147, 161, 161, 0.1)",
+        "--text": "#eee8d5",
+        "--text-secondary": "#93a1a1",
+        "--text-tertiary": "#657b83",
+        "--separator": "#0e4553",
+        "--control-bg": "#073642",
+        "--control-border": "#174f5c",
+        "--field-bg": "#002b36",
+        "--field-border": "#1b5664",
+        "--sheet-bg": "#04313c",
+        "--seg-on": "#174f5c",
+        "--toast-bg": "rgba(7, 54, 66, 0.96)",
+        "--danger": "#f0605c",
+        "--warning": "#b58900",
+        "--success": "#859900",
+        "--success-text": "#a7bd00",
+        "--warning-text": "#d4a400",
+        "--thumb-bg": "linear-gradient(160deg, #073642 0%, #002f3b 100%)",
+        "--term-selection": "#0e4553",
+        "--term-fg": "#93a1a1",
+      },
+    },
+  },
+  {
+    // Neutral surfaces; the accent is the color of the spool on head T0 of
+    // the active printer (`accentFrom`), a neutral slate without one.
+    id: "filament",
+    name: "display.theme.filament",
+    sub: "display.theme.filament.sub",
+    accentFrom: "spool",
+    accent: { light: "#56606e", dark: "#9aa4b3" },
+    tokens: {
+      light: {
+        "--content-bg": "#f2f2f2",
+        "--card-bg": "#ffffff",
+        "--card-border": "rgba(0, 0, 0, 0.08)",
+        "--sidebar-bg": "rgba(233, 233, 233, 0.7)",
+        "--sidebar-opaque": "#e9e9e9",
+        "--text": "#1a1a1a",
+        "--text-secondary": "#5c5c5c",
+        "--text-tertiary": "#9e9e9e",
+        "--separator": "#dedede",
+        "--control-bg": "#ffffff",
+        "--control-border": "#d4d4d4",
+        "--field-bg": "#ffffff",
+        "--field-border": "#d0d0d0",
+        "--sheet-bg": "#f7f7f7",
+        "--seg-on": "#ffffff",
+        "--thumb-bg": "linear-gradient(160deg, #f7f7f7 0%, #e8e8e8 100%)",
+        "--term-selection": "#d6d6d6",
+      },
+      dark: {
+        "--content-bg": "#1b1b1b",
+        "--card-bg": "#262626",
+        "--card-border": "rgba(255, 255, 255, 0.06)",
+        "--sidebar-bg": "rgba(20, 20, 20, 0.78)",
+        "--sidebar-opaque": "#141414",
+        "--sidebar-item-hover": "rgba(255, 255, 255, 0.06)",
+        "--text": "#f0f0f0",
+        "--text-secondary": "#a8a8a8",
+        "--text-tertiary": "#6a6a6a",
+        "--separator": "#363636",
+        "--control-bg": "rgba(255, 255, 255, 0.06)",
+        "--control-border": "#3a3a3a",
+        "--field-bg": "#161616",
+        "--field-border": "#444444",
+        "--sheet-bg": "#222222",
+        "--seg-on": "#3a3a3a",
+        "--toast-bg": "rgba(38, 38, 38, 0.96)",
+        "--thumb-bg": "linear-gradient(160deg, #2b2b2b 0%, #202020 100%)",
+        "--term-selection": "#3d3d3d",
+      },
+    },
+  },
+  {
+    // Colour-blind safe: Snap Studio with the states in Okabe-Ito colors
+    // told apart without red / green: blue (fine), orange (caution),
+    // reddish purple (error).
+    id: "cvd",
+    name: "display.theme.cvd",
+    sub: "display.theme.cvd.sub",
+    accent: null,
+    tokens: {
+      light: {
+        "--danger": "#a3307e",
+        "--warning": "#e69f00",
+        "--success": "#0072b2",
+        "--success-text": "#005b8f",
+        "--warning-text": "#8a5800",
+      },
+      dark: {
+        "--danger": "#e08fc6",
+        "--warning": "#e69f00",
+        "--success": "#56b4e9",
+        "--success-text": "#56b4e9",
+        "--warning-text": "#f0b429",
+      },
+    },
+  },
+  {
+    // macOS 26 (Liquid Glass): glassy panels and sidebar (blur, saturation,
+    // a specular top edge), rounder cards and controls, SF neutrals, the
+    // system accent. Without vibrancy (Windows, Linux) the sidebar stays
+    // opaque (--sidebar-opaque); in-window glass works everywhere.
+    id: "macos",
+    name: "display.theme.macos",
+    sub: "display.theme.macos.sub",
+    accent: null,
+    tokens: {
+      light: {
+        "--content-bg": "#f5f5f7",
+        "--card-bg": "#ffffff",
+        "--card-border": "rgba(0, 0, 0, 0.05)",
+        "--card-shadow": "inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06)",
+        "--card-shadow-hover": "inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 8px rgba(0, 0, 0, 0.08), 0 14px 32px rgba(0, 0, 0, 0.1)",
+        "--sidebar-bg": "rgba(246, 246, 248, 0.38)",
+        "--sidebar-opaque": "#ebebef",
+        "--text": "#1d1d1f",
+        "--text-secondary": "#636368",
+        "--text-tertiary": "#a1a1a6",
+        "--separator": "rgba(60, 60, 67, 0.14)",
+        "--control-bg": "rgba(255, 255, 255, 0.7)",
+        "--control-border": "rgba(0, 0, 0, 0.1)",
+        "--field-bg": "rgba(255, 255, 255, 0.85)",
+        "--sheet-bg": "#f2f2f5",
+        "--sheet-shadow": "0 24px 70px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.12)",
+        "--radius-card": "22px",
+        "--radius-control": "10px",
+        "--glass-mix": "62%",
+        "--glass-blur": "blur(30px) saturate(200%)",
+        "--glass-edge": "inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 0.5px rgba(255, 255, 255, 0.4)",
+        "--sheet-mix": "80%",
+        "--sheet-blur": "blur(30px) saturate(200%)",
+      },
+      dark: {
+        "--content-bg": "#1c1c1e",
+        "--card-bg": "#2c2c2e",
+        "--card-border": "rgba(255, 255, 255, 0.06)",
+        "--card-shadow": "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25)",
+        "--card-shadow-hover": "inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 3px 8px rgba(0, 0, 0, 0.35), 0 14px 32px rgba(0, 0, 0, 0.4)",
+        "--sidebar-bg": "rgba(30, 30, 32, 0.4)",
+        "--sidebar-opaque": "#232325",
+        "--text": "#f5f5f7",
+        "--text-secondary": "#a1a1a6",
+        "--text-tertiary": "#6e6e73",
+        "--separator": "rgba(84, 84, 88, 0.55)",
+        "--sheet-bg": "#28282a",
+        "--sheet-shadow": "0 24px 70px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.12)",
+        "--radius-card": "22px",
+        "--radius-control": "10px",
+        "--glass-mix": "62%",
+        "--glass-blur": "blur(30px) saturate(200%)",
+        "--glass-edge": "inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 0.5px rgba(255, 255, 255, 0.08)",
+        "--sheet-mix": "80%",
+        "--sheet-blur": "blur(30px) saturate(200%)",
+      },
+    },
   },
 ];
 
@@ -170,10 +592,16 @@ function displayNormalize(raw) {
 
 const displayResolveMode = (mode, systemDark) => (mode === "light" || mode === "dark" ? mode : systemDark ? "dark" : "light");
 
-/* The accent to write (#rrggbb), or null for the system accent. */
-function displayAccent(s, mode) {
+/* The accent to write (#rrggbb), or null for the system accent. `spool`
+   is the color of the spool on T0 (#rrggbb or null), for a theme taking
+   its accent from it (Filament). */
+function displayAccent(s, mode, spool = null) {
   if (s.accent === "system") return null;
-  if (s.accent === "theme") return themeById(s.theme).accent?.[mode] || null;
+  const t = themeById(s.theme);
+  if (s.accent === "theme" && t.accentFrom === "spool") {
+    return filamentAccent(spool, mode, t.tokens[mode]["--content-bg"], t.accent[mode]);
+  }
+  if (s.accent === "theme") return t.accent?.[mode] || null;
   const preset = ACCENTS.find((a) => a.id === s.accent);
   return preset ? preset.hex : s.accent;
 }
@@ -181,9 +609,9 @@ function displayAccent(s, mode) {
 /* Tokens written inline for these settings in this mode: the theme's
    overrides and the accent. --accent-text is added by the caller once the
    accent's color is known (AccentColor is only known to the browser). */
-function displayTokens(s, mode) {
+function displayTokens(s, mode, spool = null) {
   const out = { ...themeById(s.theme).tokens[mode] };
-  const accent = displayAccent(s, mode);
+  const accent = displayAccent(s, mode, spool);
   if (accent) out["--accent"] = accent;
   return out;
 }
@@ -220,6 +648,33 @@ function contrastRatio(a, b) {
   return (l1 + 0.05) / (l2 + 0.05);
 }
 
+const toHex = (rgb) => "#" + rgb.slice(0, 3).map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0")).join("");
+
+/* Color of the spool on head T0 among a printer's slots ({ index,
+   present, color }), as #rrggbb; null when there is none or it is empty. */
+function spoolT0(slots) {
+  const s = Array.isArray(slots) ? slots.find((x) => x && x.index === 0) : null;
+  if (!s || !s.present) return null;
+  const m = String(s.color || "").trim().toLowerCase().match(/^#?([0-9a-f]{6})(?:[0-9a-f]{2})?$/);
+  return m ? "#" + m[1] : null;
+}
+
+/* Filament accent: the spool's color, darkened (light mode) or lightened
+   (dark mode) just enough to stand out from the page (3:1) — a white
+   spool on a light page, a black one on a dark page; `fallback` without a
+   spool. */
+function filamentAccent(spool, mode, page, fallback) {
+  const c = spool ? parseColor(spool) : null;
+  if (!c) return fallback;
+  const bg = parseColor(page) || (mode === "dark" ? [0, 0, 0, 1] : [255, 255, 255, 1]);
+  const to = mode === "dark" ? 255 : 0;
+  for (let t = 0; t <= 1.0001; t += 0.05) {
+    const rgb = c.slice(0, 3).map((v) => v + (to - v) * t);
+    if (contrastRatio(rgb, bg) >= 3) return toHex(rgb);
+  }
+  return fallback;
+}
+
 /* Text on an accent: white, as on macOS, unless the accent is too light
    for it (yellow, orange, light blue…): then near-black. */
 const accentTextFor = (rgb) => (contrastRatio(rgb, [255, 255, 255]) >= 3 ? "#ffffff" : "#1d1d1f");
@@ -227,6 +682,10 @@ const accentTextFor = (rgb) => (contrastRatio(rgb, [255, 255, 255]) >= 3 ? "#fff
 /* ------------------------------------------------------------ applying */
 
 let DISPLAY = DISPLAY_DEFAULT;
+/* Spool on T0 of the active printer (Filament theme), remembered so the
+   first paint has it before the printer answers. */
+const DISPLAY_SPOOL_KEY = "snapstudio.display.spool";
+let DISPLAY_SPOOL = null;
 let displayApplied = [];
 let displayLast = "";
 
@@ -261,7 +720,7 @@ function displayApply(s = DISPLAY) {
   root.dataset.scheme = mode;
   root.dataset.theme = DISPLAY.theme;
   for (const k of displayApplied) root.style.removeProperty(k);
-  const tokens = displayTokens(DISPLAY, mode);
+  const tokens = displayTokens(DISPLAY, mode, DISPLAY_SPOOL);
   for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v);
   const rgb = parseColor(cssColor("var(--accent)")) || [0, 122, 255];
   root.style.setProperty("--accent-text", accentTextFor(rgb));
@@ -296,8 +755,31 @@ function displayNative() {
 
 const isDark = () => document.documentElement.dataset.scheme === "dark";
 
+/* Follows the spool on T0 of the printer Prepare uses (heads.js), as it is
+   read or changed. A printer not read yet keeps the remembered color;
+   no printer at all (`listed`: the list is known) or an empty T0 gives the
+   neutral accent. */
+function displaySpoolSync(listed = false) {
+  if (typeof headsActive !== "function") return;
+  const pid = headsActive();
+  const slots = pid ? headsSlots(pid) : [];
+  if (pid && !slots.length) return;
+  if (!pid && !listed) return;
+  const c = pid ? spoolT0(slots) : null;
+  if (c === DISPLAY_SPOOL) return;
+  DISPLAY_SPOOL = c;
+  try {
+    c ? localStorage.setItem(DISPLAY_SPOOL_KEY, c) : localStorage.removeItem(DISPLAY_SPOOL_KEY);
+  } catch {}
+  if (themeById(DISPLAY.theme).accentFrom === "spool") displayApply();
+}
+
 if (typeof document !== "undefined" && typeof window !== "undefined") {
+  try {
+    DISPLAY_SPOOL = spoolT0([{ index: 0, present: true, color: localStorage.getItem(DISPLAY_SPOOL_KEY) }]);
+  } catch {}
   displayApply(displayLoad());
+  window.addEventListener("headschange", () => displaySpoolSync());
   // System mode follows the OS as it changes.
   if (typeof matchMedia === "function") {
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
@@ -311,6 +793,6 @@ if (typeof document !== "undefined" && typeof window !== "undefined") {
 if (typeof module !== "undefined") {
   module.exports = {
     DISPLAY_DEFAULT, DISPLAY_MODES, ACCENTS, THEMES, themeById, displayNormalize, displayResolveMode, displayAccent,
-    displayTokens, parseColor, blendOver, contrastRatio, accentTextFor,
+    displayTokens, parseColor, blendOver, contrastRatio, accentTextFor, spoolT0, filamentAccent, toHex,
   };
 }

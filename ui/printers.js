@@ -79,6 +79,8 @@ async function prnLoad(selectId) {
   if (window.currentView === "prepare" && typeof prRefreshSpools === "function") prRefreshSpools();
   // Maintenance due on each printer: the sidebar's dots.
   if (typeof mtCheckAll === "function") mtCheckAll();
+  // Filament theme: its accent follows the active printer's T0 spool.
+  displaySpoolSync(true);
 }
 
 function ledClass(st, id) {
