@@ -285,11 +285,11 @@
       <div id="p-msg" class="v-msg hidden"></div>
       <div id="p-angle" class="p-angle hidden"></div>
       <div id="p-toolhint" class="p-toolhint hidden"></div>
-      <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
+      <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · ⌘ drag from an empty spot: select an area · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
       <div id="p-objects" class="p-float p-objects prep-inspector">
         <div class="p-float-head" id="p-objects-head">
           <button type="button" id="p-objects-fold" class="p-tw p-fold">▾</button>
-          <span class="p-float-title" data-i18n="prepare.objects">Objects</span>
+          <span class="p-float-title" data-i18n="prepare.objects" title="Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it" data-i18n-title="prepare.list.hint">Objects</span>
           <span id="p-objects-n" class="p-float-n"></span>
           <select id="p-printer" class="hidden"></select>
         </div>
@@ -312,7 +312,7 @@
             <div class="grow-row p-field" data-field="p-ry"><span class="k" data-i18n="prepare.around_y">Around Y</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-ry" class="field num" type="number" step="1" /><span class="unit">°</span><button type="button" class="p-mode"></button></div>
             <div class="grow-row p-field" data-field="p-rz"><span class="k" data-i18n="prepare.around_z">Around Z</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-rz" class="field num" type="number" step="1" /><span class="unit">°</span><button type="button" class="p-mode"></button></div>
           </div>
-          <div class="vp-section" data-i18n="prepare.scale">Scale</div>
+          <div class="vp-section p-sec"><span data-i18n="prepare.scale">Scale</span><button type="button" id="p-scale-split" class="p-mode"></button></div>
           <div class="group">
             <label class="grow-row"><span class="k" data-i18n="prepare.keep_ratio">Keep proportions</span><input type="checkbox" id="p-lock" class="sw" role="switch" checked /></label>
             <div class="grow-row p-field p-uni" data-field="p-scale"><span class="k" data-i18n="prepare.scale">Scale</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-scale" class="field num" type="number" step="1" /><span class="unit">%</span><button type="button" class="p-mode"></button></div>
@@ -324,6 +324,7 @@
         </div>
         </div>
       </div>
+      <div id="p-marquee" class="p-marquee hidden"></div>
       <div id="p-ghost" class="p-ghost hidden"></div>
     </div>
   </div>

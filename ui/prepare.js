@@ -623,11 +623,45 @@ function rayTriangles(o, d, pos) {
 }
 
 function prSelect(ids, toggle) {
+  if (ids.length === 1) PR.anchor = ids[0];
   if (toggle) {
     for (const id of ids) PR.sel.has(id) ? PR.sel.delete(id) : PR.sel.add(id);
   } else {
     PR.sel = new Set(ids);
   }
+  prRenderInspector();
+  prSchedule();
+}
+
+/* Screen boxes (canvas pixels) of the objects: their rested volume's
+   corners, projected. */
+function prScreenBoxes() {
+  const rect = $("p-canvas").getBoundingClientRect();
+  const { view, proj } = prCamera(rect.width, rect.height);
+  const vp = m4.mul(proj, view);
+  return PR.objects.map((o) => {
+    const sh = shape(o);
+    const h = sh.zmax - sh.zmin;
+    const pts = footprint(o).flatMap(([x, y]) => [[x, y, 0], [x, y, h]]);
+    const b = plScreenBox(vp, pts, rect.width, rect.height);
+    return b && { id: o.id, ...b };
+  });
+}
+
+/* The band follows the pointer; the selection follows the band. */
+function prMarquee(d, e) {
+  const rect = $("p-canvas").getBoundingClientRect();
+  const a = [d.x - rect.left, d.y - rect.top], b = [e.clientX - rect.left, e.clientY - rect.top];
+  const m = $("p-marquee");
+  m.classList.remove("hidden");
+  const box = m.offsetParent?.getBoundingClientRect() || rect;
+  m.style.left = Math.min(a[0], b[0]) + rect.left - box.left + "px";
+  m.style.top = Math.min(a[1], b[1]) + rect.top - box.top + "px";
+  m.style.width = Math.abs(b[0] - a[0]) + "px";
+  m.style.height = Math.abs(b[1] - a[1]) + "px";
+  const sel = new Set([...d.keep, ...plMarquee(a, b, d.boxes)]);
+  if (sel.size === PR.sel.size && [...sel].every((id) => PR.sel.has(id))) return;
+  PR.sel = sel;
   prRenderInspector();
   prSchedule();
 }
@@ -642,6 +676,8 @@ function prBindInteractions(canvas) {
       PR.drag.menu = { clientX: e.clientX, clientY: e.clientY };
       return;
     }
+    // Ctrl-click is a right click on macOS: not while drawing a band.
+    if (PR.drag?.mode === "marquee") return;
     // Elsewhere it comes after the release: not after a drag of the view.
     if (PR.lastPan && Date.now() - PR.lastPan.at < 400 && PR.lastPan.moved) return;
     prObjectMenu(e);
@@ -684,8 +720,14 @@ function prBindInteractions(canvas) {
       return;
     }
     const hit = prPick(e);
+    // ⌘/Ctrl dragged from an empty spot: a rubber band, adding what it
+    // touches to the selection (⇧ already moves the view, ⌥ rotates).
+    if (!hit && (e.metaKey || e.ctrlKey) && e.button === 0) {
+      PR.drag = { ...base, mode: "marquee", keep: new Set(PR.sel), boxes: prScreenBoxes() };
+      return;
+    }
     if (!hit) {
-      PR.drag = { ...base, mode: "orbit", clear: !(e.metaKey || e.ctrlKey) };
+      PR.drag = { ...base, mode: "orbit", clear: true };
       return;
     }
     if (e.metaKey || e.ctrlKey) {
@@ -713,6 +755,10 @@ function prBindInteractions(canvas) {
     if (!d || window.currentView !== "prepare") return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+    if (d.mode === "marquee") {
+      if (d.moved) prMarquee(d, e);
+      return;
+    }
     if (d.mode === "pan" || d.mode === "orbit") {
       d.x = e.clientX;
       d.y = e.clientY;
@@ -793,6 +839,10 @@ function prBindInteractions(canvas) {
     if (d.mode === "pan") {
       PR.lastPan = { at: Date.now(), moved: d.moved };
       if (d.menu && !d.moved) prObjectMenu(d.menu);
+      return;
+    }
+    if (d.mode === "marquee") {
+      $("p-marquee").classList.add("hidden");
       return;
     }
     if (d.mode === "orbit" && !d.moved && d.clear) prSelect([], false);
@@ -891,17 +941,30 @@ function prStatus() {
   sideCount("prepare", n);
   tbSet("prepare", tr("slice.plate"), n ? tr("prepare.count", { n }) + (out ? " · " + tr("prepare.off_count", { n: out }) : "") : "");
   $("p-empty").classList.toggle("hidden", n > 0);
-  $("p-del").disabled = PR.sel.size === 0;
-  $("p-dup").disabled = PR.sel.size === 0;
-  $("p-split").disabled = PR.sel.size === 0 || !!PR.splitting;
-  $("p-save").disabled = $("p-clear").disabled = n === 0;
-  $("p-arrange").disabled = !PR.objects.some((o) => bedState(o) !== "out");
-  $("p-orient").disabled = PR.orienting || !PR.objects.length;
+  // The toolbar shows only what can act on the plate as it is; Save,
+  // Clear and Slice stay (on the right: the others come and go on their
+  // left without moving them).
+  const tools = plTools({
+    n,
+    sel: PR.sel.size,
+    onBed: g.on.length,
+    sliceable: g.sliced > 0 || g.partial > 0,
+    tool: PR.tool,
+    orienting: !!PR.orienting,
+    splitting: !!PR.splitting,
+  });
+  for (const [id, t] of Object.entries(tools)) {
+    const b = $(id);
+    b.classList.toggle("hidden", !t.show);
+    b.disabled = !t.on;
+  }
+  for (const grp of $("p-slice").parentElement.querySelectorAll(":scope > .tb-group")) {
+    grp.classList.toggle("hidden", ![...grp.children].some((b) => !b.classList.contains("hidden")));
+  }
   // Only the objects fully on the plate are sliced: the button says how
   // many, and why the others are not.
   const slice = $("p-slice");
   slice.textContent = g.sliced ? tr("prepare.slice_n", { n: g.sliced }) : tr("prepare.slice");
-  slice.disabled = g.sliced === 0 && g.partial === 0;
   slice.title = [
     g.partial ? tr("prepare.tip.partial", { n: g.partial }) : "",
     g.off.length ? tr("prepare.tip.off", { n: g.off.length }) : "",
@@ -916,6 +979,8 @@ const PR_ICON = {
   warn: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.5 23 21.5H1zM11 9.5v6h2v-6zm0 8v2h2v-2z"/></svg>',
   keys: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1m1 2v8h16V8zm1 1h2v2H5zm3 0h2v2H8zm3 0h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2zM7 13h10v2H7z"/></svg>',
   slider: '<svg viewBox="0 0 24 24"><path d="M3 11h5.2a3 3 0 0 1 5.6 0H21v2h-7.2a3 3 0 0 1-5.6 0H3z"/></svg>',
+  // Three sliders (X, Y, Z) / back to one.
+  axes: '<svg viewBox="0 0 24 24"><path d="M3 5h3.2a2.5 2.5 0 0 1 4.6 0H21v2H10.8a2.5 2.5 0 0 1-4.6 0H3zm0 6h9.2a2.5 2.5 0 0 1 4.6 0H21v2h-4.2a2.5 2.5 0 0 1-4.6 0H3zm0 6h5.2a2.5 2.5 0 0 1 4.6 0H21v2h-8.2a2.5 2.5 0 0 1-4.6 0H3z"/></svg>',
 };
 
 /* Remembered look of the panels: fields typed rather than slid, list and
@@ -926,10 +991,18 @@ const PRUI = (() => {
   try {
     s = JSON.parse(localStorage.getItem(PRUI_KEY) || "{}") || {};
   } catch {}
-  return { typing: new Set(Array.isArray(s.typing) ? s.typing : []), listFolded: !!s.listFolded, offFolded: !!s.offFolded };
+  return {
+    typing: new Set(Array.isArray(s.typing) ? s.typing : []),
+    listFolded: !!s.listFolded,
+    offFolded: !!s.offFolded,
+    split: !!s.split,
+  };
 })();
 const pruiSave = () =>
-  localStorage.setItem(PRUI_KEY, JSON.stringify({ typing: [...PRUI.typing], listFolded: PRUI.listFolded, offFolded: PRUI.offFolded }));
+  localStorage.setItem(
+    PRUI_KEY,
+    JSON.stringify({ typing: [...PRUI.typing], listFolded: PRUI.listFolded, offFolded: PRUI.offFolded, split: PRUI.split })
+  );
 
 const prGroups = () => plGroups(PR.objects, bedState);
 
@@ -981,7 +1054,10 @@ function prRenderInspector() {
   const offOpen = !PRUI.offFolded;
   $("p-list").innerHTML = `
     <div class="p-grp p-on">
-      <div class="p-grp-head"><span class="k">${esc(tr("prepare.on_bed", { n: g.on.length }))}</span></div>
+      <div class="p-grp-head">
+        <span class="k">${esc(tr("prepare.on_bed", { n: g.on.length }))}</span>
+        ${g.on.length ? `<button type="button" class="btn" data-parkall title="${esc(tr("prepare.park_all.title"))}">${esc(tr("prepare.park_all"))}</button>` : ""}
+      </div>
       ${g.on.length ? `<div class="group">${g.on.map(row).join("")}</div>` : `<div class="vp-sub">${esc(tr("prepare.nothing"))}</div>`}
     </div>
     <div class="p-grp p-off${g.off.length ? "" : " none"}${offOpen ? "" : " folded"}" data-drop="off">
@@ -1064,11 +1140,17 @@ function prRenderProps() {
     f.mode.setAttribute("aria-label", f.mode.title);
     f.range.setAttribute("aria-label", f.row.querySelector(".k").textContent);
   }
-  // Proportions: lock on the object, open as soon as the scale is not uniform.
-  const uniform = o.scale[0] === o.scale[1] && o.scale[1] === o.scale[2];
-  if (!uniform) o.free = true;
-  $("p-lock").checked = !o.free;
-  $("p-lock").closest(".group").classList.toggle("locked", !o.free);
+  // Scale: one slider (proportions kept) or three, X, Y, Z, free. Split
+  // when asked for (remembered) and always for a scale not uniform.
+  const split = plScaleSplit(o.scale, PRUI.split);
+  $("p-lock").checked = !split;
+  $("p-lock").closest(".group").classList.toggle("locked", !split);
+  const sb = $("p-scale-split");
+  sb.innerHTML = split ? PR_ICON.slider : PR_ICON.axes;
+  sb.classList.toggle("on", split);
+  sb.setAttribute("aria-pressed", String(split));
+  sb.title = tr(split ? "prepare.scale.join" : "prepare.scale.split");
+  sb.setAttribute("aria-label", sb.title);
   // Dimensions of the rested volume (box aligned on the bed axes).
   const sh = shape(o);
   const xs = sh.foot.map((p) => p[0]), ys = sh.foot.map((p) => p[1]);
@@ -1215,17 +1297,24 @@ function prBindField(id) {
 }
 for (const id of Object.keys(PF)) prBindField(id);
 
-$("p-lock").addEventListener("change", () => {
+/* Scale split into X, Y, Z (free axes) or one (proportions kept): the
+   switch and the section's icon are the same choice, remembered. Joining
+   a scale that is not uniform makes it so, from X: one undo step. */
+function prScaleSplit(split) {
+  PRUI.split = split;
+  pruiSave();
   const o = PR.objects.find((x) => PR.sel.has(x.id));
-  if (!o) return;
-  prRemember();
-  o.free = !$("p-lock").checked;
-  // Locking again brings back a uniform scale (X's).
-  if (!o.free) o.scale = [o.scale[0], o.scale[0], o.scale[0]];
-  prSave();
+  if (!split && o && !plUniform(o.scale)) {
+    prRemember();
+    o.scale = [o.scale[0], o.scale[0], o.scale[0]];
+    prSave();
+    prSchedule();
+  }
   prRenderInspector();
-  prSchedule();
-});
+}
+$("p-lock").addEventListener("change", () => prScaleSplit(!$("p-lock").checked));
+// Shown split now (the switch off): the icon joins, and the other way.
+$("p-scale-split").addEventListener("click", () => prScaleSplit($("p-lock").checked));
 
 /* ------------------------------------------------- on and off the plate */
 
@@ -1317,6 +1406,10 @@ $("p-list").addEventListener("click", (e) => {
     prRenderInspector();
     return;
   }
+  if (e.target.closest("[data-parkall]")) {
+    prParkAll();
+    return;
+  }
   if (e.target.closest("[data-putall]")) {
     prPutOnBed(prGroups().off.map((o) => o.id));
     return;
@@ -1338,14 +1431,42 @@ $("p-list").addEventListener("click", (e) => {
     return;
   }
   const row = e.target.closest(".p-obj");
-  if (row) prSelect([+row.dataset.id], e.metaKey || e.ctrlKey);
+  if (row) prListPick(+row.dataset.id, e);
 });
 $("p-list").addEventListener("keydown", (e) => {
   const row = e.target.closest?.(".p-obj");
   if (!row || e.target !== row || (e.key !== "Enter" && e.key !== " ")) return;
   e.preventDefault();
-  prSelect([+row.dataset.id], e.metaKey || e.ctrlKey);
+  prListPick(+row.dataset.id, e);
 });
+
+/* A click in the list: the row alone; ⌘/Ctrl toggles it; ⇧ takes every
+   row from the last one clicked (the anchor) to this one, in the order
+   shown, added to the selection with ⌘/Ctrl too. */
+function prListPick(id, e) {
+  const add = e.metaKey || e.ctrlKey;
+  if (e.shiftKey && PR.anchor != null) {
+    const order = [...$("p-list").querySelectorAll(".p-obj")].map((r) => +r.dataset.id);
+    const ids = plRangeIds(order, PR.anchor, id);
+    PR.sel = new Set(add ? [...PR.sel, ...ids] : ids);
+    prRenderInspector();
+    prSchedule();
+    return;
+  }
+  PR.anchor = id;
+  prSelect([id], add);
+}
+
+/* Every object of the plate taken off it, beside it: one undo step. */
+function prParkAll() {
+  const on = prGroups().on;
+  if (!on.length) return;
+  prRemember();
+  prPark(on);
+  prSave();
+  prRenderInspector();
+  prSchedule();
+}
 
 /* Dragging a row: onto the plate (placed under the pointer) or into the
    off-plate group (taken off). Pointer events, not HTML drag and drop:
@@ -1375,8 +1496,10 @@ addEventListener("pointermove", (e) => {
   if (!o) return;
   if (!d.on) {
     d.on = true;
+    // A selected row carries the whole selection.
+    d.ids = PR.sel.has(o.id) && PR.sel.size > 1 ? PR.objects.filter((x) => PR.sel.has(x.id)).map((x) => x.id) : [o.id];
     $("p-objects").classList.add("dragging");
-    $("p-ghost").textContent = o.name;
+    $("p-ghost").textContent = d.ids.length > 1 ? tr("prepare.selected", { n: d.ids.length }) : o.name;
     $("p-ghost").classList.remove("hidden");
   }
   const g = $("p-ghost");
@@ -1399,20 +1522,23 @@ addEventListener("pointerup", (e) => {
   const over = document.elementFromPoint(e.clientX, e.clientY);
   const off = prDropOff(over);
   prDropEnd();
-  const o = PR.objects.find((x) => x.id === d.id);
-  if (!o) return;
+  const list = PR.objects.filter((x) => (d.ids || [d.id]).includes(x.id));
+  if (!list.length) return;
   if (off) {
-    if (bedState(o) === "out") return;
+    const going = list.filter((x) => bedState(x) !== "out");
+    if (!going.length) return;
     prRemember();
-    prPark([o]);
+    prPark(going);
   } else if (over === $("p-canvas")) {
     const p = prBedPoint(e);
     if (!p) return;
     prRemember();
-    const b = groupBox([o]);
-    o.pos = [o.pos[0] + p[0] - (b.x0 + b.x1) / 2, o.pos[1] + p[1] - (b.y0 + b.y1) / 2];
+    // As a block, its center under the pointer.
+    const b = groupBox(list);
+    const dx = p[0] - (b.x0 + b.x1) / 2, dy = p[1] - (b.y0 + b.y1) / 2;
+    for (const x of list) x.pos = [x.pos[0] + dx, x.pos[1] + dy];
   } else return;
-  PR.sel = new Set([o.id]);
+  PR.sel = new Set(list.map((x) => x.id));
   prSave();
   prRenderInspector();
   prSchedule();
@@ -1570,6 +1696,7 @@ function prSetTool(t) {
   $("p-face").classList.toggle("on", PR.tool === "face");
   $("p-toolhint").textContent = PR.tool ? tr(TOOL_HINTS[PR.tool]) : "";
   $("p-toolhint").classList.toggle("hidden", !PR.tool);
+  prStatus();
   prSchedule();
 }
 
@@ -1680,7 +1807,7 @@ async function prOrient(all) {
   const targets = all || !PR.sel.size ? onBed : PR.objects.filter((o) => PR.sel.has(o.id));
   if (!targets.length || PR.orienting) return;
   PR.orienting = true;
-  $("p-orient").disabled = true;
+  prStatus();
   $("p-toolhint").textContent = tr("prepare.orienting", { n: targets.length });
   $("p-toolhint").classList.remove("hidden");
   const before = prSnap();
@@ -1701,7 +1828,7 @@ async function prOrient(all) {
     toast(tr("prepare.orient_failed", { err: e }), true);
   } finally {
     PR.orienting = false;
-    $("p-orient").disabled = false;
+    prStatus();
     $("p-toolhint").textContent = PR.tool ? tr(TOOL_HINTS[PR.tool]) : "";
     $("p-toolhint").classList.toggle("hidden", !PR.tool);
   }
@@ -1853,7 +1980,7 @@ async function prSplit() {
   const sel = PR.objects.filter((o) => PR.sel.has(o.id));
   if (!sel.length || PR.splitting) return;
   PR.splitting = true;
-  $("p-split").disabled = true;
+  prStatus();
   try {
     const found = await Promise.all(
       sel.map((o) => invoke("plate_pieces", { path: o.path, item: o.item, piece: o.piece ?? null }).catch((e) => (toast(String(e), true), null)))
@@ -1884,7 +2011,6 @@ async function prSplit() {
           extruders: p.extruders,
           heads: { ...(o.heads || {}) },
           cv: COLORS_VERSION,
-          free: o.free,
         };
       });
       PR.objects.splice(at, 1, ...made);

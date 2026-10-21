@@ -86,7 +86,7 @@
   "files.analyze": "Analyze Geometry",
   "prepare.empty.title": "Empty plate",
   "prepare.empty.text": "Choose a model in Files, then “Prepare” — or add it with +.",
-  "prepare.hint": "drag: move · ⌥ drag: rotate · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo",
+  "prepare.hint": "drag: move · ⌥ drag: rotate · ⌘ drag from an empty spot: select an area · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo",
   "prepare.objects": "Objects",
   "prepare.placement": "Placement",
   "prepare.pos_x": "Position X",
@@ -1577,5 +1577,10 @@
   "prepare.mode.slider": "Use a slider",
   "prepare.val_hint": "Double-click to type the value",
   "prepare.list.show": "Show the list",
-  "prepare.list.hide": "Hide the list"
+  "prepare.list.hide": "Hide the list",
+  "prepare.park_all": "Take All Off",
+  "prepare.park_all.title": "Move every object beside the plate (not sliced)",
+  "prepare.scale.split": "Scale each axis (X, Y, Z)",
+  "prepare.scale.join": "One scale, proportions kept",
+  "prepare.list.hint": "Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it"
 }

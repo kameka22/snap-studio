@@ -72,4 +72,51 @@ assert.deepStrictEqual(L.plParkSpot([{ x0: 290, y0: 0, x1: 330, y1: 30 }], bed, 
 assert.deepStrictEqual(L.plParkSpot([{ x0: 290, y0: 60, x1: 330, y1: 90 }], bed, 40, 30), [290, 0], "a gap above is used");
 assert.deepStrictEqual(L.plParkSpot([{ x0: 10, y0: 0, x1: 50, y1: 30 }], bed, 40, 30), [290, 0], "boxes on the plate do not count");
 
+// Shift-click: from the anchor to the clicked row, in the displayed order.
+const order = [4, 1, 7, 3, 9];
+assert.deepStrictEqual(L.plRangeIds(order, 1, 3), [1, 7, 3]);
+assert.deepStrictEqual(L.plRangeIds(order, 9, 1), [1, 7, 3, 9], "upwards too");
+assert.deepStrictEqual(L.plRangeIds(order, 7, 7), [7]);
+assert.deepStrictEqual(L.plRangeIds(order, 42, 3), [3], "anchor gone: the row alone");
+assert.deepStrictEqual(L.plRangeIds(order, 1, 42), []);
+
+// Projection: identity keeps NDC; a point behind the eye is dropped.
+const I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+assert.deepStrictEqual(L.plProject(I, [0.5, -0.5, 0]), [0.5, -0.5]);
+const behind = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -1, 0, 0, 0, 0]; // w = -z
+assert.strictEqual(L.plProject(behind, [0, 0, 1]), null);
+assert.deepStrictEqual(L.plProject(behind, [1, 1, -2]), [0.5, 0.5]);
+assert.deepStrictEqual(L.plScreenBox(I, [[-1, 1, 0], [0, 0, 0]], 200, 100), { x0: 0, y0: 0, x1: 100, y1: 50 }, "y down");
+assert.strictEqual(L.plScreenBox(behind, [[0, 0, 1]], 200, 100), null);
+
+// Rubber band: boxes it touches, corners in any order.
+const boxes = [
+  { id: 1, x0: 10, y0: 10, x1: 30, y1: 30 },
+  { id: 2, x0: 50, y0: 10, x1: 70, y1: 30 },
+  { id: 3, x0: 10, y0: 60, x1: 30, y1: 80 },
+  null,
+];
+assert.deepStrictEqual(L.plMarquee([0, 0], [40, 40], boxes), [1]);
+assert.deepStrictEqual(L.plMarquee([60, 35], [25, 5], boxes), [1, 2], "partly touched counts");
+assert.deepStrictEqual(L.plMarquee([31, 31], [49, 59], boxes), []);
+assert.deepStrictEqual(L.plMarquee([0, 0], [100, 100], boxes), [1, 2, 3]);
+
+// Scale split: asked for, or forced by a non-uniform scale.
+assert.strictEqual(L.plScaleSplit([1, 1, 1], false), false);
+assert.strictEqual(L.plScaleSplit([1, 1, 1], true), true);
+assert.strictEqual(L.plScaleSplit([1, 2, 1], false), true);
+assert.strictEqual(L.plUniform([0.5, 0.5, 0.5]), true);
+
+// Toolbar: only the useful buttons; the last three always.
+const vis = (st) => Object.entries(L.plTools(st)).filter(([, v]) => v.show).map(([k]) => k);
+assert.deepStrictEqual(vis({}), ["p-save", "p-clear", "p-slice"], "empty plate");
+assert.deepStrictEqual(vis({ n: 2, onBed: 2, sliceable: true }), ["p-face", "p-orient", "p-arrange", "p-save", "p-clear", "p-slice"], "nothing selected");
+assert.deepStrictEqual(vis({ n: 2, onBed: 0 }), ["p-face", "p-save", "p-clear", "p-slice"], "all beside the plate");
+assert.strictEqual(vis({ n: 2, sel: 1, onBed: 2 }).length, 10, "a selection: all");
+assert.ok(vis({ n: 1, tool: "rotate" }).includes("p-rotate"), "a tool on stays in view");
+const busy = L.plTools({ n: 1, sel: 1, onBed: 1, orienting: true, splitting: true });
+assert.deepStrictEqual([busy["p-orient"], busy["p-split"]], [{ show: true, on: false }, { show: true, on: false }]);
+assert.strictEqual(L.plTools({ n: 1 })["p-slice"].on, false);
+assert.strictEqual(L.plTools({ n: 1 })["p-save"].on, true);
+
 console.log("prepare: ok");

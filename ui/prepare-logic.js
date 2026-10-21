@@ -90,6 +90,73 @@ function plParkSpot(parked, bed, bw, bd, gap = 10) {
   return [x0, y];
 }
 
+/* Shift-click in the list: the ids from the anchor to the clicked one,
+   both included, in the displayed order. Without an anchor still listed,
+   only the clicked one. */
+function plRangeIds(order, anchor, id) {
+  const a = order.indexOf(anchor), b = order.indexOf(id);
+  if (b < 0) return [];
+  if (a < 0) return [id];
+  return order.slice(Math.min(a, b), Math.max(a, b) + 1);
+}
+
+/* Point [x, y, z] through a column-major 4 × 4 matrix, to normalized
+   device coordinates [x, y] (−1…1, y up); null behind the eye. */
+function plProject(m, p) {
+  const w = m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15];
+  if (w <= 1e-6) return null;
+  return [
+    (m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12]) / w,
+    (m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13]) / w,
+  ];
+}
+
+/* Screen box (pixels, y down) of points seen through `m` in a `w` × `h`
+   view; null when none is in front of the eye. */
+function plScreenBox(m, pts, w, h) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) {
+    const q = plProject(m, p);
+    if (!q) continue;
+    const x = ((q[0] + 1) / 2) * w, y = ((1 - q[1]) / 2) * h;
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+    y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  return x0 === Infinity ? null : { x0, y0, x1, y1 };
+}
+
+/* Rubber band: ids of the boxes ({ id, x0, y0, x1, y1 }) the rectangle
+   touches, the rectangle given by two corners in any order. */
+function plMarquee(a, b, boxes) {
+  const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]);
+  const y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
+  return boxes.filter((r) => r && r.x1 >= x0 && r.x0 <= x1 && r.y1 >= y0 && r.y0 <= y1).map((r) => r.id);
+}
+
+/* Scale split into X, Y, Z: when asked for, and always for a scale that
+   is not uniform (one slider could not show it). */
+const plUniform = (s) => Math.abs(s[0] - s[1]) < 1e-9 && Math.abs(s[1] - s[2]) < 1e-9;
+const plScaleSplit = (scale, wanted) => !!wanted || !plUniform(scale);
+
+/* Toolbar of the plate: which buttons show, which act. Only the useful
+   ones show; Save, Clear and Slice stay, disabled when they cannot act.
+   A button busy (orienting, splitting) or a tool still on stays in view. */
+function plTools({ n = 0, sel = 0, onBed = 0, sliceable = false, tool = null, orienting = false, splitting = false }) {
+  const t = (show, on) => ({ show: !!show, on: !!(show && on) });
+  return {
+    "p-rotate": t(sel || tool === "rotate", true),
+    "p-face": t(n || tool === "face", true),
+    "p-orient": t(sel || onBed || orienting, !orienting),
+    "p-arrange": t(onBed, true),
+    "p-dup": t(sel, true),
+    "p-split": t(sel || splitting, !splitting && sel),
+    "p-del": t(sel, true),
+    "p-save": { show: true, on: n > 0 },
+    "p-clear": { show: true, on: n > 0 },
+    "p-slice": { show: true, on: !!sliceable },
+  };
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot };
+  module.exports = { plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
 }

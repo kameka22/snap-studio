@@ -86,7 +86,7 @@
   "files.analyze": "Analyser la géométrie",
   "prepare.empty.title": "Plateau vide",
   "prepare.empty.text": "Choisissez un modèle dans Fichiers, puis « Préparer » — ou ajoutez-le avec +.",
-  "prepare.hint": "glisser : déplacer · ⌥ glisser : tourner · ⇧ ou clic droit glisser, ⇧ défiler : déplacer la vue · flèches : 1 mm (⇧ 10 mm) · A : disposer · ⌘D : dupliquer · ⌘Z : annuler",
+  "prepare.hint": "glisser : déplacer · ⌥ glisser : tourner · ⌘ glisser depuis le vide : sélectionner une zone · ⇧ ou clic droit glisser, ⇧ défiler : déplacer la vue · flèches : 1 mm (⇧ 10 mm) · A : disposer · ⌘D : dupliquer · ⌘Z : annuler",
   "prepare.objects": "Objets",
   "prepare.placement": "Placement",
   "prepare.pos_x": "Position X",
@@ -1580,5 +1580,10 @@
   "prepare.mode.slider": "Utiliser un curseur",
   "prepare.val_hint": "Double-clic pour saisir la valeur",
   "prepare.list.show": "Afficher la liste",
-  "prepare.list.hide": "Masquer la liste"
+  "prepare.list.hide": "Masquer la liste",
+  "prepare.park_all": "Tout sortir",
+  "prepare.park_all.title": "Sortir tous les objets à côté du plateau (non découpés)",
+  "prepare.scale.split": "Échelle par axe (X, Y, Z)",
+  "prepare.scale.join": "Une seule échelle, proportions conservées",
+  "prepare.list.hint": "Clic : sélectionner · ⌘ clic : ajouter ou retirer · ⇧ clic : toutes les lignes jusqu’à celle-ci · glisser : sur le plateau ou à côté"
 }
