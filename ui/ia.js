@@ -889,18 +889,15 @@ document.addEventListener("keydown", (e) => {
    Switching tabs or going back to the list must not erase anything: the
    element is detached, not destroyed. */
 
-/* Terminal colors matched to the tokens: --content-bg background, --text
-   text, cursor in the system accent color. */
+/* Terminal colors read from the theme's tokens (--term-*), cursor in the
+   accent color (AccentColor included: the browser resolves them). */
 function iaTheme() {
-  // --accent may be the AccentColor keyword: read the resolved color.
-  const probe = document.createElement("i");
-  probe.style.color = "var(--accent)";
-  document.body.appendChild(probe);
-  const accent = getComputedStyle(probe).color || "#007aff";
-  probe.remove();
-  return isDark()
-    ? { background: "#1e1e20", foreground: "#f5f5f7", cursor: accent, selectionBackground: "#3f4a5c" }
-    : { background: "#f3f3f5", foreground: "#1d1d1f", cursor: accent, selectionBackground: "#b3d7ff" };
+  return {
+    background: cssColor("var(--term-bg)"),
+    foreground: cssColor("var(--term-fg)"),
+    cursor: cssColor("var(--accent)") || "#007aff",
+    selectionBackground: cssColor("var(--term-selection)"),
+  };
 }
 
 function iaTerm(id) {

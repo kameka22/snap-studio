@@ -395,7 +395,7 @@ function prDraw() {
   }
   gl.viewport(0, 0, w, h);
   const light = !isDark();
-  gl.clearColor(...(light ? [0.953, 0.953, 0.961, 1] : [0.118, 0.118, 0.125, 1]));
+  gl.clearColor(...prClearColor(), 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
   const { view, proj } = prCamera(w, h);
@@ -532,7 +532,19 @@ const prSchedule = () => {
     prDraw();
   });
 };
-window.addEventListener("themechange", prSchedule);
+/* Background of the 3D view: the theme's --viewport-bg, as 0-1 components. */
+let PR_CLEAR = null;
+function prClearColor() {
+  if (!PR_CLEAR) {
+    const m = cssColor("var(--viewport-bg)").match(/[\d.]+/g) || [];
+    PR_CLEAR = m.length >= 3 ? m.slice(0, 3).map((x) => +x / 255) : [0.953, 0.953, 0.961];
+  }
+  return PR_CLEAR;
+}
+window.addEventListener("themechange", () => {
+  PR_CLEAR = null;
+  prSchedule();
+});
 addEventListener("resize", () => window.currentView === "prepare" && prSchedule());
 
 /* Resolved accent color (AccentColor included), as 0–1 components. */
