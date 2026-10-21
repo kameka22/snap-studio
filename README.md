@@ -184,13 +184,13 @@ The check can be turned off in Settings → Prepare.
 
 ### 🌓 Display
 
-Settings → Display: light, dark or as the system; eleven themes, each with
-a light and a dark version and a live preview — Snap Studio, Snapmaker
-Space, High contrast, Graphite, Deep Night, Studio Light, Nord, Solarized,
-Colour-blind safe (states never told apart by red and green alone),
-Filament (the accent takes the color of the spool on T0) and macOS (a
-Tahoe-style layout in glass) — and the accent color: the theme's, the
-system's, a preset or your own.
+Settings → Display: light, dark or as the system; ten themes, each with a
+light and a dark version and a live preview — Snap Studio, Snapmaker Space
+(navy sidebar), High contrast, Graphite, Deep Night, Paper, Nord,
+Solarized, Filament (the app takes the color of the spool on T0) and macOS
+(a Tahoe-style layout in glass); the accent color: the theme's, the
+system's, a preset or your own; and color-blind safe colors over any theme
+(states never told apart by red and green alone).
 
 ## Download
 

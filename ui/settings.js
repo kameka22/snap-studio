@@ -158,6 +158,7 @@ function dispRender() {
     ACCENTS.map((a) => sw(a.id, tr(a.name), `--c: ${a.hex}`)).join("") +
     `<label class="disp-sw custom${custom ? " on" : ""}" title="${esc(tr("display.accent.custom"))}"${custom ? ` style="--c: ${custom}"` : ""}>` +
     `<input type="color" id="disp-color" value="${custom || own || "#007aff"}" aria-label="${esc(tr("display.accent.custom"))}" /></label>`;
+  $("disp-cvd").checked = DISPLAY.cvd;
   const preset = ACCENTS.find((a) => a.id === DISPLAY.accent);
   $("disp-accent-sub").textContent =
     DISPLAY.accent === "theme" && theme.accentFrom === "spool"
@@ -198,6 +199,7 @@ $("disp-accents").addEventListener("change", (e) => {
   dispSet({ accent: e.target.value });
 });
 $("disp-reset").addEventListener("click", () => dispSet({ ...DISPLAY_DEFAULT }));
+$("disp-cvd").addEventListener("change", (e) => dispSet({ cvd: e.target.checked }));
 
 /* Arrow keys move the choice inside each group, as in a radio group. */
 for (const [id, sel, key] of [["disp-mode", "[data-mode-pick]", "modePick"], ["disp-themes", "[data-theme-pick]", "themePick"], ["disp-accents", "button[data-accent]", "accent"]]) {

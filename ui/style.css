@@ -27,6 +27,11 @@
   --sidebar-item-hover: rgba(0, 0, 0, 0.05);
   --sidebar-item-selected: var(--accent);
   --sidebar-item-selected-inactive: rgba(0, 0, 0, 0.1);
+  /* Text in the sidebar: the page's, unless a theme gives it its own (a
+     dark sidebar on a light page). */
+  --sidebar-text: var(--text);
+  --sidebar-text-secondary: var(--text-secondary);
+  --sidebar-text-tertiary: var(--text-tertiary);
 
   --text: #1d1d1f;
   --text-secondary: rgba(60, 60, 67, 0.6);
@@ -896,6 +901,15 @@ body:has(#view-prepare:not(.hidden)) .toast.out { transform: translateY(-12px); 
   box-shadow: var(--glass-edge);
 }
 .sidebar .titlebar { height: var(--titlebar-height); flex: none; }
+/* Everything in the sidebar (and its picture in the theme tiles) reads the
+   sidebar's text colors. */
+.sidebar,
+.dm-side {
+  --text: var(--sidebar-text);
+  --text-secondary: var(--sidebar-text-secondary);
+  --text-tertiary: var(--sidebar-text-tertiary);
+  color: var(--text);
+}
 /* The app's name at the top of the sidebar, under the window buttons. */
 .side-brand {
   flex: none;
@@ -4014,6 +4028,11 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 /* A small window drawn with the theme's tokens (data-scheme on the mock
    picks its light or dark set, the theme's overrides are inline). */
 .disp-mock {
+  /* A tile's own tokens are inline; without sidebar colors of its own, its
+     sidebar reads its page's. */
+  --sidebar-text: var(--text);
+  --sidebar-text-secondary: var(--text-secondary);
+  --sidebar-text-tertiary: var(--text-tertiary);
   position: relative;
   display: flex;
   width: 100%;

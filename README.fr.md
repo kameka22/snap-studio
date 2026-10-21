@@ -199,13 +199,14 @@ La vérification se désactive dans Réglages → Préparer.
 
 ### 🌓 Affichage
 
-Réglages → Affichage : clair, sombre ou comme le système ; onze thèmes,
+Réglages → Affichage : clair, sombre ou comme le système ; dix thèmes,
 chacun en version claire et sombre avec un aperçu en direct — Snap Studio,
-Snapmaker Space, Contraste élevé, Graphite, Nuit profonde, Studio clair,
-Nord, Solarized, Daltonien (les états ne se distinguent jamais par le seul
-rouge / vert), Filament (l'accent prend la couleur de la bobine sur T0) et
-macOS (une mise en page façon Tahoe, en verre) — et la couleur d'accent :
-celle du thème, du système, une couleur prédéfinie ou la vôtre.
+Snapmaker Space (barre latérale bleu nuit), Contraste élevé, Graphite, Nuit
+profonde, Papier, Nord, Solarized, Filament (l'app prend la couleur de la
+bobine sur T0) et macOS (une mise en page façon Tahoe, en verre) ; la
+couleur d'accent : celle du thème, du système, une couleur prédéfinie ou la
+vôtre ; et des couleurs adaptées au daltonisme, avec tous les thèmes (les
+états ne se distinguent jamais par le seul rouge / vert).
 
 ## Télécharger
 

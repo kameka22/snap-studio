@@ -23,7 +23,10 @@ assert.ok(!/prefers-color-scheme/.test(css), "style.css follows data-scheme, not
 // Settings are normalised.
 assert.deepStrictEqual(T.displayNormalize(null), T.DISPLAY_DEFAULT);
 assert.deepStrictEqual(T.displayNormalize({ mode: "dim", theme: "nope", accent: "javascript:x" }), T.DISPLAY_DEFAULT);
-assert.deepStrictEqual(T.displayNormalize({ mode: "dark", theme: "space", accent: "#A1B2C3" }), { mode: "dark", theme: "space", accent: "#a1b2c3" });
+assert.deepStrictEqual(T.displayNormalize({ mode: "dark", theme: "space", accent: "#A1B2C3" }), { mode: "dark", theme: "space", accent: "#a1b2c3", cvd: false });
+// Colour-blind safe was a theme: kept as the option, over Snap Studio.
+assert.deepStrictEqual(T.displayNormalize({ theme: "cvd" }), { ...T.DISPLAY_DEFAULT, cvd: true });
+assert.strictEqual(T.displayNormalize({ theme: "nord", cvd: "yes" }).cvd, false, "only true");
 assert.deepStrictEqual(T.displayNormalize({ accent: "green" }).accent, "green");
 assert.strictEqual(T.displayNormalize({ accent: "#fff" }).accent, "theme", "only #rrggbb");
 
@@ -47,7 +50,7 @@ assert.deepStrictEqual(T.displayTokens(S({}), "light"), {});
 assert.deepStrictEqual(T.displayTokens(S({}), "dark"), {});
 assert.deepStrictEqual(T.displayTokens(S({ accent: "red" }), "light"), { "--accent": "#ff3b30" });
 const space = T.displayTokens(S({ theme: "space" }), "dark");
-assert.strictEqual(space["--content-bg"], "#171717");
+assert.strictEqual(space["--content-bg"], "#101828");
 assert.strictEqual(space["--accent"], "#3d8bff");
 
 // Every token a theme writes exists in style.css (no typo silently ignored).
@@ -58,13 +61,13 @@ for (const t of T.THEMES) {
   }
 }
 assert.deepStrictEqual(T.THEMES.map((t) => t.id), [
-  "studio", "space", "contrast", "graphite", "night", "studiolight", "nord", "solarized", "filament", "cvd", "macos",
+  "studio", "space", "contrast", "graphite", "night", "studiolight", "nord", "solarized", "filament", "macos",
 ]);
 // Each theme gives both modes (a token left out takes Snap Studio's value
 // for that mode).
 for (const t of T.THEMES) {
   assert.ok(t.tokens.light && t.tokens.dark, `${t.id}: light and dark`);
-  if (t.id !== "studio" && t.id !== "cvd" && t.id !== "macos" && t.id !== "contrast") {
+  if (t.id !== "studio" && t.id !== "macos" && t.id !== "contrast") {
     assert.ok(t.tokens.light["--content-bg"] && t.tokens.dark["--content-bg"], `${t.id}: own surfaces in both modes`);
   }
   if (t.accent) assert.ok(t.accent.light && t.accent.dark, `${t.id}: accent per mode`);
@@ -116,7 +119,9 @@ const opaque = (c, bg) => {
   assert.ok(p, `color ${c}`);
   return p[3] < 1 ? T.blendOver(p, bg) : p;
 };
-const SAME_AS_STUDIO = new Set(["studio", "cvd"]);
+const SAME_AS_STUDIO = new Set(["studio"]);
+// Sidebar text: the theme's own (a dark sidebar), else the page's.
+const sideTok = (tok, k) => (/^var\(/.test(tok[`--sidebar-${k}`] || "var(") ? tok[`--${k}`] : tok[`--sidebar-${k}`]);
 for (const t of T.THEMES) {
   for (const mode of ["light", "dark"]) {
     const tok = { ...(mode === "dark" ? DARK : LIGHT), ...t.tokens[mode] };
@@ -142,8 +147,8 @@ for (const t of T.THEMES) {
     // The sidebar (opaque outside macOS) reads as well as the page.
     if (!SAME_AS_STUDIO.has(t.id)) {
       const side = opaque(tok["--sidebar-opaque"], [0, 0, 0, 1]);
-      assert.ok(T.contrastRatio(opaque(tok["--text"], side), side) >= 7, `${t.id}/${mode}: text on sidebar`);
-      assert.ok(T.contrastRatio(opaque(tok["--text-secondary"], side), side) >= 4.5, `${t.id}/${mode}: secondary on sidebar`);
+      assert.ok(T.contrastRatio(opaque(sideTok(tok, "text"), side), side) >= 7, `${t.id}/${mode}: text on sidebar`);
+      assert.ok(T.contrastRatio(opaque(sideTok(tok, "text-secondary"), side), side) >= 4.5, `${t.id}/${mode}: secondary on sidebar`);
     }
     // Glass panels: the sheet color at --glass-mix over a mid-grey scene
     // (the Prepare view behind) keeps the text readable.
@@ -175,7 +180,7 @@ const hue = (c) => {
   return (h * 60 + 360) % 360;
 };
 for (const mode of ["light", "dark"]) {
-  const k = T.themeById("cvd").tokens[mode];
+  const k = T.CVD_TOKENS[mode];
   for (const n of ["--danger", "--success", "--success-text"]) {
     const h = hue(k[n]);
     assert.ok(!(h < 20 || h > 345) && !(h > 75 && h < 165), `cvd/${mode} ${n} is neither red nor green (${h.toFixed(0)}°)`);
@@ -186,6 +191,63 @@ for (const mode of ["light", "dark"]) {
     assert.ok(Math.min(d, 360 - d) >= 60, `cvd/${mode}: states apart`);
   }
 }
+// Colour-blind safe is an option over every theme: its states stay
+// readable on each theme's surfaces.
+for (const t of T.THEMES) {
+  for (const mode of ["light", "dark"]) {
+    const tok = { ...(mode === "dark" ? DARK : LIGHT), ...T.displayTokens(S({ theme: t.id, cvd: true }), mode) };
+    for (const k of Object.keys(T.CVD_TOKENS[mode])) assert.strictEqual(tok[k], T.CVD_TOKENS[mode][k], `${t.id}/${mode}: cvd ${k} wins`);
+    for (const surface of ["--content-bg", "--card-bg", "--sheet-bg"]) {
+      const bg = opaque(tok[surface], opaque(tok["--content-bg"], [0, 0, 0, 1]));
+      for (const k of ["--danger", "--success-text", "--warning-text"]) {
+        const r = T.contrastRatio(opaque(tok[k], bg), bg);
+        assert.ok(r >= 3, `${t.id}/${mode} cvd on ${surface}: ${k} ${r.toFixed(2)}`);
+      }
+    }
+  }
+}
+assert.deepStrictEqual(T.displayTokens(S({ cvd: true }), "light"), T.CVD_TOKENS.light);
+
+// Filament tints its surfaces with the spool (the sidebar more than the
+// page); text stays readable whatever the spool.
+const filTok = T.displayTokens(S({ theme: "filament" }), "light", "#ff0000");
+assert.notStrictEqual(filTok["--content-bg"], fil.tokens.light["--content-bg"], "page tinted");
+assert.ok(/^rgba\(/.test(filTok["--sidebar-bg"]), "translucent sidebar keeps its alpha");
+assert.deepStrictEqual(T.filamentTint(fil.tokens.light, null), {}, "no spool: no tint");
+const shift = (k) => {
+  const a = T.parseColor(fil.tokens.light[k]), b = T.parseColor(filTok[k]);
+  return Math.abs(a[0] - b[0]);
+};
+assert.ok(shift("--sidebar-opaque") > shift("--content-bg"), "the sidebar takes more of it");
+for (const mode of ["light", "dark"]) {
+  for (const spool of ["#ff0000", "#00aa00", "#0000ff", "#000000", "#ffffff", "#fff200", "#8b00ff"]) {
+    const tok = { ...(mode === "dark" ? DARK : LIGHT), ...T.displayTokens(S({ theme: "filament" }), mode, spool) };
+    for (const surface of ["--content-bg", "--card-bg", "--sheet-bg", "--sidebar-opaque"]) {
+      const bg = opaque(tok[surface], [0, 0, 0, 1]);
+      assert.ok(T.contrastRatio(opaque(tok["--text"], bg), bg) >= 7, `filament ${spool}/${mode}: text on ${surface}`);
+      assert.ok(T.contrastRatio(opaque(tok["--text-secondary"], bg), bg) >= 4.5, `filament ${spool}/${mode}: secondary on ${surface}`);
+    }
+  }
+}
+
+// No two themes look alike: in each mode, the page, the sidebar and the
+// accent together differ enough (Snap Studio's accent: the macOS blue).
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+for (const mode of ["light", "dark"]) {
+  const look = (t) => {
+    const tok = { ...(mode === "dark" ? DARK : LIGHT), ...t.tokens[mode] };
+    return ["--content-bg", "--sidebar-opaque"].map((k) => opaque(tok[k], [0, 0, 0, 1])).concat([T.parseColor(t.accent?.[mode] || "#007aff")]);
+  };
+  const ts = T.THEMES.filter((t) => t.id !== "macos");
+  for (let i = 0; i < ts.length; i++) {
+    for (let j = i + 1; j < ts.length; j++) {
+      const [a, b] = [look(ts[i]), look(ts[j])];
+      const d = a.reduce((sum, c, n) => sum + dist(c, b[n]), 0);
+      assert.ok(d >= 60, `${ts[i].id} and ${ts[j].id} look alike in ${mode} (${d.toFixed(0)})`);
+    }
+  }
+}
+
 // The macOS theme rounds cards and controls through the radius tokens
 // only, and its glass falls back to the defaults elsewhere.
 assert.ok("--radius-card" in LIGHT && "--glass-blur" in LIGHT);
