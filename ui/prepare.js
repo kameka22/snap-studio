@@ -1270,6 +1270,10 @@ function prBindField(id) {
   range.addEventListener(
     "wheel",
     (e) => {
+      // Only a slider in use (focused, after a click or Tab) takes the
+      // wheel: passing over one while scrolling the inspector changes
+      // nothing.
+      if (document.activeElement !== range) return;
       e.preventDefault();
       // ⇧ turns a mouse wheel horizontal on macOS.
       const d = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * (e.deltaMode === 1 ? 40 : 1);

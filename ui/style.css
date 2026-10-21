@@ -201,6 +201,9 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 }
 .tb-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .tb-title h1 {
+  /* A short title stays whole ("Plate"); the subtitle gives way first. */
+  flex-shrink: 0;
+  max-width: 40vw;
   margin: 0;
   font-size: 15px;
   font-weight: 700;
@@ -210,6 +213,9 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   text-overflow: ellipsis;
 }
 #tb-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -2249,7 +2255,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   box-shadow: var(--sheet-shadow);
   overflow: hidden;
 }
-.p-objects { left: 12px; width: 272px; }
+/* Wide enough for "Color 1" beside the four head tokens. */
+.p-objects { left: 12px; width: 300px; }
 .p-insp { right: 12px; width: 300px; }
 .p-float-head {
   flex: none;
@@ -2389,7 +2396,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .p-obj.on .p-tw { color: var(--accent-text); }
 .p-dots { display: flex; gap: 3px; flex: none; }
 .p-dots i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); }
-.p-color { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 28px; border-top: 1px solid var(--separator); }
+.p-color { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 22px; border-top: 1px solid var(--separator); }
 .p-sw { width: 12px; height: 12px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); flex: none; }
 .p-color-lbl { flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-toks { display: flex; gap: 3px; flex: none; }

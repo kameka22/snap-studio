@@ -56,6 +56,12 @@ assert.strictEqual(L.plNudge("rot", 15, -1, true, bed), 0);
 assert.strictEqual(L.plNudge("rot", 180, 1, false, bed), -179, "rotation wraps");
 assert.strictEqual(L.plNudge("rot", -180, -1, true, bed), 165);
 assert.strictEqual(L.plNudge("scale", 400, 1, false, bed), 400);
+// A value beyond the bounds takes the step, not the bound.
+assert.strictEqual(L.plNudge("scale", 500, -1, false, bed), 499, "typed above 400 %");
+assert.strictEqual(L.plNudge("scale", 2540, 1, false, bed), 2541, "inch model converted to mm");
+assert.strictEqual(L.plNudge("scale", 5, -1, false, bed), 4, "below 10 %");
+assert.strictEqual(L.plNudge("scale", 1, -1, false, bed), 1, "never below 1 %");
+assert.strictEqual(L.plNudge("pos", 320, 1, false, bed, 0), 321, "parked beside the bed: not thrown back");
 assert.strictEqual(L.plNudge("scale", 10, -1, true, bed), 10);
 assert.strictEqual(L.plNudge("scale", 100, 1, true, bed), 110);
 assert.strictEqual(L.plWrapDeg(270), -90);

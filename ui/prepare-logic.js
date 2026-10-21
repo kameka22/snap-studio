@@ -57,13 +57,16 @@ const plWrapDeg = (a) => {
 
 /* One wheel / arrow step from `v` (dir = +1 or -1): a rotation wraps
    around, the others stay within the slider's bounds. A coarse rotation
-   step lands on the 15 degree notches. */
+   step lands on the 15 degree notches. A value already beyond the bounds
+   (a scale typed at 2540 %, an object parked beside the bed) just takes
+   the step: clamping it would throw it back to the bound in one notch. */
 function plNudge(kind, v, dir, coarse, bed, axis = 0) {
   const r = plRange(kind, bed, axis);
   const s = coarse ? r.coarse : r.fine;
   let x = coarse ? (dir > 0 ? Math.floor(v / s + 1e-9) + 1 : Math.ceil(v / s - 1e-9) - 1) * s : v + dir * s;
   x = Math.round(x * 100) / 100;
   if (kind === "rot") return plWrapDeg(x);
+  if (v < r.min || v > r.max) return kind === "scale" ? Math.max(1, x) : x;
   return Math.min(r.max, Math.max(r.min, x));
 }
 
