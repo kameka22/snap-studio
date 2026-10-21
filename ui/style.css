@@ -3715,7 +3715,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .bm-more > summary:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 .bm-more .bm-trend-card { margin-top: 6px; }
 /* The assistant: steps, checklist, phases, verdict. */
-.bm-wiz { width: 480px; }
+/* Wide enough for the six steps of a U1 measurement on one line. */
+.bm-wiz { width: min(620px, 92vw); }
 .bm-wiz .grow-row .k .sub, .bm-sheet .grow-row .k .sub { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; margin-top: 1px; }
 .bm-steps { display: flex; gap: 6px; margin: 4px 0 14px; padding: 0; list-style: none; counter-reset: bm-step; }
 .bm-steps li { flex: 1; display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-tertiary); counter-increment: bm-step; }
