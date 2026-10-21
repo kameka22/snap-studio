@@ -59,8 +59,9 @@ const swatch = (color) =>
 
 /* ------------------------------------------------------------ opening */
 
-/* Slicing works on the Prepare view's plate. */
-async function openSlice() {
+/* Slicing works on the Prepare view's plate. `replaces`: a queued print
+   brought back to Prepare, removed from the queue once this slice is sent. */
+async function openSlice({ replaces = null } = {}) {
   // A plate from an older version may still be reading its colors: each one
   // needs a head, or the engine gets it on T0.
   if (typeof prRefreshColors === "function") await prRefreshColors();
@@ -68,6 +69,7 @@ async function openSlice() {
   if (!scene) return;
   SL.source = scene;
   SL.job = null;
+  SL.replaces = replaces;
   SL.touched = new Set();
   slFileLine();
   setSliceMessage("");
@@ -249,6 +251,7 @@ async function onMachineChange(mem) {
     renderHeads(m.filaments || (m.filament ? [m.filament] : null), false);
     renderModelMap(false);
     await loadDefaults(m.simple);
+    spdLoad(m.speed);
     advLoad(m.adv);
   } catch (e) {
     setSliceMessage(String(e), "err");
@@ -284,7 +287,7 @@ function bestFilament(slot, list) {
   return best?.name || null;
 }
 
-/* One row per head: real spool (if known) and filament preset. */
+/* One card per head: real spool (if known) and filament preset. */
 function renderHeads(saved, fromPrinter) {
   const list = SL.lists?.filaments || [];
   const fallback = SL.lists?.selected?.filament || list[0]?.name;
@@ -304,15 +307,15 @@ function renderHeads(saved, fromPrinter) {
       ? slot.vendor || (auto ? "" : tr("slice.no_preset", { kind: slot.kind || "" }))
       : tr(slot ? "slice.no_spool" : "slice.spool_unknown");
     const color = present && slot.color ? slot.color : null;
+    // Compact card, two per row: swatch, head and material; vendor and
+    // temperature; profile.
     rows.push(`<div class="sl-headcard${slot && !present ? " is-empty" : ""}" data-card="${i}">
-      <div class="sl-spool${color ? "" : " none"}"${color ? ` style="--c:${esc(color)}"` : ""}></div>
-      <div class="sl-hc-top"><b>T${i}</b><span>${esc(kind)}</span></div>
-      <small class="sl-hc-sub${present && !auto ? " warn" : ""}">${esc(sub)}</small>
+      <div class="sl-hc-top"><div class="sl-spool${color ? "" : " none"}"${color ? ` style="--c:${esc(color)}"` : ""}></div><b>T${i}</b><span title="${esc(kind)}">${esc(kind)}</span></div>
+      <div class="sl-hc-meta"><small class="sl-hc-sub${present && !auto ? " warn" : ""}" title="${esc(sub)}">${esc(sub)}</small><small class="sl-hc-temp" data-temp="${i}"></small></div>
       <select class="hidden" data-head="${i}" tabindex="-1">${list
         .map((p) => `<option value="${esc(p.name)}"${p.name === chosen ? " selected" : ""}>${esc(p.name)}</option>`)
         .join("")}</select>
       <span class="sel-row"><button class="sl-hc-preset" data-pick-head="${i}" title="${esc(tr("slice.change_filament"))}"></button><button class="btn info-btn" data-info="head" data-head="${i}" title="${esc(tr("slice.profile_details"))}">${INFO_ICON}</button></span>
-      <small class="sl-hc-temp" data-temp="${i}"></small>
     </div>`);
   }
   $("s-heads").innerHTML = rows.join("");
@@ -464,12 +467,15 @@ function slSummary() {
     $("s-layer-val").textContent,
     tr("slice.sum.infill", { v: $("s-infill-val").textContent }),
     tr("slice.sum.walls", { v: $("s-walls-val").textContent }),
+    typeof spdSummary === "function" && spdSummary(),
     $("s-supports").checked && [tr("slice.sum.supports"), heads?.supports].filter(Boolean).join(" "),
     $("s-brim").checked && tr("slice.sum.brim"),
     heads?.others,
     typeof advCount === "function" && advCount() && tr("slice.sum.adv", { n: advCount() }),
   ].filter(Boolean);
-  $("s-summary").innerHTML = parts.map((p) => `<span>${esc(p)}</span>`).join("");
+  $("s-summary").innerHTML = parts
+    .map((p) => (typeof p === "object" ? `<span class="${esc(p.cls)}">${esc(p.text)}</span>` : `<span>${esc(p)}</span>`))
+    .join("");
 }
 
 /* Adjustments touched by hand: they survive a profile change. */
@@ -525,7 +531,7 @@ function showSliceBusy(busy) {
   $("s-cancel").classList.toggle("hidden", busy);
   $("s-stop").classList.toggle("hidden", !busy);
   document
-    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-cols button:not(.info-btn)")
+    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn)")
     .forEach((el) => (el.disabled = busy));
   if (busy) closePicker();
   // Unlocked: the chips of empty heads must stay inactive.
@@ -557,9 +563,12 @@ async function startSlice() {
     return slot?.present && slot.color ? slot.color : null;
   });
 
+  // The profile's values the Speed adjustment works from must be this
+  // profile's.
+  await ADV.ready?.catch(() => {});
   const simple = currentSimple();
   const bed = $("s-bed").value;
-  remember(machine, { process, filaments, simple, bed, adv: SL.adv || {} });
+  remember(machine, { process, filaments, simple, bed, adv: SL.adv || {}, speed: SL.speed });
   const printer = currentPrinter();
   rememberPrinter(printer?.id || "");
   if (printer) {
@@ -574,11 +583,14 @@ async function startSlice() {
     SL.job = await invoke("slice_start", {
       request: {
         source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
-        overrides: { ...advOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
+        overrides: { ...advOverrides(), ...spdOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";
-    SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel };
+    // The plate's objects go with the print: the spool check can bring a
+    // queued print back to Prepare.
+    const plate = typeof prPlateOf === "function" ? prPlateOf(SL.source.items.map((it) => it.id)) : [];
+    SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel, plate };
   } catch (e) {
     showSliceBusy(false);
     setSliceProgress(null);
@@ -640,7 +652,7 @@ function stopElapsed() {
 
 function showPreview(job, p) {
   const req = SL.request || { filaments: [], colors: [] };
-  SL.preview = { job, source: SL.source, gcode: p.gcode, stats: p.stats || {}, printer: req.printer, saved: null };
+  SL.preview = { job, source: SL.source, gcode: p.gcode, stats: p.stats || {}, printer: req.printer, saved: null, replaces: SL.replaces };
   const toolColors = req.filaments.map((_, i) => hexToRgb(req.colors[i]));
   const toolNames = req.filaments.map((name) => name.replace(/\s*@.*$/, ""));
   openPreview({
@@ -651,17 +663,23 @@ function showPreview(job, p) {
     toolNames,
     onSend: openSend,
     onSave: savePreview,
-    onEdit: () => {
-      closeViewer();
-      switchView("prepare");
-      openSlice();
-    },
+    onEdit: () => editInPrepare(),
     // Closing the preview deletes it: what was saved stays.
     onClose: () => {
       if (SL.preview) invoke("slice_discard", { id: SL.preview.job }).catch(() => {});
       SL.preview = null;
     },
   });
+}
+
+/* Back to the plate this preview was sliced from, Slice sheet open. A
+   printer given: its spools are those read for the slice. */
+function editInPrepare(printerId) {
+  const replaces = SL.preview?.replaces || null;
+  closeViewer();
+  switchView("prepare");
+  if (printerId) rememberPrinter(printerId);
+  openSlice({ replaces });
 }
 
 async function savePreview() {
@@ -682,16 +700,15 @@ async function savePreview() {
 async function openSend() {
   const pv = SL.preview;
   if (!pv) return;
+  SL.remote = null;
   if (!SL.printers.length) SL.printers = await invoke("printers_list").catch(() => []);
   if (!SL.printers.length) {
     toast(tr("send.no_printer"), true);
     return;
   }
   $("snd-file").textContent = pv.source.name + (pv.stats.print_time_s ? " · " + fmtDuration(pv.stats.print_time_s) : "");
-  $("snd-printer").innerHTML = SL.printers
-    .map((p) => `<option value="${esc(p.id)}">${esc(p.name || p.host)}</option>`)
-    .join("");
-  $("snd-printer").value = SL.printers.some((p) => p.id === pv.printer) ? pv.printer : SL.printers[0].id;
+  SL.sendPid = SL.printers.some((p) => p.id === pv.printer) ? pv.printer : SL.printers[0].id;
+  renderSendPrinters();
   // Options always unticked on opening, as requested.
   ["snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).checked = false));
   setSendBusy(false);
@@ -701,7 +718,50 @@ async function openSend() {
   checkSendPrinter();
 }
 
-const sendPrinter = () => SL.printers.find((p) => p.id === $("snd-printer").value);
+/* The same sheet for a file already on a printer (its Files view). Start
+   it there, queue it, or print it on another printer: `printer` holds the
+   file, chosen by default. `file`: a RemoteFile. */
+async function openSendRemote(printer, file, thumb) {
+  SL.printers = await invoke("printers_list").catch(() => SL.printers);
+  if (!SL.printers.some((p) => p.id === printer.id)) SL.printers = [printer, ...SL.printers];
+  SL.remote = { printer, file, thumb, stats: pflSendStats(file.meta) };
+  const st = SL.remote.stats;
+  // The metadata does not say which heads the file uses: the G-code is
+  // read before anything is checked or sent (a multi-color file must not
+  // be prepared as a single-color one).
+  if (!file.meta?.tools_known) {
+    const remote = SL.remote;
+    remote.toolsReady = invoke("pf_tools", { printerId: printer.id, path: file.path, modified: file.modified || 0 })
+      .then((tools) => {
+        if (tools?.length) remote.stats.tools = tools;
+        if (SL.remote === remote && !$("sendmodal").classList.contains("hidden")) checkSendPrinter();
+      })
+      .catch(() => {});
+  }
+  $("snd-file").textContent = pflName(file.path) + (st.print_time_s ? " · " + fmtDuration(st.print_time_s) : "");
+  SL.sendPid = printer.id;
+  renderSendPrinters();
+  ["snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).checked = false));
+  setSendBusy(false);
+  setSendMessage("");
+  setSendProgress(null);
+  openSheet($("sendmodal"));
+  checkSendPrinter();
+}
+
+const sendPrinter = () => SL.printers.find((p) => p.id === SL.sendPid);
+
+/* The printer picker: the print queue's chips. */
+function renderSendPrinters() {
+  $("snd-printer").innerHTML = printerChips(SL.printers, SL.sendPid, !!SL.sending);
+}
+function setSendPrinter(id) {
+  if (!id || id === SL.sendPid || SL.sending) return;
+  SL.sendPid = id;
+  renderSendPrinters();
+  checkSendPrinter();
+}
+const sendStats = () => (SL.remote ? SL.remote.stats : SL.preview?.stats);
 
 /* Printer free: start, or queue. Busy or unreachable: only the queue. */
 function setSendMode(mode) {
@@ -714,6 +774,8 @@ function setSendMode(mode) {
 async function checkSendPrinter() {
   const p = sendPrinter();
   const el = $("snd-state");
+  // The bed out of tolerance: a discreet banner (Care & Tuning › Bed Leveling).
+  if (typeof bmSendBanner === "function") bmSendBanner(p?.id);
   $("snd-go").disabled = true;
   setSendMode("launch");
   $("snd-queue").classList.add("hidden");
@@ -722,6 +784,9 @@ async function checkSendPrinter() {
   el.textContent = tr("send.querying");
   const st = await invoke("printer_status", { host: p.host, port: p.port }).catch(() => null);
   if (sendPrinter() !== p) return;
+  // The chip shows the state just read.
+  SL.pstate = { ...(SL.pstate || {}), [p.id]: st?.online ? st.state : "offline" };
+  renderSendPrinters();
   if (!st || !st.online) {
     el.className = "pf-test err";
     el.textContent = tr("send.no_answer", { name: p.name });
@@ -738,13 +803,14 @@ async function checkSendPrinter() {
     return;
   }
   // G-code heads with no spool on this machine: to flag before sending.
-  const tools = SL.preview?.stats?.tools || [];
+  const tools = sendStats()?.tools || [];
   const missing = tools.filter((t) => (st.filaments || []).some((f) => f.index === t && !f.present));
   el.className = "pf-test" + (missing.length ? " err" : " ok");
   el.textContent = missing.length
     ? tr("send.missing", { heads: missing.map((t) => "T" + t).join(", "), name: p.name })
     : tr("send.ready", { name: p.name });
-  $("snd-go").disabled = missing.length > 0;
+  // With the spool check, another loaded spool can stand in for an empty head.
+  $("snd-go").disabled = missing.length > 0 && !spEnabled();
   setSendMode("launch");
 }
 
@@ -764,23 +830,52 @@ function setSendBusy(busy) {
   if (busy) $("snd-queue").classList.add("hidden");
   else if (SL.sendMode) setSendMode(SL.sendMode);
   $("snd-cancel").classList.toggle("hidden", busy);
-  ["snd-printer", "snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).disabled = busy));
+  ["snd-level", "snd-flow", "snd-timelapse"].forEach((id) => ($(id).disabled = busy));
+  renderSendPrinters();
 }
 
 async function sendPrint(queue = SL.sendMode === "queue") {
+  if (SL.remote) return sendRemote(queue);
   const pv = SL.preview, p = sendPrinter();
   if (!pv || !p || (!queue && $("snd-go").disabled)) return;
+  const r = SL.request || {};
+  const tools = pv.stats.tools?.length ? pv.stats.tools : [0];
+  // Spools checked when the print starts now; a queued job is checked when
+  // it starts from the queue.
+  let map = [];
+  if (!queue) {
+    if (SL.checking) return;
+    SL.checking = true;
+    // The plate is still the one in Prepare: it can be sliced again there.
+    const print = { thumb: thumbSrc(pv.gcode, 240, 0), name: pv.source.name, printer: p.name || p.host };
+    let ok;
+    try {
+      ok = await spCheckBeforeStart(p, { tools, profile: r, stats: pv.stats, canEdit: true, print });
+    } catch (e) {
+      setSendMessage(String(e.message || e), "err");
+      return;
+    } finally {
+      SL.checking = false;
+    }
+    if (!ok) return;
+    if (ok.edit) {
+      closeSheet($("sendmodal"));
+      editInPrepare(p.id);
+      return;
+    }
+    map = ok.map;
+  }
   setSendBusy(true);
   setSendProgress(queue ? null : 0);
   setSendMessage(tr(queue ? "send.queueing" : "send.preparing"), "busy");
-  const r = SL.request || {};
   try {
     const id = await invoke("print_send", {
       request: {
         printer_id: p.id,
         job: pv.job,
         queue,
-        tools: pv.stats.tools?.length ? pv.stats.tools : [0],
+        tools,
+        map,
         options: {
           bed_leveling: $("snd-level").checked,
           flow_calibration: $("snd-flow").checked,
@@ -793,9 +888,16 @@ async function sendPrint(queue = SL.sendMode === "queue") {
           bed: r.bed || null,
           bed_label: r.bedLabel || null,
           colors: r.colors || [],
+          plate: r.plate?.length ? r.plate : null,
         },
       },
     });
+    // A queued print sliced again: the new one takes its place, if it is
+    // still waiting.
+    if (pv.replaces) {
+      await pjLoad();
+      if (pjQueue().some((j) => j.id === pv.replaces)) await invoke("job_remove", { id: pv.replaces }).catch(() => {});
+    }
     if (!queue) {
       // The printers snapshot may still say "free": the record is designated by
       // the job, not by the printer.
@@ -817,10 +919,74 @@ async function sendPrint(queue = SL.sendMode === "queue") {
   }
 }
 
+/* A file already on a printer: started (after the same spool check),
+   queued, or sent to another printer, as after a slice. */
+async function sendRemote(queue) {
+  const { printer: src, file, stats, thumb } = SL.remote;
+  const p = sendPrinter();
+  if (!p || (!queue && $("snd-go").disabled) || SL.checking) return;
+  if (SL.remote.toolsReady) {
+    SL.checking = true;
+    setSendMessage(tr("pfiles.reading_tools"), "busy");
+    await SL.remote.toolsReady;
+    SL.checking = false;
+    setSendMessage("");
+  }
+  let map = [];
+  if (!queue) {
+    SL.checking = true;
+    let ok;
+    try {
+      ok = await spCheckBeforeStart(p, { tools: stats.tools, profile: {}, stats, canEdit: false, print: { thumb, name: pflName(file.path), printer: p.name || p.host } });
+    } catch (e) {
+      setSendMessage(String(e.message || e), "err");
+      return;
+    } finally {
+      SL.checking = false;
+    }
+    if (!ok) return;
+    map = ok.map || [];
+  }
+  setSendBusy(true);
+  setSendProgress(null);
+  setSendMessage(tr(queue ? "send.queueing" : "send.preparing"), "busy");
+  try {
+    const id = await invoke("pf_print", {
+      request: {
+        source_id: src.id,
+        path: file.path,
+        printer_id: p.id,
+        queue,
+        tools: stats.tools,
+        map,
+        options: {
+          bed_leveling: $("snd-level").checked,
+          flow_calibration: $("snd-flow").checked,
+          timelapse: $("snd-timelapse").checked,
+        },
+      },
+    });
+    await pjLoad();
+    if (!queue) pjShow(id ? "job:" + id : "live:" + p.id);
+    else {
+      setSendBusy(false);
+      closeSheet($("sendmodal"));
+      const pos = pjQueue().findIndex((j) => j.id === id) + 1;
+      toast(tr("send.queued", { name: p.name }) + (pos ? ` (${tr("prints.position", { n: pos })})` : ""));
+      pjShow("job:" + id);
+    }
+  } catch (e) {
+    setSendBusy(false);
+    setSendProgress(null);
+    setSendMessage(String(e), "err");
+  }
+}
+
 listen("print-send", (e) => {
   if (!SL.sending) return;
   const s = e.payload;
   if (s.phase === "check") setSendMessage(tr("send.checking"), "busy");
+  else if (s.phase === "fetch") setSendMessage(tr("send.fetching"), "busy");
   else if (s.phase === "prepare") setSendMessage(tr("send.preparing"), "busy");
   else if (s.phase === "upload") {
     setSendProgress(s.percent);
@@ -831,7 +997,8 @@ listen("print-send", (e) => {
     closeSheet($("sendmodal"));
     toast(tr("send.started", { name: p?.name || tr("slice.printer") }));
     if (s.message) toast(s.message, true);
-    closeViewer();
+    // From a printer's files, the slice preview (if any) stays as it was.
+    if (!SL.remote) closeViewer();
   }
 });
 
@@ -882,11 +1049,13 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !SL.job && e.target.tagName !== "SELECT") startSlice();
 });
 
-$("snd-printer").addEventListener("change", checkSendPrinter);
+$("snd-printer").addEventListener("click", (e) => setSendPrinter(e.target.closest("[data-printer]")?.dataset.printer));
 $("snd-go").addEventListener("click", () => sendPrint());
 $("snd-cancel").addEventListener("click", () => closeSheet($("sendmodal")));
 $("snd-queue").addEventListener("click", () => sendPrint(true));
 document.addEventListener("keydown", (e) => {
   if ($("sendmodal").classList.contains("hidden") || SL.sending) return;
+  // The spool sheet, open on top, keeps its keys.
+  if (!$("spmodal").classList.contains("hidden")) return;
   if (e.key === "Escape") closeSheet($("sendmodal"));
 });

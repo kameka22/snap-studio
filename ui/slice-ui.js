@@ -76,7 +76,7 @@ $("picker-list").addEventListener("click", (e) => {
 });
 $("picker-foot").addEventListener("click", () => PK.foot?.onClick());
 // Anchored to a scrolling element: it closes rather than float elsewhere.
-document.querySelector("#smodal .sl-cols").addEventListener("scroll", () => {
+document.querySelector("#smodal .sl-areas").addEventListener("scroll", () => {
   if (!$("picker").classList.contains("hidden")) closePicker();
 });
 document.addEventListener("mousedown", (e) => {
@@ -115,6 +115,22 @@ function slPrinterStatus(id) {
   if (SL.pstate?.[id]) return SL.pstate[id];
   const live = typeof PJ !== "undefined" ? PJ.live.find((l) => l.printer_id === id) : null;
   return live ? (live.status.online ? live.status.state : "offline") : null;
+}
+
+/* The printer picker of the print queue: one chip per printer with its
+   state, the chosen one ticked. Also the send sheet's (after a slice, or
+   from a printer's files), so that both look and behave the same. */
+function printerChips(list, selected, disabled = false) {
+  return list
+    .map((p) => {
+      const s = slPrinterStatus(p.id);
+      const on = p.id === selected;
+      const away = s === "offline" || s === "error";
+      return `<button type="button" class="sl-pchip${on ? " on" : ""}${away ? " away" : ""}" role="radio" aria-checked="${on}" data-printer="${esc(p.id)}"${disabled ? " disabled" : ""}>
+          <span class="sl-pchip-icon ${esc(s || "")}">${PRINTER_ICON}</span>
+          <span class="sl-pchip-text"><b>${esc(p.name || p.host)}</b><small class="st ${esc(s || "")}">${esc(s ? pstateLabel(s) : "—")}</small></span></button>`;
+    })
+    .join("");
 }
 
 /* Called by the spool reading; `id`: the printer queried. */
@@ -269,7 +285,7 @@ function slHeadLabel(i) {
   btn.disabled = !!empty;
   btn.innerHTML = empty
     ? `<span>${esc(tr("slice.head_unused"))}</span>`
-    : `<span>${esc(sel.value || "—")}</span>${sel.value && sel.value === auto ? '<em>auto</em>' : ""}<i>▾</i>`;
+    : `<span title="${esc(sel.value)}">${esc(sel.value || "—")}</span>${sel.value && sel.value === auto ? '<em>auto</em>' : ""}<i>▾</i>`;
 }
 
 function slPickFilament(i, anchor, all = false) {

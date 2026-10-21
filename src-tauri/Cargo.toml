@@ -1,6 +1,6 @@
 [package]
 name = "snap-studio"
-version = "0.9.0"
+version = "0.12.0"
 edition = "2021"
 description = "Desktop workshop for the Snapmaker U1: files, plate, slicing, printing, AI"
 license = "GPL-3.0-or-later"
@@ -43,6 +43,8 @@ futures-util = { version = "0.3", default-features = false, features = ["sink"] 
 portable-pty = "0.9.0"
 notify = "8.2.0"
 sys-locale = "0.3"
+# QR code of a file shared to a phone on the local network (SVG only).
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 # Library tabs on Linux: their views are placed over the main view in GTK
 # directly (`library::gtk_layer`). Same versions as Tauri's.
@@ -52,6 +54,11 @@ webkit2gtk = "2.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 window-vibrancy = "0.8"
+# Sharing a file: the system's share menu and the file pasteboard. Same
+# versions as Tauri's, only the classes used.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSGeometry", "NSString", "NSURL", "NSObject"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard", "NSResponder", "NSSharingService", "NSView", "NSWindow"] }
 
 [profile.release]
 opt-level = 3

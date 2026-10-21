@@ -528,6 +528,33 @@ mod tests {
         assert!((zmax - 20.0).abs() < 1e-3, "scale 2: {zmax}");
     }
 
+    /// A scale per axis is applied in the object's own frame, before its
+    /// rotation (as the Prepare view draws it).
+    #[test]
+    fn placing_honors_a_scale_per_axis() {
+        let mut t = cube(-5.0, 10.0);
+        let it = SceneItem {
+            path: String::new(),
+            item: 0,
+            name: "c".into(),
+            pos: [100.0, 50.0],
+            rot: [0.0, 0.0, 90.0],
+            scale: [2.0, 1.0, 0.5],
+            extruder_map: vec![],
+            piece: None,
+        };
+        place(&mut t, &it);
+        let span = |k: usize| {
+            let lo = t.iter().flat_map(|t| t.v).map(|v| v[k]).fold(f32::MAX, f32::min);
+            let hi = t.iter().flat_map(|t| t.v).map(|v| v[k]).fold(f32::MIN, f32::max);
+            hi - lo
+        };
+        // Turned 90° around Z: the object's X (×2) lies along Y.
+        assert!((span(0) - 10.0).abs() < 1e-3, "x: {}", span(0));
+        assert!((span(1) - 20.0).abs() < 1e-3, "y: {}", span(1));
+        assert!((span(2) - 5.0).abs() < 1e-3, "z: {}", span(2));
+    }
+
     /// A file of two objects, one on the plate, the other far away (a second
     /// plate): the second is left out, the first written in place.
     #[test]

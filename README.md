@@ -13,7 +13,7 @@
 
 [**Download**](https://github.com/kameka22/snap-studio/releases/latest) ·
 [Features](#features) · [AI](#design-with-ai) · [FAQ](#faq) ·
-[Contributing](CONTRIBUTING.md)
+[Changelog](CHANGELOG.md) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md)
 
 **English** · [Français](README.fr.md)
 
@@ -26,7 +26,8 @@
 - **The whole way in one app** — find a model, prepare the plate, slice
   with the Snapmaker Orca engine, send it, follow it on the camera.
 - **Made for the U1's four heads** — the spools loaded on the printer are
-  read, the colors of a multicolor model are mapped to the heads.
+  read, the colors of a multicolor model are mapped to the heads, and checked
+  again before a print starts.
 - **Design with AI** — describe a change or a new part; Claude models it,
   you watch it take shape in 3D, version by version.
 
@@ -41,9 +42,11 @@ and layer-by-layer G-code toolpaths.
 <td width="50%" valign="top">
 
 ### 🧩 Prepare
-The U1 plate as in Orca: move, rotate, scale, duplicate, lay on face,
-auto-orient, auto-arrange, undo — then slice. Each object lists its
-colors, painted ones included, and sends each to the head you pick.
+The U1 plate as in Orca: move, rotate, scale (per axis too) with sliders,
+duplicate, lay on face, auto-orient, auto-arrange, undo — then slice.
+Objects can be set aside off the plate (not sliced) and put back in a
+click. Each object lists its colors, painted ones included, and sends each
+to the head you pick.
 
 <img src="docs/screenshots/prepare.png" alt="Prepare" />
 
@@ -53,7 +56,8 @@ colors, painted ones included, and sends each to the head you pick.
 ### ✦ AI
 Claude modifies a part or creates one from a description, in a chat with a
 live 3D preview and every version kept. Results are multicolor 3MF files
-that slice as they are.
+that slice as they are. Conversations can be searched, pinned, renamed,
+duplicated; see [Design with AI](#design-with-ai).
 
 <img src="docs/screenshots/ai-chat.png" alt="An AI conversation" />
 
@@ -64,8 +68,8 @@ that slice as they are.
 
 ### 🖨 Printers
 Found on the network on their own; live state, the four heads'
-temperatures, the spools loaded in each, and their [maintenance](#-maintenance).
-Works with any Klipper printer.
+temperatures, the spools loaded in each, their [files and timelapses](#-printer-files-and-timelapses)
+and their [care and bed leveling](#-care--tuning). Works with any Klipper printer.
 
 <img src="docs/screenshots/printer.png" alt="Printer and its spools" />
 
@@ -84,7 +88,9 @@ The printer's camera, live, from the printer's page and from each print.
 
 ### ⏱ Prints
 Running prints and a queue: when one ends, Snap Studio offers the next
-(never on its own). Progress, slicing summary, temperatures, pause, cancel.
+(never on its own), on the printer you pick. Progress, slicing summary,
+temperatures, pause, cancel. Before a print starts, the
+[spools are checked](#-spool-check).
 
 <img src="docs/screenshots/print-job.png" alt="A print in progress" />
 
@@ -101,10 +107,11 @@ downloads land in Files; favorites in the sidebar.
 </tr>
 </table>
 
-### 🔧 Maintenance
+### 🔧 Care & Tuning
 
-Each printer has its maintenance view, from what the printer counts and
-Snapmaker's maintenance guide:
+Each printer has its Care & Tuning view, in two tabs.
+
+**Care**, from what the printer counts and Snapmaker's maintenance guide:
 
 - **Usage**: print time, prints, filament used, longest print.
 - **Heads** (U1): tool changes, how far each is from the contacts' cleaning
@@ -122,19 +129,93 @@ Contacts follow Snapmaker's figure; the other intervals are prudent
 defaults, Snapmaker gives none. On another Klipper printer, the view keeps
 usage and the hour-based tasks.
 
-<img src="docs/screenshots/maintenance.png" alt="The maintenance view" />
+<img src="docs/screenshots/maintenance.png" alt="Care &amp; Tuning: maintenance tasks and the heads' counters" />
+
+**Bed Leveling**: the bed's mesh, read from the printer, kept over time.
+
+- One card says how the bed is and the one thing to do: good (compensated
+  by the printer's mesh), to watch, out of tolerance, or measure again.
+  The default limits (0.5 / 1 mm, three levels) suit the U1, whose mesh
+  compensates what is below; it asks for manual leveling only above 2 mm.
+- The surface in 3D or as a map with every point's height; history,
+  trend and the comparison of two measurements.
+- **Measure** with an assistant: the bed confirmed clear (a print that has
+  just ended is pointed out), a temperature proposed from the last print,
+  then each of the U1's steps — heating, the 2 min settle, preheat, the
+  corner check, probing — a clean stop or an emergency stop, and the
+  result against the previous measurement.
+- When the bed asks for attention, its shape is named and shown on the map
+  (a tilted side, a raised corner, a hollow or domed bed, one point apart),
+  with what to do — on a U1, the knobs under the bed and the printer's
+  manual leveling — then "I've fixed it: measure again".
+- A reminder in Care after 30 days or 50 prints, and "Measure first" in
+  the send sheet when the bed is out of tolerance.
+
+### 📂 Printer files and timelapses
+
+Under each printer, **Files** shows what is stored on it, read live:
+
+- **Print files**, as a list or a grid: thumbnail, duration, filament per
+  head, size, the result of their last print; search and sort. **Print** opens
+  the same sheet as after a slice — start it there, queue it, or print it on
+  another printer — and the heads it uses are read from the file itself.
+  Download, rename, delete, several at once; the file being printed is
+  protected.
+- **Timelapses**, played straight from the printer (speed 0.5×–4×, full
+  screen, previous / next), downloaded or deleted.
+- **Share** a file or a video: the macOS share menu (AirDrop, Messages,
+  Mail…), a QR code to download it on your phone on the same Wi-Fi (a local
+  link that stops after 15 minutes or when the sheet closes), the file on the
+  clipboard, or Save As.
+
+<img src="docs/screenshots/printer-files.png" alt="A printer's files, as a grid of thumbnails" />
 
 ### ✂️ Slicing
 
 The Snapmaker Orca engine, downloaded once (about 30 MB) and kept up to
-date by the app: you do not need Snapmaker Orca installed. The U1's four
-heads with the spools read from the printer, each color of each object sent
-to its head, the plate surface (textured PEI, smooth PEI…) and its
-temperature, quality and adjustments, each profile's details as the engine
-gets them; then a toolpath preview with duration, filament and cost, sent to
-the printer — with its picture on the printer's screen — or saved as G-code.
+date by the app: you do not need Snapmaker Orca installed. The slice sheet
+puts the printer, plate and quality on the left, the adjustments on the
+right, the U1's four heads and the model's colors below:
+
+- the spools read from the printer, each color of each object sent to its
+  head, the plate surface (textured PEI, smooth PEI…) and its temperature;
+- infill, walls, supports, brim, seam, Orca's advanced settings, and saving
+  them as a custom profile;
+- **Speed**: one slider from 50 % to 120 % of the profile (speeds × f,
+  accelerations × f²), with a ⚙ panel showing each value, profile →
+  computed; at 100 % the G-code is the profile's;
+- each profile's details as the engine gets them.
+
+Then a toolpath preview with duration, filament and cost, sent to the
+printer — with its picture on the printer's screen — or saved as G-code.
 
 <img src="docs/screenshots/slicing.png" alt="The slice sheet" />
+
+### 🎨 Spool check
+
+Before a print starts — sent after a slice, started from the queue or from a
+printer's files — each color of the model is compared with the spool loaded
+on its head (material, and color as the eye sees it). When they differ, a
+sheet shows one row per color with the heads you can print it with:
+
+- pick another head, and that color is printed from it — for this print
+  only, through the printer's extruder map, the G-code is not rewritten;
+- or **Edit in Prepare**: the plate comes back with the slice sheet open on
+  the spools loaded now.
+
+The check can be turned off in Settings → Prepare.
+
+### 🌓 Display
+
+Settings → Display: light, dark or as the system; ten themes, each with a
+light and a dark version and a live preview — Snap Studio, Snapmaker Space
+(navy sidebar), High contrast, Graphite, Deep Night, Paper, Nord,
+Solarized, Filament (the app takes the color of the spool on T0) and macOS
+(a Tahoe-style layout in glass); the accent color: the theme's, the
+system's, a preset or your own; and color-blind safe colors over any theme
+(states never told apart by red and green alone).
+
+<img src="docs/screenshots/display.png" alt="Settings › Display: appearance and the ten themes" />
 
 ## Download
 
@@ -149,6 +230,8 @@ The packages are not signed by Apple or Microsoft yet. First launch on
 macOS: right-click → Open (or
 `xattr -dr com.apple.quarantine "/Applications/Snap Studio.app"`); on
 Windows: "More info" → "Run anyway".
+
+What each version brought: [CHANGELOG.md](CHANGELOG.md).
 
 A **welcome assistant** sets everything up: language, models folder, the
 printer on your network, the slicing engine and the AI. Afterwards **the
@@ -169,7 +252,22 @@ opens once everything is ready.
 | A running container engine: Docker (or OrbStack), Podman, or Apple `container` | ✓ | |
 | Python 3 with `trimesh`, `manifold3d`, `numpy` | | ✓ |
 
+**A conversation**, from a file ("Edit with AI" in Files) or from scratch:
+describe what you want — ideas are offered — choose where it runs and the
+Claude model. The 3D preview and the chat sit side by side: every version
+Claude exports is kept, measured (size, weight, watertight) and can be shown
+again; **Save** puts the version shown in your files, **Slice** sends it to
+Prepare. **Stop Claude** (or Esc) interrupts an answer; the **Terminal** tab
+shows the same session as a terminal does, live.
+
+**The list** of conversations: search, filters, groups by date, pins,
+rename, duplicate (same files, a fresh Claude session). **Delete** removes the
+conversation's folder and Claude's own files for that session — never your
+saved 3MF files, never another session.
+
 ## FAQ
+
+**What changed in the last versions?** See the [changelog](CHANGELOG.md).
 
 **Do I need Snapmaker Orca?** No. Snap Studio downloads its own engine. If
 Snapmaker Orca is installed, its custom profiles are offered too.
@@ -202,12 +300,34 @@ printers, favorites and conversations are carried over on first launch.
 | ⌘, | Settings |
 
 In Prepare: R rotate, F lay on face, Q orient (⇧Q: all), A arrange,
-⌘D duplicate, arrows 1 mm (⇧: 10 mm), ⌘Z / ⇧⌘Z.
+⌘D duplicate, arrows 1 mm (⇧: 10 mm), ⌘Z / ⇧⌘Z; ⌘ + drag from an empty
+spot selects with a rectangle, ⇧-click in the list selects a range.
+
+In the AI list: ⌘F search, ↑ / ↓ and ⏎ open, F2 rename, ⌫ delete. In a
+conversation: ⌘⏎ send, Esc stop Claude.
+
+In a printer's files: ⏎ details, Esc close; in the player: ← / → previous /
+next video, Space pause, Esc back.
 
 ## Roadmap
 
-What is in progress and what comes next lives in [`docs/plans/`](docs/plans/).
-Ideas are welcome in the [Discussions](https://github.com/kameka22/snap-studio/discussions).
+What has shipped is in the [changelog](CHANGELOG.md). What is planned, each
+with its pull request (drafts, approved or under discussion):
+
+| Feature | |
+|---|---|
+| **Several plates in Prepare** — plate tabs, auto-arrange across plates, slice them all and queue them; multi-plate 3MF files kept as such | [#18](https://github.com/kameka22/snap-studio/pull/18) |
+| **Print by object** — one object after the other, with collision checks for the U1's head and an adjustable order | [#22](https://github.com/kameka22/snap-studio/pull/22) |
+| **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
+| **Calibration assistant** — step-by-step Klipper calibrations from a Calibration menu | [#17](https://github.com/kameka22/snap-studio/pull/17) |
+| **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
+| **Snapmaker hub** — Snapmaker Space, Store, Wiki, Forum and account in one menu, models opened straight in Prepare | [#23](https://github.com/kameka22/snap-studio/pull/23) |
+| **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
+| **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
+
+Work in progress, what remains to check on a real printer and ideas for later
+live in [`docs/plans/`](docs/plans/). Ideas are welcome in the
+[Discussions](https://github.com/kameka22/snap-studio/discussions).
 
 ## Contributing
 

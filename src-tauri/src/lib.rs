@@ -2,6 +2,7 @@ mod menu;
 mod migrate;
 mod access;
 mod auth;
+mod bedmesh;
 mod chat;
 mod discover;
 mod engine;
@@ -17,6 +18,8 @@ mod mesh;
 mod model3mf;
 mod presets;
 mod printers;
+mod printer_files;
+mod share;
 mod orient;
 mod paint;
 mod plate;
@@ -527,6 +530,9 @@ struct SendRequest {
     /// True: queue instead of starting.
     #[serde(default)]
     queue: bool,
+    /// Substitutes chosen at the spool check: (G-code tool, head).
+    #[serde(default)]
+    map: Vec<(u8, u8)>,
 }
 
 #[derive(Serialize, Clone)]
@@ -554,7 +560,30 @@ async fn launch(
     name: &str,
     options: &printers::StartOptions,
     tools: &[u8],
+    map: &[(u8, u8)],
 ) -> Result<Option<String>, String> {
+    let warning = prepare_printer(app, p, options, tools, map).await?;
+    let handle = app.clone();
+    printers::upload(&p.host, p.port, gcode, name, true, move |sent, total| {
+        let pct = if total > 0 { sent as f32 * 100.0 / total as f32 } else { 0.0 };
+        send_progress(&handle, "upload", Some(pct), None);
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(warning)
+}
+
+/// Before a print starts, whatever its G-code comes from: the printer is
+/// idle, every head used has a spool, the heads and options are set.
+/// Returns a warning if an option was not confirmed.
+async fn prepare_printer(
+    app: &tauri::AppHandle,
+    p: &printers::Printer,
+    options: &printers::StartOptions,
+    tools: &[u8],
+    map: &[(u8, u8)],
+) -> Result<Option<String>, String> {
+    printers::check_map(tools, map).map_err(|e| e.to_string())?;
     send_progress(app, "check", None, None);
     let st = printers::status(&p.host, p.port).await;
     if !st.online {
@@ -565,23 +594,25 @@ async fn launch(
     }
     // A head used without a spool: refused, even for a job queued before it
     // was emptied.
+    // Physical heads, after substitution.
     let empty: Vec<String> = tools
         .iter()
-        .filter(|t| st.filaments.iter().any(|f| f.index == **t && !f.present))
-        .map(|t| format!("T{t}"))
+        .map(|t| printers::head_of(*t, map))
+        .filter(|h| st.filaments.iter().any(|f| f.index == *h && !f.present))
+        .map(|h| format!("T{h}"))
         .collect();
     if !empty.is_empty() {
         return Err(t!("err.head_empty", name = p.name, heads = empty.join(", ")));
     }
 
     send_progress(app, "prepare", None, None);
-    let script = printers::preprint_script(options, tools, false);
+    let script = printers::preprint_script(options, tools, map, false);
     if let Err(e) = printers::gcode_script(&p.host, p.port, &script).await {
         // Firmware older than 1.3.0: a single macro for the options.
         if !printers::is_unknown_command(&e) {
             return Err(t!("err.prepare_refused", err = e));
         }
-        let legacy = printers::preprint_script(options, tools, true);
+        let legacy = printers::preprint_script(options, tools, map, true);
         printers::gcode_script(&p.host, p.port, &legacy)
             .await
             .map_err(|e| t!("err.prepare_refused", err = e))?;
@@ -593,15 +624,317 @@ async fn launch(
             warning = Some(t!("err.options_unconfirmed", opts = missing.join(", ")));
         }
     }
-
-    let handle = app.clone();
-    printers::upload(&p.host, p.port, gcode, name, true, move |sent, total| {
-        let pct = if total > 0 { sent as f32 * 100.0 / total as f32 } else { 0.0 };
-        send_progress(&handle, "upload", Some(pct), None);
-    })
-    .await
-    .map_err(|e| e.to_string())?;
     Ok(warning)
+}
+
+// ---------------------------------------------------------------- printer files
+
+fn served_root(root: &str) -> Result<(), String> {
+    if printer_files::served_root(root) {
+        Ok(())
+    } else {
+        Err("invalid path".into())
+    }
+}
+
+/// The file a printer is busy with, if any.
+async fn printing_file(p: &printers::Printer) -> Option<String> {
+    let st = printers::status(&p.host, p.port).await;
+    printer_files::printing_path(&st.state, st.job.as_deref())
+}
+
+/// A printer's print files and timelapses. Unreachable: an error, the
+/// view offers to try again.
+#[tauri::command]
+async fn pf_overview(printer_id: String) -> Result<printer_files::Overview, String> {
+    let p = printer_by_id(&printer_id)?;
+    let st = printers::status(&p.host, p.port).await;
+    if !st.online {
+        return Err(t!("err.printer_silent", name = p.name));
+    }
+    let printing = printer_files::printing_path(&st.state, st.job.as_deref());
+    printer_files::overview(&p.host, p.port, printing).await.map_err(|e| e.to_string())
+}
+
+/// Tools a print file on a printer uses, read from the G-code when the
+/// metadata does not say.
+#[tauri::command]
+async fn pf_tools(printer_id: String, path: String, modified: f64) -> Result<Vec<u8>, String> {
+    let p = printer_by_id(&printer_id)?;
+    printer_files::tools(&p.host, p.port, &path, modified).await.map_err(|e| e.to_string())
+}
+
+/// Number of print files on a printer, for the sidebar.
+#[tauri::command]
+async fn pf_count(printer_id: String) -> Result<usize, String> {
+    let p = printer_by_id(&printer_id)?;
+    printer_files::count(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn pf_video_duration(printer_id: String, root: String, path: String, modified: f64) -> Result<Option<f64>, String> {
+    served_root(&root)?;
+    let p = printer_by_id(&printer_id)?;
+    printer_files::video_duration(&p.host, p.port, &root, &path, modified)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Deletes files of one root; each one's error, if any, in order.
+#[tauri::command]
+async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Result<Vec<Option<String>>, String> {
+    served_root(&root)?;
+    let p = printer_by_id(&printer_id)?;
+    let printing = printing_file(&p).await;
+    let mut out = Vec::new();
+    for path in &paths {
+        let r = match printer_files::check_change(&root, path, printing.as_deref()) {
+            Ok(()) if root == "gcodes" => printer_files::delete(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            // Timelapses: also through the camera service when Moonraker
+            // only lists them (a U1's read-only `camera` folder).
+            Ok(()) => printer_files::delete_video(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            Err(e) => Err(e.to_string()),
+        };
+        out.push(r.err());
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+async fn pf_rename(printer_id: String, path: String, name: String) -> Result<String, String> {
+    let p = printer_by_id(&printer_id)?;
+    let printing = printing_file(&p).await;
+    printer_files::check_change("gcodes", &path, printing.as_deref()).map_err(|e| e.to_string())?;
+    printer_files::rename(&p.host, p.port, &path, &name).await.map_err(|e| e.to_string())
+}
+
+/// Downloads files into a folder: the Files folder for print files, the
+/// Downloads folder for videos unless another is given. Returns the files
+/// written; stops at the first failure.
+#[tauri::command]
+async fn pf_download(printer_id: String, root: String, paths: Vec<String>, dir: Option<String>) -> Result<Vec<String>, String> {
+    served_root(&root)?;
+    let p = printer_by_id(&printer_id)?;
+    let dir = dir
+        .map(PathBuf::from)
+        .or_else(dirs::download_dir)
+        .ok_or_else(|| t!("pfiles.err.no_folder"))?;
+    if !dir.is_dir() {
+        return Err(t!("pfiles.err.no_folder"));
+    }
+    let mut out = Vec::new();
+    for path in &paths {
+        let f = printer_files::download(&p.host, p.port, &root, path, &dir).await.map_err(|e| e.to_string())?;
+        out.push(f.to_string_lossy().to_string());
+    }
+    Ok(out)
+}
+
+#[derive(serde::Deserialize)]
+struct PfPrintRequest {
+    /// Printer the file is on.
+    source_id: String,
+    path: String,
+    /// Printer that prints it (the same one, or another).
+    printer_id: String,
+    options: printers::StartOptions,
+    #[serde(default)]
+    tools: Vec<u8>,
+    #[serde(default)]
+    map: Vec<(u8, u8)>,
+    /// True: queue instead of starting.
+    #[serde(default)]
+    queue: bool,
+}
+
+/// Prints a file that is on a printer, as the send sheet does after a slice.
+/// Started at once on that same printer: same checks and preparation as a
+/// sent print, then the printer starts its own copy (nothing is uploaded).
+/// Queued, or for another printer: the G-code is copied from the printer and
+/// becomes an ordinary job (queued, or sent and started). Returns the job's
+/// id, if one was made.
+#[tauri::command]
+async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Option<String>, String> {
+    let p = printer_by_id(&request.printer_id)?;
+    let mut tools = if request.tools.is_empty() { vec![0] } else { request.tools.clone() };
+    // Started in place only without a substitution: a substituted print
+    // needs its record (the extruder map goes back to identity when it
+    // ends), so it goes the copy's way, as any sent print.
+    if !request.queue && request.source_id == request.printer_id && !printers::is_remap(&request.map) {
+        let warning = prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
+        printer_files::start(&p.host, p.port, &request.path)
+            .await
+            .map_err(|e| t!("pfiles.err.start", err = e))?;
+        send_progress(&app, "done", Some(100.0), warning);
+        return Ok(None);
+    }
+    let src = printer_by_id(&request.source_id)?;
+    send_progress(&app, "fetch", None, None);
+    let tmp = std::env::temp_dir().join("snapstudio-pfiles").join(printers::new_id());
+    std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+    let result = async {
+        let gcode = printer_files::download(&src.host, src.port, "gcodes", &request.path, &tmp)
+            .await
+            .map_err(|e| t!("pfiles.err.fetch", err = e))?;
+        // The copy is here: its own tools, rather than the metadata's.
+        let g = gcode.clone();
+        if let Some(t) = tauri::async_runtime::spawn_blocking(move || printer_files::gcode_tools(&g)).await.ok().flatten() {
+            tools = t;
+        }
+        let id = printers::new_id();
+        let stem = printer_files::display_name(&request.path);
+        let remote = jobs::remote_name(&stem, &id);
+        let new = jobs::NewJob {
+            id: Some(id),
+            stats: None,
+            name: stem,
+            printer_id: p.id.clone(),
+            options: request.options.clone(),
+            tools: tools.clone(),
+            profile: jobs::Profile::default(),
+            source: None,
+        };
+        let add = |gcode: PathBuf, new: jobs::NewJob, state: &'static str, remote: String| {
+            tauri::async_runtime::spawn_blocking(move || jobs::add(&gcode, new, state, &remote))
+        };
+        if request.queue {
+            let job = add(gcode, new, "queued", String::new())
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
+            emit_jobs(&app);
+            return Ok(Some(job.id));
+        }
+        let warning = launch(&app, &p, &gcode, &remote, &request.options, &tools, &request.map).await?;
+        let id = match add(gcode, new, "printing", remote).await.map_err(|e| anyhow::anyhow!("{e}")).and_then(|r| r) {
+            Ok(job) => {
+                if printers::is_remap(&request.map) {
+                    if let Err(e) = jobs::mark_remapped(&job.id) {
+                        eprintln!("[jobs] substitution not recorded: {e}");
+                    }
+                }
+                Some(job.id)
+            }
+            Err(e) => {
+                eprintln!("[jobs] record not saved: {e}");
+                None
+            }
+        };
+        emit_jobs(&app);
+        send_progress(&app, "done", Some(100.0), warning);
+        Ok(id)
+    }
+    .await;
+    let _ = std::fs::remove_dir_all(&tmp);
+    result
+}
+
+// ---------------------------------------------------------------- share
+
+/// The local copy of a printer file, to share it; fetched once per version.
+#[tauri::command]
+async fn share_fetch(printer_id: String, root: String, path: String, modified: f64) -> Result<String, String> {
+    served_root(&root)?;
+    let p = printer_by_id(&printer_id)?;
+    share::fetch(&p.host, p.port, &root, &path, modified)
+        .await
+        .map(|f| f.to_string_lossy().into_owned())
+        .map_err(|e| t!("pfiles.err.fetch", err = e))
+}
+
+#[tauri::command]
+fn share_caps() -> share::Caps {
+    share::caps()
+}
+
+#[tauri::command]
+fn share_copy(path: String) -> Result<(), String> {
+    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    share::copy(&p).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn share_save(path: String, dest: String) -> Result<(), String> {
+    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    share::save(&p, Path::new(&dest)).map_err(|e| e.to_string())
+}
+
+/// The system's share menu (AirDrop, Messages, Mail…) at (`x`, `y`) of the
+/// window. macOS only.
+#[tauri::command]
+async fn share_native(app: tauri::AppHandle, path: String, x: f64, y: f64) -> Result<(), String> {
+    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::Manager;
+        // The window, not the "webview window": once the Library has added
+        // its own views to it, it is no longer one (get_webview_window: None).
+        let w = app.get_window("main").ok_or("no window")?;
+        let ns = w.ns_window().map_err(|e| e.to_string())? as usize;
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.run_on_main_thread(move || {
+            let _ = tx.send(share::native(ns, &p, x, y).map_err(|e| e.to_string()));
+        })
+        .map_err(|e| e.to_string())?;
+        return tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or_else(|_| Err("no answer".into())))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, p, x, y);
+        Err("not available on this system".into())
+    }
+}
+
+/// Serves a shared file to the local network for a quarter of an hour:
+/// its address and QR code. On the network that reaches the printer.
+#[tauri::command]
+fn share_qr_start(path: String, printer_id: String) -> Result<share::QrShare, String> {
+    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    let printer = printer_by_id(&printer_id)?;
+    share::qr_start(p, &printer.host).map_err(|e| t!("share.err.qr", err = e))
+}
+
+#[tauri::command]
+fn share_qr_stop() {
+    share::qr_stop();
+}
+
+/// `prn://localhost/f?id=<printer>&root=<root>&p=<path>`: a file of a
+/// printer (thumbnail, timelapse picture, video by pieces).
+async fn handle_prn(uri: String, range: Option<String>) -> Response<Vec<u8>> {
+    let fail = |code: u16| {
+        Response::builder()
+            .status(code)
+            .header("Access-Control-Allow-Origin", "*")
+            .body(Vec::new())
+            .unwrap()
+    };
+    let (Some(id), Some(root), Some(path)) = (query_param(&uri, "id"), query_param(&uri, "root"), query_param(&uri, "p")) else {
+        return fail(400);
+    };
+    if !printer_files::served_root(&root) {
+        return fail(403);
+    }
+    let Ok(p) = printer_by_id(&id) else {
+        return fail(404);
+    };
+    match printer_files::proxy(&p.host, p.port, &root, &path, range.as_deref()).await {
+        Ok(r) => {
+            let mut b = Response::builder()
+                .status(r.status)
+                .header("Content-Type", r.mime)
+                .header("Accept-Ranges", "bytes")
+                .header("Cache-Control", "no-store")
+                .header("Access-Control-Allow-Origin", "*");
+            if let Some(cr) = r.content_range {
+                b = b.header("Content-Range", cr);
+            }
+            b.body(r.body).unwrap()
+        }
+        Err(_) => fail(502),
+    }
 }
 
 /// Sends a slice's preview: immediate start, or queueing. Returns the id of
@@ -636,11 +969,18 @@ async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<Strin
         emit_jobs(&app);
         return Ok(job.id);
     }
-    let warning = launch(&app, &p, &gcode, &remote, &request.options, &request.tools).await?;
+    let warning = launch(&app, &p, &gcode, &remote, &request.options, &request.tools, &request.map).await?;
     // The print's record keeps the G-code and its summary. The print has left:
     // a failure here must not make it look failed.
     let id = match add(gcode, new, "printing", remote).await.map_err(|e| anyhow::anyhow!("{e}")).and_then(|r| r) {
-        Ok(job) => job.id,
+        Ok(job) => {
+            if printers::is_remap(&request.map) {
+                if let Err(e) = jobs::mark_remapped(&job.id) {
+                    eprintln!("[jobs] substitution not recorded: {e}");
+                }
+            }
+            job.id
+        }
         Err(e) => {
             eprintln!("[jobs] record not saved: {e}");
             String::new()
@@ -670,7 +1010,7 @@ fn prints_status() -> Vec<jobs::Live> {
 
 /// Starts a queued job (the user confirmed the bed is clear).
 #[tauri::command]
-async fn job_launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
+async fn job_launch(app: tauri::AppHandle, id: String, map: Option<Vec<(u8, u8)>>) -> Result<(), String> {
     let job = jobs::get(&id).ok_or_else(|| t!("err.job_unknown"))?;
     if job.state != "queued" {
         return Err(t!("err.not_queued"));
@@ -679,9 +1019,15 @@ async fn job_launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
     // A name of its own for each job: two prints of the same model do not
     // overwrite each other on the printer.
     let remote = jobs::remote_name(&job.name, &job.id);
-    let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools).await?;
+    let map = map.unwrap_or_default();
+    let warning = launch(&app, &p, Path::new(&job.file), &remote, &job.options, &job.tools, &map).await?;
     if let Err(e) = jobs::mark_started(&id, &remote) {
         eprintln!("[jobs] launch not recorded: {e}");
+    }
+    if printers::is_remap(&map) {
+        if let Err(e) = jobs::mark_remapped(&id) {
+            eprintln!("[jobs] substitution not recorded: {e}");
+        }
     }
     emit_jobs(&app);
     send_progress(&app, "done", Some(100.0), warning);
@@ -884,6 +1230,65 @@ fn maintenance_done(printer_id: String, task: String, print_hours: f64, swaps: V
 #[tauri::command]
 fn maintenance_remove(printer_id: String, task: String, at: u64) -> Result<Vec<maintenance::Entry>, String> {
     maintenance::remove(&printer_id, &task, at).map_err(|e| e.to_string())
+}
+
+/// A printer's bed mesh now, with its settings and progress.
+#[tauri::command]
+async fn bed_mesh_read(printer_id: String, light: Option<bool>) -> Result<bedmesh::Live, String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::read(&p.host, p.port, light.unwrap_or(false)).await.map_err(|e| e.to_string())
+}
+
+/// The meshes stored for a printer, oldest first.
+#[tauri::command]
+fn bed_mesh_history(printer_id: String) -> Vec<bedmesh::Mesh> {
+    bedmesh::history(&printer_id)
+}
+
+/// Stores a full-bed mesh not seen yet; returns the history.
+#[tauri::command]
+fn bed_mesh_record(printer_id: String, mesh: bedmesh::Mesh, keep: usize, by_app: bool) -> Result<Vec<bedmesh::Mesh>, String> {
+    bedmesh::record(&printer_id, mesh, keep, by_app).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn bed_mesh_remove(printer_id: String, at: u64) -> Result<Vec<bedmesh::Mesh>, String> {
+    bedmesh::remove(&printer_id, at).map_err(|e| e.to_string())
+}
+
+/// Keeps only the `keep` newest meshes.
+#[tauri::command]
+fn bed_mesh_keep(printer_id: String, keep: usize) -> Result<Vec<bedmesh::Mesh>, String> {
+    bedmesh::keep(&printer_id, keep).map_err(|e| e.to_string())
+}
+
+/// Measures the bed; returns when the printer is done.
+#[tauri::command]
+async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::measure(&p.host, p.port, temp).await.map_err(|e| e.to_string())
+}
+
+/// Stops the probing cleanly (the U1, once its leveling has begun).
+#[tauri::command]
+async fn bed_mesh_abort(printer_id: String) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::abort(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+/// Emergency stop of a measurement going wrong (then Klipper restarts).
+#[tauri::command]
+async fn bed_mesh_stop(printer_id: String) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    bedmesh::stop(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
+/// A system notification (the end of a measurement while the app is
+/// elsewhere).
+#[tauri::command]
+fn app_notify(app: tauri::AppHandle, title: String, body: String) {
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder().title(title).body(body).show();
 }
 
 /// Opens the live feeds (Printers tab shown).
@@ -1179,8 +1584,11 @@ fn ia_create(
     source: String,
     prompt: String,
     engine: String,
+    model: Option<String>,
 ) -> Result<ia::Conversation, String> {
-    ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())
+    let model = creation_model(model)?;
+    let c = ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())?;
+    with_model(c, model)
 }
 
 #[tauri::command]
@@ -1189,18 +1597,93 @@ fn ia_create_blank(
     engine: String,
     dest: String,
     bounds: Option<[f32; 3]>,
+    model: Option<String>,
 ) -> Result<ia::Conversation, String> {
-    ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())
+    let model = creation_model(model)?;
+    let c = ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())?;
+    with_model(c, model)
+}
+
+/// Model chosen in the creation sheet, checked before anything is created.
+/// Empty or none: the account's default.
+fn creation_model(model: Option<String>) -> Result<Option<String>, String> {
+    match model.filter(|m| !m.is_empty()) {
+        Some(m) if !chat::MODELS.contains(&m.as_str()) => Err(format!("unknown model: {m}")),
+        m => Ok(m),
+    }
+}
+
+/// The new conversation with its model, kept for its first start.
+fn with_model(c: ia::Conversation, model: Option<String>) -> Result<ia::Conversation, String> {
+    let Some(m) = model else { return Ok(c) };
+    chat::set_model(&c.id, Some(&m)).map_err(|e| e.to_string())?;
+    ia::get(&c.id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn ia_delete(id: String) -> Result<Vec<ia::Conversation>, String> {
-    // Deleting the folder under a running Claude would leave it running without
-    // a directory: close first, delete afterwards.
-    pty::close(&id);
-    chat::close(&id);
-    ia::remove(&id).map_err(|e| e.to_string())?;
-    Ok(ia::list())
+async fn ia_delete(id: String) -> Result<IaDeleted, String> {
+    tauri::async_runtime::spawn_blocking(move || delete_conversation(&id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// What a deletion left behind, for the toast.
+#[derive(serde::Serialize)]
+struct IaDeleted {
+    list: Vec<ia::Conversation>,
+    /// Claude session files removed.
+    removed: usize,
+    /// Paths that were kept: links, out of place, or not removable.
+    kept: Vec<String>,
+}
+
+fn delete_conversation(id: &str) -> Result<IaDeleted, String> {
+    // Only one of our conversations: its id is then a session we created,
+    // never someone else's Claude session.
+    ia::get(id).map_err(|_| t!("err.conv_unknown"))?;
+    // Deleting under a running Claude would leave it running without a
+    // directory, and still writing its transcript: both close first, and each
+    // close waits for its process to exit.
+    pty::close(id);
+    chat::close(id);
+    ia::watch_stop(id);
+    // Listed before the folder goes: the project folder's name derives from it.
+    let found = ia::session_artifacts(id).map_err(|e| e.to_string())?;
+    ia::remove(id).map_err(|e| e.to_string())?;
+    let (removed, failed) = ia::remove_artifacts(&found);
+    let kept = found
+        .skipped
+        .iter()
+        .chain(&failed)
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    Ok(IaDeleted { list: ia::list(), removed, kept })
+}
+
+/// What deleting a conversation would remove, for its confirmation.
+#[derive(serde::Serialize)]
+struct IaDeletePlan {
+    /// Claude session files found for it.
+    files: usize,
+    /// A Claude process is open for it (chat or terminal).
+    running: bool,
+}
+
+#[tauri::command]
+fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
+    ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
+    let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
+    Ok(IaDeletePlan { files: found.paths.len(), running: pty::is_open(&id) || chat::is_open(&id) })
+}
+
+#[tauri::command]
+fn ia_duplicate(id: String) -> Result<ia::Conversation, String> {
+    ia::duplicate(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn ia_rename(id: String, title: String) -> Result<ia::Conversation, String> {
+    ia::rename(&id, &title).map_err(|e| e.to_string())
 }
 
 /// Path of the current mesh and stamp of its last write.
@@ -1373,6 +1856,13 @@ pub fn run() {
                 responder.respond(handle_cam(uri).await);
             });
         })
+        .register_asynchronous_uri_scheme_protocol("prn", |_app, request: Request<Vec<u8>>, responder| {
+            let uri = request.uri().to_string();
+            let range = request.headers().get("range").and_then(|v| v.to_str().ok()).map(String::from);
+            tauri::async_runtime::spawn(async move {
+                responder.respond(handle_prn(uri, range).await);
+            });
+        })
         .register_asynchronous_uri_scheme_protocol("gcode", |_app, request: Request<Vec<u8>>, responder| {
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
@@ -1417,7 +1907,9 @@ pub fn run() {
                     );
                 }
                 // Created invisible to avoid the white flash before the first render.
+                // Showing it does not bring the app forward on macOS: focus it too.
                 let _ = window.show();
+                let _ = window.set_focus();
             }
             Ok(())
         })
@@ -1458,6 +1950,21 @@ pub fn run() {
             plate_orient,
             plate_save,
             print_send,
+            pf_overview,
+            pf_count,
+            pf_tools,
+            share_fetch,
+            share_caps,
+            share_copy,
+            share_save,
+            share_native,
+            share_qr_start,
+            share_qr_stop,
+            pf_video_duration,
+            pf_delete,
+            pf_rename,
+            pf_download,
+            pf_print,
             jobs_list,
             prints_status,
             job_launch,
@@ -1484,6 +1991,9 @@ pub fn run() {
             ia_create,
             ia_create_blank,
             ia_delete,
+            ia_delete_plan,
+            ia_rename,
+            ia_duplicate,
             ia_current,
             ia_get,
             ia_workspace,
@@ -1524,6 +2034,15 @@ pub fn run() {
             maintenance_log,
             maintenance_done,
             maintenance_remove,
+            bed_mesh_read,
+            bed_mesh_history,
+            bed_mesh_record,
+            bed_mesh_remove,
+            bed_mesh_keep,
+            bed_mesh_measure,
+            bed_mesh_stop,
+            bed_mesh_abort,
+            app_notify,
             printers_watch_start,
             printers_watch_stop,
             cache_info,
@@ -1537,6 +2056,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 pty::close_all();
                 chat::close_all();
+                share::cleanup();
             }
         });
 }
@@ -1544,6 +2064,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn creation_model_is_checked_first() {
+        assert_eq!(creation_model(None), Ok(None));
+        assert_eq!(creation_model(Some(String::new())), Ok(None));
+        assert_eq!(creation_model(Some("claude-opus-5-5".into())), Ok(Some("claude-opus-5-5".into())));
+        assert!(creation_model(Some("gpt-9".into())).is_err());
+    }
 
     #[test]
     fn parse_query() {

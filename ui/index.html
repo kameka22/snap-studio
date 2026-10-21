@@ -6,6 +6,7 @@
 <title>Snap Studio</title>
 <link rel="stylesheet" href="vendor/xterm.css" />
 <link rel="stylesheet" href="style.css" />
+<script src="themes.js"></script>
 </head>
 <body>
 <div class="window">
@@ -105,6 +106,28 @@
   <div class="tb-actions tb-add" data-for="printers">
     <button id="prn-add3" class="tb-btn labeled" title="Add a Printer" data-i18n-title="printers.add"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="printers.add_short">Add Printer</span></button>
   </div>
+  <!-- Tabs: on the left, right after the title, so they never move when
+       an action appears on the right. -->
+  <div class="tb-actions tb-tabs" data-for="pfiles">
+    <div id="pfl-tabs" class="seg" role="group" aria-label="Files of the printer" data-i18n-aria="pfiles.title">
+      <button class="seg-btn labeled" data-tab="files" data-i18n="pfiles.tab.files">Print Files</button>
+      <button class="seg-btn labeled" data-tab="videos" data-i18n="pfiles.tab.videos">Timelapses</button>
+    </div>
+  </div>
+  <div class="tb-actions tb-tabs" data-for="ia">
+    <div id="ia-views" class="seg hidden" role="group" aria-label="View" data-i18n-aria="chat.view">
+      <button class="seg-btn" data-iaview="chat" data-i18n="chat.view.chat">Conversation</button>
+      <button class="seg-btn" data-iaview="term" data-i18n="chat.view.term">Terminal</button>
+    </div>
+  </div>
+  <div class="tb-actions tb-tabs" data-for="maint">
+    <div id="mt-tabs" class="seg" role="group" aria-label="Care &amp; Tuning" data-i18n-aria="maint.title">
+      <button class="seg-btn labeled" data-mtab="care"><span data-i18n="maint.tab.care">Care</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+      <button class="seg-btn labeled" data-mtab="level"><span data-i18n="maint.tab.level">Bed Leveling</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+      <!-- Calibration: #17's assistant; hidden until it lands. -->
+      <button class="seg-btn labeled hidden" data-mtab="calib"><span data-i18n="maint.tab.calib">Calibration</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+    </div>
+  </div>
   <div class="tb-spacer" data-tauri-drag-region></div>
   <div class="tb-actions" data-for="files">
     <input id="tile" type="range" min="140" max="360" step="10" title="Thumbnail size" data-i18n-title="files.tile_size" />
@@ -126,12 +149,8 @@
   <div class="tb-actions" data-for="ia">
     <span id="ia-engine-tag" class="ia-tag"></span>
     <div id="ia-dacts" class="tb-group hidden">
-      <div id="ia-views" class="seg" role="group" aria-label="View" data-i18n-aria="chat.view">
-        <button class="seg-btn" data-iaview="chat" data-i18n="chat.view.chat">Conversation</button>
-        <button class="seg-btn" data-iaview="term" data-i18n="chat.view.term">Terminal</button>
-      </div>
       <button id="ia-folder" class="tb-btn" title="Show the working folder" data-i18n-title="ia.show_workspace"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
-      <button id="ia-stop" class="btn" data-i18n="ia.close_session">End Session</button>
+      <button id="ia-delete" class="btn ia-delete-btn" title="Delete the conversation and its Claude session" data-i18n-title="ia.delete.button_title"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg><span data-i18n="ia.delete.button">Delete Conversation</span></button>
     </div>
   </div>
   <div class="tb-actions" data-for="library">
@@ -159,13 +178,28 @@
     <button id="p-save" class="tb-btn labeled" title="Save the plate…" data-i18n-title="prepare.menu.save"><svg viewBox="0 0 24 24"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2m2 2v4h8V5zm5 8a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/></svg><span data-i18n="common.save">Save</span></button>
     <button id="p-clear" class="tb-btn labeled danger" title="Clear the plate" data-i18n-title="prepare.menu.clear"><svg viewBox="0 0 24 24"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7l-1.4-1.4L9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3z"/></svg><span data-i18n="prepare.clear.short">Clear</span></button>
     </div>
-    <button id="p-slice" class="btn primary" data-i18n="prepare.slice">Slice</button>
+    <button id="p-slice" class="btn primary">Slice</button>
   </div>
   <div class="tb-actions" data-for="heads">
     <button id="hv-refresh" class="tb-btn" title="Read the spools again" data-i18n-title="heads.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
   </div>
+  <div class="tb-actions" data-for="pfiles">
+    <button id="pfl-sort" class="tb-btn" title="Sort" data-i18n-title="files.sort"><svg viewBox="0 0 24 24"><path d="M7 4l4 5H8v11H6V9H3zm10 16l-4-5h3V4h2v11h3z"/></svg></button>
+    <div id="pfl-layout" class="seg" role="group" aria-label="Display" data-i18n-aria="files.display">
+      <button class="seg-btn" data-layout="grid" title="Thumbnails" data-i18n-title="pfiles.layout.grid"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z"/></svg></button>
+      <button class="seg-btn" data-layout="list" title="List" data-i18n-title="pfiles.layout.list"><svg viewBox="0 0 24 24"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h16v2H4z"/></svg></button>
+    </div>
+    <button id="pfl-select" class="tb-btn labeled hidden" title="Select several videos" data-i18n-title="pfiles.select.title"><span data-i18n="pfiles.select">Select</span></button>
+    <button id="pfl-refresh" class="tb-btn" title="Read the printer again" data-i18n-title="pfiles.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+    <label class="search">
+      <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 1-4.2 10.2l-3 3-1.4-1.4 3-3A6 6 0 0 1 10 4m0 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8"/></svg>
+      <input id="pfl-q" type="search" placeholder="Search" spellcheck="false" autocomplete="off" data-i18n-placeholder="files.search" />
+    </label>
+  </div>
   <div class="tb-actions" data-for="maint">
-    <button id="mt-refresh" class="tb-btn" title="Read the counters again" data-i18n-title="maint.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
+    <button id="bm-measure-btn" class="tb-btn labeled hidden" title="Probe the bed now" data-i18n-title="bm.measure.title"><svg viewBox="0 0 24 24"><path d="M9 2h6v4.5l-2 3V13h-2V9.5l-2-3zM3 18.5h18V21H3zM4 15.5h2v1.6H4zm4.67 0h2v1.6h-2zm4.66 0h2v1.6h-2zM18 15.5h2v1.6h-2z"/></svg><span id="bm-measure-lbl" data-i18n="bm.measure">Measure Now</span></button>
+    <button id="bm-settings-btn" class="tb-btn hidden" title="Bed leveling settings" data-i18n-title="bm.settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7" transform="translate(-1 0)"/></svg></button>
+    <button id="mt-refresh" class="tb-btn" title="Read the counters again" data-i18n-title="maint.refresh_any"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
   </div>
   <div class="tb-actions" data-for="printers">
     <div id="prn-tools" class="tb-group hidden">
@@ -266,37 +300,51 @@
         <p data-i18n="prepare.empty.text">Choose a model in Files, then “Prepare” — or add it with +.</p>
       </div>
       <div id="p-msg" class="v-msg hidden"></div>
+      <div id="p-loading" class="p-loading hidden" role="status" aria-live="polite"><span class="spinner small"></span><span id="p-loading-text"></span></div>
       <div id="p-angle" class="p-angle hidden"></div>
       <div id="p-toolhint" class="p-toolhint hidden"></div>
-      <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
-    </div>
-    <aside class="prep-inspector">
-      <div class="vp-section p-objects-head"><span data-i18n="prepare.objects">Objects</span><select id="p-printer" class="hidden"></select></div>
-      <div id="p-list" class="group"></div>
-      <div id="p-props" class="hidden">
-        <div class="vp-section" data-i18n="prepare.placement">Placement</div>
-        <div class="group">
-          <label class="grow-row"><span class="k" data-i18n="prepare.pos_x">Position X</span><input id="p-x" class="field num" type="number" step="1" /><span class="unit">mm</span></label>
-          <label class="grow-row"><span class="k" data-i18n="prepare.pos_y">Position Y</span><input id="p-y" class="field num" type="number" step="1" /><span class="unit">mm</span></label>
+      <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · ⌘ drag from an empty spot: select an area · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
+      <div id="p-objects" class="p-float p-objects prep-inspector">
+        <div class="p-float-head" id="p-objects-head">
+          <button type="button" id="p-objects-fold" class="p-tw p-fold">▾</button>
+          <span class="p-float-title" data-i18n="prepare.objects" title="Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it" data-i18n-title="prepare.list.hint">Objects</span>
+          <span id="p-objects-n" class="p-float-n"></span>
+          <select id="p-printer" class="hidden"></select>
         </div>
-        <div class="vp-section" data-i18n="prepare.rotation">Rotation</div>
-        <div class="group">
-          <label class="grow-row"><span class="k" data-i18n="prepare.around_x">Around X</span><input id="p-rx" class="field num" type="number" step="5" /><span class="unit">°</span></label>
-          <label class="grow-row"><span class="k" data-i18n="prepare.around_y">Around Y</span><input id="p-ry" class="field num" type="number" step="5" /><span class="unit">°</span></label>
-          <label class="grow-row"><span class="k" data-i18n="prepare.around_z">Around Z</span><input id="p-rz" class="field num" type="number" step="5" /><span class="unit">°</span></label>
-        </div>
-        <div class="vp-section" data-i18n="prepare.scale">Scale</div>
-        <div class="group">
-          <label class="grow-row"><span class="k" data-i18n="prepare.keep_ratio">Keep proportions</span><input type="checkbox" id="p-lock" class="sw" checked /></label>
-          <label class="grow-row p-uni"><span class="k" data-i18n="prepare.scale">Scale</span><input id="p-scale" class="field num" type="number" step="5" min="1" /><span class="unit">%</span></label>
-          <label class="grow-row p-axis"><span class="k">X</span><input id="p-sx" class="field num" type="number" step="5" min="1" /><span class="unit">%</span></label>
-          <label class="grow-row p-axis"><span class="k">Y</span><input id="p-sy" class="field num" type="number" step="5" min="1" /><span class="unit">%</span></label>
-          <label class="grow-row p-axis"><span class="k">Z</span><input id="p-sz" class="field num" type="number" step="5" min="1" /><span class="unit">%</span></label>
-        </div>
-        <div id="p-dims" class="vp-sub"></div>
+        <div id="p-list" class="p-float-body"></div>
       </div>
-      <div id="p-multi" class="vp-sub hidden"></div>
-    </aside>
+      <div id="p-insp" class="p-float p-insp prep-inspector hidden">
+        <div class="p-float-head">
+          <span id="p-insp-name" class="p-float-title"></span>
+        </div>
+        <div class="p-float-body">
+        <div id="p-props" class="hidden">
+          <div class="vp-section" data-i18n="prepare.placement">Placement</div>
+          <div class="group">
+            <div class="grow-row p-field" data-field="p-x"><span class="k" data-i18n="prepare.pos_x">Position X</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-x" class="field num" type="number" step="1" /><span class="unit">mm</span><button type="button" class="p-mode"></button></div>
+            <div class="grow-row p-field" data-field="p-y"><span class="k" data-i18n="prepare.pos_y">Position Y</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-y" class="field num" type="number" step="1" /><span class="unit">mm</span><button type="button" class="p-mode"></button></div>
+          </div>
+          <div class="vp-section" data-i18n="prepare.rotation">Rotation</div>
+          <div class="group">
+            <div class="grow-row p-field" data-field="p-rx"><span class="k" data-i18n="prepare.around_x">Around X</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-rx" class="field num" type="number" step="1" /><span class="unit">°</span><button type="button" class="p-mode"></button></div>
+            <div class="grow-row p-field" data-field="p-ry"><span class="k" data-i18n="prepare.around_y">Around Y</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-ry" class="field num" type="number" step="1" /><span class="unit">°</span><button type="button" class="p-mode"></button></div>
+            <div class="grow-row p-field" data-field="p-rz"><span class="k" data-i18n="prepare.around_z">Around Z</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-rz" class="field num" type="number" step="1" /><span class="unit">°</span><button type="button" class="p-mode"></button></div>
+          </div>
+          <div class="vp-section p-sec"><span data-i18n="prepare.scale">Scale</span><button type="button" id="p-scale-split" class="p-mode"></button></div>
+          <div class="group">
+            <label class="grow-row"><span class="k" data-i18n="prepare.keep_ratio">Keep proportions</span><input type="checkbox" id="p-lock" class="sw" role="switch" checked /></label>
+            <div class="grow-row p-field p-uni" data-field="p-scale"><span class="k" data-i18n="prepare.scale">Scale</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-scale" class="field num" type="number" step="1" /><span class="unit">%</span><button type="button" class="p-mode"></button></div>
+            <div class="grow-row p-field p-axis" data-field="p-sx"><span class="k">X</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-sx" class="field num" type="number" step="1" /><span class="unit">%</span><button type="button" class="p-mode"></button></div>
+            <div class="grow-row p-field p-axis" data-field="p-sy"><span class="k">Y</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-sy" class="field num" type="number" step="1" /><span class="unit">%</span><button type="button" class="p-mode"></button></div>
+            <div class="grow-row p-field p-axis" data-field="p-sz"><span class="k">Z</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-sz" class="field num" type="number" step="1" /><span class="unit">%</span><button type="button" class="p-mode"></button></div>
+          </div>
+          <div id="p-dims" class="vp-sub"></div>
+        </div>
+        </div>
+      </div>
+      <div id="p-marquee" class="p-marquee hidden"></div>
+      <div id="p-ghost" class="p-ghost hidden"></div>
+    </div>
   </div>
 </section>
 
@@ -446,7 +494,7 @@
 
         <div class="group cam">
           <div class="ghead"><span data-i18n="printers.camera">Camera</span><span id="cam-note" class="note"></span>
-            <button id="cam-toggle" class="btn small" data-i18n="common.show">Show</button>
+            <input type="checkbox" id="cam-toggle" class="sw small" role="switch" aria-label="Camera" data-i18n-aria="printers.camera" />
           </div>
           <div id="cam-box" class="cam-box hidden"><img id="cam-img" alt="Printer camera" data-i18n-alt="printers.camera_alt" />
             <div class="cam-bar"><button id="cam-size" class="cam-btn" title="Enlarge" data-i18n-title="printers.cam.enlarge">
@@ -463,9 +511,56 @@
   </div>
 </section>
 
+<section id="view-pfiles" class="view hidden">
+  <div class="pfl">
+    <div id="pfl-main" class="pfl-main"></div>
+    <aside id="pfl-detail" class="details pfl-detail hidden"></aside>
+    <div id="pfl-player" class="pfl-player hidden">
+      <div class="pfl-phead">
+        <button id="pfl-back" class="tb-btn" title="Back (Esc)" data-i18n-title="pfiles.player.back"><svg viewBox="0 0 24 24"><path d="M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z"/></svg></button>
+        <div class="pfl-ptitle"><b id="pfl-ptitle"></b><span id="pfl-pdate" class="det-sub"></span></div>
+        <span id="pfl-pcount" class="det-sub"></span>
+        <button id="pfl-pprev" class="tb-btn" title="Previous video (←)" data-i18n-title="pfiles.player.prev"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zm3 7 9-7v14z"/></svg></button>
+        <button id="pfl-pnext" class="tb-btn" title="Next video (→)" data-i18n-title="pfiles.player.next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z"/></svg></button>
+        <button id="pfl-pdl" class="btn" data-i18n="common.download">Download</button>
+        <button id="pfl-pshare" class="btn" data-i18n="share.button">Share</button>
+        <button id="pfl-pdel" class="btn danger" data-i18n="common.delete">Delete</button>
+      </div>
+      <div class="pfl-stage">
+        <video id="pfl-video" preload="metadata" playsinline></video>
+        <div id="pfl-perr" class="pfl-perr hidden"></div>
+      </div>
+      <div class="pfl-ctrls">
+        <button id="pfl-play" class="tb-btn"></button>
+        <span id="pfl-cur" class="pfl-time">0:00</span>
+        <input id="pfl-seek" type="range" min="0" max="1000" value="0" aria-label="Position" data-i18n-aria="pfiles.player.seek" />
+        <span id="pfl-dur" class="pfl-time">0:00</span>
+        <select id="pfl-speed" title="Speed" data-i18n-title="pfiles.player.speed">
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+        <button id="pfl-fs" class="tb-btn" title="Full screen" data-i18n-title="pfiles.player.fullscreen"><svg viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div id="pfl-selbar" class="selbar hidden">
+    <span id="pfl-selcount"></span>
+    <button id="pfl-selall" class="btn" data-i18n="pfiles.select_all">Select All</button>
+    <button id="pfl-selprint" class="btn primary" data-i18n="pfiles.print">Print</button>
+    <button id="pfl-seldl" class="btn" data-i18n="common.download">Download</button>
+    <button id="pfl-selshare" class="btn" data-i18n="share.button">Share</button>
+    <button id="pfl-selren" class="btn" data-i18n="pfiles.rename">Rename</button>
+    <button id="pfl-seldel" class="btn danger" data-i18n="common.delete">Delete</button>
+    <button id="pfl-seldone" class="btn" data-i18n="pfiles.select_done">Done</button>
+  </div>
+</section>
 <section id="view-maint" class="view hidden">
   <div class="prn">
     <section class="prn-main hv mt" id="mt-body"></section>
+    <section class="prn-main hv bm hidden" id="bm-body"></section>
   </div>
 </section>
 <section id="view-heads" class="view hidden">
@@ -517,11 +612,72 @@
     <button class="btn small" data-ai-settings data-i18n="ais.open_settings">Settings → AI</button>
   </div>
 
-  <div id="ia-list" class="ia-list"></div>
+  <div id="ia-listbar" class="ia-listbar hidden">
+    <label class="ia-search">
+      <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.7 10.7l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4m0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/></svg>
+      <input id="ia-q" type="search" placeholder="Search conversations" data-i18n-placeholder="ia.list.search" aria-label="Search conversations" data-i18n-aria="ia.list.search" autocomplete="off" spellcheck="false" />
+    </label>
+    <select id="ia-f-kind" aria-label="Kind" data-i18n-aria="ia.list.kind">
+      <option value="all" data-i18n="ia.list.kind_all">All kinds</option>
+      <option value="create" data-i18n="ia.list.kind_create">Created</option>
+      <option value="edit" data-i18n="ia.list.kind_edit">Modified</option>
+    </select>
+    <select id="ia-f-state" aria-label="State" data-i18n-aria="ia.list.state">
+      <option value="all" data-i18n="ia.list.state_all">All states</option>
+      <option value="saved" data-i18n="ia.list.state_saved">Saved</option>
+      <option value="pending" data-i18n="ia.list.state_pending">Not saved</option>
+    </select>
+    <select id="ia-f-engine" aria-label="Where Claude runs" data-i18n-aria="ia.list.engine">
+      <option value="all" data-i18n="ia.list.engine_all">All modes</option>
+      <option value="local" data-i18n="ia.engine.local_short">On this Mac</option>
+      <option value="container" data-i18n="ia.engine.container_short">Sandbox</option>
+    </select>
+    <select id="ia-sort" aria-label="Sort" data-i18n-aria="ia.list.sort">
+      <option value="activity" data-i18n="ia.list.sort_activity">Last activity</option>
+      <option value="created" data-i18n="ia.list.sort_created">Creation date</option>
+      <option value="title" data-i18n="ia.list.sort_title">Title</option>
+    </select>
+  </div>
+  <div id="ia-list" class="ia-list" role="listbox" tabindex="0" aria-label="Conversations" data-i18n-aria="ia.conversations"></div>
+  <div id="ia-nomatch" class="ia-nomatch hidden">
+    <span data-i18n="ia.list.nomatch">No conversation matches.</span>
+    <button id="ia-clearq" class="btn small" data-i18n="ia.list.clear">Clear Search and Filters</button>
+  </div>
 
   <div id="ia-detail" class="ia-detail hidden">
     <div id="ia-hint" class="ia-hint hidden"></div>
     <div class="ia-split">
+      <div id="ia-center" class="ia-center">
+        <section id="ia-viewpane" class="ia-viewpane">
+          <div id="ia-stage" class="ia-stage">
+            <div id="ia-ptools" class="ia-ptools" role="toolbar" aria-label="Preview" data-i18n-aria="ia.preview">
+              <label id="ia-bed-sw" class="sw-label ia-bedsw" title="Show the printer's bed under the object" data-i18n-title="ia.bed.show"><input type="checkbox" id="ia-bed" class="sw small" role="switch" /><span data-i18n="ia.bed">Bed</span></label>
+              <span class="ia-ptools-sep" aria-hidden="true"></span>
+              <button id="ia-reframe" class="btn small" title="Reframe the view" data-i18n-title="ia.reframe.title" data-i18n="ia.reframe">Reframe</button>
+              <button id="ia-expand" class="btn small" title="Enlarge (double-click the preview)" data-i18n-title="ia.expand.title" data-i18n="ia.expand">Enlarge</button>
+            </div>
+            <div id="ia-wait" class="ia-wait hidden">
+              <div class="ia-wait-bed"></div>
+              <span data-i18n="ia.waiting">Waiting for Claude's first mesh…</span>
+            </div>
+          </div>
+          <div id="ia-dock" class="ia-dock" role="toolbar" aria-label="Details" data-i18n-aria="ia.details">
+            <div class="ia-zone ia-zone-lead">
+              <div id="ia-versions" class="ia-versions" role="group" aria-label="Versions" data-i18n-aria="ia.versions"></div>
+            </div>
+            <div class="ia-zone ia-zone-stats">
+              <div id="ia-stats" class="ia-stats"></div>
+              <button id="ia-more" class="tb-btn ia-more hidden" aria-haspopup="dialog" aria-expanded="false" aria-controls="ia-pop" title="All details" data-i18n-title="ia.details_all" aria-label="All details" data-i18n-aria="ia.details_all"><svg viewBox="0 0 24 24"><path d="M6 10.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3m6 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3m6 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3"/></svg></button>
+              <div id="ia-pop" class="ia-pop hidden" role="dialog" aria-label="Details" data-i18n-aria="ia.details"></div>
+            </div>
+            <div class="ia-zone ia-zone-actions">
+              <button id="ia-save" class="btn ia-savebtn"><svg class="ia-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.1 8.4 18.7 7z"/></svg><span id="ia-save-label">Save to Files</span></button>
+              <button id="ia-slice" class="btn primary" data-i18n="prepare.slice">Slice</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div id="ia-splitter" class="ia-splitter" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to share the width with the conversation; double-click for half and half" data-i18n-title="ia.splitter" aria-label="Resize the conversation" data-i18n-aria="ia.splitter_aria"></div>
       <div id="ia-left" class="ia-left" data-mode="chat">
         <div id="ia-chat" class="ia-chat">
           <div id="chat-list" class="chat-list" role="log" aria-live="polite"></div>
@@ -536,46 +692,16 @@
               <button id="chat-send" class="chat-send" title="Send" data-i18n-title="chat.send" disabled>
                 <svg viewBox="0 0 24 24"><path d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
               </button>
-              <button id="chat-stop" class="chat-send stop hidden" title="Stop (Esc)" data-i18n-title="chat.stop">
-                <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg>
+              <button id="chat-stop" class="chat-send stop hidden" title="Stop Claude's answer without deleting anything (Esc)" data-i18n-title="ia.stop.title">
+                <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span>
               </button>
-            </div>
-            <div class="chat-foot">
-              <select id="chat-mode" title="How much Claude may do without asking" data-i18n-title="chat.mode.title"></select>
-              <span id="chat-status" class="chat-status"></span>
             </div>
           </div>
           <input id="chat-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
         </div>
         <div id="ia-term" class="ia-term"></div>
-        <div id="ia-dead" class="ia-dead hidden">
-          <span data-i18n="ia.session_ended">The session has ended.</span>
-          <button id="ia-restart" class="btn small" data-i18n="ia.reopen">Reopen</button>
-        </div>
+        <button id="ia-term-stop" class="ia-term-stop hidden" title="Stop Claude's current answer (Esc)" data-i18n-title="ia.stop.term_title"><svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span></button>
       </div>
-
-      <aside class="ia-right">
-        <div class="ia-rbar">
-          <span data-i18n="ia.preview">Preview</span>
-          <span class="ia-rbar-end">
-            <button id="ia-reframe" class="btn small" title="Reframe the view" data-i18n-title="ia.reframe.title" data-i18n="ia.reframe">Reframe</button>
-            <button id="ia-expand" class="btn small" title="Enlarge (double-click the preview)" data-i18n-title="ia.expand.title" data-i18n="ia.expand">Enlarge</button>
-            <span id="ia-vlabel" class="ia-vlabel"></span>
-          </span>
-        </div>
-        <div id="ia-stage" class="ia-stage">
-          <div id="ia-wait" class="ia-wait hidden">
-            <div class="ia-wait-bed"></div>
-            <span data-i18n="ia.waiting">Waiting for Claude's first mesh…</span>
-          </div>
-        </div>
-        <div id="ia-versions" class="ia-versions"></div>
-        <dl id="ia-stats" class="ia-stats"></dl>
-        <div class="ia-rActions">
-          <button id="ia-save" class="btn primary" data-i18n="ia.save">Save to Files</button>
-          <button id="ia-slice" class="btn" data-i18n="prepare.slice">Slice</button>
-        </div>
-      </aside>
     </div>
   </div>
 
@@ -604,6 +730,7 @@
   <div class="settings">
   <nav id="set-menu" class="set-menu">
     <button class="set-cat" data-cat="app"><span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span><span class="lbl" data-i18n="settings.app">Application</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="display"><span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2v14a7 7 0 0 1 0-14"/></svg></span><span class="lbl" data-i18n="settings.display">Display</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="nav3d"><span class="glyph" style="color: #5AC8FA"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6"/><path fill-rule="evenodd" transform="rotate(-28 12 12)" d="M12 7C5.9 7 1.5 9.2 1.5 12s4.4 5 10.5 5 10.5-2.2 10.5-5-4.4-5-10.5-5m0 1.7c5 0 8.8 1.6 8.8 3.3s-3.8 3.3-8.8 3.3-8.8-1.6-8.8-3.3 3.8-3.3 8.8-3.3"/></svg></span><span class="lbl" data-i18n="settings.nav3d">3D navigation</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="files"><span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="lbl" data-i18n="nav.files">Files</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="prepare"><span class="glyph" style="color: #5856D6"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span><span class="lbl" data-i18n="nav.prepare">Prepare</span><i class="set-dot"></i></button>
@@ -631,7 +758,7 @@
         <span class="k"><span data-i18n="settings.update_auto">Check for updates at launch</span>
           <span class="sub" data-i18n="settings.update_auto.sub">A window offers to install a new version when one is published</span>
         </span>
-        <input type="checkbox" id="up-auto" class="sw" />
+        <input type="checkbox" id="up-auto" class="sw" role="switch" />
       </label>
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.updates">Updates</span>
@@ -644,6 +771,45 @@
           <span class="sub" data-i18n="settings.welcome.sub">Choose a models folder, find a printer on the network</span>
         </span>
         <button id="w-again" class="btn small" data-i18n="settings.welcome.again">Show Welcome</button>
+      </div>
+    </div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="display">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="settings.display">Display</h2>
+    <div class="group">
+      <div class="grow-row">
+        <span class="k"><span data-i18n="display.mode">Appearance</span>
+          <span class="sub" data-i18n="display.mode.sub">System follows the light or dark setting of the computer</span>
+        </span>
+        <div id="disp-mode" class="seg" role="radiogroup" aria-label="Appearance" data-i18n-aria="display.mode">
+          <button type="button" class="seg-btn" role="radio" data-mode-pick="light" data-i18n="display.mode.light">Light</button>
+          <button type="button" class="seg-btn" role="radio" data-mode-pick="dark" data-i18n="display.mode.dark">Dark</button>
+          <button type="button" class="seg-btn" role="radio" data-mode-pick="system" data-i18n="display.mode.system">System</button>
+        </div>
+      </div>
+    </div>
+    <div class="vp-section disp-head" data-i18n="display.theme">Theme</div>
+    <div id="disp-themes" class="disp-themes" role="radiogroup" aria-label="Theme" data-i18n-aria="display.theme"></div>
+    <div class="group">
+      <div class="grow-row disp-accent-row">
+        <span class="k"><span data-i18n="display.accent">Accent color</span>
+          <span class="sub" id="disp-accent-sub"></span>
+        </span>
+        <div id="disp-accents" class="disp-accents" role="radiogroup" aria-label="Accent color" data-i18n-aria="display.accent"></div>
+      </div>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="display.cvd">Color-blind safe colors</span>
+          <span class="sub" data-i18n="display.cvd.sub">States in blue, orange and purple, never red / green — in every theme</span>
+        </span>
+        <input type="checkbox" id="disp-cvd" class="sw" role="switch" />
+      </label>
+      <div class="grow-row">
+        <span class="k"><span data-i18n="display.reset">Default display</span>
+          <span class="sub" data-i18n="display.reset.sub">System appearance, Snap Studio theme, theme accent</span>
+        </span>
+        <button id="disp-reset" class="btn small" data-i18n="display.reset.btn">Restore</button>
       </div>
     </div>
       </div>
@@ -666,7 +832,7 @@
         <span class="k"><span data-i18n="settings.wheel_invert">Invert scroll wheel</span>
           <span class="sub" data-i18n="settings.wheel_invert.sub">Scrolling up moves the camera away instead of closer</span>
         </span>
-        <input type="checkbox" id="set-invert-wheel" class="sw" />
+        <input type="checkbox" id="set-invert-wheel" class="sw" role="switch" />
       </label>
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.wheel_speed">Sensitivity</span>
@@ -693,7 +859,7 @@
         <span class="k"><span data-i18n="settings.recursive">Include subfolders</span>
           <span class="sub" data-i18n="settings.recursive.sub">Also browse the folders inside the open one</span>
         </span>
-        <input type="checkbox" id="opt-recursive" class="sw" />
+        <input type="checkbox" id="opt-recursive" class="sw" role="switch" />
       </label>
       <div class="grow-row">
         <span class="k"><span data-i18n="settings.thumb_source">Preview source</span>
@@ -717,7 +883,13 @@
         <span class="k"><span data-i18n="settings.plate_ask">Warn when the plate is not empty</span>
           <span class="sub" data-i18n="settings.plate_ask.sub">Asks whether to clear or keep the plate when preparing new models</span>
         </span>
-        <input type="checkbox" id="set-plate-ask" class="sw" />
+        <input type="checkbox" id="set-plate-ask" class="sw" role="switch" />
+      </label>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="settings.spool_check">Check spools before sending</span>
+          <span class="sub" data-i18n="settings.spool_check.sub">Warns when a head used by the print holds another material or color than at slicing, and offers another loaded spool</span>
+        </span>
+        <input type="checkbox" id="set-spool-check" class="sw" role="switch" />
       </label>
     </div>
       </div>
@@ -837,95 +1009,111 @@
     </div>
 
     <div id="s-engine" class="sl-engine hidden"></div>
-    <div class="sl-cols">
-      <div class="sl-col">
-        <div class="set-section" data-i18n="slice.printer">Printer</div>
-        <div id="s-printers" class="sl-printers"></div>
-        <select id="s-printer" class="hidden" tabindex="-1"></select>
-        <div class="sl-line">
-          <span class="k" data-i18n="slice.nozzle">Nozzle</span>
-          <div id="s-nozzles" class="sl-chips small"></div>
-          <button id="s-machine-other" class="w-link" data-i18n="slice.other_profile">Other profile…</button>
-          <button class="btn info-btn" data-info="machine" title="Profile details" data-i18n-title="slice.profile_details"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button>
-        </div>
-        <div id="s-machine-name" class="sl-note"></div>
-        <select id="s-machine" class="hidden" tabindex="-1"></select>
-
-        <div class="set-section" data-i18n="slice.plate">Plate</div>
-        <div id="s-beds" class="sl-beds"></div>
-        <select id="s-bed" class="hidden" tabindex="-1"></select>
-        <div id="s-bedtemp" class="s-bedtemp"></div>
-
-        <div class="set-section" data-i18n="slice.quality">Quality</div>
-        <div class="sl-layer">
-          <div class="sl-layer-head"><span data-i18n="slice.layer_height">Layer height</span><b id="s-layer-val">—</b></div>
-          <div id="s-layer-chips" class="sl-chips"></div>
-          <div class="sl-scale"><span data-i18n="slice.finer">finer</span><span data-i18n="slice.faster">faster</span></div>
-        </div>
-        <div class="sl-layer">
-          <div class="sl-layer-head"><span data-i18n="slice.style">Style</span></div>
-          <div id="s-styles" class="sl-chips"></div>
-        </div>
-        <div class="sl-line">
-          <span id="s-process-name" class="sl-note grow"></span>
-          <button id="s-process-other" class="w-link" data-i18n="slice.other_profile">Other profile…</button>
-          <button class="btn info-btn" data-info="process" title="Profile details" data-i18n-title="slice.profile_details"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button>
-        </div>
-        <select id="s-process" class="hidden" tabindex="-1"></select>
-
-        <div class="set-section" data-i18n="slice.adjust">Adjustments</div>
-        <div class="sl-adjust">
-          <div class="sl-card sl-tile">
-            <small data-i18n="slice.infill">Infill</small>
-            <b id="s-infill-val">—</b>
-            <input type="range" id="s-infill" min="0" max="100" step="5" />
+    <div class="sl-areas">
+      <div class="sl-top">
+        <div class="sl-area sl-area-setup">
+          <div class="set-section" data-i18n="slice.printer">Printer</div>
+          <div id="s-printers" class="sl-printers"></div>
+          <select id="s-printer" class="hidden" tabindex="-1"></select>
+          <div class="sl-line">
+            <span class="k" data-i18n="slice.nozzle">Nozzle</span>
+            <div id="s-nozzles" class="sl-chips small"></div>
+            <button id="s-machine-other" class="w-link" data-i18n="slice.other_profile">Other profile…</button>
+            <button class="btn info-btn" data-info="machine" title="Profile details" data-i18n-title="slice.profile_details"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button>
           </div>
-          <div class="sl-card sl-tile">
-            <small data-i18n="slice.walls">Walls</small>
-            <div class="sl-stepper">
-              <button class="btn" data-step="-1" title="Fewer walls" data-i18n-title="slice.walls_less">−</button>
-              <b id="s-walls-val">—</b>
-              <button class="btn" data-step="1" title="More walls" data-i18n-title="slice.walls_more">+</button>
+          <div id="s-machine-name" class="sl-note"></div>
+          <select id="s-machine" class="hidden" tabindex="-1"></select>
+
+          <div class="set-section" data-i18n="slice.plate">Plate</div>
+          <div id="s-beds" class="sl-beds"></div>
+          <select id="s-bed" class="hidden" tabindex="-1"></select>
+          <div id="s-bedtemp" class="s-bedtemp"></div>
+
+          <div class="set-section" data-i18n="slice.quality">Quality</div>
+          <div class="sl-layer">
+            <div class="sl-layer-head"><span data-i18n="slice.layer_height">Layer height</span><b id="s-layer-val">—</b></div>
+            <div id="s-layer-chips" class="sl-chips"></div>
+            <div class="sl-scale"><span data-i18n="slice.finer">finer</span><span data-i18n="slice.faster">faster</span></div>
+          </div>
+          <div class="sl-layer">
+            <div class="sl-layer-head"><span data-i18n="slice.style">Style</span></div>
+            <div id="s-styles" class="sl-chips"></div>
+          </div>
+          <div class="sl-line">
+            <span id="s-process-name" class="sl-note grow"></span>
+            <button id="s-process-other" class="w-link" data-i18n="slice.other_profile">Other profile…</button>
+            <button class="btn info-btn" data-info="process" title="Profile details" data-i18n-title="slice.profile_details"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m-1 3h2v2h-2zm0 4h2v6h-2z"/></svg></button>
+          </div>
+          <select id="s-process" class="hidden" tabindex="-1"></select>
+        </div>
+
+        <div class="sl-area sl-area-adjust">
+          <div class="set-section" data-i18n="slice.adjust">Adjustments</div>
+          <div class="sl-adjust">
+            <div class="sl-card sl-tile">
+              <small data-i18n="slice.infill">Infill</small>
+              <b id="s-infill-val">—</b>
+              <input type="range" id="s-infill" min="0" max="100" step="5" />
             </div>
-            <input type="range" id="s-walls" class="hidden" min="1" max="6" step="1" tabindex="-1" />
+            <div class="sl-card sl-tile">
+              <small data-i18n="slice.walls">Walls</small>
+              <div class="sl-stepper">
+                <button class="btn" data-step="-1" title="Fewer walls" data-i18n-title="slice.walls_less">−</button>
+                <b id="s-walls-val">—</b>
+                <button class="btn" data-step="1" title="More walls" data-i18n-title="slice.walls_more">+</button>
+              </div>
+              <input type="range" id="s-walls" class="hidden" min="1" max="6" step="1" tabindex="-1" />
+            </div>
           </div>
-        </div>
-        <div class="sl-card sl-adv">
-          <div class="sl-adv-row">
-            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16v4H4zm2 6h2v12H6zm5 0h2v12h-2zm5 0h2v12h-2z"/></svg></span>
-            <span class="k"><span data-i18n="slice.supports">Supports</span><small id="s-adv-sum-support" class="sub"></small></span>
-            <input type="checkbox" id="s-supports" class="sw" />
-            <button class="btn info-btn sl-adv-btn" data-adv="support" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+          <div class="sl-card sl-adv">
+            <div class="sl-adv-row sl-speed-row" id="s-speed-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 4a10 10 0 0 0-8.7 15h17.4A10 10 0 0 0 12 4m0 2a8 8 0 0 1 7.5 11h-15A8 8 0 0 1 12 6m4.2 2.4-5 4.6a1.6 1.6 0 1 0 2.2 2.2z"/></svg></span>
+              <span class="k"><span id="s-speed-label" data-i18n="slice.speed">Speed</span><small id="s-adv-sum-speed" class="sub"></small></span>
+              <b id="s-speed-val" class="sl-speed-val">100 %</b>
+              <button class="btn info-btn sl-adv-btn" data-adv="speed" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <div class="sl-speed-ctl">
+                <input type="range" id="s-speed" min="50" max="120" step="5" value="100" aria-labelledby="s-speed-label" />
+                <div class="sl-speed-marks" data-marks="s-speed"></div>
+              </div>
+            </div>
+            <div class="sl-adv-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16v4H4zm2 6h2v12H6zm5 0h2v12h-2zm5 0h2v12h-2z"/></svg></span>
+              <span class="k"><span data-i18n="slice.supports">Supports</span><small id="s-adv-sum-support" class="sub"></small></span>
+              <input type="checkbox" id="s-supports" class="sw" role="switch" />
+              <button class="btn info-btn sl-adv-btn" data-adv="support" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
+            <div class="sl-adv-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8zM3 3h18v18H3zm2 2v14h14V5z"/></svg></span>
+              <span class="k"><span data-i18n="slice.brim">Brim</span><small id="s-adv-sum-brim" class="sub"></small></span>
+              <input type="checkbox" id="s-brim" class="sw" role="switch" />
+              <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
+            <div class="sl-adv-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
+              <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
+              <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
+            <div class="sl-adv-row" id="s-adv-mm-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
+              <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
+              <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
           </div>
-          <div class="sl-adv-row">
-            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8zM3 3h18v18H3zm2 2v14h14V5z"/></svg></span>
-            <span class="k"><span data-i18n="slice.brim">Brim</span><small id="s-adv-sum-brim" class="sub"></small></span>
-            <input type="checkbox" id="s-brim" class="sw" />
-            <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+          <div class="sl-line sl-save-line">
+            <button id="s-save-process" class="w-link" data-i18n="slice.adv.save">Save as Custom Profile…</button>
           </div>
-          <div class="sl-adv-row">
-            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
-            <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
-            <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
-          </div>
-          <div class="sl-adv-row" id="s-adv-mm-row">
-            <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
-            <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
-            <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
-          </div>
-        </div>
-        <div class="sl-line sl-save-line">
-          <button id="s-save-process" class="w-link" data-i18n="slice.adv.save">Save as Custom Profile…</button>
         </div>
       </div>
 
-      <div class="sl-col">
-        <div class="set-section"><span data-i18n="slice.heads">Heads and spools</span> <span id="s-heads-note" class="set-note"></span></div>
-        <div id="s-heads" class="sl-heads"></div>
-
-        <div class="set-section"><span data-i18n="slice.model_colors">Model colors</span> <button id="s-map-edit" class="w-link set-note" data-i18n="heads.edit_in_prepare">Edit in Prepare</button></div>
-        <div id="s-map" class="sl-map"></div>
-
+      <div class="sl-bottom">
+        <div class="sl-area sl-area-heads">
+          <div class="set-section"><span data-i18n="slice.heads">Heads and spools</span> <span id="s-heads-note" class="set-note"></span></div>
+          <div id="s-heads" class="sl-heads"></div>
+        </div>
+        <div class="sl-area sl-area-colors">
+          <div class="set-section"><span data-i18n="slice.model_colors">Model colors</span> <button id="s-map-edit" class="w-link set-note" data-i18n="heads.edit_in_prepare">Edit in Prepare</button></div>
+          <div id="s-map" class="sl-map"></div>
+        </div>
       </div>
     </div>
 
@@ -967,35 +1155,53 @@
 </div>
 
 <div id="iamodal" class="modal hidden">
-  <div class="modal-box">
-    <h3 id="ia-mtitle"></h3>
-    <div id="ia-src" class="det-sub"></div>
+  <div class="modal-box ia-new-box" role="dialog" aria-labelledby="ia-mtitle">
+    <div class="ia-new-head">
+      <img id="ia-src-thumb" class="ia-new-thumb hidden" alt="" />
+      <span id="ia-new-icon" class="ia-new-icon" aria-hidden="true"></span>
+      <div class="ia-new-titles">
+        <h3 id="ia-mtitle"></h3>
+        <div id="ia-src" class="ia-new-src"></div>
+      </div>
+    </div>
 
-    <div class="form">
-      <label><span id="ia-plabel"></span>
-        <textarea id="ia-prompt" rows="3"></textarea>
-      </label>
-      <div id="ia-cfields" class="form hidden">
-        <label><span data-i18n="ia.new.bounds">Maximum size</span>
+    <div class="ia-prompt-box">
+      <textarea id="ia-prompt" rows="6"></textarea>
+      <kbd id="ia-kbd" class="ia-prompt-kbd"></kbd>
+    </div>
+    <div class="ia-ideas">
+      <span class="ia-new-k" data-i18n="ia.new.ideas">Ideas</span>
+      <span id="ia-ideas" class="ia-ideas-list"></span>
+    </div>
+
+    <div class="ia-new-opts">
+      <div id="ia-cfields" class="ia-new-group hidden">
+        <div class="ia-new-row">
+          <span class="ia-new-k" data-i18n="ia.new.bounds">Maximum size</span>
           <span class="ia-dims">
             <input id="ia-bx" class="field num" type="number" min="1" step="1" aria-label="X" /><span>×</span>
             <input id="ia-by" class="field num" type="number" min="1" step="1" aria-label="Y" /><span>×</span>
             <input id="ia-bz" class="field num" type="number" min="1" step="1" aria-label="Z" /><span>mm</span>
           </span>
-        </label>
-        <label><span data-i18n="ia.new.dest">Save to</span>
-          <select id="ia-dest"></select>
-        </label>
+          <button id="ia-bed-fill" type="button" class="ia-chip-btn" data-i18n="ia.new.whole_bed">Whole Bed</button>
+        </div>
+        <div class="ia-new-row">
+          <span class="ia-new-k" data-i18n="ia.new.dest">Save to</span>
+          <button id="ia-dest" type="button" class="ia-folder-btn" aria-haspopup="menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4.2l2 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <span id="ia-dest-name"></span><span class="ia-caret" aria-hidden="true">▾</span>
+          </button>
+        </div>
       </div>
-      <label><span data-i18n="ia.new.sandbox">Sandbox</span>
-        <select id="ia-engine">
-          <option value="container" data-i18n="ia.engine.container">Container (isolated)</option>
-          <option value="local" data-i18n="ia.engine.local">Local, no container</option>
-        </select>
-      </label>
+      <div class="ia-new-row">
+        <span class="ia-new-k" data-i18n="ia.new.run">Runs in</span>
+        <div id="ia-engines" class="ia-engines" role="radiogroup"></div>
+      </div>
+      <div class="ia-new-row">
+        <span class="ia-new-k" data-i18n="ia.new.model">Model</span>
+        <div id="ia-models" class="ia-seg" role="radiogroup"></div>
+      </div>
     </div>
-
-    <div id="ia-hints" class="ia-hints"></div>
 
     <div id="ia-msg" class="pf-test"></div>
     <div class="modal-actions">
@@ -1018,8 +1224,8 @@
         <button class="seg-btn" data-mode="feature" title="One color per path type" data-i18n-title="viewer.color.paths.title" data-i18n="viewer.color.paths">Paths</button>
         <button class="seg-btn" data-mode="tool" title="Plain color of each filament" data-i18n-title="viewer.color.filaments.title" data-i18n="viewer.color.filaments">Filaments</button>
       </div>
-      <button id="v-travel" class="btn hidden" data-i18n="viewer.travel">Travel moves</button>
-      <button id="v-plate" class="btn on" data-i18n="slice.plate">Plate</button>
+      <label id="v-travel-sw" class="sw-label hidden"><input type="checkbox" id="v-travel" class="sw small" role="switch" /><span data-i18n="viewer.travel">Travel moves</span></label>
+      <label class="sw-label"><input type="checkbox" id="v-plate" class="sw small" role="switch" checked /><span data-i18n="slice.plate">Plate</span></label>
       <button id="v-reset" class="btn" title="Reframe (R)" data-i18n-title="viewer.reframe.title" data-i18n="ia.reframe">Reframe</button>
       <button id="v-close" class="btn" title="Close (Esc)" data-i18n-title="viewer.close.title" data-i18n="common.close">Close</button>
     </div>
@@ -1056,6 +1262,20 @@
 
 <div id="toasts" class="toasts"></div>
 
+<div id="iadelmodal" class="modal hidden">
+  <div class="modal-box iadel-box" role="alertdialog" aria-labelledby="iadel-title" aria-describedby="iadel-text">
+    <h3 id="iadel-title"></h3>
+    <div id="iadel-text" class="det-sub" data-i18n="ia.delete.text">This cannot be undone. Your saved files are not touched.</div>
+    <div class="set-section" data-i18n="ia.delete.what">What will be deleted</div>
+    <ul id="iadel-list" class="group iadel-list"></ul>
+    <div class="iadel-keep" data-i18n="ia.delete.keep">Claude's shared prompt history (history.jsonl) and the 3MF files you saved are kept.</div>
+    <div class="modal-actions">
+      <button id="iadel-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="iadel-go" class="btn destructive" data-i18n="ia.delete.confirm">Delete Conversation</button>
+    </div>
+  </div>
+</div>
+
 <div id="occmodal" class="modal hidden">
   <div class="modal-box occ-box" role="alertdialog" aria-labelledby="occ-title">
     <h3 id="occ-title"></h3>
@@ -1073,28 +1293,88 @@
   </div>
 </div>
 
+<div id="pfshare" class="modal hidden">
+  <div class="modal-box pfs-box" role="dialog" aria-labelledby="pfs-title">
+    <div class="pfs-head">
+      <img id="pfs-thumb" class="pfs-thumb hidden" alt="" />
+      <span id="pfs-icon" class="pfs-icon" aria-hidden="true"></span>
+      <div class="pfs-titles">
+        <h3 id="pfs-title"></h3>
+        <div id="pfs-sub" class="pfs-sub"></div>
+      </div>
+    </div>
+    <div id="pfs-grid" class="pfs-grid" role="group">
+      <button type="button" class="pfs-tile" data-share="native">
+        <span class="pfs-ico"><svg viewBox="0 0 24 24"><path d="M12 2.5 7.5 7l1.4 1.4 2.1-2.1V15h2V6.3l2.1 2.1L16.5 7zM5 10v10.5A1.5 1.5 0 0 0 6.5 22h11a1.5 1.5 0 0 0 1.5-1.5V10h-4v2h2v8H7v-8h2v-2z"/></svg></span>
+        <b data-i18n="share.native">AirDrop, Messages, Mail…</b><small data-i18n="share.native_sub">The Mac's share menu</small>
+      </button>
+      <button type="button" class="pfs-tile" data-share="qr">
+        <span class="pfs-ico"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zm2 2v4h4V5zm8-2h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zm8-2h2v2h-2zm2 2h2v2h-2zm2-2h4v2h-4zm-4 4h2v4h-2zm4 0h2v2h-2zm2 2h2v2h-2zm-2 2h2v2h-2zM6 6h2v2H6zm10 0h2v2h-2zM6 16h2v2H6z"/></svg></span>
+        <b data-i18n="share.qr">On my phone</b><small data-i18n="share.qr_sub">QR code, same Wi-Fi</small>
+      </button>
+      <button type="button" class="pfs-tile" data-share="copy">
+        <span class="pfs-ico"><svg viewBox="0 0 24 24"><path d="M8 3h9a2 2 0 0 1 2 2v12h-2V5H8zM5 7h9a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2m0 2v11h9V9z"/></svg></span>
+        <b data-i18n="share.copy">Copy the File</b><small data-i18n="share.copy_sub">To paste in a folder, a message…</small>
+      </button>
+      <button type="button" class="pfs-tile" data-share="save">
+        <span class="pfs-ico"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3zM4 18h16v2H4z"/></svg></span>
+        <b data-i18n="share.save">Save As…</b><small data-i18n="share.save_sub">Choose the folder</small>
+      </button>
+    </div>
+    <div id="pfs-qr" class="pfs-qr hidden">
+      <div id="pfs-code" class="pfs-code"></div>
+      <div class="pfs-qrtext">
+        <b data-i18n="share.qr.title">Scan with your phone</b>
+        <p data-i18n="share.qr.text">It must be on the same Wi-Fi network as this computer. The link stops when this window closes.</p>
+        <code id="pfs-url" class="pfs-url"></code>
+        <small id="pfs-left" class="pfs-left"></small>
+        <button id="pfs-qrback" type="button" class="w-link" data-i18n="share.qr.back">← Other Options</button>
+      </div>
+    </div>
+    <div id="pfs-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="pfs-close" class="btn" data-cancel data-i18n="common.close">Close</button>
+    </div>
+  </div>
+</div>
+<div id="pflrename" class="modal hidden">
+  <div class="modal-box">
+    <h3 data-i18n="pfiles.rename_title">Rename on the Printer</h3>
+    <div class="form">
+      <label><span data-i18n="pfiles.rename_name">New name</span><input id="pflren-name" class="field" type="text" maxlength="200" spellcheck="false" autocomplete="off" /></label>
+    </div>
+    <div id="pflren-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="pflren-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="pflren-go" class="btn primary" data-i18n="pfiles.rename">Rename</button>
+    </div>
+  </div>
+</div>
+
 <div id="sendmodal" class="modal hidden">
   <div class="modal-box">
     <h3 data-i18n="send.title">Send to Printer</h3>
     <div id="snd-file" class="det-sub"></div>
-    <div class="form">
-      <label><span data-i18n="slice.printer">Printer</span><select id="snd-printer"></select></label>
+    <div class="snd-for">
+      <span id="snd-for-label" data-i18n="slice.printer">Printer</span>
+      <div id="snd-printer" class="pj-printers" role="radiogroup" aria-labelledby="snd-for-label"></div>
     </div>
     <div id="snd-state" class="pf-test"></div>
+    <div id="snd-bed" class="snd-bed hidden" role="status"><span id="snd-bed-text"></span> · <button id="snd-bed-go" class="bm-link" data-i18n="bm.measure_first">Measure First</button></div>
 
     <div class="set-section" data-i18n="send.before">Before printing</div>
     <div class="group">
       <label class="grow-row">
         <span class="k" data-i18n="send.leveling">Automatic bed leveling</span>
-        <input type="checkbox" id="snd-level" class="sw" />
+        <input type="checkbox" id="snd-level" class="sw" role="switch" />
       </label>
       <label class="grow-row">
         <span class="k" data-i18n="send.flow">Extrusion flow calibration</span>
-        <input type="checkbox" id="snd-flow" class="sw" />
+        <input type="checkbox" id="snd-flow" class="sw" role="switch" />
       </label>
       <label class="grow-row">
         <span class="k" data-i18n="send.timelapse">Timelapse camera</span>
-        <input type="checkbox" id="snd-timelapse" class="sw" />
+        <input type="checkbox" id="snd-timelapse" class="sw" role="switch" />
       </label>
     </div>
 
@@ -1104,6 +1384,135 @@
       <button id="snd-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
       <button id="snd-queue" class="btn left hidden" data-i18n="send.queue">Add to Queue</button>
       <button id="snd-go" class="btn primary" data-i18n="send.go">Start Print</button>
+    </div>
+  </div>
+</div>
+
+<div id="bmmeasure" class="modal hidden">
+  <div class="modal-box bm-sheet bm-wiz">
+    <h3 data-i18n="bm.measure.sheet">Measure the Bed</h3>
+    <p class="det-sub" id="bmm-printer"></p>
+    <ol class="bm-steps" id="bmm-steps">
+      <li data-step="prep"><i></i><span data-i18n="bm.step.prep">Prepare</span></li>
+      <li data-step="run"><i></i><span data-i18n="bm.step.run">Measure</span></li>
+      <li data-step="done"><i></i><span data-i18n="bm.step.done">Result</span></li>
+    </ol>
+    <div id="bmm-form">
+      <div id="bmm-recent" class="bm-warn hidden" role="alert"></div>
+      <div class="group">
+        <div class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.printer">Printer ready</span><span class="sub" id="bmm-ready-sub"></span></span>
+          <span class="bm-check wait" id="bmm-ready-ic" aria-hidden="true"></span>
+        </div>
+        <label class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.empty">The bed is clear</span><span class="sub" data-i18n="bm.prep.empty_sub">No part, no tool on it: the probe touches the whole surface</span></span>
+          <input type="checkbox" id="bmm-empty" class="sw" role="switch" />
+        </label>
+        <label class="grow-row">
+          <span class="k"><span data-i18n="bm.prep.clean">The plate is clean and well seated</span><span class="sub" data-i18n="bm.prep.clean_sub">Advised: dirt under the plate skews the measurement</span></span>
+          <input type="checkbox" id="bmm-clean" class="sw" role="switch" />
+        </label>
+      </div>
+      <div class="group">
+        <label class="grow-row bm-slider-block">
+          <span class="k"><span data-i18n="bm.measure.temp">Bed temperature</span><span class="sub" id="bmm-temp-sub"></span></span>
+          <input id="bmm-temp" type="range" min="0" max="110" step="1" aria-label="Bed temperature" data-i18n-aria="bm.measure.temp" />
+          <span class="val" id="bmm-temp-v"></span>
+        </label>
+        <div class="grow-row"><span class="k" data-i18n="bm.measure.duration">Estimated duration</span><span class="val" id="bmm-eta"></span></div>
+      </div>
+    </div>
+    <div id="bmm-run" class="hidden">
+      <ol class="bm-phases" id="bmm-phases"></ol>
+      <div class="bm-phase" id="bmm-phase"></div>
+      <div class="bm-note bm-why" id="bmm-phase-why"></div>
+      <div class="progress" id="bmm-progress"><i></i></div>
+      <div class="bm-note" id="bmm-left"></div>
+      <p class="bm-note" id="bmm-stop-note"></p>
+    </div>
+    <div id="bmm-done" class="hidden"></div>
+    <div id="bmm-msg" class="pf-test"></div>
+    <div class="modal-actions">
+      <button id="bmm-stop" class="btn danger left hidden" data-i18n="bm.stop.button">Emergency Stop</button>
+      <button id="bmm-abort" class="btn hidden" data-i18n="bm.abort.button">Stop Measuring</button>
+      <button id="bmm-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="bmm-alt" class="btn hidden"></button>
+      <button id="bmm-go" class="btn primary" data-i18n="bm.measure.go">Measure</button>
+    </div>
+  </div>
+</div>
+
+<div id="bmsettings" class="modal hidden">
+  <div class="modal-box bm-sheet">
+    <h3 data-i18n="bm.settings">Bed Leveling Settings</h3>
+    <p class="det-sub" id="bms-printer"></p>
+    <div class="set-section" data-i18n="bm.set.tolerance">Tolerance</div>
+    <div id="bms-level" class="seg bm-seg" role="radiogroup" aria-label="Tolerance" data-i18n-aria="bm.set.tolerance"></div>
+    <p class="bm-note" id="bms-level-sub"></p>
+    <details class="bm-adv">
+      <summary data-i18n="bm.set.advanced">Advanced: limits in mm</summary>
+      <div class="group">
+        <label class="grow-row bm-slider-row">
+          <span class="k"><span data-i18n="bm.set.good">Good up to</span><span class="sub" data-i18n="bm.set.good_sub">Deviation shown in green</span></span>
+          <input id="bms-good" type="range" min="0.05" max="2" step="0.05" />
+          <span class="val" id="bms-good-v"></span>
+        </label>
+        <label class="grow-row bm-slider-row">
+          <span class="k"><span data-i18n="bm.set.limit">Alert threshold</span><span class="sub" data-i18n="bm.set.limit_sub">Above it, the bed is out of tolerance</span></span>
+          <input id="bms-limit" type="range" min="0.05" max="2" step="0.05" />
+          <span class="val" id="bms-limit-v"></span>
+        </label>
+      </div>
+    </details>
+    <div class="set-section" data-i18n="bm.set.reminders">Alerts and reminders</div>
+    <div class="group">
+      <label class="grow-row">
+        <span class="k"><span data-i18n="bm.set.alert">Alert when out of tolerance</span><span class="sub" data-i18n="bm.set.alert_sub">A Bed Leveling task in Care, and the sidebar dot</span></span>
+        <input type="checkbox" id="bms-alert" class="sw" role="switch" />
+      </label>
+      <label class="grow-row">
+        <span class="k"><span data-i18n="bm.set.remind">Remind me to measure</span><span class="sub" data-i18n="bm.set.remind_sub">A task in Care when the last measurement gets old</span></span>
+        <input type="checkbox" id="bms-remind" class="sw" role="switch" />
+      </label>
+      <div class="grow-row bm-seg-row" id="bms-days-row"><span class="k" data-i18n="bm.set.after_days">After</span><div id="bms-days" class="seg bm-seg" role="radiogroup" aria-label="After" data-i18n-aria="bm.set.after_days"></div></div>
+      <div class="grow-row bm-seg-row" id="bms-prints-row"><span class="k" data-i18n="bm.set.after_prints">Or after, in prints</span><div id="bms-prints" class="seg bm-seg" role="radiogroup" aria-label="Or after, in prints" data-i18n-aria="bm.set.after_prints"></div></div>
+    </div>
+    <div class="group">
+      <div class="grow-row bm-seg-row">
+        <span class="k"><span data-i18n="bm.set.keep">Measurements kept</span><span class="sub" data-i18n="bm.set.keep_sub">The oldest go first</span></span>
+        <div id="bms-keep" class="seg bm-seg" role="radiogroup" aria-label="Measurements kept" data-i18n-aria="bm.set.keep"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="bms-reset" class="btn left" data-i18n="bm.set.reset">Defaults</button>
+      <button id="bms-done" class="btn primary" data-cancel data-i18n="bm.set.done">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="bmcompare" class="modal hidden">
+  <div class="modal-box bm-sheet wide">
+    <h3 data-i18n="bm.compare.title">Compare Two Measurements</h3>
+    <div class="bm-cmp-pick">
+      <div class="bm-cmp-side"><span data-i18n="bm.compare.before">Before</span><div id="bmc-a" class="bm-chips" role="radiogroup" aria-label="Before" data-i18n-aria="bm.compare.before"></div></div>
+      <div class="bm-cmp-side"><span data-i18n="bm.compare.after">After</span><div id="bmc-b" class="bm-chips" role="radiogroup" aria-label="After" data-i18n-aria="bm.compare.after"></div></div>
+    </div>
+    <div class="bm-cmp-sum" id="bmc-sum"></div>
+    <div class="bm-viewbar">
+      <div id="bmc-views" class="seg" role="group" aria-label="View" data-i18n-aria="bm.compare.title">
+        <button class="seg-btn labeled" data-cv="a" data-i18n="bm.compare.before">Before</button>
+        <button class="seg-btn labeled" data-cv="b" data-i18n="bm.compare.after">After</button>
+        <button class="seg-btn labeled" data-cv="d" data-i18n="bm.compare.diff">Difference</button>
+      </div>
+      <div id="bmc-modes" class="seg" role="group" aria-label="3D or map" data-i18n-aria="bm.view">
+        <button class="seg-btn labeled" data-bmode="3d">3D</button>
+        <button class="seg-btn labeled" data-bmode="map" data-i18n="bm.view.map">Map</button>
+      </div>
+    </div>
+    <div class="bm-stage small"><canvas id="bmc-canvas"></canvas><div class="bm-hover hidden" id="bmc-hover"></div></div>
+    <div class="bm-legend" id="bmc-legend"></div>
+    <div class="modal-actions">
+      <button id="bmc-close" class="btn primary" data-cancel data-i18n="common.close">Close</button>
     </div>
   </div>
 </div>
@@ -1144,7 +1553,7 @@
     <div id="pd-summary" class="pd-summary"></div>
     <div class="pd-tools">
       <input id="pd-search" class="field" type="search" placeholder="Search a setting" spellcheck="false" data-i18n-placeholder="profile.search" />
-      <label class="pd-all"><input id="pd-all" type="checkbox" class="sw" /> <span data-i18n="profile.all">All settings</span></label>
+      <label class="pd-all"><input id="pd-all" type="checkbox" class="sw" role="switch" /> <span data-i18n="profile.all">All settings</span></label>
     </div>
     <div id="pd-tabs" class="seg pd-tabs"></div>
     <div id="pd-body" class="pd-body"></div>
@@ -1370,6 +1779,27 @@
   </div>
 </div>
 
+<div id="spmodal" class="modal hidden">
+  <div class="modal-box sp-box" role="alertdialog" aria-labelledby="sp-title">
+    <div class="sp-head">
+      <img id="sp-thumb" class="sp-thumb hidden" alt="" />
+      <div class="sp-head-text">
+        <h3 id="sp-title" data-i18n="spool.title">The loaded spools don't match the slice</h3>
+        <div id="sp-name" class="sp-name"></div>
+        <div id="sp-info" class="sp-info"></div>
+      </div>
+    </div>
+    <div class="sp-cols" aria-hidden="true"><span data-i18n="spool.col_model">Model color</span><span></span><span data-i18n="spool.use">Print with</span></div>
+    <div id="sp-list" class="sp-list"></div>
+    <div id="sp-hint" class="sp-hint"></div>
+    <div class="modal-actions">
+      <button id="sp-edit" class="btn left" data-i18n="spool.edit">Edit in Prepare</button>
+      <button id="sp-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="sp-go" class="btn primary" data-i18n="spool.send">Send</button>
+    </div>
+  </div>
+</div>
+
 <script src="scheme.js"></script>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
@@ -1380,18 +1810,29 @@
 <script src="engine.js"></script>
 <script src="profiles.js"></script>
 <script src="slice-adv.js"></script>
+<script src="speed.js"></script>
+<script src="slice-speed.js"></script>
 <script src="prints.js"></script>
+<script src="prepare-logic.js"></script>
 <script src="prepare.js"></script>
 <script src="heads.js"></script>
+<script src="spoolcheck.js"></script>
+<script src="bedmesh-logic.js"></script>
 <script src="maint.js"></script>
+<script src="bedmesh.js"></script>
+<script src="pfiles-logic.js"></script>
+<script src="printer-files.js"></script>
+<script src="pfiles-share.js"></script>
 <script src="library.js"></script>
 <script src="vendor/xterm.js"></script>
 <script src="vendor/marked.js"></script>
 <script src="vendor/purify.js"></script>
 <script src="vendor/xterm-addon-fit.js"></script>
 <script src="ai-setup.js"></script>
+<script src="ia-list.js"></script>
 <script src="ia.js"></script>
 <script src="ia-chat.js"></script>
+<script src="ia-trace.js"></script>
 <script src="auth.js"></script>
 <script src="settings.js"></script>
 <script src="update.js"></script>

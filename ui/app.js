@@ -103,11 +103,9 @@ function thumbUrl(f, px) {
 
 /* ------------------------------------------------------------------ theme */
 
-/* Light or dark: only the system setting decides. Surfaces drawn outside
-   CSS (WebGL, terminal) listen to the "themechange" event. */
-const darkScheme = matchMedia("(prefers-color-scheme: dark)");
-const isDark = () => darkScheme.matches;
-darkScheme.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+/* Light or dark, theme and accent: themes.js (loaded in <head>) resolves
+   them, exposes isDark() and fires "themechange"; surfaces drawn outside
+   CSS (WebGL, terminal) listen to it and read the tokens. */
 
 /* ------------------------------------------------------- native menus */
 
@@ -216,6 +214,7 @@ function sideSync() {
   if (v === "files" && state.dir) target = document.querySelector(`#side-recents [data-dir="${CSS.escape(state.dir)}"]`);
   if (v === "printers" && typeof P !== "undefined" && P.sel) target = document.querySelector(`#side-printers [data-id="${CSS.escape(P.sel)}"]`);
   if (v === "heads" && typeof HV !== "undefined" && HV.pid) target = document.querySelector(`#side-printers [data-heads="${CSS.escape(HV.pid)}"]`);
+  if (v === "pfiles" && typeof PFL !== "undefined" && PFL.pid) target = document.querySelector(`#side-printers [data-pfiles="${CSS.escape(PFL.pid)}"]`);
   if (v === "maint" && typeof MT !== "undefined" && MT.pid) target = document.querySelector(`#side-printers [data-maint="${CSS.escape(MT.pid)}"]`);
   if (v === "ia" && typeof IA !== "undefined" && IA.open) target = document.querySelector(`#side-ia [data-conv="${CSS.escape(IA.open)}"]`);
   if (v === "prints" && typeof PJ !== "undefined" && PJ.sel) {
@@ -989,6 +988,8 @@ onMenu("nav", (v) => switchView(v));
 onMenu("view", (v) => { switchView("files"); setView(v); });
 onMenu("edit", (what) => {
   if (what === "find" && window.currentView === "files") { $("search").focus(); $("search").select(); }
+  // On macOS ⌘F is the menu's: the AI list has its own search.
+  if (what === "find" && window.currentView === "ia" && !IA.open && IA.list.length) { $("ia-q").focus(); $("ia-q").select(); }
 });
 onMenu("files", (what) => {
   if (what === "open") { switchView("files"); pickFolder(); }
@@ -1220,6 +1221,16 @@ async function boot() {
   updateStatus();
   if (state.dir) await refresh();
 }
+
+/* Switches (input.sw, role="switch"): Enter toggles them too, as Space
+   does, and is kept from submitting or closing anything around them. */
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (e.key !== "Enter" || !(t instanceof HTMLInputElement) || !t.classList.contains("sw") || t.disabled) return;
+  e.preventDefault();
+  e.stopPropagation();
+  t.click();
+}, true);
 
 /* A new language: everything Files builds in code is rebuilt. */
 window.addEventListener("langchange", () => {

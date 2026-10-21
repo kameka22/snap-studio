@@ -194,14 +194,20 @@ impl StartOptions {
 ///
 /// Firmware ≥ 1.3.0: one `SET_PRINT_PREFERENCE` macro per option. Before: a
 /// single `SET_PRINT_PREFERENCES` (`legacy`).
-pub fn preprint_script(opts: &StartOptions, tools: &[u8], legacy: bool) -> String {
+pub fn preprint_script(opts: &StartOptions, tools: &[u8], map: &[(u8, u8)], legacy: bool) -> String {
     let mut lines: Vec<String> = Vec::new();
-    // The G-code tools are already the heads: identity mapping.
-    for t in tools {
-        lines.push(format!("SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER={t} MAP_EXTRUDER={t}"));
+    // Every used tool gets its entry (the firmware resets none): the head
+    // chosen as a substitute, otherwise the head of the same number.
+    let heads: Vec<u8> = tools.iter().map(|t| head_of(*t, map)).collect();
+    for (t, h) in tools.iter().zip(&heads) {
+        lines.push(format!("SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER={t} MAP_EXTRUDER={h}"));
     }
-    if !tools.is_empty() {
-        let list: Vec<String> = tools.iter().map(|t| t.to_string()).collect();
+    if !heads.is_empty() {
+        // Physical heads the task uses.
+        let mut used = heads.clone();
+        used.sort_unstable();
+        used.dedup();
+        let list: Vec<String> = used.iter().map(|t| t.to_string()).collect();
         lines.push(format!("SET_PRINT_USED_EXTRUDERS EXTRUDERS={}", list.join(",")));
     }
     if legacy {
@@ -219,11 +225,53 @@ pub fn preprint_script(opts: &StartOptions, tools: &[u8], legacy: bool) -> Strin
     lines.join("\n")
 }
 
+/// True when a substitution really moves a tool to another head.
+pub fn is_remap(map: &[(u8, u8)]) -> bool {
+    map.iter().any(|(t, h)| t != h)
+}
+
+/// Extruder map back to identity, tool `n` on head `n`. The firmware keeps
+/// the last map it was given, and Snap Studio only rewrites the entries of
+/// the tools a print uses: after a print sent with a substitution, a print
+/// started elsewhere (the printer's screen) could inherit it.
+pub fn identity_map_script() -> String {
+    (0..4u8)
+        .map(|h| format!("SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER={h} MAP_EXTRUDER={h}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Head printing a G-code tool: its substitute, otherwise the same number.
+pub fn head_of(tool: u8, map: &[(u8, u8)]) -> u8 {
+    map.iter().find(|(t, _)| *t == tool).map(|(_, h)| *h).unwrap_or(tool)
+}
+
+/// A substitution is only taken when it stays one tool per head and
+/// within the U1's four heads: two tools on one head would merge colors.
+pub fn check_map(tools: &[u8], map: &[(u8, u8)]) -> Result<()> {
+    if map.iter().any(|(t, h)| *h > 3 || !tools.contains(t)) {
+        return Err(anyhow!("invalid head substitution"));
+    }
+    let mut heads: Vec<u8> = tools.iter().map(|t| head_of(*t, map)).collect();
+    heads.sort_unstable();
+    let n = heads.len();
+    heads.dedup();
+    if heads.len() != n {
+        return Err(anyhow!("two tools on the same head"));
+    }
+    Ok(())
+}
+
 /// Runs a G-code script; the error reports Klipper's answer.
 pub async fn gcode_script(host: &str, port: u16, script: &str) -> Result<()> {
+    gcode_script_for(host, port, script, Duration::from_secs(30)).await
+}
+
+/// The same, for a script that lasts (Moonraker answers when it is done).
+pub async fn gcode_script_for(host: &str, port: u16, script: &str, timeout: Duration) -> Result<()> {
     let r = long_client()
         .post(format!("{}/printer/gcode/script", base(host, port)))
-        .timeout(Duration::from_secs(30))
+        .timeout(timeout)
         .json(&serde_json::json!({ "script": script }))
         .send()
         .await?;
@@ -246,6 +294,16 @@ pub fn is_unknown_command(err: &anyhow::Error) -> bool {
 }
 
 /// Pause, resume or cancel the running print.
+/// A bare POST to Moonraker (`/printer/emergency_stop`…): its `result`
+/// (Null when there is none).
+pub(crate) async fn post_path(host: &str, port: u16, path: &str) -> Result<Value> {
+    let r = client().post(format!("{}{path}", base(host, port))).send().await?;
+    if !r.status().is_success() {
+        return Err(anyhow!(crate::t!("err.printer_refuses", status = r.status())));
+    }
+    Ok(r.json::<Value>().await.map(|v| v["result"].clone()).unwrap_or(Value::Null))
+}
+
 pub async fn print_action(host: &str, port: u16, action: &str) -> Result<()> {
     let action = match action {
         "pause" | "resume" | "cancel" => action,
@@ -664,7 +722,7 @@ mod tests {
     #[test]
     fn preprint_script_matches_snapmaker_orca() {
         let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: false };
-        let s = preprint_script(&o, &[0, 2], false);
+        let s = preprint_script(&o, &[0, 2], &[], false);
         assert_eq!(
             s,
             "SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=0 MAP_EXTRUDER=0\n\
@@ -674,10 +732,34 @@ mod tests {
              SET_PRINT_PREFERENCE KEY=flow_calibrate VALUE=false\n\
              SET_PRINT_PREFERENCE KEY=time_lapse_camera VALUE=false"
         );
-        let old = preprint_script(&StartOptions::default(), &[1], true);
+        let old = preprint_script(&StartOptions::default(), &[1], &[], true);
         assert!(old.ends_with(
             "SET_PRINT_PREFERENCES AUTO_BED_LEVELING=false FLOW_CALIBRATE=false TIME_LAPSE_CAMERA=false"
         ));
+    }
+
+    #[test]
+    fn substituted_heads_are_mapped() {
+        let o = StartOptions::default();
+        let s = preprint_script(&o, &[0, 2], &[(2, 3)], false);
+        assert!(s.starts_with(
+            "SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=0 MAP_EXTRUDER=0\n\
+             SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=2 MAP_EXTRUDER=3\n\
+             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,3\n"
+        ));
+        // Swap: still one tool per head.
+        let s = preprint_script(&o, &[0, 1], &[(0, 1), (1, 0)], false);
+        assert!(s.contains("CONFIG_EXTRUDER=0 MAP_EXTRUDER=1") && s.contains("CONFIG_EXTRUDER=1 MAP_EXTRUDER=0"));
+        assert!(s.contains("EXTRUDERS=0,1\n"));
+        assert!(check_map(&[0, 1], &[(0, 1), (1, 0)]).is_ok());
+        assert!(check_map(&[0, 2], &[(2, 0)]).is_err(), "T0 and T2 on head 0");
+        assert!(check_map(&[0], &[(0, 4)]).is_err(), "no head 4");
+        assert!(check_map(&[0], &[(1, 2)]).is_err(), "T1 is not used");
+        assert_eq!(head_of(1, &[(2, 3)]), 1);
+        assert!(is_remap(&[(1, 3)]) && !is_remap(&[]) && !is_remap(&[(2, 2)]));
+        let id = identity_map_script();
+        assert_eq!(id.lines().count(), 4);
+        assert!(id.ends_with("CONFIG_EXTRUDER=3 MAP_EXTRUDER=3"));
     }
 
     #[test]

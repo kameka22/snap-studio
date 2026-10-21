@@ -30,6 +30,8 @@ function switchView(v) {
     stopLive();
     camStop();
   }
+  // Leaving a printer's files stops its video.
+  if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
   if (v === "prints") pjRender();
   else if (typeof pjCamStop === "function") pjCamStop();
   // The Library's native views must only live in its tab.
@@ -47,7 +49,12 @@ function switchView(v) {
 }
 
 document.querySelectorAll(".sidebar .side-item[data-view]").forEach((b) =>
-  b.addEventListener("click", () => switchView(b.dataset.view))
+  b.addEventListener("click", () => {
+    // AI in the sidebar leads to the list of conversations, even from one
+    // that is open; its conversations below it open them.
+    if (b.dataset.view === "ia" && typeof IA !== "undefined" && IA.open) iaBack();
+    switchView(b.dataset.view);
+  })
 );
 /* Titles of the views that have nothing more specific to show. */
 function tbDefaults() {
@@ -72,6 +79,8 @@ async function prnLoad(selectId) {
   if (window.currentView === "prepare" && typeof prRefreshSpools === "function") prRefreshSpools();
   // Maintenance due on each printer: the sidebar's dots.
   if (typeof mtCheckAll === "function") mtCheckAll();
+  // Filament theme: its accent follows the active printer's T0 spool.
+  displaySpoolSync(true);
 }
 
 function ledClass(st, id) {
@@ -101,6 +110,8 @@ function prnRenderList() {
     });
     box.querySelectorAll("[data-heads] .lbl").forEach((l) => (l.textContent = tr("heads.title")));
     box.querySelectorAll("[data-maint] .lbl").forEach((l) => (l.textContent = tr("maint.title")));
+    box.querySelectorAll("[data-pfiles] .lbl").forEach((l) => (l.textContent = tr("pfiles.title")));
+    if (typeof pflSideCounts === "function") pflSideCounts();
     sideSync();
     return;
   }
@@ -130,12 +141,15 @@ function prnRenderList() {
     const sub = document.createElement("div");
     sub.className = "side-group side-sub";
     sub.innerHTML = `<button class="side-item" data-heads="${esc(p.id)}"><span class="glyph" style="color: #34C759">${SIDE_SPOOL}</span><span class="lbl">${esc(tr("heads.title"))}</span></button>` +
-      `<button class="side-item" data-maint="${esc(p.id)}"><span class="glyph" style="color: #8E8E93">${SIDE_WRENCH}</span><span class="lbl">${esc(tr("maint.title"))}</span><span class="mt-dot hidden"></span></button>`;
+      `<button class="side-item" data-maint="${esc(p.id)}"><span class="glyph" style="color: #8E8E93">${SIDE_WRENCH}</span><span class="lbl">${esc(tr("maint.title"))}</span><span class="mt-dot hidden"></span></button>` +
+      `<button class="side-item" data-pfiles="${esc(p.id)}"><span class="glyph" style="color: #1E8CFF">${SIDE_FOLDER}</span><span class="lbl">${esc(tr("pfiles.title"))}</span><span class="count"></span></button>`;
     sub.children[0].onclick = () => headsShow(p.id);
     sub.children[1].onclick = () => maintShow(p.id);
+    sub.children[2].onclick = () => pflShow(p.id);
     box.appendChild(sub);
   }
   if (typeof mtSideDots === "function") mtSideDots();
+  if (typeof pflSideCounts === "function") pflSideCounts();
   sideSync();
 }
 
@@ -199,7 +213,7 @@ function setOffline(mode, st) {
   $("prn-offline-ico").classList.toggle("hidden", connecting);
   $("prn-offline-spin").classList.toggle("hidden", !connecting);
   setOfflineSeen(connecting ? null : P.seen.get(P.sel));
-  // No camera without a connection: stop it and disable the button.
+  // No camera without a connection: stop it and disable its switch.
   if (CAM.on) camStop();
   $("cam-toggle").disabled = true;
   const err = (!connecting && st?.message) || "";
@@ -776,10 +790,10 @@ const CAM = { id: null, on: false, n: 0, timer: 0, keep: 0 };
 
 async function camStart() {
   const p = current();
-  if (!p) return;
+  if (!p) return void ($("cam-toggle").checked = false);
   camStop();
   Object.assign(CAM, { id: p.id, on: true });
-  $("cam-toggle").textContent = tr("common.hide");
+  $("cam-toggle").checked = true;
   $("cam-note").textContent = tr("printers.cam.starting");
   $("cam-box").classList.remove("hidden");
   try {
@@ -805,7 +819,7 @@ function camStop() {
   clearInterval(CAM.keep);
   if (CAM.on && CAM.id) invoke("camera_stop", { printerId: CAM.id }).catch(() => {});
   Object.assign(CAM, { id: null, on: false, timer: 0, keep: 0 });
-  $("cam-toggle").textContent = tr("common.show");
+  $("cam-toggle").checked = false;
   $("cam-note").textContent = "";
   $("cam-box").classList.add("hidden");
   $("cam-img").removeAttribute("src");
@@ -821,7 +835,8 @@ $("cam-img").addEventListener("error", () => {
   $("cam-note").textContent = tr("printers.cam.retry");
   CAM.timer = setTimeout(camNext, 1000);
 });
-$("cam-toggle").addEventListener("click", () => (CAM.on ? camStop() : camStart()));
+// The camera's switch: on, the live image; off, nothing is fetched.
+$("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart() : camStop()));
 // Double-click: the image takes the full width of the printer pane.
 /* Enlarge the camera: its button (shown on hover) or a double-click. */
 function camToggleSize() {
@@ -856,7 +871,6 @@ window.addEventListener("langchange", () => {
   prnRenderList();
   prnRenderDetail();
   discRender();
-  $("cam-toggle").textContent = tr(CAM.on ? "common.hide" : "common.show");
   if (P.editing !== undefined && !$("pmodal").classList.contains("hidden"))
     $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
 });
