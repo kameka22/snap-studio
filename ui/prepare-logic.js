@@ -1,0 +1,95 @@
+/* Prepare view: pure rules shared by the plate and its tests (no DOM, no
+   WebGL). Objects are given as top-view footprints (points in mm) or as
+   precomputed bed states, so node can run them. */
+
+/* On the bed: "in", "partial" (sticks out) or "out" (beside it). */
+function plBedState(pts, bed) {
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const e = 0.1, { w, d } = bed;
+  if (x1 < -e || y1 < -e || x0 > w + e || y0 > d + e) return "out";
+  if (x0 < -e || y0 < -e || x1 > w + e || y1 > d + e) return "partial";
+  return "in";
+}
+
+/* The two groups of the object list, in plate order. An object that
+   sticks out stays with the plate (it blocks slicing until it is fixed).
+   Only "in" objects are sliced. One list per plate when plates come. */
+function plGroups(objects, stateOf) {
+  const on = [], off = [];
+  let partial = 0, sliced = 0;
+  for (const o of objects) {
+    const st = stateOf(o);
+    if (st === "out") off.push(o);
+    else {
+      on.push(o);
+      if (st === "partial") partial++;
+      else sliced++;
+    }
+  }
+  return { on, off, partial, sliced };
+}
+
+/* Objects handed to slicing: those fully on the bed. */
+const plSliced = (objects, stateOf) => objects.filter((o) => stateOf(o) === "in");
+
+/* Slider bounds and steps of an inspector field. `step` is the slider's
+   own grain, `fine` the wheel / arrow step and `coarse` the same with ⇧. */
+function plRange(kind, bed, axis = 0) {
+  if (kind === "pos") return { min: 0, max: axis ? bed.d : bed.w, step: 0.5, fine: 1, coarse: 10 };
+  if (kind === "rot") return { min: -180, max: 180, step: 1, fine: 1, coarse: 15 };
+  return { min: 10, max: 400, step: 1, fine: 1, coarse: 10 };
+}
+
+/* Magnetic notches every 15 degrees: a value within `pull` of one sticks
+   to it, unless snapping is off (⇧). */
+function plSnapAngle(v, free, pull = 3) {
+  if (free) return v;
+  const r = Math.round(v / 15) * 15;
+  return Math.abs(v - r) <= pull ? r : v;
+}
+
+const plWrapDeg = (a) => {
+  let x = ((a % 360) + 360) % 360;
+  if (x > 180) x -= 360;
+  return Math.round(x * 100) / 100;
+};
+
+/* One wheel / arrow step from `v` (dir = +1 or -1): a rotation wraps
+   around, the others stay within the slider's bounds. A coarse rotation
+   step lands on the 15 degree notches. */
+function plNudge(kind, v, dir, coarse, bed, axis = 0) {
+  const r = plRange(kind, bed, axis);
+  const s = coarse ? r.coarse : r.fine;
+  let x = coarse ? (dir > 0 ? Math.floor(v / s + 1e-9) + 1 : Math.ceil(v / s - 1e-9) - 1) * s : v + dir * s;
+  x = Math.round(x * 100) / 100;
+  if (kind === "rot") return plWrapDeg(x);
+  return Math.min(r.max, Math.max(r.min, x));
+}
+
+/* Smallest move [dx, dy] bringing a top-view box fully on the bed, or null
+   when the box is larger than the bed. */
+function plInside(box, bed) {
+  const bw = box.x1 - box.x0, bd = box.y1 - box.y0;
+  if (bw > bed.w + 0.1 || bd > bed.d + 0.1) return null;
+  const dx = box.x0 < 0 ? -box.x0 : box.x1 > bed.w ? bed.w - box.x1 : 0;
+  const dy = box.y0 < 0 ? -box.y0 : box.y1 > bed.d ? bed.d - box.y1 : 0;
+  return [dx, dy];
+}
+
+/* Parking spot beside the bed (on its right) for a box of `bw` × `bd`
+   mm, below the boxes already parked there: corner [x0, y0]. */
+function plParkSpot(parked, bed, bw, bd, gap = 10) {
+  const x0 = bed.w + 20;
+  let y = 0;
+  const near = parked.filter((b) => b.x1 > x0 - gap).sort((a, b) => a.y0 - b.y0);
+  for (const b of near) {
+    if (y + bd + gap <= b.y0) break;
+    y = Math.max(y, b.y1 + gap);
+  }
+  return [x0, y];
+}
+
+if (typeof module !== "undefined") {
+  module.exports = { plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot };
+}
