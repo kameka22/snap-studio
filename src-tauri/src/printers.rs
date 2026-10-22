@@ -179,22 +179,30 @@ pub struct StartOptions {
 }
 
 impl StartOptions {
-    /// `print_task_config` keys, in the order Snapmaker Orca sends them.
-    fn entries(&self) -> [(&'static str, bool); 3] {
+    /// The options as Snapmaker Orca sends them: its keys, 1 or 0. The
+    /// firmware reads them as integers (`get_int`): `true` is refused.
+    pub fn orca_entries(&self) -> [(&'static str, u8); 3] {
         [
-            ("auto_bed_leveling", self.bed_leveling),
-            ("flow_calibrate", self.flow_calibration),
-            ("time_lapse_camera", self.timelapse),
+            ("bed_level", self.bed_leveling as u8),
+            ("flow_calibrate", self.flow_calibration as u8),
+            ("time_lapse_camera", self.timelapse as u8),
+        ]
+    }
+
+    /// The same options as `print_task_config` reports them, with the
+    /// `i18n` key of their label in the send sheet.
+    fn status_entries(&self) -> [(&'static str, bool, &'static str); 3] {
+        [
+            ("auto_bed_leveling", self.bed_leveling, "send.leveling"),
+            ("flow_calibrate", self.flow_calibration, "send.flow"),
+            ("time_lapse_camera", self.timelapse, "send.timelapse"),
         ]
     }
 }
 
-/// Preparation G-code sent before the launch, as Snapmaker Orca does: tool
-/// → head mapping, heads used, options.
-///
-/// Firmware ≥ 1.3.0: one `SET_PRINT_PREFERENCE` macro per option. Before: a
-/// single `SET_PRINT_PREFERENCES` (`legacy`).
-pub fn preprint_script(opts: &StartOptions, tools: &[u8], map: &[(u8, u8)], legacy: bool) -> String {
+/// Head mapping sent before the launch, as Snapmaker Orca does: tool → head
+/// for every used tool, then the heads used.
+pub fn map_script(tools: &[u8], map: &[(u8, u8)]) -> String {
     let mut lines: Vec<String> = Vec::new();
     // Every used tool gets its entry (the firmware resets none): the head
     // chosen as a substitute, otherwise the head of the same number.
@@ -210,19 +218,58 @@ pub fn preprint_script(opts: &StartOptions, tools: &[u8], map: &[(u8, u8)], lega
         let list: Vec<String> = used.iter().map(|t| t.to_string()).collect();
         lines.push(format!("SET_PRINT_USED_EXTRUDERS EXTRUDERS={}", list.join(",")));
     }
-    if legacy {
-        let kv: Vec<String> = opts
-            .entries()
-            .iter()
-            .map(|(k, v)| format!("{}={}", k.to_uppercase(), v))
-            .collect();
-        lines.push(format!("SET_PRINT_PREFERENCES {}", kv.join(" ")));
-    } else {
-        for (k, v) in opts.entries() {
-            lines.push(format!("SET_PRINT_PREFERENCE KEY={k} VALUE={v}"));
-        }
-    }
     lines.join("\n")
+}
+
+/// One `SET_PRINT_PREFERENCE` per option, as Snapmaker Orca sends them
+/// before a launch. Not every firmware knows it (the public 1.6.0 does not):
+/// sent for what it is worth, the options of the start request are what
+/// count.
+pub fn preference_script(opts: &StartOptions) -> String {
+    opts.orca_entries()
+        .iter()
+        .map(|(k, v)| format!("SET_PRINT_PREFERENCE KEY={k} VALUE={v}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The options in one `SET_PRINT_PREFERENCES`, for a start without
+/// `start_local_print`: `BED_LEVEL=1 FLOW_CALIBRATE=0 TIME_LAPSE_CAMERA=1`.
+pub fn legacy_preferences_script(opts: &StartOptions) -> String {
+    let kv: Vec<String> = opts
+        .orca_entries()
+        .iter()
+        .map(|(k, v)| format!("{}={v}", k.to_uppercase()))
+        .collect();
+    format!("SET_PRINT_PREFERENCES {}", kv.join(" "))
+}
+
+/// `[tool, head]` pairs of the used tools, the head mapping of the start
+/// request (the firmware resets its map when a print starts with options).
+pub fn map_table(tools: &[u8], map: &[(u8, u8)]) -> Vec<[u8; 2]> {
+    tools.iter().map(|t| [*t, head_of(*t, map)]).collect()
+}
+
+/// Parameters of `server.files.start_local_print`, shaped as Snapmaker
+/// Orca's: file type, path under `gcodes`, plate, options (1 or 0) and head
+/// mapping.
+pub fn start_request(path: &str, opts: &StartOptions, tools: &[u8], map: &[(u8, u8)]) -> Value {
+    let kind = path
+        .rsplit_once('.')
+        .map(|(_, e)| e.to_ascii_lowercase())
+        .filter(|e| !e.is_empty() && !e.contains('/'))
+        .unwrap_or_else(|| "gcode".into());
+    let mut options = serde_json::Map::new();
+    for (k, v) in opts.orca_entries() {
+        options.insert(k.into(), v.into());
+    }
+    options.insert("map_table".into(), serde_json::json!(map_table(tools, map)));
+    serde_json::json!({
+        "type": kind,
+        "path": path,
+        "print_plate": 1,
+        "options": options,
+    })
 }
 
 /// True when a substitution really moves a tool to another head.
@@ -287,10 +334,89 @@ pub async fn gcode_script_for(host: &str, port: u16, script: &str, timeout: Dura
     Err(anyhow!("HTTP {code}: {msg}"))
 }
 
-/// True when Klipper does not know the command (older firmware).
-pub fn is_unknown_command(err: &anyhow::Error) -> bool {
-    let m = err.to_string().to_ascii_lowercase();
-    m.contains("unknown command")
+/// Commands of `script` Klipper answered `Unknown command` to. Klipper does
+/// not fail on an unknown command: it only says so in its responses.
+pub fn unknown_commands(responses: &[String], script: &str) -> Vec<String> {
+    let ours: Vec<&str> = script.lines().filter_map(|l| l.split_whitespace().next()).collect();
+    let mut out: Vec<String> = Vec::new();
+    for r in responses {
+        let Some(i) = r.find("Unknown command") else { continue };
+        let name = r[i..]
+            .split('"')
+            .nth(1)
+            .map(|n| n.trim().to_string())
+            .unwrap_or_default();
+        let known = ours.iter().any(|c| c.eq_ignore_ascii_case(&name));
+        if known && !out.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+            out.push(name);
+        }
+    }
+    out
+}
+
+/// Runs a G-code script over the websocket, reading Klipper's responses: a
+/// command it does not know is a failure, not a silent success.
+pub async fn gcode_script_checked(host: &str, port: u16, script: &str) -> Result<()> {
+    let (_, responses) = ws_session(
+        host,
+        port,
+        "printer.gcode.script",
+        serde_json::json!({ "script": script }),
+        Duration::from_secs(30),
+    )
+    .await?;
+    let unknown = unknown_commands(&responses, script);
+    if !unknown.is_empty() {
+        return Err(anyhow!(crate::t!("err.unknown_command", cmd = unknown.join(", "))));
+    }
+    Ok(())
+}
+
+/// How a print was started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartRoute {
+    /// `server.files.start_local_print`, options in the request.
+    Orca,
+    /// `SET_PRINT_PREFERENCES`, then `printer.print.start`.
+    Legacy,
+}
+
+/// Starts a file of `gcodes` with its options, as Snapmaker Orca does:
+/// `server.files.start_local_print` with the options (1 or 0) and the head
+/// mapping. A printer without it (Moonraker refuses the method, or does not
+/// answer) gets the options in `SET_PRINT_PREFERENCES`, then a plain start.
+/// A printer that refuses the print itself (busy, nozzle mismatch…) is not
+/// asked again another way.
+pub async fn start_print(
+    host: &str,
+    port: u16,
+    path: &str,
+    opts: &StartOptions,
+    tools: &[u8],
+    map: &[(u8, u8)],
+) -> Result<StartRoute> {
+    let req = start_request(path, opts, tools, map);
+    let err = match ws_session(host, port, "server.files.start_local_print", req, Duration::from_secs(45)).await {
+        Ok((v, _)) => {
+            if v.get("state").and_then(|s| s.as_str()) == Some("success") {
+                return Ok(StartRoute::Orca);
+            }
+            let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("refused");
+            return Err(anyhow!("{msg}"));
+        }
+        Err(e) => e,
+    };
+    // An answer that came too late: the print may have started all the same.
+    let st = status(host, port).await;
+    if matches!(st.state.as_str(), "printing" | "paused") {
+        return Ok(StartRoute::Orca);
+    }
+    eprintln!("[print] start_local_print unavailable ({err}): SET_PRINT_PREFERENCES then printer.print.start");
+    gcode_script_checked(host, port, &legacy_preferences_script(opts))
+        .await
+        .map_err(|e| anyhow!(crate::t!("err.prepare_refused", err = e)))?;
+    crate::printer_files::start(host, port, path).await?;
+    Ok(StartRoute::Legacy)
 }
 
 /// Pause, resume or cancel the running print.
@@ -329,15 +455,15 @@ pub async fn task_config(host: &str, port: u16) -> Option<Value> {
 /// Options the printer did not take into account (empty when all is well,
 /// or when it does not expose them).
 pub fn unapplied_options(cfg: &Value, opts: &StartOptions) -> Vec<&'static str> {
-    opts.entries()
+    opts.status_entries()
         .iter()
-        .filter(|(k, want)| match cfg.get(*k) {
+        .filter(|(k, want, _)| match cfg.get(*k) {
             Some(Value::Bool(b)) => b != want,
             Some(Value::Number(n)) => (n.as_f64().unwrap_or(0.0) != 0.0) != *want,
             Some(Value::String(s)) => matches!(s.to_ascii_lowercase().as_str(), "true" | "1") != *want,
             _ => false,
         })
-        .map(|(k, _)| *k)
+        .map(|(_, _, label)| *label)
         .collect()
 }
 
@@ -387,6 +513,18 @@ pub async fn upload(
 /// Snapmaker's own methods (`camera.*`) are not relayed over HTTP by the U1's
 /// nginx: the websocket is the only way.
 pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Result<Value> {
+    ws_session(host, port, method, params, Duration::from_secs(8)).await.map(|(v, _)| v)
+}
+
+/// The same, with its own timeout, also returning the G-code responses
+/// Moonraker relayed meanwhile (`notify_gcode_response`).
+pub async fn ws_session(
+    host: &str,
+    port: u16,
+    method: &str,
+    params: Value,
+    timeout: Duration,
+) -> Result<(Value, Vec<String>)> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
     let h = host
@@ -399,9 +537,16 @@ pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Resu
         let (mut ws, _) = tokio_tungstenite::connect_async(url.as_str()).await?;
         let req = serde_json::json!({ "jsonrpc": "2.0", "method": method, "params": params, "id": 1 });
         ws.send(Message::Text(req.to_string().into())).await?;
+        let mut responses: Vec<String> = Vec::new();
         while let Some(msg) = ws.next().await {
             let Message::Text(t) = msg? else { continue };
             let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
+            if v.get("method").and_then(|m| m.as_str()) == Some("notify_gcode_response") {
+                if let Some(lines) = v.get("params").and_then(|p| p.as_array()) {
+                    responses.extend(lines.iter().filter_map(|l| l.as_str()).map(String::from));
+                }
+                continue;
+            }
             if v.get("id").and_then(|i| i.as_i64()) != Some(1) {
                 continue; // status notifications, unrelated
             }
@@ -410,11 +555,11 @@ pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Resu
                 let msg = e.get("message").and_then(|m| m.as_str()).unwrap_or("erreur");
                 return Err(anyhow!("{method} : {msg}"));
             }
-            return Ok(v.get("result").cloned().unwrap_or(Value::Null));
+            return Ok((v.get("result").cloned().unwrap_or(Value::Null), responses));
         }
         Err(anyhow!(crate::t!("err.ws_closed", method = method)))
     };
-    tokio::time::timeout(Duration::from_secs(8), run)
+    tokio::time::timeout(timeout, run)
         .await
         .map_err(|_| anyhow!(crate::t!("err.ws_no_answer", method = method)))?
 }
@@ -720,37 +865,85 @@ mod tests {
 
     /// Print preparation, as Snapmaker Orca sends it.
     #[test]
-    fn preprint_script_matches_snapmaker_orca() {
-        let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: false };
-        let s = preprint_script(&o, &[0, 2], &[], false);
+    fn preparation_matches_snapmaker_orca() {
+        let s = map_script(&[0, 2], &[]);
         assert_eq!(
             s,
             "SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=0 MAP_EXTRUDER=0\n\
              SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=2 MAP_EXTRUDER=2\n\
-             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,2\n\
-             SET_PRINT_PREFERENCE KEY=auto_bed_leveling VALUE=true\n\
-             SET_PRINT_PREFERENCE KEY=flow_calibrate VALUE=false\n\
-             SET_PRINT_PREFERENCE KEY=time_lapse_camera VALUE=false"
+             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,2"
         );
-        let old = preprint_script(&StartOptions::default(), &[1], &[], true);
-        assert!(old.ends_with(
-            "SET_PRINT_PREFERENCES AUTO_BED_LEVELING=false FLOW_CALIBRATE=false TIME_LAPSE_CAMERA=false"
-        ));
+        let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: true };
+        // Integers, never `true`: the firmware reads them with `get_int`.
+        assert_eq!(
+            preference_script(&o),
+            "SET_PRINT_PREFERENCE KEY=bed_level VALUE=1\n\
+             SET_PRINT_PREFERENCE KEY=flow_calibrate VALUE=0\n\
+             SET_PRINT_PREFERENCE KEY=time_lapse_camera VALUE=1"
+        );
+        assert_eq!(legacy_preferences_script(&o), "SET_PRINT_PREFERENCES BED_LEVEL=1 FLOW_CALIBRATE=0 TIME_LAPSE_CAMERA=1");
+        assert_eq!(
+            legacy_preferences_script(&StartOptions::default()),
+            "SET_PRINT_PREFERENCES BED_LEVEL=0 FLOW_CALIBRATE=0 TIME_LAPSE_CAMERA=0"
+        );
+    }
+
+    /// `server.files.start_local_print`, shaped as Snapmaker Orca's.
+    #[test]
+    fn start_request_matches_snapmaker_orca() {
+        let o = StartOptions { bed_leveling: false, flow_calibration: true, timelapse: true };
+        let r = start_request("Cube-3f9a0c.gcode", &o, &[0, 2], &[(2, 3)]);
+        assert_eq!(
+            r,
+            serde_json::json!({
+                "type": "gcode",
+                "path": "Cube-3f9a0c.gcode",
+                "print_plate": 1,
+                "options": {
+                    "bed_level": 0,
+                    "flow_calibrate": 1,
+                    "time_lapse_camera": 1,
+                    "map_table": [[0, 0], [2, 3]],
+                },
+            })
+        );
+        // Values are numbers, not booleans (Moonraker passes `str(v)` on).
+        assert!(r["options"]["time_lapse_camera"].is_u64());
+        // A file in a folder, an upper-case extension, no extension.
+        assert_eq!(start_request("a.b/Part.GCODE", &o, &[1], &[])["type"], "gcode");
+        assert_eq!(start_request("dir.v2/part", &o, &[1], &[])["type"], "gcode");
+        assert_eq!(start_request("x.gcode", &o, &[1], &[])["options"]["map_table"], serde_json::json!([[1, 1]]));
+    }
+
+    #[test]
+    fn unknown_commands_are_failures() {
+        let script = preference_script(&StartOptions::default());
+        let replies = vec![
+            "// Unknown command:\"SET_PRINT_PREFERENCE\"".to_string(),
+            "// Unknown command:\"SET_PRINT_PREFERENCE\"".to_string(),
+            "// Unknown command:\"SOMETHING_ELSE\"".to_string(),
+            "ok".to_string(),
+        ];
+        assert_eq!(unknown_commands(&replies, &script), vec!["SET_PRINT_PREFERENCE"]);
+        assert!(unknown_commands(&["// Klipper state: Ready".to_string()], &script).is_empty());
+        assert!(unknown_commands(&[], &script).is_empty());
     }
 
     #[test]
     fn substituted_heads_are_mapped() {
-        let o = StartOptions::default();
-        let s = preprint_script(&o, &[0, 2], &[(2, 3)], false);
-        assert!(s.starts_with(
+        let s = map_script(&[0, 2], &[(2, 3)]);
+        assert_eq!(
+            s,
             "SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=0 MAP_EXTRUDER=0\n\
              SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=2 MAP_EXTRUDER=3\n\
-             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,3\n"
-        ));
+             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,3"
+        );
+        assert_eq!(map_table(&[0, 2], &[(2, 3)]), vec![[0, 0], [2, 3]]);
         // Swap: still one tool per head.
-        let s = preprint_script(&o, &[0, 1], &[(0, 1), (1, 0)], false);
+        let s = map_script(&[0, 1], &[(0, 1), (1, 0)]);
         assert!(s.contains("CONFIG_EXTRUDER=0 MAP_EXTRUDER=1") && s.contains("CONFIG_EXTRUDER=1 MAP_EXTRUDER=0"));
-        assert!(s.contains("EXTRUDERS=0,1\n"));
+        assert!(s.ends_with("EXTRUDERS=0,1"));
+        assert_eq!(map_table(&[0, 1], &[(0, 1), (1, 0)]), vec![[0, 1], [1, 0]]);
         assert!(check_map(&[0, 1], &[(0, 1), (1, 0)]).is_ok());
         assert!(check_map(&[0, 2], &[(2, 0)]).is_err(), "T0 and T2 on head 0");
         assert!(check_map(&[0], &[(0, 4)]).is_err(), "no head 4");
@@ -766,7 +959,9 @@ mod tests {
     fn unapplied_options_are_reported() {
         let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: true };
         let cfg = serde_json::json!({"auto_bed_leveling": true, "flow_calibrate": false, "time_lapse_camera": false});
-        assert_eq!(unapplied_options(&cfg, &o), vec!["time_lapse_camera"]);
+        assert_eq!(unapplied_options(&cfg, &o), vec!["send.timelapse"]);
+        let cfg = serde_json::json!({"auto_bed_leveling": 0, "flow_calibrate": "false", "time_lapse_camera": 1});
+        assert_eq!(unapplied_options(&cfg, &o), vec!["send.leveling"]);
         assert!(unapplied_options(&serde_json::json!({}), &o).is_empty(), "nothing exposed: nothing to report");
     }
 

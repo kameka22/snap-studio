@@ -551,9 +551,9 @@ fn send_progress(app: &tauri::AppHandle, phase: &'static str, percent: Option<f3
 
 /// Starts a G-code on an idle printer.
 ///
-/// Same run as Snapmaker Orca: preparation (heads and options) through
-/// Klipper macros, check in `print_task_config`, then upload with launch.
-/// Returns a warning if an option was not confirmed.
+/// Same run as Snapmaker Orca: checks and head mapping, upload without
+/// launch, then a start carrying the options (`start_printing`). Returns an
+/// error message for the options the printer did not apply.
 async fn launch(
     app: &tauri::AppHandle,
     p: &printers::Printer,
@@ -563,27 +563,27 @@ async fn launch(
     tools: &[u8],
     map: &[(u8, u8)],
 ) -> Result<Option<String>, String> {
-    let warning = prepare_printer(app, p, options, tools, map).await?;
+    prepare_printer(app, p, options, tools, map).await?;
     let handle = app.clone();
-    printers::upload(&p.host, p.port, gcode, name, true, move |sent, total| {
+    printers::upload(&p.host, p.port, gcode, name, false, move |sent, total| {
         let pct = if total > 0 { sent as f32 * 100.0 / total as f32 } else { 0.0 };
         send_progress(&handle, "upload", Some(pct), None);
     })
     .await
     .map_err(|e| e.to_string())?;
-    Ok(warning)
+    start_printing(p, name, options, tools, map).await
 }
 
 /// Before a print starts, whatever its G-code comes from: the printer is
-/// idle, every head used has a spool, the heads and options are set.
-/// Returns a warning if an option was not confirmed.
+/// idle, every head used has a spool, the heads are mapped. The options go
+/// with the start itself (`start_printing`).
 async fn prepare_printer(
     app: &tauri::AppHandle,
     p: &printers::Printer,
     options: &printers::StartOptions,
     tools: &[u8],
     map: &[(u8, u8)],
-) -> Result<Option<String>, String> {
+) -> Result<(), String> {
     printers::check_map(tools, map).map_err(|e| e.to_string())?;
     send_progress(app, "check", None, None);
     let st = printers::status(&p.host, p.port).await;
@@ -607,25 +607,37 @@ async fn prepare_printer(
     }
 
     send_progress(app, "prepare", None, None);
-    let script = printers::preprint_script(options, tools, map, false);
-    if let Err(e) = printers::gcode_script(&p.host, p.port, &script).await {
-        // Firmware older than 1.3.0: a single macro for the options.
-        if !printers::is_unknown_command(&e) {
-            return Err(t!("err.prepare_refused", err = e));
-        }
-        let legacy = printers::preprint_script(options, tools, map, true);
-        printers::gcode_script(&p.host, p.port, &legacy)
+    let script = printers::map_script(tools, map);
+    if !script.is_empty() {
+        printers::gcode_script_checked(&p.host, p.port, &script)
             .await
             .map_err(|e| t!("err.prepare_refused", err = e))?;
     }
-    let mut warning = None;
-    if let Some(cfg) = printers::task_config(&p.host, p.port).await {
-        let missing = printers::unapplied_options(&cfg, options);
-        if !missing.is_empty() {
-            warning = Some(t!("err.options_unconfirmed", opts = missing.join(", ")));
-        }
+    // As Snapmaker Orca, for a firmware that knows it; the options of the
+    // start request are what count.
+    if let Err(e) = printers::gcode_script(&p.host, p.port, &printers::preference_script(options)).await {
+        eprintln!("[print] SET_PRINT_PREFERENCE: {e}");
     }
-    Ok(warning)
+    Ok(())
+}
+
+/// Starts a file of `gcodes` with its options, then reads back what the
+/// printer applied: the options it ignored come back as an error message
+/// (the print has started all the same).
+async fn start_printing(
+    p: &printers::Printer,
+    path: &str,
+    options: &printers::StartOptions,
+    tools: &[u8],
+    map: &[(u8, u8)],
+) -> Result<Option<String>, String> {
+    let route = printers::start_print(&p.host, p.port, path, options, tools, map)
+        .await
+        .map_err(|e| t!("err.start_refused", err = e))?;
+    eprintln!("[print] {path} started ({route:?})");
+    let Some(cfg) = printers::task_config(&p.host, p.port).await else { return Ok(None) };
+    let missing: Vec<String> = printers::unapplied_options(&cfg, options).iter().map(|k| t!(*k)).collect();
+    Ok((!missing.is_empty()).then(|| t!("err.options_unapplied", opts = missing.join(", "))))
 }
 
 // ---------------------------------------------------------------- printer files
@@ -762,10 +774,8 @@ async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Opti
     // needs its record (the extruder map goes back to identity when it
     // ends), so it goes the copy's way, as any sent print.
     if !request.queue && request.source_id == request.printer_id && !printers::is_remap(&request.map) {
-        let warning = prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
-        printer_files::start(&p.host, p.port, &request.path)
-            .await
-            .map_err(|e| t!("pfiles.err.start", err = e))?;
+        prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
+        let warning = start_printing(&p, &request.path, &request.options, &tools, &request.map).await?;
         send_progress(&app, "done", Some(100.0), warning);
         return Ok(None);
     }

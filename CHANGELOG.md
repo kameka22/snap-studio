@@ -23,6 +23,14 @@ with its packages for macOS, Windows and Linux. What comes next:
   within each heater's maximum, one action at a time. Also opened from the
   printer's page (**Control**).
 
+### Fixed
+- The send sheet's options (timelapse camera, automatic bed leveling, flow
+  calibration) now reach the U1: the print starts with them, as Snapmaker
+  Orca does (`server.files.start_local_print`), instead of a command the
+  firmware does not know. If the printer does not apply one, a dialog says
+  so once the print has started
+  ([#39](https://github.com/kameka22/snap-studio/pull/39)).
+
 ## [0.12.0] — 2026-10-21
 
 ### Added

@@ -133,6 +133,12 @@ function confirmDelete(title, message, okLabel = tr("common.delete")) {
   });
 }
 
+/* A print the printer started without some of its options: said in a
+   dialog to acknowledge, not in a passing toast. */
+function startWarning(message) {
+  return window.__TAURI__.dialog.message(message, { title: tr("send.options_unapplied.title"), kind: "error" }).catch(() => toast(message, true));
+}
+
 /* No browser context menu, except in text fields. */
 document.addEventListener("contextmenu", (e) => {
   if (!e.target.closest("input, textarea, [contenteditable]")) e.preventDefault();
