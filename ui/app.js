@@ -37,9 +37,20 @@ const DEFAULTS = {
   aiModes: null,
 };
 
+/* A stored value, or {} when there is none or it is unreadable: a corrupt
+   entry must not stop the script, and the whole app with it. */
+function storedObject(key) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+
 const state = {
   ...DEFAULTS,
-  ...JSON.parse(localStorage.getItem("snapstudio") || "{}"),
+  ...storedObject("snapstudio"),
   files: [],
   meta: new Map(),
   analysis: new Map(),

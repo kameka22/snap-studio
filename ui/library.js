@@ -497,18 +497,18 @@ window.addEventListener("langchange", () => {
   renderFavs();
 });
 
-/* Native views draw on top of everything: they are hidden while a dialog or
-   the viewer takes the screen, and brought back afterwards. */
-const OVERLAYS = ["smodal", "pmodal", "iamodal", "sendmodal", "viewer"];
+/* Native views draw on top of everything: they are hidden while a sheet,
+   the viewer or the welcome assistant takes the screen, and brought back
+   afterwards. Every sheet counts: one opened by an event (the queue's
+   next print, an update, a sign-in) would otherwise sit under the page,
+   invisible, its backdrop blocking the app. */
+const OVERLAY_SEL = ".modal, .viewer, .welcome";
 (() => {
   const check = () => {
-    const shown = OVERLAYS.some((id) => $(id) && !$(id).classList.contains("hidden"));
+    const shown = [...document.querySelectorAll(OVERLAY_SEL)].some((el) => !el.classList.contains("hidden"));
     if (shown) libSuspend();
     else libResume();
   };
   const obs = new MutationObserver(check);
-  for (const id of OVERLAYS) {
-    const el = $(id);
-    if (el) obs.observe(el, { attributes: true, attributeFilter: ["class"] });
-  }
+  for (const el of document.querySelectorAll(OVERLAY_SEL)) obs.observe(el, { attributes: true, attributeFilter: ["class"] });
 })();

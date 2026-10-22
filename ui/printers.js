@@ -754,10 +754,11 @@ async function saveForm() {
   try {
     P.list = await invoke("printer_save", { printer });
     const saved = P.list.find((x) => x.host === printer.host && x.port === printer.port);
+    const edited = !!P.editing; // closeForm forgets it
     closeForm();
     await prnLoad(printer.id || saved?.id);
     switchView("printers");
-    toast(tr(P.editing ? "printers.updated" : "printers.added"));
+    toast(tr(edited ? "printers.updated" : "printers.added"));
   } catch (e) {
     toast(tr("printers.form.save_failed", { err: e }), true);
   }
@@ -874,7 +875,9 @@ $("pf-cancel").addEventListener("click", closeForm);
 $("pf-probe").addEventListener("click", probeForm);
 $("pf-save").addEventListener("click", saveForm);
 $("pmodal").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") saveForm();
+  // Enter in a field saves; on a button (Cancel, Test, a found printer)
+  // it is that button's click, not a save.
+  if (e.key === "Enter" && !e.target.closest("button")) saveForm();
   if (e.key === "Escape") closeForm();
 });
 document.addEventListener("keydown", (e) => {

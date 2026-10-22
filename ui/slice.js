@@ -16,7 +16,7 @@ const SL = {
   /* Last preview produced, awaiting a decision. */
   preview: null,
   /* Choices kept: per machine preset, and the last printer. */
-  memory: JSON.parse(localStorage.getItem("snapstudio.slice") || "{}"),
+  memory: storedObject("snapstudio.slice"),
 };
 
 function rememberFor(machine) {
