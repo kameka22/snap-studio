@@ -8,7 +8,7 @@
    counters at that moment, and "since" counts from there. Read only:
    nothing is written to the printer. */
 
-const MT = { pid: null, tab: "care", usage: null, log: [], stale: null, loading: false, due: new Map(), open: new Set(), histOpen: false };
+const MT = { pid: null, tab: "care", ctx: {}, usage: null, log: [], stale: null, loading: false, due: new Map(), open: new Set(), histOpen: false };
 
 /* Tabs; the last one open is remembered per printer. Calibration (#17)
    is not offered yet. */
@@ -155,12 +155,16 @@ function mtSetTab(tab) {
   mtRender();
   if (MT.tab === "level") bmShow(MT.pid);
   // Control reads the printer while it is shown, and only then.
-  if (MT.tab === "control") ctShow(MT.pid);
+  if (MT.tab === "control") ctShow(MT.pid, MT.ctx || {});
   else ctLeave();
+  MT.ctx = {};
 }
 
-async function maintShow(pid, tab) {
+/* Opens Care & Tuning on a printer and a tab; `ctx` is the tab's opening
+   context (Control: { head }). */
+async function maintShow(pid, tab, ctx = {}) {
   const fresh = MT.pid !== pid;
+  MT.ctx = ctx;
   MT.pid = pid;
   P.sel = pid;
   switchView("maint");

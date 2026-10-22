@@ -3702,6 +3702,24 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ct-card { padding: 14px 16px; border-radius: var(--radius-card); background: var(--card-bg); border: 1px solid var(--card-border); box-shadow: var(--card-shadow); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .ct-card-head { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
 .ct-card-head .sw { margin-left: auto; }
+/* A head the opening asked for (ctlOpen { head }): marked a moment. */
+.ct-head.focus { animation: ctl-focus 1.8s ease-out; }
+@keyframes ctl-focus { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.ctl-spool { --spool: var(--separator); display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+/* Compact components: the quick panels of the 3D printer view (#34),
+   inside a Prepare-style floating panel (.p-float). One row per item, as
+   the Prepare inspector. */
+.ctl-c { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 9px; background: color-mix(in srgb, var(--text) 4%, transparent); font-size: 12px; }
+.ctl-c + .ctl-c { margin-top: 6px; }
+.ctl-c-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ctl-c-row > b { font-size: 12.5px; font-weight: 600; }
+.ctl-c-temp { margin-left: auto; display: inline-flex; align-items: baseline; gap: 5px; font-variant-numeric: tabular-nums; }
+.ctl-c-temp b { font-size: 13px; }
+.ctl-c-temp small { color: var(--text-secondary); font-size: 11px; }
+.ctl-c-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ctl-c .ct-slider b { min-width: 40px; }
+.ctl-c-light { flex-direction: row; align-items: center; }
+.ct-estop.compact { padding: 6px; width: 30px; height: 30px; justify-content: center; margin-left: 0; }
 .ct-help { flex: none; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid var(--control-border); background: var(--control-bg); color: var(--text-secondary); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0; cursor: pointer; }
 .ct-help:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--control-border)); }
 .ct-help:focus-visible { outline: none; box-shadow: var(--focus-ring); }

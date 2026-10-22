@@ -65,6 +65,16 @@ function ctlStateOf(st) {
   return "idle";
 }
 
+/* What a head holds, from heads.js's slot ({ index, present, color, kind,
+   sub_type, vendor }): the one filament description the tab and the quick
+   panels show. `nameOf` names a colour (colorName), "Cyan PLA". */
+function ctlSpoolInfo(slot, nameOf = null) {
+  if (!slot || !slot.present) return { present: false, color: null, kind: "", name: "" };
+  const color = /^#[0-9a-f]{6}$/i.test(slot.color || "") ? slot.color.toLowerCase() : null;
+  const name = [color && nameOf ? nameOf(color) : "", slot.kind || ""].filter(Boolean).join(" ");
+  return { present: true, color, kind: slot.kind || "", name: name ? name[0].toUpperCase() + name.slice(1) : "" };
+}
+
 /* A temperature's share of its scale, for the gauges (0–1). */
 const ctlPct = (v, max) => (max > 0 ? Math.max(0, Math.min(1, (v || 0) / max)) : 0);
 
@@ -75,4 +85,4 @@ function ctlHeat(temp, target) {
 }
 
 if (typeof module !== "undefined")
-  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlPct, ctlHeat };
+  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };

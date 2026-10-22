@@ -77,6 +77,14 @@ assert.equal(C.ctlHeat(209, 210), "ready");
 assert.equal(C.ctlHeat(150, 0), "cooling");
 assert.equal(C.ctlHeat(24, 0), "off");
 
+// The one filament description: colour named, material, capitalised; empty heads say so.
+const nameOf = (hex) => ({ "#5ac8c8": "cyan", "#ffffff": "blanc" })[hex] || "";
+assert.deepEqual(C.ctlSpoolInfo({ index: 0, present: true, color: "#5AC8C8", kind: "PLA" }, nameOf), { present: true, color: "#5ac8c8", kind: "PLA", name: "Cyan PLA" });
+assert.deepEqual(C.ctlSpoolInfo({ index: 1, present: true, color: null, kind: "PETG" }, nameOf), { present: true, color: null, kind: "PETG", name: "PETG" });
+assert.deepEqual(C.ctlSpoolInfo({ index: 2, present: false, color: "#ffffff" }, nameOf), { present: false, color: null, kind: "", name: "" });
+assert.equal(C.ctlSpoolInfo(undefined).present, false);
+assert.equal(C.ctlSpoolInfo({ present: true, color: "red", kind: "" }).color, null, "only #rrggbb");
+
 // The page: Control is a Care & Tuning tab between Bed Leveling and the
 // hidden Calibration, and the printer card opens it.
 const fs = require("fs");
@@ -87,5 +95,18 @@ assert.ok(/<button class="seg-btn labeled hidden" data-mtab="calib">/.test(html)
 assert.ok(/id="prn-control"/.test(html) && /id="ct-body"/.test(html));
 const maint = fs.readFileSync(require("path").join(__dirname, "..", "ui", "maint.js"), "utf8");
 assert.ok(/const MT_TABS = \["care", "level", "control"\]/.test(maint));
+// One service, one filament source, components with a compact mode, an opening with a context:
+// the printer page's shortcut goes through ctlOpen, as #34's quick panels will.
+const ui = (f) => fs.readFileSync(require("path").join(__dirname, "..", "ui", f), "utf8");
+const ctl = ui("control.js");
+for (const name of ["ctlRun", "ctlRead", "ctlSubscribe", "ctlSpool", "ctlOpen", "ctlBind", "ctlPaint", "ctlHeadHtml", "ctlSpoolHtml", "ctlBedHtml", "ctlLightHtml", "ctlEstopHtml"]) {
+  assert.ok(new RegExp(`function ${name}\\(`).test(ctl), name);
+}
+for (const name of ["ctlHeadHtml", "ctlSpoolHtml", "ctlBedHtml", "ctlLightHtml", "ctlEstopHtml"]) {
+  assert.ok(new RegExp(`function ${name}\\([^)]*compact = false`).test(ctl), `${name} has a compact mode`);
+}
+assert.equal((ctl.match(/invoke\("control_run"/g) || []).length, 1, "one place sends actions");
+assert.ok(/ctlOpen\(current\(\)\.id\)/.test(ui("printers.js")), "the printer page opens Control through ctlOpen");
+assert.ok(!/invoke\("control_run"/.test(ui("printers.js")) && !/invoke\("control_run"/.test(ui("maint.js")));
 
 console.log("control: ok");

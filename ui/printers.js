@@ -854,8 +854,9 @@ $("prn-add").addEventListener("click", () => openForm(null));
 $("prn-add2").addEventListener("click", () => openForm(null));
 $("prn-add3").addEventListener("click", () => openForm(null));
 $("prn-edit").addEventListener("click", () => openForm(current()));
-// The printer card's shortcut to Care & Tuning › Control.
-$("prn-control").addEventListener("click", () => current() && maintShow(current().id, "control"));
+// The printer card's shortcut to Care & Tuning › Control, through its
+// opening (ctlOpen, as the quick panels' "All controls" will).
+$("prn-control").addEventListener("click", () => current() && ctlOpen(current().id));
 $("prn-del").addEventListener("click", () => askRemove());
 $("prn-refresh").addEventListener("click", () => { refreshSelected(); startLive(); });
 $("prn-offline-retry").addEventListener("click", () => { refreshSelected(); startLive(); });
