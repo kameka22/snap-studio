@@ -159,6 +159,7 @@ export function createView(host, on = {}) {
 
   // ---- drawing: on demand, continuously only while something moves
   let raf = 0, alive = true, shown = true;
+  let waiters = []; // ready(): told once a frame is on screen
   const draw = () => { if (!raf && alive && shown) raf = requestAnimationFrame(tick); };
   function tick(now) {
     raf = 0;
@@ -185,6 +186,12 @@ export function createView(host, on = {}) {
     }
     renderer.render(scene, camera);
     if (renderer.domElement.style.opacity === '0') renderer.domElement.style.opacity = '1';
+    if (waiters.length) {
+      const w = waiters;
+      waiters = [];
+      // One frame later: the picture has reached the screen.
+      requestAnimationFrame(() => w.forEach((f) => f()));
+    }
     if (moving) draw();
   }
 
@@ -312,6 +319,13 @@ export function createView(host, on = {}) {
       floor.material.opacity = dark ? 0.32 : 0.16;
       renderer.toneMappingExposure = dark ? 0.92 : 1;
       draw();
+    },
+    /** resolves once a frame of the scene is on screen */
+    ready() {
+      return new Promise((resolve) => {
+        waiters.push(resolve);
+        draw();
+      });
     },
     /** stops drawing while hidden */
     setShown(v) {

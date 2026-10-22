@@ -96,6 +96,8 @@ function p3dStatus(st) {
     if (!view) return;
     view.setShown(p3dOn());
     p3dPaint();
+    // The loader goes once the scene is on screen.
+    if ($("p3d").classList.contains("loading")) view.ready().then(() => $("p3d").classList.remove("loading"));
   });
   p3dCard(st);
   p3dInfo(st);
@@ -134,7 +136,12 @@ function p3dVisible(on) {
   if (!on) {
     p3dStop();
     p3dTip(null);
-  } else if (P3.pid) p3dStatus(P.status.get(P3.pid));
+    return;
+  }
+  // Back on the page: a loader over the view until the scene is drawn
+  // again, rather than its panels and model popping in.
+  $("p3d").classList.add("loading");
+  if (P3.pid) p3dStatus(P.status.get(P3.pid));
 }
 
 ctlSubscribe((pid) => {
