@@ -215,7 +215,10 @@ fn strings(v: Option<&Value>) -> Vec<String> {
 
 fn color(s: &str) -> Option<String> {
     let h = s.trim().trim_start_matches('#');
-    (h.len() >= 6 && h[..6].chars().all(|c| c.is_ascii_hexdigit())).then(|| format!("#{}", h[..6].to_ascii_lowercase()))
+    // `get`: a non-ASCII character at the cut gives None, not a panic.
+    h.get(..6)
+        .filter(|h| h.chars().all(|c| c.is_ascii_hexdigit()))
+        .map(|h| format!("#{}", h.to_ascii_lowercase()))
 }
 
 /// `/server/files/metadata`. `file_dir` is the file's folder in its root:
@@ -1289,5 +1292,17 @@ mod tests {
         assert!(e.to_string().contains("405"), "{e}");
         // A print file goes through Moonraker.
         block_on(delete_video("127.0.0.1", port, "gcodes", "Cube-1a2b3c.gcode")).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::color;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(color("#FF8000FF").as_deref(), Some("#ff8000"));
+        assert_eq!(color("#aaaaaé"), None);
+        assert_eq!(color("zzzzzz"), None);
     }
 }
