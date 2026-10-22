@@ -626,7 +626,7 @@ listen("print-send", (e) => {
     $("q-progress").classList.remove("hidden");
     $("q-progress").firstElementChild.style.width = Math.max(2, s.percent || 0) + "%";
     $("q-msg").textContent = tr("send.uploading", { p: Math.round(s.percent || 0) });
-  } else if (s.phase === "done" && s.message) toast(s.message, true);
+  } else if (s.phase === "done" && s.message) startWarning(s.message);
 });
 
 /* ------------------------------------------------------------ events */

@@ -996,7 +996,7 @@ listen("print-send", (e) => {
     setSendBusy(false);
     closeSheet($("sendmodal"));
     toast(tr("send.started", { name: p?.name || tr("slice.printer") }));
-    if (s.message) toast(s.message, true);
+    if (s.message) startWarning(s.message);
     // From a printer's files, the slice preview (if any) stays as it was.
     if (!SL.remote) closeViewer();
   }
