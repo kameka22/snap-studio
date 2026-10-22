@@ -912,6 +912,18 @@ fn share_qr_stop() {
     share::qr_stop();
 }
 
+/// Only the app's own page reads its protocols. Tauri attaches them to
+/// every webview the app creates, the Library's tabs included, where a
+/// third-party site could otherwise fetch `gcode://` or `thumb://` (the
+/// answers allow any origin) and read local files.
+fn own_webview<R: tauri::Runtime>(ctx: &tauri::UriSchemeContext<'_, R>) -> bool {
+    ctx.webview_label() == "main"
+}
+
+fn refused() -> Response<Vec<u8>> {
+    Response::builder().status(403).body(Vec::new()).unwrap()
+}
+
 /// `prn://localhost/f?id=<printer>&root=<root>&p=<path>`: a file of a
 /// printer (thumbnail, timelapse picture, video by pieces).
 async fn handle_prn(uri: String, range: Option<String>) -> Response<Vec<u8>> {
@@ -1877,32 +1889,47 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(update::Pending::default())
         .manage(discover::Discovery::default())
-        .register_asynchronous_uri_scheme_protocol("cam", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("cam", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             tauri::async_runtime::spawn(async move {
                 responder.respond(handle_cam(uri).await);
             });
         })
-        .register_asynchronous_uri_scheme_protocol("prn", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("prn", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             let range = request.headers().get("range").and_then(|v| v.to_str().ok()).map(String::from);
             tauri::async_runtime::spawn(async move {
                 responder.respond(handle_prn(uri, range).await);
             });
         })
-        .register_asynchronous_uri_scheme_protocol("gcode", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("gcode", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
                 responder.respond(handle_gcode(&uri));
             }));
         })
-        .register_asynchronous_uri_scheme_protocol("mesh", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("mesh", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
                 responder.respond(handle_mesh(&uri));
             }));
         })
-        .register_asynchronous_uri_scheme_protocol("thumb", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("thumb", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
                 responder.respond(handle_thumb(&uri));

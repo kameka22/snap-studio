@@ -1071,8 +1071,10 @@ fn slot_color(cfg: &Value, i: usize) -> Option<String> {
         .and_then(|x| x.as_str())
     {
         let h = s.trim().trim_start_matches('#');
-        if h.len() >= 6 {
-            return Some(format!("#{}", &h[0..6].to_ascii_lowercase()));
+        // `get`: a non-ASCII character at the cut (a firmware's string) must
+        // not panic, least of all in the jobs monitor.
+        if let Some(h6) = h.get(..6) {
+            return Some(format!("#{}", h6.to_ascii_lowercase()));
         }
     }
     let n = cfg.get("filament_color")?.get(i)?.as_u64()?;
@@ -1121,5 +1123,20 @@ pub fn apply_filaments(cfg: Option<&Value>, st: &mut Status) {
             present,
             used: is_used(i),
         });
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::slot_color;
+    use serde_json::json;
+
+    #[test]
+    fn slot_colours_cut_safely() {
+        let cfg = json!({ "filament_color_rgba": ["#FF8000FF", "aaaaaé", "#é"], "filament_color": [0, 0xff00ff, 0x123456] });
+        assert_eq!(slot_color(&cfg, 0).as_deref(), Some("#ff8000"));
+        // Not six characters at the cut: the integer form stands in.
+        assert_eq!(slot_color(&cfg, 1).as_deref(), Some("#ff00ff"));
+        assert_eq!(slot_color(&cfg, 2).as_deref(), Some("#123456"));
     }
 }

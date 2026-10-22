@@ -129,10 +129,11 @@ fn hex_list(v: &str) -> Vec<String> {
         .map(|s| {
             let s = s.trim().trim_matches('"');
             let hex = s.strip_prefix('#').unwrap_or("");
-            if hex.len() >= 6 && hex[..6].chars().all(|c| c.is_ascii_hexdigit()) {
-                format!("#{}", hex[..6].to_ascii_lowercase())
-            } else {
-                String::new()
+            // `get`, not a byte slice: a non-ASCII character at the cut
+            // (a comment of the slicer's) must not end the parse.
+            match hex.get(..6) {
+                Some(h) if h.chars().all(|c| c.is_ascii_hexdigit()) => format!("#{}", h.to_ascii_lowercase()),
+                _ => String::new(),
             }
         })
         .collect()
@@ -828,5 +829,19 @@ G1 X30 Y30 F9000
     fn prusa_extruder_colour_is_a_fallback() {
         let d = parse("; extruder_colour = \"#112233\"\nG1 X1 E1\n".as_bytes()).unwrap();
         assert_eq!(d.meta.colors, vec!["#112233"]);
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::hex_list;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(hex_list("#AABBCC;#112233"), vec!["#aabbcc", "#112233"]);
+        // Six bytes that are not six characters: skipped, never a panic.
+        assert_eq!(hex_list("#aaaaaé"), vec![""]);
+        assert_eq!(hex_list("#é"), vec![""]);
+        assert_eq!(hex_list("#aabbccé"), vec!["#aabbcc"]);
     }
 }

@@ -105,13 +105,11 @@ impl MeshData {
 
 fn parse_color(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
-    if s.len() < 6 {
-        return None;
-    }
+    // `get`: a non-ASCII character at a cut gives None, not a panic.
     Some([
-        u8::from_str_radix(&s[0..2], 16).ok()?,
-        u8::from_str_radix(&s[2..4], 16).ok()?,
-        u8::from_str_radix(&s[4..6], 16).ok()?,
+        u8::from_str_radix(s.get(0..2)?, 16).ok()?,
+        u8::from_str_radix(s.get(2..4)?, 16).ok()?,
+        u8::from_str_radix(s.get(4..6)?, 16).ok()?,
     ])
 }
 
@@ -1202,5 +1200,17 @@ mod stats_tests {
         for (e, p) in m.extruders.iter().zip(&m.paint) {
             assert_eq!(p.as_deref(), Some(crate::paint::whole(*e).as_str()));
         }
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::parse_color;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(parse_color(" #FF8000FF "), Some([255, 128, 0]));
+        assert_eq!(parse_color("aé0000"), None);
+        assert_eq!(parse_color("aaaaaé"), None);
     }
 }
