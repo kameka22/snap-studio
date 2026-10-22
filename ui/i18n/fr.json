@@ -1490,6 +1490,10 @@
     "one": "Supprimer {n} vidéo de l'imprimante ?",
     "other": "Supprimer {n} vidéos de l'imprimante ?"
   },
+  "pfiles.deleting": {
+    "one": "Suppression…",
+    "other": "Suppression de {n} fichiers…"
+  },
   "pfiles.del.failed": {
     "one": "{n} fichier n'a pas été supprimé : {err}",
     "other": "{n} fichiers n'ont pas été supprimés : {err}"
