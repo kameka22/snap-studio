@@ -109,7 +109,7 @@ downloads land in Files; favorites in the sidebar.
 
 ### 🔧 Care & Tuning
 
-Each printer has its Care & Tuning view, in two tabs.
+Each printer has its Care & Tuning view, in three tabs: Control, Care and Bed Leveling.
 
 **Care**, from what the printer counts and Snapmaker's maintenance guide:
 
@@ -150,6 +150,22 @@ usage and the hour-based tasks.
   manual leveling — then "I've fixed it: measure again".
 - A reminder in Care after 30 days or 50 prints, and "Measure first" in
   the send sheet when the bed is out of tolerance.
+
+**Control**: the printer's basic actions, without G-code — also opened from
+the printer's page (**Control**).
+
+- Home (all axes or one), a jog pad for X, Y and Z (0.1 to 50 mm), the
+  position live; clean the nozzle, go to the purge position.
+- One card per head, in its spool's colour: temperature as a gauge, its
+  target on a slider, activate, load, unload, extrude, retract.
+- The bed's temperature; the part fan, the chamber fan, the purifier and
+  the chamber light; a small camera view.
+- Turn all heaters off, turn the motors off, restart the firmware, and the
+  emergency stop, always in reach.
+- Safe by design: locked during a print (only the emergency stop, the light
+  and the camera stay), moves and head changes only once homed, Z never
+  under 0.5 mm, temperatures never above each heater's maximum, one action
+  at a time; what cannot run says why.
 
 ### 📂 Printer files and timelapses
 
@@ -319,7 +335,7 @@ with its pull request (drafts, approved or under discussion):
 | **Several plates in Prepare** — plate tabs, auto-arrange across plates, slice them all and queue them; multi-plate 3MF files kept as such | [#18](https://github.com/kameka22/snap-studio/pull/18) |
 | **Print by object** — one object after the other, with collision checks for the U1's head and an adjustable order | [#22](https://github.com/kameka22/snap-studio/pull/22) |
 | **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
-| **Calibration assistant** — step-by-step Klipper calibrations from a Calibration menu | [#17](https://github.com/kameka22/snap-studio/pull/17) |
+| **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Snapmaker hub** — Snapmaker Space, Store, Wiki, Forum and account in one menu, models opened straight in Prepare | [#23](https://github.com/kameka22/snap-studio/pull/23) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |

@@ -11,6 +11,18 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Care & Tuning › Control** ([#17](https://github.com/kameka22/snap-studio/pull/17)):
+  the printer's basic actions without G-code — home, a jog pad (X, Y, Z,
+  0.1 to 50 mm), one card per head in its spool's colour (temperature
+  gauge and target, activate, load, unload, extrude, retract), the bed's
+  temperature, part and chamber fans, purifier, chamber light, a camera
+  view, all heaters off, motors off, firmware restart and the emergency
+  stop. Locked during a print (emergency stop, light and camera stay);
+  moves and head changes once homed, Z never under 0.5 mm, temperatures
+  within each heater's maximum, one action at a time. Also opened from the
+  printer's page (**Control**).
+
 ## [0.12.0] — 2026-10-21
 
 ### Added
