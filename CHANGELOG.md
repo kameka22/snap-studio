@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-10-22
+
 ### Added
 - **Care & Tuning › Control** ([#17](https://github.com/kameka22/snap-studio/pull/17)):
   the printer's basic actions without G-code — home, a jog pad (X, Y, Z,
@@ -331,7 +333,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/kameka22/snap-studio/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/kameka22/snap-studio/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kameka22/snap-studio/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/kameka22/snap-studio/compare/v0.9.0...v0.10.0
