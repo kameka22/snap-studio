@@ -92,21 +92,24 @@ const CTL_CONFIRM = {
    emergency stop never does). */
 async function ctlRun(pid, action, label) {
   const stop = action.kind === "emergency_stop";
-  if (!pid || (ctlBusy(pid) && !stop)) return;
+  if (!pid || (ctlBusy(pid) && !stop)) return false;
   const c = CTL_CONFIRM[action.kind];
-  if (c && !(await confirmDelete(tr(c[0]), tr(c[1]), tr(c[2])))) return;
+  if (c && !(await confirmDelete(tr(c[0]), tr(c[1]), tr(c[2])))) return false;
   if (!stop) CTL.busy.set(pid, label || tr("ctl.doing.any"));
   ctlEmit(pid);
+  let ok = true;
   try {
     await invoke("control_run", { printerId: pid, action });
   } catch (e) {
+    ok = false;
     toast(String(e), true);
   } finally {
     if (!stop) CTL.busy.delete(pid);
     await ctlRead(pid);
-    // A spool went in or out.
-    if (action.kind === "load" || action.kind === "unload") ctlSpools(pid);
+    // A spool went in or out, or was declared.
+    if (["load", "unload", "filament"].includes(action.kind)) ctlSpools(pid);
   }
+  return ok;
 }
 
 /* Opens Care & Tuning › Control on a printer, with a context: `head`
@@ -125,6 +128,7 @@ const CTL_ICONS = {
   right: '<path d="M18 12l-7-6v12z"/>',
   home: '<path d="M12 4l8 7h-2.5v8h-4v-5h-3v5h-4v-8H4z"/>',
   power: '<path d="M11 3h2v9h-2zM6.3 6.3l1.4 1.4A6 6 0 1 0 16.3 7.7l1.4-1.4A8 8 0 1 1 6.3 6.3z"/>',
+  edit: '<path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8zm14.7-7.6a.8.8 0 0 0 0-1.1l-1.2-1.2a.8.8 0 0 0-1.1 0l-1.4 1.4 2.3 2.3z"/>',
 };
 const ctlIcon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${CTL_ICONS[k]}</svg>`;
 const ctlDeg = (v) => (v == null ? "—" : `${fmtNum(Math.round(v))}°`);
@@ -139,6 +143,7 @@ function ctlSpoolHtml(n, { compact = false } = {}) {
   return `<div class="ctl-c ctl-c-spool" data-ctl="spool-c" data-n="${n}">
       <div class="ctl-c-row"><b>T${n}</b>${chip}</div>
       <div class="ctl-c-acts">${ctlBtn("load", n, tr("ctl.load"))}${ctlBtn("unload", n, tr("ctl.unload"))}</div>
+      <button class="btn small ctl-c-fil" data-act="filament" data-n="${n}" data-tip="${esc(tr("ctl.filament_sub"))}">${ctlIcon("edit")}<span>${esc(tr("ctl.filament"))}</span></button>
     </div>`;
 }
 function ctlSpoolPaint(el, pid, n) {
@@ -146,7 +151,7 @@ function ctlSpoolPaint(el, pid, n) {
   // The chip carries the colour (alone, or inside a compact spool panel).
   const chip = el.matches(".ctl-spool") ? el : el.querySelector(".ctl-spool");
   for (const x of new Set([el, chip])) x?.style.setProperty("--spool", s.color || "var(--separator)");
-  el.classList.toggle("empty", !s.present);
+  el.classList.toggle("no-spool", !s.present);
   el.querySelector('[data-v="mat"]').textContent = s.present ? s.name || tr("ctl.loaded") : tr("ctl.no_spool");
 }
 
@@ -164,7 +169,7 @@ function ctlHeadHtml(h, { compact = false } = {}) {
       </div>`;
   }
   return `<div class="ct-head" data-ctl="head" data-n="${n}" data-head="${n}">
-      <div class="ct-head-top"><b>T${n}</b>${ctlSpoolHtml(n)}<span class="ct-badge" data-v="badge"></span></div>
+      <div class="ct-head-top"><b>T${n}</b>${ctlSpoolHtml(n)}<button class="ct-edit" data-act="filament" data-n="${n}" title="${esc(tr("ctl.filament"))}" aria-label="${esc(tr("ctl.filament"))}" data-tip="${esc(tr("ctl.filament"))}">${ctlIcon("edit")}</button><span class="ct-badge" data-v="badge"></span></div>
       <div class="ct-head-mid">
         <div class="ct-gauge" data-v="gauge"><span><b data-v="temp">—</b><small data-v="target"></small></span></div>
         <div class="ct-head-set">${slider}<button class="btn small ct-activate" data-act="tool" data-n="${n}">${esc(tr("ctl.activate"))}</button></div>
@@ -181,7 +186,7 @@ function ctlHeadPaint(el, pid, h) {
   const active = st?.active === h.index;
   const s = ctlSpool(pid, h.index);
   el.style.setProperty("--spool", s.color || "var(--separator)");
-  el.classList.toggle("empty", !s.present);
+  el.classList.toggle("no-spool", !s.present);
   el.classList.toggle("active", active);
   const spool = el.querySelector('[data-ctl="spool"]');
   if (spool) ctlSpoolPaint(spool, pid, h.index);
@@ -263,7 +268,7 @@ function ctlPaint(root, pid) {
   const step = +root.dataset.step || 0;
   root.querySelectorAll("[data-act]").forEach((b) => {
     const kind = b.dataset.act;
-    const opts = { n: b.dataset.n == null ? null : +b.dataset.n, axis: b.dataset.axis, dist: b.dataset.sign ? +b.dataset.sign * step : 0 };
+    const opts = { n: b.dataset.n == null ? null : +b.dataset.n, axis: b.dataset.axis, dist: b.dataset.sign ? +b.dataset.sign * step : 0, axes: b.dataset.axes || "" };
     const why = kind === "emergency_stop" ? (st || cfg ? "" : "ctl.why.offline") : busy ? "ctl.why.busy" : ctlWhy(kind, st, cfg, opts);
     b.disabled = !!why;
     if (why) b.title = tr(why, { t: fmtNum(Math.round(cfg?.heads.find((h) => h.index === opts.n)?.min_extrude_temp || 170)) });
@@ -292,6 +297,10 @@ function ctlBind(root) {
       return ctlRun(pid, { kind, axis: b.dataset.axis, dist }, tr(CTL_DOING.jog, { axis: b.dataset.axis.toUpperCase(), d: fmtDec(dist, step < 1 ? 1 : 0) }));
     }
     if (kind === "home") return ctlRun(pid, { kind, axes: b.dataset.axes }, tr(CTL_DOING.home, { axes: b.dataset.axes.toUpperCase() }));
+    // A head's material and colour; loading a spool without an RFID tag
+    // asks them first (as the printer's screen).
+    if (kind === "filament") return ctlFilament(pid, n);
+    if (kind === "load" && ctlLoadAsks(ctlState(pid)?.heads.find((h) => h.index === n), ctlData(pid).cfg)) return ctlFilament(pid, n, { load: true });
     const action = { kind };
     if (n !== undefined) action.n = n;
     ctlRun(pid, action, CTL_DOING[kind] ? tr(CTL_DOING[kind], { n }) : tr("ctl.doing.any"));
@@ -427,7 +436,10 @@ function ctBuild() {
           <div class="ct-row ct-homes"><span class="ct-k">${esc(tr("ctl.home"))}</span>
             <div class="ct-homegrp">
               <button class="btn small primary" data-act="home" data-axes="xyz">${ctlIcon("home")} XYZ</button>
-              <button class="btn small" data-act="home" data-axes="x">X</button><button class="btn small" data-act="home" data-axes="y">Y</button><button class="btn small" data-act="home" data-axes="z">Z</button>
+              ${cfg?.u1
+                // A U1 homes X and Y together (its G28 override).
+                ? `<button class="btn small" data-act="home" data-axes="xy">XY</button><button class="btn small" data-act="home" data-axes="z">Z</button>`
+                : `<button class="btn small" data-act="home" data-axes="x">X</button><button class="btn small" data-act="home" data-axes="y">Y</button><button class="btn small" data-act="home" data-axes="z">Z</button>`}
             </div>
           </div>
         </div>
@@ -477,8 +489,9 @@ function ctUpdate() {
     : state === "busy" ? tr("ctl.st.busy", { state: st.main_state }) : tr(`ctl.st.${state}`);
   $("ct-state").className = `ct-state ${state}`;
   $("ct-state-t").textContent = stateText;
-  const homed = ctlHomed(st);
-  $("ct-homed").textContent = st ? tr(homed ? "ctl.homed" : "ctl.not_homed_short") : "";
+  const homed = ctlHomed(st), xy = ctlHomed(st, "xy");
+  // X and Y only (a U1's "G28 X Y", its feeder or a head change): said.
+  $("ct-homed").textContent = st ? tr(homed ? "ctl.homed" : xy ? "ctl.homed_xy" : "ctl.not_homed_short") : "";
   $("ct-homed").className = `ct-chip${st && !homed ? " warn" : ""}`;
   $("ct-active").textContent = st?.active != null ? tr("ctl.active_head", { n: st.active }) : "";
   $("ct-busy").classList.toggle("hidden", !busy);
@@ -496,9 +509,9 @@ function ctUpdate() {
   // Homed a moment ago, not any more, nothing moved: Klipper's standby
   // (5 min without a command) turned the motors off. Said as such.
   if (homed) CT.homedSeen = true;
-  $("ct-nohome").classList.toggle("hidden", !st || homed || !!lock);
+  $("ct-nohome").classList.toggle("hidden", !st || homed || xy || !!lock);
   $("ct-nohome").querySelector("span").textContent = tr(CT.homedSeen && !homed && st?.idle === "Idle" ? "ctl.not_homed_idle" : "ctl.not_homed");
-  $("ct-pos").textContent = st && homed ? `X ${ctMm(st.position[0])}  Y ${ctMm(st.position[1])}  Z ${ctMm(st.position[2])}` : "";
+  $("ct-pos").textContent = st && xy ? `X ${ctMm(st.position[0])}  Y ${ctMm(st.position[1])}${homed ? `  Z ${ctMm(st.position[2])}` : ""}` : "";
   root.dataset.step = String(CT.step);
   document.querySelectorAll("#ct-steps [data-step-pick]").forEach((b) => {
     const on = +b.dataset.stepPick === CT.step;
@@ -549,12 +562,82 @@ $("ct-body").addEventListener("change", (e) => {
   if (r.id === "ct-cam-sw") return r.checked ? ctCamStart() : ctCamStop();
 });
 
+/* ------------------------------------------------- material and colour */
+
+/* The colours offered at once (any other through the colour field). */
+const CTL_COLORS = ["#ffffff", "#000000", "#8e9089", "#c9cbcd", "#c12e1f", "#ff6a13", "#f4d10b", "#00ae42", "#164b35", "#0086d6", "#0a2989", "#5e43b7", "#f55a74", "#9d432c", "#e8dbb7", "#b8cde9"];
+
+const CF = { pid: null, n: null, load: false, pick: null };
+
+/* Declares head `n`'s material and colour, from the printer's own list
+   (Material › Brand › Type, as on its screen); `load`: then loads it. */
+function ctlFilament(pid, n, { load = false } = {}) {
+  const cfg = ctlData(pid).cfg;
+  if (!pid || !cfg?.materials?.length) return;
+  const slot = (typeof headsSlots === "function" ? headsSlots(pid) : []).find((s) => s.index === n);
+  Object.assign(CF, { pid, n, load, pick: ctlFilamentPick(cfg.materials, slot) });
+  $("ctlfil-title").textContent = tr(load ? "ctl.fil.title_load" : "ctl.fil.title", { n });
+  $("ctlfil-ok").textContent = tr(load ? "ctl.fil.ok_load" : "common.save");
+  ctlFilFill();
+  openSheet($("ctlfil"));
+}
+
+function ctlFilFill() {
+  const mats = ctlData(CF.pid).cfg?.materials || [], p = CF.pick;
+  const m = mats.find((x) => x.kind === p.material) || mats[0];
+  const v = m.vendors.find((x) => x.name === p.vendor) || m.vendors[0];
+  const opt = (val, label, on) => `<option value="${esc(val)}"${on ? " selected" : ""}>${esc(label)}</option>`;
+  $("ctlfil-material").innerHTML = mats.map((x) => opt(x.kind, x.kind, x === m)).join("");
+  $("ctlfil-vendor").innerHTML = m.vendors.map((x) => opt(x.name, x.name, x === v)).join("");
+  $("ctlfil-sub").innerHTML = v.subs.map((s) => opt(s, s || tr("ctl.fil.generic"), s === p.sub_type)).join("");
+  $("ctlfil-vendor").disabled = m.vendors.length < 2;
+  $("ctlfil-sub").disabled = v.subs.length < 2;
+  const name = typeof colorName === "function" ? colorName : () => "";
+  $("ctlfil-colors").innerHTML = CTL_COLORS.map((c) => `<button class="ctl-fil-sw${c === p.color ? " on" : ""}" data-color="${c}" style="--c:${c}" title="${esc(name(c))}" aria-label="${esc(name(c) || c)}" role="radio" aria-checked="${c === p.color}"></button>`).join("");
+  $("ctlfil-color").value = p.color;
+  $("ctlfil-color-t").textContent = `${name(p.color)} ${p.color.toUpperCase()}`.trim();
+  $("ctlfil-preview").style.setProperty("--c", p.color);
+  $("ctlfil-preview-t").textContent = [p.vendor, p.material, p.sub_type].filter(Boolean).join(" ");
+}
+
+$("ctlfil-material").addEventListener("change", (e) => {
+  const m = ctlData(CF.pid).cfg.materials.find((x) => x.kind === e.target.value);
+  Object.assign(CF.pick, { material: m.kind, vendor: m.vendors[0].name, sub_type: m.vendors[0].subs[0] });
+  ctlFilFill();
+});
+$("ctlfil-vendor").addEventListener("change", (e) => {
+  const v = ctlData(CF.pid).cfg.materials.find((x) => x.kind === CF.pick.material).vendors.find((x) => x.name === e.target.value);
+  Object.assign(CF.pick, { vendor: v.name, sub_type: v.subs[0] });
+  ctlFilFill();
+});
+$("ctlfil-sub").addEventListener("change", (e) => {
+  CF.pick.sub_type = e.target.value;
+  ctlFilFill();
+});
+$("ctlfil-colors").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-color]");
+  if (!b) return;
+  CF.pick.color = b.dataset.color;
+  ctlFilFill();
+});
+$("ctlfil-color").addEventListener("input", (e) => {
+  CF.pick.color = e.target.value.toLowerCase();
+  ctlFilFill();
+});
+$("ctlfil-cancel").addEventListener("click", () => closeSheet($("ctlfil")));
+$("ctlfil-ok").addEventListener("click", async () => {
+  const { pid, n, load, pick } = CF;
+  closeSheet($("ctlfil"));
+  const ok = await ctlRun(pid, { kind: "filament", n, vendor: pick.vendor, material: pick.material, sub_type: pick.sub_type, color: pick.color }, tr("ctl.doing.filament", { n }));
+  if (ok && load) ctlRun(pid, { kind: "load", n }, tr("ctl.doing.load", { n }));
+});
+
 /* ------------------------------------------------------------ help */
 
 /* The heads' buttons explained: what each does, when it is greyed out;
    then what holds for all of them. */
 function ctHelp() {
-  const rows = ["temp", "tool", "load", "unload", "extrude", "retract"].map((k) => `<div class="ct-help-row">
+  const rows = ["temp", "tool", "load", "unload", "filament", "extrude", "retract"].map((k) => `<div class="ct-help-row">
       <b>${esc(tr(`ctl.help.${k}_t`))}</b>
       <span>${esc(tr(`ctl.help.${k}`))}</span>
       <small>${esc(tr(`ctl.help.${k}_when`))}</small>

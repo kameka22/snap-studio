@@ -11,7 +11,7 @@ const CTL_Z_STEP_MAX = 10;
 /* On a U1 the head docks sit behind the bed. */
 const CTL_U1_Y_MAX = 270;
 
-const ctlHomed = (st) => !!st && ["x", "y", "z"].every((a) => (st.homed || "").includes(a));
+const ctlHomed = (st, axes = "xyz") => !!st && [...axes].every((a) => (st.homed || "").includes(a));
 const ctlPrinting = (st) => ["printing", "paused"].includes(st?.state);
 const ctlMachineBusy = (st) => !!st?.main_state && st.main_state !== "IDLE";
 
@@ -23,9 +23,31 @@ function ctlRange(cfg, i) {
   return [min, max];
 }
 
+/* Filament in a head (control.rs HeadState): its sensor, else the feed
+   module's last load; null: not known. */
+function ctlLoaded(h) {
+  if (typeof h?.filament === "boolean") return h.filament;
+  return h?.feed_state ? h.feed_state === "load_finish" : null;
+}
+
+/* Loading asks for the material and colour first, as the printer's
+   screen does for a spool without an RFID tag (a tagged one says itself). */
+const ctlLoadAsks = (h, cfg) => !!cfg?.materials?.length && h?.official !== true;
+
+/* The material and colour offered for head `slot` (heads.js): what it
+   declares when the printer lists it, else Generic PLA; white. */
+function ctlFilamentPick(materials, slot) {
+  const m = materials.find((x) => x.kind === slot?.kind) || materials.find((x) => x.kind === "PLA") || materials[0];
+  if (!m) return null;
+  const v = m.vendors.find((x) => x.name === slot?.vendor) || m.vendors[0];
+  const sub = v.subs.includes(slot?.sub_type || "") ? slot?.sub_type || "" : v.subs[0];
+  const color = slot?.present && /^#[0-9a-f]{6}$/i.test(slot.color || "") ? slot.color.toLowerCase() : "#ffffff";
+  return { material: m.kind, vendor: v.name, sub_type: sub, color };
+}
+
 /* Why an action cannot run now: an i18n key (ctl.why.*), or "" when it
    can. `kind` as control.rs's Action; `n` the head, `axis` and `dist` a jog. */
-function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
+function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0, axes = "" } = {}) {
   if (!st || !cfg) return "ctl.why.offline";
   if (kind === "emergency_stop") return "";
   if (kind === "light") return cfg.light ? "" : "ctl.why.missing";
@@ -36,8 +58,11 @@ function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
   if (n != null && !head) return "ctl.why.missing";
   if (kind === "chamber_fan" && !cfg.chamber_fan) return "ctl.why.missing";
   if (kind === "purifier" && !cfg.purifier) return "ctl.why.missing";
+  // Homing: on a U1 X and Y home together, and Z only once they are.
+  if (kind === "home") return cfg.u1 && axes === "z" && !ctlHomed(st, "xy") ? "ctl.why.home_xy" : "";
   if (kind === "jog") {
-    if (!ctlHomed(st)) return "ctl.why.home";
+    // Klipper needs the axis moved homed, not the others.
+    if (!ctlHomed(st, axis || "xyz")) return "ctl.why.home";
     const i = ["x", "y", "z"].indexOf(axis);
     if (i < 0 || !CTL_STEPS.some((s) => Math.abs(Math.abs(dist) - s) < 1e-9)) return "ctl.why.limit";
     if (i === 2 && Math.abs(dist) > CTL_Z_STEP_MAX) return "ctl.why.zstep";
@@ -45,11 +70,31 @@ function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
     const to = st.position[i] + dist;
     return to < min - 1e-6 || to > max + 1e-6 ? "ctl.why.limit" : "";
   }
-  if (["tool", "unload", "clean", "purge_position"].includes(kind) && !ctlHomed(st)) return "ctl.why.home";
+  // A head's material and colour: from the printer's own list; a spool
+  // read from its RFID tag is not edited.
+  if (kind === "filament") {
+    if (!cfg.u1 || !cfg.materials?.length) return "ctl.why.missing";
+    return st.heads.find((x) => x.index === n)?.official ? "ctl.why.official" : "";
+  }
+  // Loading and unloading: a U1's feed module, which homes X and Y itself.
+  if (kind === "load" || kind === "unload") {
+    if (!cfg.u1) return "ctl.why.missing";
+    const h = st.heads.find((x) => x.index === n) || {};
+    const loaded = ctlLoaded(h);
+    if (kind === "unload") return loaded === false ? "ctl.why.empty" : "";
+    if (loaded === true) return "ctl.why.loaded";
+    if (h.auto_feed === false) return "ctl.why.auto_off";
+    return h.inserted === false ? "ctl.why.insert" : "";
+  }
+  // A U1 homes X and Y itself to pick a head (T<n>); cleaning and the
+  // purge position need them homed (MOVE_TO_XY_IDLE_POSITION). Another
+  // printer: everything homed.
+  if (kind === "tool" && !cfg.u1 && !ctlHomed(st)) return "ctl.why.home";
+  if (["clean", "purge_position"].includes(kind) && !ctlHomed(st, cfg.u1 ? "xy" : "xyz")) return "ctl.why.home";
   if (kind === "extrude" || kind === "retract") {
     const h = st.heads.find((x) => x.index === n);
     if (!h || h.temp < head.min_extrude_temp) return "ctl.why.cold";
-    if (st.active !== n && !ctlHomed(st)) return "ctl.why.home";
+    if (st.active !== n && !cfg.u1 && !ctlHomed(st)) return "ctl.why.home";
   }
   if (kind === "tool" && st.active === n) return "ctl.why.active";
   return "";
@@ -85,4 +130,4 @@ function ctlHeat(temp, target) {
 }
 
 if (typeof module !== "undefined")
-  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };
+  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlLoaded, ctlLoadAsks, ctlFilamentPick, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };

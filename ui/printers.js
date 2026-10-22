@@ -25,6 +25,7 @@ function switchView(v) {
   document.querySelectorAll(".views > .view").forEach((s) => {
     s.classList.toggle("hidden", s.id !== "view-" + v);
   });
+  if (typeof p3dVisible === "function") p3dVisible(v === "printers");
   if (v === "printers") startLive();
   else {
     stopLive();
@@ -193,6 +194,7 @@ function prnRenderDetail() {
     return;
   }
   tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}`);
+  if (typeof p3dShow === "function") p3dShow(p);
   renderStatus(P.status.get(p.id));
 }
 
@@ -233,6 +235,7 @@ function renderStatus(st) {
     setOffline("connecting");
     $("prn-info").innerHTML = "";
     paintPrinter({ online: false, state: "offline", nozzles: [] });
+    if (typeof p3dStatus === "function") p3dStatus(null);
     updateFreshness();
     return;
   }
@@ -284,7 +287,10 @@ function renderStatus(st) {
   if (st.fan != null) chips.push(chip(tr("printers.fan"), Math.round(st.fan * 100) + " %"));
   $("prn-chips").innerHTML = chips.join("");
 
-  // Loaded filaments (U1) and temperatures
+  // Loaded filaments (U1) and temperatures. The live status is the spools'
+  // freshest source: the heads' own copy (heads.js, Control, the 3D view)
+  // follows it, or an unloaded spool would linger there.
+  if (st.online && Array.isArray(st.filaments) && P.sel) headsSetSlots(P.sel, st.filaments);
   renderFilaments(st);
   const rows = [];
   if (!(st.filaments || []).length) {
@@ -311,6 +317,8 @@ function renderStatus(st) {
   $("prn-info").innerHTML = info.join("");
 
   paintPrinter(st);
+  // The 3D view, when it can, replaces the hero (printer3d.js).
+  if (typeof p3dStatus === "function") p3dStatus(st);
   updateFreshness();
 }
 
@@ -380,7 +388,7 @@ function renderFilaments(st) {
     return `<div class="frow${on ? " on" : ""}">
       <span class="fbar"></span>
       <span class="fsw" style="${sw}"></span>
-      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span>${prof[f.index] ? `<span class="fprof">${esc(prof[f.index])}</span>` : ""}</span>
+      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span>${f.present && prof[f.index] ? `<span class="fprof">${esc(prof[f.index])}</span>` : ""}</span>
       <span class="ftags">${tags.join("")}<span class="ftemp">${esc(temp)}</span></span>
     </div>`;
   });
@@ -560,23 +568,25 @@ function setOfflineSeen(seen) {
 function updateFreshness() {
   const seen = P.seen.get(P.sel);
   const live = P.live.get(P.sel);
-  const box = $("prn-updated");
   const st = P.status.get(P.sel);
+  // The footer, and its copy in the 3D view's details (printer3d.js).
+  const say = (t) => {
+    $("prn-updated").textContent = t;
+    $("p3d-fresh").textContent = t;
+  };
   // Offline: the card carries the last-connection time, no footer.
   if (st && !st.online) {
-    box.textContent = "";
+    say("");
     setOfflineSeen(seen);
     return;
   }
   if (!seen) {
-    box.textContent = live ? tr("printers.live.connecting") : "";
+    say(live ? tr("printers.live.connecting") : "");
     return;
   }
   const age = Math.round((Date.now() - seen) / 1000);
   // Printer answering HTTP but live feed down: the data may be stale.
-  box.textContent = live
-    ? tr("printers.live.age", { s: age })
-    : tr("printers.live.offline", { time: fmtSeen(seen) });
+  say(live ? tr("printers.live.age", { s: age }) : tr("printers.live.offline", { time: fmtSeen(seen) }));
 }
 
 /* ------------------------------------------------------------ form */

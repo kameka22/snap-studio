@@ -67,7 +67,8 @@ duplicated; see [Design with AI](#design-with-ai).
 <td valign="top">
 
 ### 🖨 Printers
-Found on the network on their own; live state, the four heads'
+Found on the network on their own; the U1 in 3D, its parts clickable for
+quick controls (spools, heads, bed, light); live state, the four heads'
 temperatures, the spools loaded in each, their [files and timelapses](#-printer-files-and-timelapses)
 and their [care and bed leveling](#-care--tuning). Works with any Klipper printer.
 

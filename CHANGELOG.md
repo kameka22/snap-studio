@@ -19,9 +19,35 @@ with its packages for macOS, Windows and Linux. What comes next:
   temperature, part and chamber fans, purifier, chamber light, a camera
   view, all heaters off, motors off, firmware restart and the emergency
   stop. Locked during a print (emergency stop, light and camera stay);
-  moves and head changes once homed, Z never under 0.5 mm, temperatures
-  within each heater's maximum, one action at a time. Also opened from the
+  each move once its axis is homed (as Klipper; a U1 homes X and Y
+  together, Z after them, and picks a head or loads after homing X and Y
+  itself), Z never under 0.5 mm, temperatures
+  within each heater's maximum, one action at a time. Load and unload run
+  the U1 feeder's own procedures, as its screen does (homing X and Y when
+  needed, the filament's own temperature), and follow the head's filament
+  sensor: Load once the filament is in the feed port of an empty head,
+  Unload when the head holds filament. **Material & colour** declares a
+  head's spool as the printer's screen does, from the list the printer
+  itself holds (material, brand, type) and a colour; loading a spool
+  without an RFID tag asks it first, so the printer heats to the right
+  temperature (a tagged spool declares itself). Also opened from the
   printer's page (**Control**).
+- **3D printer view** ([#34](https://github.com/kameka22/snap-studio/pull/34)):
+  the printer's page shows the U1 in 3D (three.js, bundled with the app),
+  over the whole page. Hover a part to highlight it; click a spool, a head,
+  the bed or the chamber light to open its quick controls in a panel over
+  the view (Control's compact components: temperature, load, unload,
+  light), with **All controls** leading to Care & Tuning › Control on that
+  head. Selecting a head turns the view to its spool's side, the bed or
+  the light to the front; clicking the background deselects and turns
+  back to the front.
+  The Heads and spools card (top left) has one row per head (spool and
+  its details, temperature, active, unloaded) plus the bed; a row selects
+  its head. The print's status sits top centre. Left / Front / Right / Back, drag or ← → to turn,
+  1–4 for a head, Esc to close. A quick bar for the light and the camera
+  (shown in a corner of the view), the printer's details bottom right, and
+  the emergency stop in the toolbar beside Control. Without WebGL the page
+  keeps its 2D picture.
 
 ### Fixed
 - The send sheet's options (timelapse camera, automatic bed leveling, flow
