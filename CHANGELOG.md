@@ -22,6 +22,17 @@ with its packages for macOS, Windows and Linux. What comes next:
   moves and head changes once homed, Z never under 0.5 mm, temperatures
   within each heater's maximum, one action at a time. Also opened from the
   printer's page (**Control**).
+- **3D printer view** ([#34](https://github.com/kameka22/snap-studio/pull/34)):
+  the printer's page shows the U1 in 3D (three.js, bundled with the app).
+  Hover a part to highlight it; click a spool, a head, the bed or the
+  chamber light to open its quick controls in a panel over the view
+  (Control's compact components: load, unload, temperatures, light), with
+  **All controls** leading to Care & Tuning › Control on that head.
+  Clicking a spool turns the view to its side; Left / Front / Right, or
+  drag to turn. Spools in their declared colours (greyed when empty), the
+  active head and its nozzle's heat, the light, the print's progress and
+  a status card with the four spools; the emergency stop stays in reach.
+  Without WebGL the page keeps its 2D picture.
 
 ### Fixed
 - The send sheet's options (timelapse camera, automatic bed leveling, flow

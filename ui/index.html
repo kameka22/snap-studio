@@ -381,6 +381,29 @@
           </details>
         </div>
 
+        <div id="p3d" class="p3d hidden" data-ctl-pid="">
+          <div id="p3d-canvas" class="p3d-canvas"></div>
+          <div class="p-float p3d-card" role="status">
+            <div class="p3d-card-top"><span id="p3d-state" class="p3d-state"><i></i><b id="p3d-state-t"></b></span><span id="p3d-chamber" class="p3d-chamber"></span></div>
+            <div id="p3d-job" class="p3d-job"></div>
+            <div id="p3d-prog" class="p3d-prog hidden"><div class="p3d-track"><div id="p3d-bar" class="p3d-bar"></div></div><small id="p3d-prog-t"></small></div>
+            <div id="p3d-chips" class="p3d-chips"></div>
+          </div>
+          <div id="p3d-panel" class="p-float p3d-panel hidden">
+            <div class="p-float-head"><span id="p3d-panel-t" class="p-float-title"></span>
+              <button id="p3d-close" class="p3d-x" title="Close" aria-label="Close" data-i18n-title="p3d.close" data-i18n-aria="p3d.close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button>
+            </div>
+            <div id="p3d-panel-body" class="p-float-body"></div>
+          </div>
+          <div id="p3d-views" class="seg p3d-views" role="group" aria-label="View" data-i18n-aria="p3d.view">
+            <button class="seg-btn" data-side="left" data-i18n="p3d.side.left">Left side</button>
+            <button class="seg-btn on" data-side="front" data-i18n="p3d.side.front">Front</button>
+            <button class="seg-btn" data-side="right" data-i18n="p3d.side.right">Right side</button>
+          </div>
+          <div class="p3d-hint" data-i18n="p3d.hint">Hover a part to highlight it · click to open its controls · drag to turn</div>
+          <div class="p3d-estop"></div>
+          <div id="p3d-tip" class="p3d-tip hidden"></div>
+        </div>
         <div class="hero" id="prn-hero">
           <div class="hero-visual">
             <svg id="pv" class="pv" viewBox="0 0 280 252" aria-hidden="true">
@@ -1836,6 +1859,8 @@
 <script src="bedmesh.js"></script>
 <script src="control-logic.js"></script>
 <script src="control.js"></script>
+<script src="printer3d-logic.js"></script>
+<script src="printer3d.js"></script>
 <script src="pfiles-logic.js"></script>
 <script src="printer-files.js"></script>
 <script src="pfiles-share.js"></script>

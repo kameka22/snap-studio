@@ -25,6 +25,7 @@ function switchView(v) {
   document.querySelectorAll(".views > .view").forEach((s) => {
     s.classList.toggle("hidden", s.id !== "view-" + v);
   });
+  if (typeof p3dVisible === "function") p3dVisible(v === "printers");
   if (v === "printers") startLive();
   else {
     stopLive();
@@ -193,6 +194,7 @@ function prnRenderDetail() {
     return;
   }
   tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}`);
+  if (typeof p3dShow === "function") p3dShow(p);
   renderStatus(P.status.get(p.id));
 }
 
@@ -233,6 +235,7 @@ function renderStatus(st) {
     setOffline("connecting");
     $("prn-info").innerHTML = "";
     paintPrinter({ online: false, state: "offline", nozzles: [] });
+    if (typeof p3dStatus === "function") p3dStatus(null);
     updateFreshness();
     return;
   }
@@ -311,6 +314,8 @@ function renderStatus(st) {
   $("prn-info").innerHTML = info.join("");
 
   paintPrinter(st);
+  // The 3D view, when it can, replaces the hero (printer3d.js).
+  if (typeof p3dStatus === "function") p3dStatus(st);
   updateFreshness();
 }
 

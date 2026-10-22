@@ -71,8 +71,9 @@ recherchent, s'épinglent, se renomment, se dupliquent ; voir
 <td valign="top">
 
 ### 🖨 Imprimantes
-Trouvées seules sur le réseau ; état en direct, températures des quatre
-têtes, bobines chargées, leurs [fichiers et timelapses](#-fichiers-et-timelapses-de-limprimante)
+Trouvées seules sur le réseau ; la U1 en 3D, ses pièces cliquables pour
+les contrôles rapides (bobines, têtes, plateau, lumière) ; état en direct,
+températures des quatre têtes, bobines chargées, leurs [fichiers et timelapses](#-fichiers-et-timelapses-de-limprimante)
 et leur [entretien et nivellement](#-entretien-et-réglages). Fonctionne avec toute imprimante Klipper.
 
 <img src="docs/screenshots/printer.png" alt="L'imprimante et ses bobines" />

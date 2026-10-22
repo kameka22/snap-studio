@@ -1,0 +1,80 @@
+"use strict";
+/* The 3D printer view (#34): the pure part, tested by
+   scripts/test-printer3d.js. printer3d.js and printer3d/view.js draw
+   what these return. */
+
+/* Where each head's spool hangs on a U1, seen from the front: T0 and T1 on
+   the left (top, bottom), T2 and T3 on the right. */
+const P3D_SPOOLS = [
+  { n: 0, side: "left", slot: "top" },
+  { n: 1, side: "left", slot: "bottom" },
+  { n: 2, side: "right", slot: "top" },
+  { n: 3, side: "right", slot: "bottom" },
+];
+
+/* The view's turn (radians about the vertical axis) to show a side; a
+   positive turn brings the left side forward. */
+const P3D_YAW = { left: 0.95, front: 0, right: -0.95 };
+
+/* A zone id from a picked part's names (the model's named groups, from the
+   part up): spool of head n, head n (its dock, or the carriage when it is
+   the active head), bed, light. Null: nothing clickable. */
+function p3dZoneOf(names, active = null) {
+  for (const name of names) {
+    const spool = ["spoolLeftTop", "spoolLeftBottom", "spoolRightTop", "spoolRightBottom"].indexOf(name);
+    if (spool >= 0) return `spool:${spool}`;
+    const dock = /^dock([0-3])$/.exec(name);
+    if (dock) return `head:${dock[1]}`;
+    if (name === "toolhead") return active == null ? null : `head:${active}`;
+    if (name === "bed" || name === "light") return name;
+  }
+  return null;
+}
+
+/* What a zone id names: { kind: spool | head | bed | light, n }. */
+function p3dParse(zone) {
+  const m = /^(spool|head):(\d)$/.exec(zone || "");
+  if (m) return { kind: m[1], n: +m[2] };
+  return zone === "bed" || zone === "light" ? { kind: zone, n: null } : null;
+}
+
+/* The side a zone sits on: a spool's, else the front. */
+function p3dSideOf(zone) {
+  const z = p3dParse(zone);
+  return z?.kind === "spool" ? P3D_SPOOLS[z.n].side : "front";
+}
+
+/* A nozzle's glow, 0 (cold) to 1: its way from room temperature to its
+   target, or to 200 °C when it has none (cooling down). */
+function p3dHeat(temp, target) {
+  const room = 40;
+  const top = target > room ? target : 200;
+  return Math.max(0, Math.min(1, ((temp || 0) - room) / (top - room)));
+}
+
+/* The status card's lines from the printer's status (printers.js): state,
+   job, progress 0–1, layer, time left in seconds. */
+function p3dSummary(status) {
+  if (!status || !status.online) return { state: "offline", job: "", progress: null, layer: null, left: null };
+  const printing = status.state === "printing" || status.state === "paused";
+  return {
+    state: status.state || "standby",
+    job: printing ? status.job || "" : "",
+    progress: printing && Number.isFinite(status.progress) ? status.progress : null,
+    layer: printing && Array.isArray(status.layer) ? status.layer : null,
+    left: printing && Number.isFinite(status.remaining_s) ? status.remaining_s : null,
+  };
+}
+
+/* The carriage over the bed, in the model's metres from the bed's centre
+   (x right, z toward the front), from the printer's position in mm (a
+   U1's bed is 270 mm, Y+ toward the back). Null: not known. */
+function p3dCarriage(pos, bed = 270) {
+  if (!Array.isArray(pos) || !Number.isFinite(pos[0]) || !Number.isFinite(pos[1])) return null;
+  return { x: (pos[0] - bed / 2) / 1000, z: (bed / 2 - pos[1]) / 1000 };
+}
+
+/* An easing for the view's turns (smooth start and end). */
+const p3dEase = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+if (typeof module !== "undefined") module.exports = { P3D_SPOOLS, P3D_YAW, p3dZoneOf, p3dParse, p3dSideOf, p3dHeat, p3dSummary, p3dCarriage, p3dEase };
