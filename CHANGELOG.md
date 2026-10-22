@@ -62,6 +62,30 @@ with its packages for macOS, Windows and Linux. What comes next:
   Remove and undo now free the GPU memory of the meshes no object uses,
   instead of keeping every mesh loaded for the whole session
   ([#44](https://github.com/kameka22/snap-studio/pull/44)).
+- Sheets opened while a Library site is shown (the queue's next print, an
+  update, sign-in, share, rename, the welcome assistant) no longer sit
+  invisible under the site, the app blocked behind their backdrop. In the
+  printer form, Enter on a button (Cancel, Test, a found printer) is that
+  button's click instead of a save, and the message after an edit says
+  "updated" rather than "added". A corrupt stored setting no longer stops
+  the app at launch ([#45](https://github.com/kameka22/snap-studio/pull/45)).
+- Sites opened in the Library's tabs can no longer read local files
+  through the app's own protocols (`gcode://`, `thumb://`, `mesh://`,
+  `prn://`, `cam://`): only the app's window gets an answer. A malformed
+  colour (a non-ASCII character in a preset, a file or the printer's
+  report) no longer crashes slicing, file reading or the jobs monitor
+  ([#46](https://github.com/kameka22/snap-studio/pull/46)).
+- Mirrored objects are no longer sent to the slicer with scrambled
+  triangles: a `-0.0` coordinate shifted every later triangle of the
+  object in the 3MF. A preset whose parent is missing (a user preset from
+  another Orca version) is now reported by name when slicing, instead of
+  a partial configuration the engine failed on ([#47](https://github.com/kameka22/snap-studio/pull/47)).
+- The QR share server caps request and header lines at 8 KiB and serves
+  at most eight connections at once: a host on the network can no longer
+  grow the app's memory with a line that never ends. Closing a Claude
+  conversation now really ends its input, so Claude stops promptly, and a
+  container conversation's container gets time to stop before the kill
+  ([#48](https://github.com/kameka22/snap-studio/pull/48)).
 
 ## [0.12.0] — 2026-10-21
 
