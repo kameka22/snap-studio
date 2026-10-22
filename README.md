@@ -109,7 +109,7 @@ downloads land in Files; favorites in the sidebar.
 
 ### 🔧 Care & Tuning
 
-Each printer has its Care & Tuning view, in three tabs.
+Each printer has its Care & Tuning view, in three tabs: Control, Care and Bed Leveling.
 
 **Care**, from what the printer counts and Snapmaker's maintenance guide:
 

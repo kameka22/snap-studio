@@ -115,7 +115,7 @@ barre latérale.
 
 ### 🔧 Entretien et réglages
 
-Chaque imprimante a sa vue Entretien et réglages, en trois onglets.
+Chaque imprimante a sa vue Entretien et réglages, en trois onglets : Contrôle, Entretien et Nivellement.
 
 **Entretien**, construit à partir de ce que l'imprimante compte et du guide
 de maintenance Snapmaker :

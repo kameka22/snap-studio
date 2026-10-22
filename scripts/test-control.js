@@ -85,12 +85,13 @@ assert.deepEqual(C.ctlSpoolInfo({ index: 2, present: false, color: "#ffffff" }, 
 assert.equal(C.ctlSpoolInfo(undefined).present, false);
 assert.equal(C.ctlSpoolInfo({ present: true, color: "red", kind: "" }).color, null, "only #rrggbb");
 
-// The page: Control is a Care & Tuning tab between Bed Leveling and the
-// hidden Calibration, and the printer card opens it.
+// The page: Control is Care & Tuning's first tab — [Control] [Care]
+// [Bed Leveling], Calibration hidden after them — and the printer card opens it.
 const fs = require("fs");
 const html = fs.readFileSync(require("path").join(__dirname, "..", "ui", "index.html"), "utf8");
 const tabs = html.slice(html.indexOf('id="mt-tabs"'), html.indexOf("</div>", html.indexOf('id="mt-tabs"')));
-assert.ok(tabs.indexOf('data-mtab="level"') < tabs.indexOf('data-mtab="control"') && tabs.indexOf('data-mtab="control"') < tabs.indexOf('data-mtab="calib"'));
+const at = (t) => tabs.indexOf(`data-mtab="${t}"`);
+assert.ok(at("control") > 0 && at("control") < at("care") && at("care") < at("level") && at("level") < at("calib"), "Control, Care, Bed Leveling");
 assert.ok(/<button class="seg-btn labeled hidden" data-mtab="calib">/.test(html), "Calibration still hidden");
 assert.ok(/id="prn-control"/.test(html) && /id="ct-body"/.test(html));
 const maint = fs.readFileSync(require("path").join(__dirname, "..", "ui", "maint.js"), "utf8");
