@@ -38,6 +38,8 @@ export function createView(host, on = {}) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Faded in on its first frame: no blank square while the scene builds.
+  renderer.domElement.style.opacity = '0';
   host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -131,7 +133,9 @@ export function createView(host, on = {}) {
   function frame() {
     const w = host.clientWidth, h = host.clientHeight;
     if (!w || !h) return;
-    renderer.setSize(w, h, false);
+    // Resized only when it changes: a canvas resized is cleared.
+    const size = renderer.getSize(new THREE.Vector2());
+    if (size.x !== w || size.y !== h) renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const vfov = THREE.MathUtils.degToRad(camera.fov);
     const needH = 0.98, needW = 0.9; // the model with its spools and tubes, a margin around
@@ -180,6 +184,7 @@ export function createView(host, on = {}) {
       moving = true;
     }
     renderer.render(scene, camera);
+    if (renderer.domElement.style.opacity === '0') renderer.domElement.style.opacity = '1';
     if (moving) draw();
   }
 
@@ -309,7 +314,17 @@ export function createView(host, on = {}) {
       draw();
     },
     /** stops drawing while hidden */
-    setShown(v) { shown = v; if (v) frame(); },
+    setShown(v) {
+      if (v === shown && v) return;
+      shown = v;
+      if (!v) return;
+      // Drawn at once when shown again: the browser may have dropped the
+      // last picture while the page was hidden.
+      frame();
+      cancelAnimationFrame(raf);
+      raf = 0;
+      tick(performance.now());
+    },
     dispose() {
       alive = false;
       cancelAnimationFrame(raf);

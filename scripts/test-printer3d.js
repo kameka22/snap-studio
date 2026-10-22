@@ -47,8 +47,11 @@ assert.equal(L.p3dHeat(null, 0), 0);
 // The status card.
 assert.equal(L.p3dSummary(null).state, "offline");
 assert.equal(L.p3dSummary({ online: false, state: "printing" }).state, "offline");
-assert.deepEqual(L.p3dSummary({ online: true, state: "standby", job: "old.gcode", progress: 1 }), { state: "standby", job: "", progress: null, layer: null, left: null }, "a finished job is not shown as running");
-assert.deepEqual(L.p3dSummary({ online: true, state: "printing", job: "cube.gcode", progress: 0.42, layer: [12, 80], remaining_s: 3600 }), { state: "printing", job: "cube.gcode", progress: 0.42, layer: [12, 80], left: 3600 });
+const idleSum = L.p3dSummary({ online: true, state: "standby", job: "old.gcode", progress: 1, fan: 0.5 });
+assert.deepEqual([idleSum.job, idleSum.progress, idleSum.fan], ["", null, null], "a finished job is not shown as running");
+assert.deepEqual(L.p3dSummary({ online: true, state: "printing", job: "cube.gcode", progress: 0.42, layer: [12, 80], elapsed_s: 1200, remaining_s: 3600, speed_factor: 1.1, fan: 0.5, filament_mm: 3200 }),
+  { state: "printing", job: "cube.gcode", progress: 0.42, layer: [12, 80], elapsed: 1200, left: 3600, speed: 1.1, fan: 0.5, filament: 3.2 });
+assert.equal(L.p3dSummary({ online: true, state: "printing", speed_factor: 1 }).speed, null, "100 % says nothing");
 assert.equal(L.p3dSummary({ online: true, state: "paused", job: "a", progress: 0.1 }).progress, 0.1);
 assert.equal(L.p3dSummary({ online: true }).state, "standby");
 
@@ -85,7 +88,12 @@ const sp = [{ present: true, color: "#6fd6dc", name: "Cyan PLA" }, { present: tr
 const stat = { online: true, nozzles: [{ index: 0, current: 24, target: 0, active: false }, { index: 1, current: 205, target: 210, active: true }], filaments: [{}, {}, {}, {}] };
 let rows = L.p3dRows(stat, null, sp);
 assert.equal(rows.length, 4);
-assert.deepEqual(rows[1], { n: 1, temp: 205, target: 210, active: true, present: true, color: "#f4f4f4", name: "White PLA", inHead: null });
+assert.deepEqual(rows[1], { n: 1, temp: 205, target: 210, active: true, present: true, color: "#f4f4f4", name: "White PLA", inHead: null, detail: [], used: false });
+const withFil = { ...stat, state: "printing", job: "a.gcode", filaments: [{ index: 0, kind: "PLA", sub_type: "Matte", color: "#6fd6dc", vendor: "Bambu", present: true, used: true }, { index: 2, kind: "PETG", present: false, used: true }] };
+rows = L.p3dRows(withFil, null, sp);
+assert.deepEqual([rows[0].detail, rows[0].used], [["PLA Matte", "#6FD6DC", "Bambu"], true]);
+assert.deepEqual([rows[2].detail, rows[1].used], [[], false], "an empty slot has no details");
+assert.equal(L.p3dRows({ ...withFil, state: "standby" }, null, sp)[0].used, false, "used by a past job: not shown");
 assert.deepEqual([rows[2].present, rows[2].color, rows[2].temp], [false, null, null], "an empty slot, no nozzle reading");
 const ctl = { active: 3, heads: [0, 1, 2, 3].map((index) => ({ index, temp: 20 + index, target: 0, filament: index !== 2 })) };
 rows = L.p3dRows(stat, ctl, sp);

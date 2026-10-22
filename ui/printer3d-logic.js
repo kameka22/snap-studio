@@ -69,17 +69,26 @@ function p3dHeat(temp, target) {
   return Math.max(0, Math.min(1, ((temp || 0) - room) / (top - room)));
 }
 
-/* The status card's lines from the printer's status (printers.js): state,
-   job, progress 0–1, layer, time left in seconds. */
+/* The printer card's print lines from the printer's status (printers.js):
+   state, job, progress 0–1, layer, elapsed and left (s), the speed factor
+   (only when changed from 100 %), the part fan 0–1, the filament used (m). */
 function p3dSummary(status) {
-  if (!status || !status.online) return { state: "offline", job: "", progress: null, layer: null, left: null };
+  const none = { state: "offline", job: "", progress: null, layer: null, elapsed: null, left: null, speed: null, fan: null, filament: null };
+  if (!status || !status.online) return none;
   const printing = status.state === "printing" || status.state === "paused";
+  const num = (v) => (printing && Number.isFinite(v) ? v : null);
+  const speed = num(status.speed_factor);
   return {
+    ...none,
     state: status.state || "standby",
     job: printing ? status.job || "" : "",
-    progress: printing && Number.isFinite(status.progress) ? status.progress : null,
+    progress: num(status.progress),
     layer: printing && Array.isArray(status.layer) ? status.layer : null,
-    left: printing && Number.isFinite(status.remaining_s) ? status.remaining_s : null,
+    elapsed: num(status.elapsed_s),
+    left: num(status.remaining_s),
+    speed: speed != null && Math.round(speed * 100) !== 100 ? speed : null,
+    fan: num(status.fan),
+    filament: num(status.filament_mm) != null ? status.filament_mm / 1000 : null,
   };
 }
 
@@ -118,6 +127,7 @@ function p3dRows(st, cs, spools) {
   for (let i = 0; i < n; i++) {
     const h = cs?.heads?.find((x) => x.index === i), z = noz.find((x) => x.index === i);
     const sp = spools[i] || { present: false, color: null, name: "" };
+    const f = (st?.filaments || []).find((x) => x.index === i);
     rows.push({
       n: i,
       temp: h ? h.temp : z ? z.current : null,
@@ -127,6 +137,10 @@ function p3dRows(st, cs, spools) {
       color: sp.present ? sp.color : null,
       name: sp.name,
       inHead: h && typeof h.filament === "boolean" ? h.filament : null,
+      // The spool's details: material and subtype, colour code, brand.
+      detail: f && sp.present ? [[f.kind, f.sub_type].filter(Boolean).join(" "), f.color ? f.color.toUpperCase() : "", f.vendor || ""].filter(Boolean) : [],
+      // Used by the print under way (a past job's list means nothing).
+      used: !!(f?.used && st?.job && (st.state === "printing" || st.state === "paused")),
     });
   }
   return rows;

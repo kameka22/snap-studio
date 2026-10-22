@@ -4454,7 +4454,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .prn-detail.p3d-on #prn-hero, .prn-detail.p3d-on #prn-filaments, .prn-detail.p3d-on #prn-temps,
 .prn-detail.p3d-on #prn-info, .prn-detail.p3d-on #prn-updated, .prn-detail.p3d-on .group.cam { display: none; }
 .p3d-canvas { position: absolute; inset: 0; }
-.p3d-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.p3d-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; transition: opacity 220ms ease; }
 /* The printer card. */
 .p3d-card { left: 12px; width: min(350px, calc(100% - 24px)); }
 .p3d-card .p-float-head { gap: 8px; }
@@ -4470,6 +4470,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p3d-track { height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
 .p3d-bar { height: 100%; border-radius: 3px; background: var(--accent); transition: width 400ms ease; }
 .p3d-prog small { font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.p3d-prog small:empty { display: none; }
 .p3d-heads { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
 .p3d-row { --spool: transparent; display: flex; align-items: center; gap: 7px; min-width: 0; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
 .p3d-row:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
@@ -4477,7 +4478,11 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p3d-row.on { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 .p3d-sw { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--spool); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
 .p3d-row.empty .p3d-sw { background: repeating-linear-gradient(45deg, transparent 0 2px, color-mix(in srgb, var(--text) 25%, transparent) 2px 3px); }
-.p3d-row > b { flex: none; font-weight: 600; }
+.p3d-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.p3d-l1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.p3d-l1 > b, .p3d-row > b { flex: none; font-weight: 600; }
+.p3d-sub { font-size: 11px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p3d-sub:empty { display: none; }
 .p3d-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p3d-row.empty .p3d-name { color: var(--text-tertiary); }
 .p3d-tag { flex: none; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
@@ -4489,7 +4494,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p3d-more:hover { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
 .p3d-bedrow { border-top: 1px solid var(--separator); border-radius: 0 0 8px 8px; margin-top: 2px; }
 .p3d-bedrow.on { border-radius: 8px; }
-.p3d-config { align-self: flex-start; margin-top: 2px; }
+.p3d-config { align-self: center; margin-top: 4px; }
 /* The quick panel: a head's (its nozzle with its spool, then Load and
    Unload: the spool component's own row would repeat the nozzle's). */
 .p3d-panel { right: 12px; width: 300px; }
@@ -4504,8 +4509,8 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p3d-x:hover { color: var(--text); }
 .p3d-wait { color: var(--text-secondary); }
 .p3d-busy { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
-.p3d-link { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
-.p3d-link:hover { text-decoration: underline; }
+.p3d-all { justify-content: center; gap: 7px; width: 100%; margin-top: 2px; }
+.p3d-all svg { width: 15px; height: 15px; fill: currentColor; flex: none; }
 /* Along the bottom: sides, help line and quick bar, details. */
 .p3d-views { position: absolute; left: 12px; bottom: 12px; height: 30px; background: color-mix(in srgb, var(--sheet-bg) var(--glass-mix), transparent); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); box-shadow: var(--glass-edge), var(--sheet-shadow); }
 .p3d-bottom { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
@@ -4518,10 +4523,11 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p3d-q.on { background: var(--accent-soft); color: var(--accent); }
 #p3d-light.on { background: color-mix(in srgb, #ffcc00 22%, transparent); color: #d9a400; }
 .p3d-q:disabled { opacity: 0.4; cursor: default; }
-.p3d-info { top: auto; bottom: 12px; right: 12px; max-width: 280px; padding: 8px 12px; gap: 3px; font-size: 11.5px; }
-.p3d-info div { display: flex; gap: 8px; justify-content: space-between; }
-.p3d-info b { font-weight: 600; }
-.p3d-info span { color: var(--text-secondary); }
+.p3d-info { top: auto; bottom: 12px; right: 12px; width: 250px; padding: 9px 12px; gap: 4px; font-size: 11.5px; }
+#p3d-info-rows { display: flex; flex-direction: column; gap: 3px; }
+.p3d-info div div { display: flex; gap: 10px; justify-content: space-between; min-width: 0; }
+.p3d-info span { flex: none; color: var(--text-secondary); }
+.p3d-info b { min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
 .p3d-fresh { color: var(--text-tertiary); font-size: 11px; }
 .p3d-fresh:empty { display: none; }
 /* The camera, as a picture in the picture (bigger when enlarged). */

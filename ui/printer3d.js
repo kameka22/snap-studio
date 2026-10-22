@@ -26,10 +26,29 @@ const P3 = {
 
 const p3dOn = () => window.currentView === "printers" && !!P3.pid && !$("p3d").classList.contains("hidden");
 
+/* The scene's code, fetched once (also ahead, when the app is idle: the
+   first visit then shows the view at once). */
+const p3dModule = () => (P3.module ||= import("./printer3d/view.js"));
+setTimeout(() => (window.requestIdleCallback || setTimeout)(() => p3dModule().catch(() => {})), 2000);
+
+/* WebGL here, as far as a test context tells: the page takes the view's
+   layout before the scene is ready, without showing the old one first. */
+function p3dWebGL() {
+  if (P3.gl == null) {
+    try {
+      const c = document.createElement("canvas");
+      P3.gl = !!(c.getContext("webgl2") || c.getContext("webgl"));
+    } catch {
+      P3.gl = false;
+    }
+  }
+  return P3.gl;
+}
+
 /* Loads the scene once; null without WebGL. */
 function p3dLoad() {
   if (P3.loading) return P3.loading;
-  P3.loading = import("./printer3d/view.js")
+  P3.loading = p3dModule()
     .then((m) => {
       const view = m.createView($("p3d-canvas"), { hover: p3dHover, pick: (zone) => p3dPick(zone, true), turn: p3dTurned });
       if (!view) throw new Error("WebGL");
@@ -70,8 +89,8 @@ function p3dStatus(st) {
   if (online) p3dPoll();
   else p3dStop();
   p3dEstopPaint();
-  if (!online || P3.failed) return p3dLayout(false);
-  if (P3.view) p3dLayout(true);
+  if (!online || P3.failed || !p3dWebGL()) return p3dLayout(false);
+  p3dLayout(true);
   p3dLoad().then((view) => {
     p3dLayout(!!view && !!P.status.get(P3.pid)?.online);
     if (!view) return;
@@ -151,6 +170,8 @@ function p3dPaint() {
   p3dQuick();
 }
 
+// Control's icon (the toolbar's Control button).
+const P3D_CONTROL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 3.5h-2V9h-2V5.5H9zM12 22l-3-3.5h2V15h2v3.5h2zM2 12l3.5-3v2H9v2H5.5v2zM22 12l-3.5 3v-2H15v-2h3.5V9zM12 10.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6"/></svg>';
 const p3dTemp = (t, target) => (t == null ? "—" : `${ctlDeg(t)}${target > 0 ? ` → ${ctlDeg(target)}` : ""}`);
 
 /* The printer card: state, chamber, the print, one row per head, the bed. */
@@ -168,9 +189,15 @@ function p3dCard(st) {
     $("p3d-bar").style.width = `${Math.round(sum.progress * 100)}%`;
     const bits = [`${Math.round(sum.progress * 100)} %`];
     if (sum.layer) bits.push(tr("p3d.layer", { a: sum.layer[0], b: sum.layer[1] }));
-    const left = fmtHms(sum.left);
+    const el = fmtHms(sum.elapsed), left = fmtHms(sum.left);
+    if (el) bits.push(tr("printers.elapsed", { t: el }));
     if (left) bits.push(tr("p3d.left", { t: left }));
     $("p3d-prog-t").textContent = bits.join(" · ");
+    const more = [];
+    if (sum.speed != null) more.push(`${tr("printers.speed")} ${Math.round(sum.speed * 100)} %`);
+    if (sum.fan != null) more.push(`${tr("printers.fan")} ${Math.round(sum.fan * 100)} %`);
+    if (sum.filament != null) more.push(`${tr("files.col.weight")} ${fmtDec(sum.filament, 2)} m`);
+    $("p3d-prog-more").textContent = more.join(" · ");
   }
   const spools = [0, 1, 2, 3].map((n) => ctlSpool(pid, n));
   const rows = p3dRows(st, cs, spools);
@@ -178,11 +205,15 @@ function p3dCard(st) {
   if (box.children.length !== rows.length) {
     box.innerHTML = rows
       .map((r) => `<div class="p3d-row p3d-head" role="listitem" data-zone="head:${r.n}" tabindex="0">
-          <i class="p3d-sw"></i><b>T${r.n}</b><span class="p3d-name"></span><span class="p3d-tag"></span><span class="p3d-t"></span>
+          <i class="p3d-sw"></i>
+          <span class="p3d-main"><span class="p3d-l1"><b>T${r.n}</b><span class="p3d-name"></span><span class="p3d-tag"></span><span class="p3d-t"></span></span><small class="p3d-sub"></small></span>
           <button class="p3d-more" data-all="${r.n}" title="${esc(tr("p3d.all_head", { n: r.n }))}" aria-label="${esc(tr("p3d.all_head", { n: r.n }))}">⋯</button>
         </div>`)
       .join("");
   }
+  // The filament profile of each head, as set in "Heads and spools".
+  if (typeof HD !== "undefined" && !HD.listsNow[pid]) headsLists(pid).catch(() => {});
+  const profile = (n) => (typeof headsProfile === "function" ? headsProfile(pid, n, HD.listsNow[pid] || null).name || "" : "");
   rows.forEach((r, i) => {
     const el = box.children[i];
     el.style.setProperty("--spool", r.present ? r.color || "var(--text-tertiary)" : "transparent");
@@ -190,7 +221,8 @@ function p3dCard(st) {
     el.classList.toggle("on", P3.zone === `head:${r.n}`);
     el.querySelector(".p3d-name").textContent = r.present ? r.name || tr("ctl.loaded") : tr("p3d.empty");
     const tag = el.querySelector(".p3d-tag");
-    tag.textContent = r.active ? tr(sum.state === "printing" ? "printers.extruding" : "printers.active_head_tag") : r.present && r.inHead === false ? tr("p3d.unloaded") : "";
+    tag.textContent = r.active ? tr(sum.state === "printing" ? "printers.extruding" : "printers.active_head_tag") : r.present && r.inHead === false ? tr("p3d.unloaded") : r.used ? tr("printers.used_by_job") : "";
+    el.querySelector(".p3d-sub").textContent = [...r.detail, profile(r.n)].filter(Boolean).join(" · ");
     tag.className = "p3d-tag" + (r.active ? " accent" : "");
     el.querySelector(".p3d-t").textContent = p3dTemp(r.temp, r.target);
   });
@@ -201,15 +233,21 @@ function p3dCard(st) {
   b.innerHTML = `<span class="p3d-name">${esc(tr("ctl.bed"))}</span><span class="p3d-t">${esc(bed ? p3dTemp(bed.temp, bed.target) : "")}</span>`;
 }
 
-/* The printer's details, bottom right; the data's age follows
-   (updateFreshness writes #p3d-fresh). */
+/* The printer's details, bottom right, one per line; the data's age
+   follows (updateFreshness writes #p3d-fresh). */
 function p3dInfo(st) {
   const p = current();
   if (!p) return;
-  const rows = [[p.model || tr("printers.form.model"), `${p.host}:${p.port}`], [st?.hostname, st?.klipper ? `Klipper ${st.klipper}` : ""]];
+  const rows = [
+    [tr("printers.form.model"), p.model],
+    [tr("printers.address"), `${p.host}:${p.port}`],
+    [tr("printers.hostname"), st?.hostname],
+    ["Klipper", st?.klipper],
+    [tr("printers.note"), p.note],
+  ];
   $("p3d-info-rows").innerHTML = rows
-    .filter((r) => r[0] || r[1])
-    .map(([a, b]) => `<div><b>${esc(a || "")}</b><span>${esc(b || "")}</span></div>`)
+    .filter((r) => r[1])
+    .map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(String(v))}</b></div>`)
     .join("");
 }
 
@@ -343,7 +381,7 @@ function p3dPanelPaint() {
     const all = head != null ? tr("p3d.all_head", { n: head }) : tr("p3d.all");
     body.innerHTML = `${parts.join("")}
       <div class="p3d-busy hidden" role="status"><span class="spinner small"></span><span></span></div>
-      <button class="p3d-link" data-all="${head ?? ""}">${esc(all)}<span aria-hidden="true">›</span></button>`;
+      <button class="btn p3d-all" data-all="${head ?? ""}">${P3D_CONTROL_ICON}<span>${esc(all)}</span></button>`;
   }
   ctlPaint(body, pid);
   const busy = ctlBusy(pid), b = body.querySelector(".p3d-busy");
