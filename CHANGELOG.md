@@ -32,10 +32,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   the bed or the chamber light to open its quick controls in a panel over
   the view (Control's compact components: temperature, load, unload,
   light), with **All controls** leading to Care & Tuning › Control on that
-  head; a head clicked on the model is also shown close up from above.
-  The printer card (top left) gathers the state, the print's progress and
-  one row per head (spool, temperature, active, unloaded) plus the bed;
-  a row selects its head. Left / Front / Right / Back, drag or ← → to turn,
+  head. Selecting a head turns the view to its spool's side, the bed or
+  the light to the front; clicking the background deselects and turns
+  back to the front.
+  The Heads and spools card (top left) has one row per head (spool and
+  its details, temperature, active, unloaded) plus the bed; a row selects
+  its head. The print's status sits top centre. Left / Front / Right / Back, drag or ← → to turn,
   1–4 for a head, Esc to close. A quick bar for the light and the camera
   (shown in a corner of the view), the printer's details bottom right, and
   the emergency stop in the toolbar beside Control. Without WebGL the page

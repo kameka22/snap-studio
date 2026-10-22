@@ -20,7 +20,9 @@ assert.deepEqual(L.p3dParse("bed"), { kind: "bed", n: null });
 assert.equal(L.p3dParse("door"), null);
 assert.equal(L.p3dParse(null), null);
 assert.deepEqual([0, 1, 2, 3].map((n) => L.p3dSideOf(`spool:${n}`)), ["left", "left", "right", "right"]);
-assert.equal(L.p3dSideOf("head:0"), "front");
+assert.deepEqual([0, 1, 2, 3].map((n) => L.p3dSideOf(`head:${n}`)), ["left", "left", "right", "right"], "a head: its spool's side");
+assert.equal(L.p3dSideOf("bed"), "front");
+assert.equal(L.p3dSideOf(null), "front");
 assert.equal(L.p3dSideOf("light"), "front");
 // Turning the short way round, whatever the turns already made.
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≈ ${b}`);

@@ -55,10 +55,11 @@ function p3dParse(zone) {
   return zone === "bed" || zone === "light" ? { kind: zone, n: null } : null;
 }
 
-/* The side a zone sits on: a spool's, else the front. */
+/* The side the view turns to for a zone: a head's (or its spool's) is
+   its spool's side; the bed, the light, nothing: the front. */
 function p3dSideOf(zone) {
   const z = p3dParse(zone);
-  return z?.kind === "spool" ? P3D_SPOOLS[z.n].side : "front";
+  return (z?.kind === "spool" || z?.kind === "head") && P3D_SPOOLS[z.n] ? P3D_SPOOLS[z.n].side : "front";
 }
 
 /* A nozzle's glow, 0 (cold) to 1: its way from room temperature to its

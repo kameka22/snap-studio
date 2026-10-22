@@ -50,7 +50,7 @@ function p3dLoad() {
   if (P3.loading) return P3.loading;
   P3.loading = p3dModule()
     .then((m) => {
-      const view = m.createView($("p3d-canvas"), { hover: p3dHover, pick: (zone) => p3dPick(zone, true), turn: p3dTurned });
+      const view = m.createView($("p3d-canvas"), { hover: p3dHover, pick: p3dPick, turn: p3dTurned });
       if (!view) throw new Error("WebGL");
       P3.view = view;
       p3dTheme();
@@ -97,7 +97,12 @@ function p3dStatus(st) {
     view.setShown(p3dOn());
     p3dPaint();
     // The loader goes once the scene is on screen.
-    if ($("p3d").classList.contains("loading")) view.ready().then(() => $("p3d").classList.remove("loading"));
+    // (1.5 s at most, whatever happens).
+    if ($("p3d").classList.contains("loading")) {
+      const done = () => $("p3d").classList.remove("loading");
+      view.ready().then(done);
+      setTimeout(done, 1500);
+    }
   });
   p3dCard(st);
   p3dInfo(st);
@@ -311,15 +316,21 @@ function p3dTip(zone, x, y) {
 }
 const p3dHover = (zone, x, y) => p3dTip(zone, x, y);
 
-/* A click opens the panel of what was clicked, where it is (the view does
-   not turn); a head clicked on the model also zooms on its place; the
-   open panel's own part, or nothing, closes it. */
-function p3dPick(zone, onModel = false) {
+/* A click (on the model, a row, a key) opens the panel of what was
+   clicked and turns the view to it: a head to its spool's side, the bed
+   and the light to the front. Clicking it again keeps it selected;
+   nothing (the background, ✕, Esc) deselects and turns to the front. */
+function p3dPick(zone) {
   p3dTip(null);
   p3dHintDone();
   const panel = p3dPanelZone(zone);
-  if (!panel || (panel === P3.zone && !onModel)) return p3dClose();
-  p3dOpen(panel, onModel && p3dParse(zone).kind === "head");
+  if (!panel) return p3dDeselect();
+  if (panel !== P3.zone) p3dOpen(panel);
+  p3dTurn(p3dSideOf(panel));
+}
+function p3dDeselect() {
+  p3dClose();
+  p3dTurn("front");
 }
 function p3dTurned(side) {
   p3dSegment(side);
@@ -345,13 +356,11 @@ function p3dHintDone() {
 
 /* ------------------------------------------------------------ the panel */
 
-function p3dOpen(zone, zoom = false) {
+function p3dOpen(zone) {
   P3.zone = zone;
   P3.built = "";
   $("p3d-panel").classList.remove("hidden");
   P3.view?.choose(zone);
-  const z = p3dParse(zone);
-  P3.view?.focus(zoom ? z.n : null);
   p3dPanelPaint();
   p3dCard(P.status.get(P3.pid));
 }
@@ -359,7 +368,6 @@ function p3dClose() {
   P3.zone = null;
   $("p3d-panel").classList.add("hidden");
   P3.view?.choose(null);
-  P3.view?.focus(null);
   if (P3.pid) p3dCard(P.status.get(P3.pid));
 }
 
@@ -401,7 +409,7 @@ function p3dPanelPaint() {
 
 ctlBind($("p3d"));
 ctlBind($("prn-estop"));
-$("p3d-close").addEventListener("click", p3dClose);
+$("p3d-close").addEventListener("click", p3dDeselect);
 $("p3d").addEventListener("click", (e) => {
   const all = e.target.closest("[data-all]");
   if (all) return ctlOpen(P3.pid, all.dataset.all === "" ? {} : { head: +all.dataset.all });
@@ -437,7 +445,7 @@ $("p3d-help").addEventListener("click", () => {
 document.addEventListener("keydown", (e) => {
   if (!p3dOn() || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".modal:not(.hidden)")) return;
   if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
-  if (e.key === "Escape" && P3.zone) return p3dClose();
+  if (e.key === "Escape" && P3.zone) return p3dDeselect();
   if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
     e.preventDefault();
     return p3dTurn(p3dNextSide(P3.view?.side || "front", e.key === "ArrowRight" ? 1 : -1));
