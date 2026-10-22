@@ -18,12 +18,14 @@ use serde::Serialize;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{IpAddr, TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 /// How long a file stays served to the phone.
 pub const QR_LIFETIME: Duration = Duration::from_secs(15 * 60);
+/// Connections served at once; the rest are dropped at accept.
+const MAX_CONNECTIONS: usize = 8;
 
 fn cache_dir() -> PathBuf {
     std::env::temp_dir().join("snapstudio-share")
@@ -249,13 +251,22 @@ pub fn qr_start(path: PathBuf, toward: &str) -> Result<QrShare> {
     *serving().lock().unwrap() = Some(Serving { stop: stop.clone() });
     let until = Instant::now() + QR_LIFETIME;
     let prefix = format!("/{token}/");
+    // One phone is expected; a handful of connections covers its browser's
+    // parallel range requests. Beyond that, the port is being hammered.
+    let live = Arc::new(AtomicUsize::new(0));
     std::thread::spawn(move || {
         while !stop.load(Ordering::Relaxed) && Instant::now() < until {
             match listener.accept() {
                 Ok((conn, _)) => {
-                    let (path, prefix, stop) = (path.clone(), prefix.clone(), stop.clone());
+                    if live.fetch_add(1, Ordering::Relaxed) >= MAX_CONNECTIONS {
+                        live.fetch_sub(1, Ordering::Relaxed);
+                        drop(conn);
+                        continue;
+                    }
+                    let (path, prefix, stop, live) = (path.clone(), prefix.clone(), stop.clone(), live.clone());
                     std::thread::spawn(move || {
                         let _ = serve(conn, &path, &prefix, &stop);
+                        live.fetch_sub(1, Ordering::Relaxed);
                     });
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(150)),
@@ -275,15 +286,26 @@ pub struct Asked {
     pub range: Option<String>,
 }
 
+/// Longest request or header line read; past it the request is dropped.
+/// Anyone on the network can reach the port: a line that never ends must
+/// not grow in memory until the read timeout.
+const LINE_MAX: usize = 8 * 1024;
+
+/// One line, `LINE_MAX` bytes at most: None past that, or on a read error.
+fn line_within(r: &mut impl BufRead, max: usize) -> Option<String> {
+    let mut s = String::new();
+    r.take(max as u64).read_line(&mut s).ok()?;
+    (s.ends_with('\n') || s.len() < max).then_some(s)
+}
+
 pub fn read_request(r: &mut impl BufRead) -> Option<Asked> {
-    let mut line = String::new();
-    r.read_line(&mut line).ok()?;
+    let line = line_within(r, LINE_MAX)?;
     let mut parts = line.split_whitespace();
     let (method, target) = (parts.next()?.to_string(), parts.next()?.to_string());
     let mut range = None;
     for _ in 0..64 {
-        let mut h = String::new();
-        if r.read_line(&mut h).ok()? == 0 || h.trim().is_empty() {
+        let h = line_within(r, LINE_MAX)?;
+        if h.is_empty() || h.trim().is_empty() {
             break;
         }
         if let Some((k, v)) = h.split_once(':') {

@@ -441,8 +441,10 @@ type Listener = Arc<dyn Fn(Value) + Send + Sync>;
 
 struct Session {
     child: Child,
-    /// Its own lock: an image may take a while to write.
-    stdin: Arc<Mutex<ChildStdin>>,
+    /// Its own lock: an image may take a while to write. `None` once closed:
+    /// the reader thread shares the handle, so dropping this field alone
+    /// would leave the pipe open and Claude waiting for input.
+    stdin: Arc<Mutex<Option<ChildStdin>>>,
     /// Pending permission requests, kept whole: the answer needs their
     /// `input` and `permission_suggestions`.
     permissions: Arc<Mutex<HashMap<String, Value>>>,
@@ -499,7 +501,7 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], liste
     let permissions: Arc<Mutex<HashMap<String, Value>>> = Arc::default();
 
     let pending = permissions.clone();
-    let stdin = Arc::new(Mutex::new(stdin));
+    let stdin = Arc::new(Mutex::new(Some(stdin)));
     let input = stdin.clone();
     let id = id.to_string();
     let token = next_token();
@@ -521,9 +523,11 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], liste
                 // Retrying cannot help: end the turn now rather than after
                 // ten attempts.
                 if event["type"] != "result" {
-                    if let Ok(mut w) = input.lock() {
-                        let _ = writeln!(w, "{}", interrupt("auth"));
-                        let _ = w.flush();
+                    if let Ok(mut g) = input.lock() {
+                        if let Some(w) = g.as_mut() {
+                            let _ = writeln!(w, "{}", interrupt("auth"));
+                            let _ = w.flush();
+                        }
                     }
                 }
             }
@@ -698,7 +702,8 @@ fn write_line(id: &str, message: &Value) -> Result<()> {
         let s = sessions().lock().unwrap();
         s.get(id).ok_or_else(|| anyhow!(crate::t!("err.terminal_closed")))?.stdin.clone()
     };
-    let mut w = stdin.lock().unwrap();
+    let mut g = stdin.lock().unwrap();
+    let w = g.as_mut().ok_or_else(|| anyhow!(crate::t!("err.terminal_closed")))?;
     writeln!(w, "{message}")?;
     w.flush()?;
     Ok(())
@@ -804,8 +809,23 @@ pub fn note(id: &str, event: Value) {
     }
 }
 
-/// Time left to Claude to finish on its own.
+/// Time left to Claude to finish on its own once its input ends.
 const GRACE: std::time::Duration = std::time::Duration::from_millis(2500);
+/// Then, time left to the group after SIGTERM: yolobox relays it to stop
+/// its container, which a SIGKILL right after would leave running.
+const TERM_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// True once the child has ended (or cannot be asked), false past `d`.
+fn ended_within(child: &mut Child, d: std::time::Duration) -> bool {
+    let deadline = std::time::Instant::now() + d;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => return true,
+            Ok(None) if std::time::Instant::now() < deadline => std::thread::sleep(std::time::Duration::from_millis(80)),
+            Ok(None) => return false,
+        }
+    }
+}
 
 /// Ends the conversation's Claude. Nothing is lost: the next message resumes
 /// the session from the transcript.
@@ -814,23 +834,28 @@ pub fn close(id: &str) {
         return;
     };
     crate::ia::watch_stop(id);
-    // Ask first: interrupt the turn, then end the input.
-    if let Ok(mut w) = sess.stdin.lock() {
-        let _ = writeln!(w, "{}", interrupt("closing"));
-        let _ = w.flush();
-    }
-    drop(sess.stdin);
-    let deadline = std::time::Instant::now() + GRACE;
-    while std::time::Instant::now() < deadline {
-        match sess.child.try_wait() {
-            Ok(Some(_)) | Err(_) => return,
-            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(80)),
+    // Ask first: interrupt the turn, then end the input. Taking the handle
+    // out of the shared slot is what closes the pipe (the reader thread
+    // holds the slot too); Claude then ends on its own.
+    if let Ok(mut g) = sess.stdin.lock() {
+        if let Some(w) = g.as_mut() {
+            let _ = writeln!(w, "{}", interrupt("closing"));
+            let _ = w.flush();
         }
+        *g = None;
+    }
+    if ended_within(&mut sess.child, GRACE) {
+        return;
     }
     #[cfg(unix)]
-    unsafe {
-        // SAFETY: plain signal to the process group we created.
-        libc::killpg(sess.child.id() as i32, libc::SIGTERM);
+    {
+        unsafe {
+            // SAFETY: plain signal to the process group we created.
+            libc::killpg(sess.child.id() as i32, libc::SIGTERM);
+        }
+        if ended_within(&mut sess.child, TERM_GRACE) {
+            return;
+        }
     }
     let _ = sess.child.kill();
     let _ = sess.child.wait();
