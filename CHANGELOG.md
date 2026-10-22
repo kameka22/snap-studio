@@ -28,8 +28,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   chamber light to open its quick controls in a panel over the view
   (Control's compact components: load, unload, temperatures, light), with
   **All controls** leading to Care & Tuning › Control on that head.
-  Clicking a spool turns the view to its side; Left / Front / Right, or
-  drag to turn. Spools in their declared colours (greyed when empty), the
+  Clicking a spool turns the view to its side, clicking a head zooms on
+  its place from above; Left / Front / Right / Back, or drag to turn all
+  the way round. Spools in their declared colours (greyed when empty), the
   active head and its nozzle's heat, the light, the print's progress and
   a status card with the four spools; the emergency stop stays in reach.
   Without WebGL the page keeps its 2D picture.

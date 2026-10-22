@@ -22,6 +22,18 @@ assert.equal(L.p3dParse(null), null);
 assert.deepEqual([0, 1, 2, 3].map((n) => L.p3dSideOf(`spool:${n}`)), ["left", "left", "right", "right"]);
 assert.equal(L.p3dSideOf("head:0"), "front");
 assert.equal(L.p3dSideOf("light"), "front");
+// Turning the short way round, whatever the turns already made.
+const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≈ ${b}`);
+near(L.p3dYawTo(0, "back"), Math.PI);
+near(L.p3dYawTo(-0.95, "back"), -Math.PI, "from the right side, back is the other way");
+near(L.p3dYawTo(2 * Math.PI + 0.1, "front"), 2 * Math.PI);
+near(L.p3dYawTo(Math.PI, "left"), 0.95);
+assert.equal(L.p3dSideAt(0.1), "front");
+assert.equal(L.p3dSideAt(1.2), "left");
+assert.equal(L.p3dSideAt(-1.1), "right");
+assert.equal(L.p3dSideAt(3), "back");
+assert.equal(L.p3dSideAt(-3), "back");
+assert.equal(L.p3dSideAt(4 * Math.PI + 0.9), "left");
 assert.ok(L.P3D_YAW.left > 0 && L.P3D_YAW.right < 0 && L.P3D_YAW.front === 0, "a positive turn shows the left side");
 
 // A nozzle's glow: cold, on its way, at its target, cooling without one.

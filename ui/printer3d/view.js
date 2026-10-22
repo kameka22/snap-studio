@@ -7,6 +7,7 @@ import { RoomEnvironment } from '../vendor/three/addons/RoomEnvironment.js';
 import { createSnapmakerU1 } from './u1-model.js';
 
 const TARGET = new THREE.Vector3(0, 0.37, 0);
+const ABOVE = new THREE.Vector3(0, 0.36, 0.2); // a head's close-up: from above, a little in front
 const PITCH = 0.16; // the camera a little above, as someone standing in front
 const HULL = 0.0028; // outline width, metres
 
@@ -95,7 +96,15 @@ export function createView(host, on = {}) {
   addZone('bed', u1.bed);
   addZone('light', u1.light);
 
-  const st = { active: null, printing: false, yaw: 0, from: 0, to: 0, t0: 0, dur: 0, side: 'front', hover: null, chosen: null, inset: 0, spin: 0, w: 0, h: 0 };
+  // Where each head's dock is (the model faces the front here).
+  const dockAt = u1.docks.map((d) => {
+    const b = new THREE.Box3().setFromObject(d);
+    return new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y - 0.01, (b.min.z + b.max.z) / 2);
+  });
+
+  const st = { active: null, printing: false, yaw: 0, from: 0, to: 0, t0: 0, dur: 0, side: 'front', hover: null, chosen: null, spin: 0, focus: null };
+  // The camera: where it is, where it looks, and its move under way.
+  const cam = { p: new THREE.Vector3(), t: TARGET.clone(), base: new THREE.Vector3(), move: null };
   // A head's parts: its dock, and the carriage when it is the active one.
   const partsOf = (zone) => {
     const z = p3dParse(zone);
@@ -109,23 +118,30 @@ export function createView(host, on = {}) {
     }
   };
 
-  // ---- framing: the whole printer in the space the overlays leave
+  // ---- framing: the whole printer, centred in the stage (a panel opening
+  // over the right does not move it)
   function frame() {
     const w = host.clientWidth, h = host.clientHeight;
     if (!w || !h) return;
-    st.w = w; st.h = h;
     renderer.setSize(w, h, false);
-    const free = Math.max(w - st.inset, w * 0.4);
     camera.aspect = w / h;
     const vfov = THREE.MathUtils.degToRad(camera.fov);
     const needH = 0.98, needW = 0.9; // the model with its spools and tubes, a margin around
-    const dist = Math.max(needH / 2 / Math.tan(vfov / 2), needW / 2 / (Math.tan(vfov / 2) * (free / h)));
-    camera.position.set(0, TARGET.y + Math.sin(PITCH) * dist, Math.cos(PITCH) * dist);
-    camera.lookAt(TARGET);
-    // Centred in the free part (left of a panel).
-    if (st.inset) camera.setViewOffset(w, h, (w - free) / 2, 0, w, h);
-    else camera.clearViewOffset();
+    const dist = Math.max(needH / 2 / Math.tan(vfov / 2), needW / 2 / (Math.tan(vfov / 2) * (w / h)));
+    cam.base.set(0, TARGET.y + Math.sin(PITCH) * dist, Math.cos(PITCH) * dist);
     camera.updateProjectionMatrix();
+    if (!cam.move) {
+      const [p, t] = goal();
+      cam.p.copy(p);
+      cam.t.copy(t);
+    }
+    draw();
+  }
+  // Where the camera goes: the whole printer, or above a head's dock.
+  const goal = () => (st.focus == null ? [cam.base, TARGET] : [dockAt[st.focus].clone().add(ABOVE), dockAt[st.focus]]);
+  function moveCamera(ms = 700) {
+    const [p, t] = goal();
+    cam.move = { p0: cam.p.clone(), t0: cam.t.clone(), p, t, start: performance.now(), ms };
     draw();
   }
 
@@ -141,6 +157,14 @@ export function createView(host, on = {}) {
       if (t >= 1) { st.dur = 0; on.turn?.(st.side); } else moving = true;
     }
     root.rotation.y = st.yaw;
+    if (cam.move) {
+      const m = cam.move, k = Math.min(1, (now - m.start) / m.ms), e = p3dEase(k);
+      cam.p.lerpVectors(m.p0, m.p, e);
+      cam.t.lerpVectors(m.t0, m.t, e);
+      if (k >= 1) cam.move = null; else moving = true;
+    }
+    camera.position.copy(cam.p);
+    camera.lookAt(cam.t);
     if (st.printing && st.active != null) {
       // The active spool unwinds slowly.
       st.spin += 0.01;
@@ -151,10 +175,12 @@ export function createView(host, on = {}) {
     if (moving) draw();
   }
 
-  // ---- turning: a side, or by dragging
-  function turn(side, ms = 650) {
-    const to = P3D_YAW[side] ?? 0;
+  // ---- turning: a side (the short way round), or by dragging; a turn
+  // leaves a head's close-up
+  function turn(side, ms = 650, keep = false) {
+    const to = p3dYawTo(st.yaw, side);
     st.side = side;
+    if (!keep && st.focus != null) { st.focus = null; moveCamera(); }
     if (ms <= 0 || Math.abs(to - st.yaw) < 1e-3) { st.yaw = to; st.dur = 0; on.turn?.(side); return draw(); }
     Object.assign(st, { from: st.yaw, to, t0: performance.now(), dur: ms });
     draw();
@@ -180,7 +206,7 @@ export function createView(host, on = {}) {
   const el = renderer.domElement;
   let drag = null;
   el.addEventListener('pointerdown', (e) => {
-    drag = { x: e.clientX, yaw: st.yaw, moved: false };
+    drag = { x: e.clientX, yaw: st.yaw, moved: false, focus: st.focus };
     el.setPointerCapture(e.pointerId);
   });
   el.addEventListener('pointermove', (e) => {
@@ -189,7 +215,8 @@ export function createView(host, on = {}) {
       if (Math.abs(dx) > 4) drag.moved = true;
       if (drag.moved) {
         st.dur = 0;
-        st.yaw = THREE.MathUtils.clamp(drag.yaw + dx * 0.008, -1.5, 1.5);
+        if (st.focus != null) { st.focus = null; moveCamera(); }
+        st.yaw = drag.yaw + dx * 0.008;
         draw();
         return;
       }
@@ -209,7 +236,7 @@ export function createView(host, on = {}) {
     if (!d) return;
     if (d.moved) {
       // Dropped near a side: that side is the one shown.
-      const side = Object.entries(P3D_YAW).sort((a, b) => Math.abs(a[1] - st.yaw) - Math.abs(b[1] - st.yaw))[0][0];
+      const side = p3dSideAt(st.yaw);
       st.side = side;
       on.turn?.(side, true);
       return;
@@ -231,8 +258,14 @@ export function createView(host, on = {}) {
   return {
     turn,
     get side() { return st.side; },
-    /** the panel's width over the right of the view (0: none) */
-    setInset(px) { if (st.inset !== px) { st.inset = px; frame(); } },
+    /** a close-up from above on head n's dock, facing the front (null: the
+     *  whole printer) */
+    focus(n) {
+      if ((n ?? null) === st.focus) return;
+      st.focus = n ?? null;
+      if (st.focus != null && st.side !== 'front') turn('front', 650, true);
+      moveCamera();
+    },
     /** the zone whose panel is open, outlined */
     choose(zone) { st.chosen = zone; outline(); draw(); },
     /** the printer's state: spools [hex|null ×4], active head, its heat 0–1,

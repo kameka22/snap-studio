@@ -201,8 +201,9 @@ function p3dTip(zone, x, y) {
 }
 const p3dHover = (zone, x, y) => p3dTip(zone, x, y);
 
-/* A click: a spool turns the view to its side, then its panel opens;
-   elsewhere the panel opens at once; nothing closes it. */
+/* A click: a spool turns the view to its side, then its panel opens; a
+   head zooms on its place; elsewhere the panel opens at once; nothing
+   closes it. */
 function p3dPick(zone) {
   p3dTip(null);
   if (!zone) return p3dClose();
@@ -233,7 +234,9 @@ function p3dOpen(zone) {
   P3.built = "";
   $("p3d-panel").classList.remove("hidden");
   P3.view?.choose(zone);
-  P3.view?.setInset($("p3d-panel").offsetWidth + 24);
+  // A head: a close-up from above on its place.
+  const z = p3dParse(zone);
+  P3.view?.focus(z.kind === "head" ? z.n : null);
   p3dPanelPaint();
   p3dCard(P.status.get(P3.pid));
 }
@@ -242,7 +245,7 @@ function p3dClose() {
   P3.pending = null;
   $("p3d-panel").classList.add("hidden");
   P3.view?.choose(null);
-  P3.view?.setInset(0);
+  P3.view?.focus(null);
   if (P3.pid) p3dCard(P.status.get(P3.pid));
 }
 

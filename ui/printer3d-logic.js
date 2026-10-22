@@ -14,7 +14,24 @@ const P3D_SPOOLS = [
 
 /* The view's turn (radians about the vertical axis) to show a side; a
    positive turn brings the left side forward. */
-const P3D_YAW = { left: 0.95, front: 0, right: -0.95 };
+const P3D_YAW = { left: 0.95, front: 0, right: -0.95, back: Math.PI };
+
+/* The turn that shows `side` from `yaw`, the short way round (the view
+   turns freely: yaw is not bounded). */
+function p3dYawTo(yaw, side) {
+  const base = P3D_YAW[side] ?? 0;
+  return base + 2 * Math.PI * Math.round((yaw - base) / (2 * Math.PI));
+}
+
+/* The side a turn is closest to (after a drag). */
+function p3dSideAt(yaw) {
+  let best = "front", gap = Infinity;
+  for (const side of Object.keys(P3D_YAW)) {
+    const d = Math.abs(p3dYawTo(yaw, side) - yaw);
+    if (d < gap) [best, gap] = [side, d];
+  }
+  return best;
+}
 
 /* A zone id from a picked part's names (the model's named groups, from the
    part up): spool of head n, head n (its dock, or the carriage when it is
@@ -77,4 +94,4 @@ function p3dCarriage(pos, bed = 270) {
 /* An easing for the view's turns (smooth start and end). */
 const p3dEase = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
-if (typeof module !== "undefined") module.exports = { P3D_SPOOLS, P3D_YAW, p3dZoneOf, p3dParse, p3dSideOf, p3dHeat, p3dSummary, p3dCarriage, p3dEase };
+if (typeof module !== "undefined") module.exports = { P3D_SPOOLS, P3D_YAW, p3dYawTo, p3dSideAt, p3dZoneOf, p3dParse, p3dSideOf, p3dHeat, p3dSummary, p3dCarriage, p3dEase };

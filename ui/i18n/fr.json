@@ -1991,6 +1991,7 @@
   "p3d.side.left": "Côté gauche",
   "p3d.side.front": "Face",
   "p3d.side.right": "Côté droit",
+  "p3d.side.back": "Arrière",
   "p3d.hint": "Survolez une pièce pour la repérer · cliquez pour ses contrôles · faites glisser pour tourner",
   "p3d.close": "Fermer",
   "p3d.chamber": "Chambre {t} °C",

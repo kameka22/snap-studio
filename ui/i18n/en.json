@@ -1988,6 +1988,7 @@
   "p3d.side.left": "Left side",
   "p3d.side.front": "Front",
   "p3d.side.right": "Right side",
+  "p3d.side.back": "Back",
   "p3d.hint": "Hover a part to highlight it · click to open its controls · drag to turn",
   "p3d.close": "Close",
   "p3d.chamber": "Chamber {t} °C",
