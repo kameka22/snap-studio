@@ -66,6 +66,22 @@ function prSave() {
   const objects = PR.objects.map(prStored);
   localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId }));
   prStatus();
+  prPruneMeshes();
+}
+
+/* Frees the meshes no object uses any more (removed, cleared, undone):
+   their buffers would otherwise stay on the GPU for the session. An object
+   brought back by undo loads its mesh again. */
+function prPruneMeshes() {
+  const used = new Set(PR.objects.map(meshKey));
+  for (const [key, m] of PR.meshes) {
+    if (used.has(key)) continue;
+    if (m.vao && PR.gl) {
+      PR.gl.deleteVertexArray(m.vao);
+      for (const b of m.bufs || []) PR.gl.deleteBuffer(b);
+    }
+    PR.meshes.delete(key);
+  }
 }
 
 /* The objects of a slice (`ids`), kept with the print: a queued print can
@@ -333,17 +349,23 @@ async function prLoadMeshNow(o) {
     toast(tr("prepare.bad_mesh", { name: o.name }), true);
     return null;
   }
+  // Pruned meanwhile (its object removed), or loaded again (undo): the
+  // entry now in the cache, if any, is the one to use.
+  if (PR.meshes.get(key) !== entry) return PR.meshes.get(key) || null;
   const data = decodeMesh(buf);
   const gl = PR.gl;
+  const bufs = [];
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
   const pb = gl.createBuffer();
+  bufs.push(pb);
   gl.bindBuffer(gl.ARRAY_BUFFER, pb);
   gl.bufferData(gl.ARRAY_BUFFER, data.pos, gl.STATIC_DRAW);
   const aPos = gl.getAttribLocation(PR.prog, "aPos");
   gl.enableVertexAttribArray(aPos);
   gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
   const cb = gl.createBuffer();
+  bufs.push(cb);
   gl.bindBuffer(gl.ARRAY_BUFFER, cb);
   gl.bufferData(gl.ARRAY_BUFFER, data.col, gl.STATIC_DRAW);
   const aCol = gl.getAttribLocation(PR.prog, "aCol");
@@ -352,13 +374,14 @@ async function prLoadMeshNow(o) {
   const aExt = gl.getAttribLocation(PR.prog, "aExt");
   if (data.ext && aExt >= 0) {
     const eb = gl.createBuffer();
+    bufs.push(eb);
     gl.bindBuffer(gl.ARRAY_BUFFER, eb);
     gl.bufferData(gl.ARRAY_BUFFER, data.ext, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(aExt);
     gl.vertexAttribPointer(aExt, 1, gl.UNSIGNED_BYTE, false, 0, 0);
   }
   gl.bindVertexArray(null);
-  Object.assign(entry, { loading: false, vao, count: data.n * 3, n: data.n, pos: data.pos, hasExt: !!data.ext });
+  Object.assign(entry, { loading: false, vao, bufs, count: data.n * 3, n: data.n, pos: data.pos, hasExt: !!data.ext });
   PR.meshes.set(key, entry);
   // Convex hull: exact resting, footprint, "lay on face".
   invoke("plate_hull", { path: o.path, item: o.item, piece: o.piece ?? null })
@@ -2120,6 +2143,7 @@ async function prepareShow() {
   const bed = await invoke("plate_bed", { machine: SL.memory.last || null }).catch(() => null);
   if (bed && (bed.w !== PR.bed.w || bed.d !== PR.bed.d || bed.model !== PR.bed.model)) {
     PR.bed = { w: bed.w, d: bed.d, model: bed.model };
+    disposeDrawable(PR.gl, PR.grid);
     PR.grid = buildGrid(PR.gl, PR.bed.w, PR.bed.d);
     disposeBed(PR.gl, PR.plate);
     PR.plate = buildBed(PR.gl, PR.bed.w, PR.bed.d, PR.bed.model, prSchedule);
@@ -2317,6 +2341,9 @@ let nudgeAt = 0;
 document.addEventListener("keydown", (e) => {
   if (window.currentView !== "prepare") return;
   if (document.querySelector(".modal:not(.hidden)")) return;
+  // The slice preview covers the plate without leaving the view: its keys
+  // (R reframes) must not reach the plate (R rotates, Backspace removes).
+  if (!$("viewer").classList.contains("hidden")) return;
   if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
   const mod = e.metaKey || e.ctrlKey;
   const k = e.key.toLowerCase();
