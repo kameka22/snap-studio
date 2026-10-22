@@ -23,6 +23,13 @@ function ctlRange(cfg, i) {
   return [min, max];
 }
 
+/* Filament in a head (control.rs HeadState): its sensor, else the feed
+   module's last load; null: not known. */
+function ctlLoaded(h) {
+  if (typeof h?.filament === "boolean") return h.filament;
+  return h?.feed_state ? h.feed_state === "load_finish" : null;
+}
+
 /* Why an action cannot run now: an i18n key (ctl.why.*), or "" when it
    can. `kind` as control.rs's Action; `n` the head, `axis` and `dist` a jog. */
 function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
@@ -45,7 +52,17 @@ function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
     const to = st.position[i] + dist;
     return to < min - 1e-6 || to > max + 1e-6 ? "ctl.why.limit" : "";
   }
-  if (["tool", "unload", "clean", "purge_position"].includes(kind) && !ctlHomed(st)) return "ctl.why.home";
+  // Loading and unloading: a U1's feed module, which homes X and Y itself.
+  if (kind === "load" || kind === "unload") {
+    if (!cfg.u1) return "ctl.why.missing";
+    const h = st.heads.find((x) => x.index === n) || {};
+    const loaded = ctlLoaded(h);
+    if (kind === "unload") return loaded === false ? "ctl.why.empty" : "";
+    if (loaded === true) return "ctl.why.loaded";
+    if (h.auto_feed === false) return "ctl.why.auto_off";
+    return h.inserted === false ? "ctl.why.insert" : "";
+  }
+  if (["tool", "clean", "purge_position"].includes(kind) && !ctlHomed(st)) return "ctl.why.home";
   if (kind === "extrude" || kind === "retract") {
     const h = st.heads.find((x) => x.index === n);
     if (!h || h.temp < head.min_extrude_temp) return "ctl.why.cold";
@@ -85,4 +102,4 @@ function ctlHeat(temp, target) {
 }
 
 if (typeof module !== "undefined")
-  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };
+  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlLoaded, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };

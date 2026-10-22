@@ -20,7 +20,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   view, all heaters off, motors off, firmware restart and the emergency
   stop. Locked during a print (emergency stop, light and camera stay);
   moves and head changes once homed, Z never under 0.5 mm, temperatures
-  within each heater's maximum, one action at a time. Also opened from the
+  within each heater's maximum, one action at a time. Load and unload run
+  the U1 feeder's own procedures, as its screen does (homing X and Y when
+  needed, the filament's own temperature), and follow the head's filament
+  sensor: Load once the filament is in the feed port of an empty head,
+  Unload when the head holds filament. Also opened from the
   printer's page (**Control**).
 - **3D printer view** ([#34](https://github.com/kameka22/snap-studio/pull/34)):
   the printer's page shows the U1 in 3D (three.js, bundled with the app).
