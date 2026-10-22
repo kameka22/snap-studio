@@ -146,7 +146,7 @@ function ctlSpoolPaint(el, pid, n) {
   // The chip carries the colour (alone, or inside a compact spool panel).
   const chip = el.matches(".ctl-spool") ? el : el.querySelector(".ctl-spool");
   for (const x of new Set([el, chip])) x?.style.setProperty("--spool", s.color || "var(--separator)");
-  el.classList.toggle("empty", !s.present);
+  el.classList.toggle("no-spool", !s.present);
   el.querySelector('[data-v="mat"]').textContent = s.present ? s.name || tr("ctl.loaded") : tr("ctl.no_spool");
 }
 
@@ -181,7 +181,7 @@ function ctlHeadPaint(el, pid, h) {
   const active = st?.active === h.index;
   const s = ctlSpool(pid, h.index);
   el.style.setProperty("--spool", s.color || "var(--separator)");
-  el.classList.toggle("empty", !s.present);
+  el.classList.toggle("no-spool", !s.present);
   el.classList.toggle("active", active);
   const spool = el.querySelector('[data-ctl="spool"]');
   if (spool) ctlSpoolPaint(spool, pid, h.index);

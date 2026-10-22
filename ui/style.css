@@ -3771,7 +3771,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ct-head-grid > .ct-head { justify-content: space-between; }
 .ct-head { --spool: var(--separator); display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--spool) 5%, var(--control-bg)); border: 1px solid color-mix(in srgb, var(--spool) 45%, var(--card-border)); border-left: 4px solid var(--spool); }
 .ct-head.active { box-shadow: 0 0 0 2px var(--accent) inset; }
-.ct-head.empty { opacity: 0.85; }
+.ct-head.no-spool { opacity: 0.85; }
 .ct-head-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ct-head-top b { font-size: 14px; }
 .ct-spool { width: 12px; height: 12px; border-radius: 50%; background: var(--spool); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); flex: none; }
@@ -4485,14 +4485,14 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p3d-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .p3d-row.on { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 .p3d-sw { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--spool); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
-.p3d-row.empty .p3d-sw { background: repeating-linear-gradient(45deg, transparent 0 2px, color-mix(in srgb, var(--text) 25%, transparent) 2px 3px); }
+.p3d-row.no-spool .p3d-sw { background: repeating-linear-gradient(45deg, transparent 0 2px, color-mix(in srgb, var(--text) 25%, transparent) 2px 3px); }
 .p3d-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .p3d-l1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .p3d-l1 > b, .p3d-row > b { flex: none; font-weight: 600; }
 .p3d-sub { font-size: 11px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p3d-sub:empty { display: none; }
 .p3d-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.p3d-row.empty .p3d-name { color: var(--text-tertiary); }
+.p3d-row.no-spool .p3d-name { color: var(--text-tertiary); }
 .p3d-tag { flex: none; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
 .p3d-tag:empty { display: none; }
 .p3d-tag.accent { color: var(--accent); }

@@ -230,7 +230,7 @@ function p3dCard(st) {
   rows.forEach((r, i) => {
     const el = box.children[i];
     el.style.setProperty("--spool", r.present ? r.color || "var(--text-tertiary)" : "transparent");
-    el.classList.toggle("empty", !r.present);
+    el.classList.toggle("no-spool", !r.present);
     el.classList.toggle("on", P3.zone === `head:${r.n}`);
     el.querySelector(".p3d-name").textContent = r.present ? r.name || tr("ctl.loaded") : tr("p3d.empty");
     const tag = el.querySelector(".p3d-tag");
