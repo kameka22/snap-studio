@@ -56,6 +56,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   firmware does not know. If the printer does not apply one, a dialog says
   so once the print has started
   ([#39](https://github.com/kameka22/snap-studio/pull/39)).
+- Mirrored objects are no longer sent to the slicer with scrambled
+  triangles: a `-0.0` coordinate shifted every later triangle of the
+  object in the 3MF. A preset whose parent is missing (a user preset from
+  another Orca version) is now reported by name when slicing, instead of
+  a partial configuration the engine failed on ([#47](https://github.com/kameka22/snap-studio/pull/47)).
 
 ## [0.12.0] — 2026-10-21
 
