@@ -253,20 +253,19 @@ pub fn qr_start(path: PathBuf, toward: &str) -> Result<QrShare> {
     let prefix = format!("/{token}/");
     // One phone is expected; a handful of connections covers its browser's
     // parallel range requests. Beyond that, the port is being hammered.
-    let live = Arc::new(AtomicUsize::new(0));
+    let slots = Slots::new(MAX_CONNECTIONS);
     std::thread::spawn(move || {
         while !stop.load(Ordering::Relaxed) && Instant::now() < until {
             match listener.accept() {
                 Ok((conn, _)) => {
-                    if live.fetch_add(1, Ordering::Relaxed) >= MAX_CONNECTIONS {
-                        live.fetch_sub(1, Ordering::Relaxed);
+                    let Some(slot) = slots.take() else {
                         drop(conn);
                         continue;
-                    }
-                    let (path, prefix, stop, live) = (path.clone(), prefix.clone(), stop.clone(), live.clone());
+                    };
+                    let (path, prefix, stop) = (path.clone(), prefix.clone(), stop.clone());
                     std::thread::spawn(move || {
+                        let _slot = slot;
                         let _ = serve(conn, &path, &prefix, &stop);
-                        live.fetch_sub(1, Ordering::Relaxed);
                     });
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(150)),
@@ -276,6 +275,36 @@ pub fn qr_start(path: PathBuf, toward: &str) -> Result<QrShare> {
         stop.store(true, Ordering::Relaxed);
     });
     Ok(QrShare { url, svg, seconds: QR_LIFETIME.as_secs() })
+}
+
+/// Connections served at once, at most `max`: each holds a `Slot` until it
+/// ends (dropped, even on a panic, it frees its place).
+struct Slots {
+    live: Arc<AtomicUsize>,
+    max: usize,
+}
+
+struct Slot(Arc<AtomicUsize>);
+
+impl Slots {
+    fn new(max: usize) -> Self {
+        Slots { live: Arc::default(), max }
+    }
+
+    /// A place for one more connection, or None when all are taken.
+    fn take(&self) -> Option<Slot> {
+        if self.live.fetch_add(1, Ordering::AcqRel) >= self.max {
+            self.live.fetch_sub(1, Ordering::AcqRel);
+            return None;
+        }
+        Some(Slot(self.live.clone()))
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 /// What the phone asked: method, target, byte range.
@@ -470,5 +499,75 @@ mod tests {
             s.is_empty() || s.starts_with("HTTP/1.1 404")
         }).unwrap_or(true));
         let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+/// The share server's bounds: request and header lines, and connections.
+#[cfg(test)]
+mod bounded_tests {
+    use super::*;
+
+    #[test]
+    fn an_overlong_request_line_is_dropped() {
+        let raw = format!("GET /{} HTTP/1.1\r\nHost: x\r\n\r\n", "a".repeat(LINE_MAX));
+        assert_eq!(read_request(&mut raw.as_bytes()), None);
+    }
+
+    #[test]
+    fn an_overlong_header_line_is_dropped() {
+        let raw = format!("GET /abc/v.mp4 HTTP/1.1\r\nX-Long: {}\r\n\r\n", "b".repeat(LINE_MAX));
+        assert_eq!(read_request(&mut raw.as_bytes()), None);
+    }
+
+    /// A line that never ends is cut at `LINE_MAX`, not read until memory
+    /// runs out.
+    #[test]
+    fn an_endless_line_stops_at_the_cap() {
+        let mut endless = BufReader::new(std::io::repeat(b'a'));
+        assert_eq!(read_request(&mut endless), None);
+        let mut endless = BufReader::new(std::io::repeat(b'a'));
+        assert_eq!(line_within(&mut endless, LINE_MAX), None);
+    }
+
+    #[test]
+    fn lines_up_to_the_cap_still_parse() {
+        // A request line of exactly LINE_MAX bytes, newline included.
+        let head = "GET /abc/";
+        let tail = " HTTP/1.1\r\n";
+        let target = "v".repeat(LINE_MAX - head.len() - tail.len());
+        let raw = format!("{head}{target}{tail}Range: bytes=0-1\r\n\r\n");
+        let a = read_request(&mut raw.as_bytes()).unwrap();
+        assert_eq!(a.target.len(), "/abc/".len() + target.len());
+        assert_eq!(a.range.as_deref(), Some("bytes=0-1"));
+        // A last line without a newline, short of the cap, is kept.
+        assert_eq!(line_within(&mut &b"GET / HTTP/1.1"[..], LINE_MAX).as_deref(), Some("GET / HTTP/1.1"));
+        // End of input: an empty line, which ends the headers.
+        assert_eq!(read_request(&mut &b"GET /abc/v.mp4 HTTP/1.1\r\n"[..]).unwrap().range, None);
+    }
+
+    #[test]
+    fn at_most_max_connections_at_once() {
+        let slots = Slots::new(MAX_CONNECTIONS);
+        let mut held: Vec<Slot> = (0..MAX_CONNECTIONS).map(|_| slots.take().expect("a free slot")).collect();
+        assert!(slots.take().is_none(), "one past the limit");
+        held.pop();
+        let again = slots.take();
+        assert!(again.is_some(), "a closed connection frees its place");
+        assert!(slots.take().is_none());
+        drop(held);
+        drop(again);
+        assert_eq!(slots.live.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn a_panicking_connection_frees_its_place() {
+        let slots = Slots::new(1);
+        let slot = slots.take().unwrap();
+        let _ = std::thread::spawn(move || {
+            let _slot = slot;
+            panic!("serve failed");
+        })
+        .join();
+        assert!(slots.take().is_some());
     }
 }
