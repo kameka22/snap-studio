@@ -17,7 +17,9 @@
 
 **English** · [Français](README.fr.md)
 
-<img src="docs/screenshots/files.png" alt="Snap Studio — your 3MF files at a glance" />
+<img src="docs/screenshots/printer.png" alt="Snap Studio — the Snapmaker U1 in 3D, with its spools, heads, bed and light" />
+
+<sub>Your U1 in 3D: click a spool, a head, the bed or the light to control it.</sub>
 
 </div>
 
@@ -33,86 +35,219 @@
 
 ## Features
 
-**📁 Files** — thumbnails of your 3MF files (Orca, Bambu, Prusa, MakerWorld)
-or a 3D render when there is none; duration, filament, plates; a 3D viewer
-and layer-by-layer G-code toolpaths.
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-### 🧩 Prepare
-The U1 plate as in Orca: move, rotate, scale (per axis too) with sliders,
-duplicate, lay on face, auto-orient, auto-arrange, undo — then slice.
-Objects can be set aside off the plate (not sliced) and put back in a
-click. Each object lists its colors, painted ones included, and sends each
-to the head you pick.
-
-<img src="docs/screenshots/prepare.png" alt="Prepare" />
-
-</td>
-<td width="50%" valign="top">
-
-### ✦ AI
-Claude modifies a part or creates one from a description, in a chat with a
-live 3D preview and every version kept. Results are multicolor 3MF files
-that slice as they are. Conversations can be searched, pinned, renamed,
-duplicated; see [Design with AI](#design-with-ai).
-
-<img src="docs/screenshots/ai-chat.png" alt="An AI conversation" />
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-### 🖨 Printers
-Found on the network on their own; the U1 in 3D, its parts clickable for
-quick controls (spools, heads, bed, light); live state, the four heads'
-temperatures, the spools loaded in each, their [files and timelapses](#-printer-files-and-timelapses)
-and their [care and bed leveling](#-care--tuning). Works with any Klipper printer.
-
-<img src="docs/screenshots/printer.png" alt="Printer and its spools" />
-
-</td>
-<td valign="top">
-
-### 📷 Camera
-The printer's camera, live, from the printer's page and from each print.
-
-<img src="docs/screenshots/printer-camera.png" alt="The printer's camera" />
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-### ⏱ Prints
-Running prints and a queue: when one ends, Snap Studio offers the next
-(never on its own), on the printer you pick. Progress, slicing summary,
-temperatures, pause, cancel. Before a print starts, the
-[spools are checked](#-spool-check).
-
-<img src="docs/screenshots/print-job.png" alt="A print in progress" />
-
-</td>
-<td valign="top">
+**From file to print:** [Library](#-library) · [Files](#-files) ·
+[Prepare](#-prepare) · [AI](#-ai) · [Slicing](#️-slicing) ·
+[Spool check](#-spool-check) · [Prints](#-prints) · [Camera](#-camera)<br>
+**Your printer:** [3D view](#-your-printer-in-3d) · [Control](#-control) ·
+[Care](#-care) · [Bed Leveling](#-bed-leveling) ·
+[Printer files](#-printer-files-and-timelapses) · and the [Display](#-display)
 
 ### 📚 Library
-MakerWorld, Printables, Thingiverse and Cults3D in tabs, sessions kept;
-downloads land in Files; favorites in the sidebar.
 
-<img src="docs/screenshots/library.png" alt="Library" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Library" />
 
-</td>
-</tr>
-</table>
+The model sites you use, inside the app.
 
-### 🔧 Care & Tuning
+- MakerWorld, Printables, Thingiverse and Cults3D in tabs, sessions kept.
+- Downloads land in [Files](#-files).
+- Favorites in the sidebar.
 
-Each printer has its Care & Tuning view, in three tabs: Control, Care and Bed Leveling.
+<br clear="both">
 
-**Care**, from what the printer counts and Snapmaker's maintenance guide:
+### 📁 Files
+
+<img align="left" width="48%" hspace="12" src="docs/screenshots/files.png" alt="Snap Studio — your 3MF files at a glance" />
+
+Your 3MF files at a glance.
+
+- Thumbnails of your 3MF files (Orca, Bambu, Prusa, MakerWorld), or a 3D
+  render when there is none.
+- Duration, filament, plates.
+- A 3D viewer and layer-by-layer G-code toolpaths.
+
+<br clear="both">
+
+### 🧩 Prepare
+
+<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Prepare" />
+
+The U1 plate as in Orca — then slice.
+
+- Move, rotate, scale (per axis too) with sliders; duplicate, lay on face,
+  auto-orient, auto-arrange, undo.
+- Objects can be set aside off the plate (not sliced) and put back in a click.
+- Each object lists its colors, painted ones included, and sends each to the
+  head you pick.
+
+<br clear="both">
+
+### ✦ AI
+
+<img align="left" width="48%" hspace="12" src="docs/screenshots/ai-chat.png" alt="An AI conversation" />
+
+Claude modifies a part or creates one from a description.
+
+- A chat with a live 3D preview, every version kept.
+- Results are multicolor 3MF files that slice as they are.
+- Conversations can be searched, pinned, renamed, duplicated; see
+  [Design with AI](#design-with-ai).
+
+<br clear="both">
+
+### ✂️ Slicing
+
+<img align="right" width="40%" hspace="12" src="docs/screenshots/slicing.png" alt="The slice sheet" />
+
+The Snapmaker Orca engine, built in: you do not need Snapmaker Orca installed.
+
+- Printer, plate and quality on the left, the adjustments on the right, the
+  U1's four heads and the model's colors below.
+- Each color of each object sent to its head, from the spools read on the printer.
+- **Speed**: one slider from 50 % to 120 % of the profile.
+- A toolpath preview, then sent to the printer or saved as G-code.
+
+<details>
+<summary>More details</summary>
+
+The engine is downloaded once (about 30 MB) and kept up to date by the app.
+The slice sheet puts the printer, plate and quality on the left, the
+adjustments on the right, the U1's four heads and the model's colors below:
+
+- the spools read from the printer, each color of each object sent to its
+  head, the plate surface (textured PEI, smooth PEI…) and its temperature;
+- infill, walls, supports, brim, seam, Orca's advanced settings, and saving
+  them as a custom profile;
+- **Speed**: one slider from 50 % to 120 % of the profile (speeds × f,
+  accelerations × f²), with a ⚙ panel showing each value, profile →
+  computed; at 100 % the G-code is the profile's;
+- each profile's details as the engine gets them.
+
+Then a toolpath preview with duration, filament and cost, sent to the
+printer — with its picture on the printer's screen — or saved as G-code.
+
+</details>
+
+<br clear="both">
+
+### 🎨 Spool check
+
+Before a print starts, each color of the model is compared with the spool
+loaded on its head.
+
+- Material, and color as the eye sees it.
+- When they differ, pick another head for that color — for this print only.
+- Or **Edit in Prepare**, with the spools loaded now.
+
+<details>
+<summary>More details</summary>
+
+The check runs whether the print is sent after a slice, started from the
+queue or from a printer's files. When the model and the spools differ, a
+sheet shows one row per color with the heads you can print it with:
+
+- pick another head, and that color is printed from it — for this print
+  only, through the printer's extruder map, the G-code is not rewritten;
+- or **Edit in Prepare**: the plate comes back with the slice sheet open on
+  the spools loaded now.
+
+The check can be turned off in Settings → Prepare.
+
+</details>
+
+### ⏱ Prints
+
+<img align="left" width="48%" hspace="12" src="docs/screenshots/print-job.png" alt="A print in progress" />
+
+Running prints and a queue.
+
+- When one ends, Snap Studio offers the next (never on its own), on the
+  printer you pick.
+- Progress, slicing summary, temperatures, pause, cancel.
+- Before a print starts, the [spools are checked](#-spool-check).
+
+<br clear="both">
+
+### 📷 Camera
+
+<img align="right" width="48%" hspace="12" src="docs/screenshots/printer-camera.png" alt="The printer's camera" />
+
+The printer's camera, live.
+
+- From the printer's page.
+- From each print.
+
+<br clear="both">
+
+### 🖨 Your printer, in 3D
+
+<img align="left" width="48%" hspace="12" src="docs/screenshots/printer.png" alt="The printer's page: the U1 in 3D and its spools" />
+
+Printers are found on the network on their own; the U1 is shown in 3D.
+
+- Click a spool, a head, the bed or the light: its quick controls open in a
+  panel over the view.
+- Live state, the four heads' temperatures and the spools loaded in each; the
+  camera in a corner.
+- **All controls** opens [Control](#-control).
+- Works with any Klipper printer.
+
+<details>
+<summary>More details</summary>
+
+Under each printer: its [files and timelapses](#-printer-files-and-timelapses),
+and Care & Tuning with its three tabs — [Control](#-control), [Care](#-care)
+and [Bed Leveling](#-bed-leveling).
+
+</details>
+
+<br clear="both">
+
+### 🎛 Control
+
+<img align="right" width="48%" hspace="12" src="docs/screenshots/control.png" alt="Care &amp; Tuning › Control: movement, the four heads, bed, fans and light" />
+
+The printer's basic actions, without G-code — the first tab of Care & Tuning,
+also opened from the printer's page (**Control**).
+
+- Home and jog X, Y and Z (0.1 to 50 mm), the position live.
+- One card per head, in its spool's colour: temperature, load, unload, extrude.
+- Bed, fans, light, a small camera view; the emergency stop always in reach.
+- Safe by design: locked during a print.
+
+<details>
+<summary>More details</summary>
+
+- Home (all axes or one), a jog pad for X, Y and Z (0.1 to 50 mm), the
+  position live; clean the nozzle, go to the purge position.
+- One card per head, in its spool's colour: temperature as a gauge, its
+  target on a slider, activate, load, unload, extrude, retract.
+- The bed's temperature; the part fan, the chamber fan, the purifier and
+  the chamber light; a small camera view.
+- Turn all heaters off, turn the motors off, restart the firmware, and the
+  emergency stop, always in reach.
+- Safe by design: locked during a print (only the emergency stop, the light
+  and the camera stay), moves and head changes only once homed, Z never
+  under 0.5 mm, temperatures never above each heater's maximum, one action
+  at a time; what cannot run says why.
+
+</details>
+
+<br clear="both">
+
+### 🔧 Care
+
+<img align="left" width="48%" hspace="12" src="docs/screenshots/maintenance.png" alt="Care &amp; Tuning: maintenance tasks and the heads' counters" />
+
+What the printer counts, and Snapmaker's maintenance guide, in one tab of
+Care & Tuning.
+
+- Usage: print time, prints, filament, longest print.
+- Each head's tool changes, errors and hotend (U1).
+- Tasks sorted by urgency, each with its steps and video; a dot in the
+  sidebar when one is due.
+
+<details>
+<summary>More details</summary>
 
 - **Usage**: print time, prints, filament used, longest print.
 - **Heads** (U1): tool changes, how far each is from the contacts' cleaning
@@ -130,9 +265,21 @@ Contacts follow Snapmaker's figure; the other intervals are prudent
 defaults, Snapmaker gives none. On another Klipper printer, the view keeps
 usage and the hour-based tasks.
 
-<img src="docs/screenshots/maintenance.png" alt="Care &amp; Tuning: maintenance tasks and the heads' counters" />
+</details>
 
-**Bed Leveling**: the bed's mesh, read from the printer, kept over time.
+<br clear="both">
+
+### 📐 Bed Leveling
+
+The bed's mesh, read from the printer, kept over time — the third tab of
+Care & Tuning.
+
+- One card says how the bed is and the one thing to do.
+- The surface in 3D or as a map, history and trend.
+- **Measure** with a guided assistant; when the bed needs attention, what to do.
+
+<details>
+<summary>More details</summary>
 
 - One card says how the bed is and the one thing to do: good (compensated
   by the printer's mesh), to watch, out of tolerance, or measure again.
@@ -152,25 +299,20 @@ usage and the hour-based tasks.
 - A reminder in Care after 30 days or 50 prints, and "Measure first" in
   the send sheet when the bed is out of tolerance.
 
-**Control**: the printer's basic actions, without G-code — also opened from
-the printer's page (**Control**).
-
-- Home (all axes or one), a jog pad for X, Y and Z (0.1 to 50 mm), the
-  position live; clean the nozzle, go to the purge position.
-- One card per head, in its spool's colour: temperature as a gauge, its
-  target on a slider, activate, load, unload, extrude, retract.
-- The bed's temperature; the part fan, the chamber fan, the purifier and
-  the chamber light; a small camera view.
-- Turn all heaters off, turn the motors off, restart the firmware, and the
-  emergency stop, always in reach.
-- Safe by design: locked during a print (only the emergency stop, the light
-  and the camera stay), moves and head changes only once homed, Z never
-  under 0.5 mm, temperatures never above each heater's maximum, one action
-  at a time; what cannot run says why.
+</details>
 
 ### 📂 Printer files and timelapses
 
-Under each printer, **Files** shows what is stored on it, read live:
+<img align="right" width="48%" hspace="12" src="docs/screenshots/printer-files.png" alt="A printer's files, as a grid of thumbnails" />
+
+Under each printer, **Files** shows what is stored on it, read live.
+
+- Print files as a list or a grid; **Print** opens the same sheet as after a slice.
+- Timelapses played straight from the printer.
+- Share a file or a video: AirDrop, a QR code for your phone, the clipboard.
+
+<details>
+<summary>More details</summary>
 
 - **Print files**, as a list or a grid: thumbnail, duration, filament per
   head, size, the result of their last print; search and sort. **Print** opens
@@ -185,54 +327,31 @@ Under each printer, **Files** shows what is stored on it, read live:
   link that stops after 15 minutes or when the sheet closes), the file on the
   clipboard, or Save As.
 
-<img src="docs/screenshots/printer-files.png" alt="A printer's files, as a grid of thumbnails" />
+</details>
 
-### ✂️ Slicing
-
-The Snapmaker Orca engine, downloaded once (about 30 MB) and kept up to
-date by the app: you do not need Snapmaker Orca installed. The slice sheet
-puts the printer, plate and quality on the left, the adjustments on the
-right, the U1's four heads and the model's colors below:
-
-- the spools read from the printer, each color of each object sent to its
-  head, the plate surface (textured PEI, smooth PEI…) and its temperature;
-- infill, walls, supports, brim, seam, Orca's advanced settings, and saving
-  them as a custom profile;
-- **Speed**: one slider from 50 % to 120 % of the profile (speeds × f,
-  accelerations × f²), with a ⚙ panel showing each value, profile →
-  computed; at 100 % the G-code is the profile's;
-- each profile's details as the engine gets them.
-
-Then a toolpath preview with duration, filament and cost, sent to the
-printer — with its picture on the printer's screen — or saved as G-code.
-
-<img src="docs/screenshots/slicing.png" alt="The slice sheet" />
-
-### 🎨 Spool check
-
-Before a print starts — sent after a slice, started from the queue or from a
-printer's files — each color of the model is compared with the spool loaded
-on its head (material, and color as the eye sees it). When they differ, a
-sheet shows one row per color with the heads you can print it with:
-
-- pick another head, and that color is printed from it — for this print
-  only, through the printer's extruder map, the G-code is not rewritten;
-- or **Edit in Prepare**: the plate comes back with the slice sheet open on
-  the spools loaded now.
-
-The check can be turned off in Settings → Prepare.
+<br clear="both">
 
 ### 🌓 Display
 
-Settings → Display: light, dark or as the system; ten themes, each with a
-light and a dark version and a live preview — Snap Studio, Snapmaker Space
-(navy sidebar), High contrast, Graphite, Deep Night, Paper, Nord,
-Solarized, Filament (the app takes the color of the spool on T0) and macOS
-(a Tahoe-style layout in glass); the accent color: the theme's, the
-system's, a preset or your own; and color-blind safe colors over any theme
-(states never told apart by red and green alone).
+<img align="left" width="48%" hspace="12" src="docs/screenshots/display.png" alt="Settings › Display: appearance and the ten themes" />
 
-<img src="docs/screenshots/display.png" alt="Settings › Display: appearance and the ten themes" />
+Settings → Display: light, dark or as the system.
+
+- Ten themes, each with a light and a dark version and a live preview.
+- The accent color: the theme's, the system's, a preset or your own.
+- Color-blind safe colors over any theme.
+
+<details>
+<summary>More details</summary>
+
+The ten themes: Snap Studio, Snapmaker Space (navy sidebar), High contrast,
+Graphite, Deep Night, Paper, Nord, Solarized, Filament (the app takes the
+color of the spool on T0) and macOS (a Tahoe-style layout in glass). With
+color-blind safe colors, states are never told apart by red and green alone.
+
+</details>
+
+<br clear="both">
 
 ## Download
 
