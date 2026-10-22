@@ -56,6 +56,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   firmware does not know. If the printer does not apply one, a dialog says
   so once the print has started
   ([#39](https://github.com/kameka22/snap-studio/pull/39)).
+- The QR share server caps request and header lines at 8 KiB and serves
+  at most eight connections at once: a host on the network can no longer
+  grow the app's memory with a line that never ends. Closing a Claude
+  conversation now really ends its input, so Claude stops promptly, and a
+  container conversation's container gets time to stop before the kill
+  ([#48](https://github.com/kameka22/snap-studio/pull/48)).
 
 ## [0.12.0] — 2026-10-21
 
