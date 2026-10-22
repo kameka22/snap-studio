@@ -184,6 +184,13 @@ function p3dPaint() {
 
 // Control's icon (the toolbar's Control button).
 const P3D_CONTROL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 3.5h-2V9h-2V5.5H9zM12 22l-3-3.5h2V15h2v3.5h2zM2 12l3.5-3v2H9v2H5.5v2zM22 12l-3.5 3v-2H15v-2h3.5V9zM12 10.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6"/></svg>';
+/* A text written only when it changes: a text replaced under a pressed
+   mouse makes WebKit drop the click (the live status rewrites the rows
+   several times a second). */
+function p3dText(el, v) {
+  if (el.textContent !== v) el.textContent = v;
+}
+
 const p3dTemp = (t, target) => (t == null ? "—" : `${ctlDeg(t)}${target > 0 ? ` → ${ctlDeg(target)}` : ""}`);
 
 /* The print's status (top centre: state, job, chamber, progress) and the
@@ -195,9 +202,9 @@ function p3dCard(st) {
   // An action under way (an unload takes minutes) says so instead.
   const busy = ctlBusy(pid);
   $("p3d-state").className = "p3d-state " + (busy ? "busy" : STATES[s]?.[1] || "");
-  $("p3d-state-t").textContent = busy || stateLabel(sum.state);
-  $("p3d-chamber").textContent = st?.chamber ? tr("p3d.chamber", { t: fmtNum(Math.round(st.chamber.current)) }) : "";
-  $("p3d-job").textContent = sum.job || tr("p3d.no_job");
+  p3dText($("p3d-state-t"), busy || stateLabel(sum.state));
+  p3dText($("p3d-chamber"), st?.chamber ? tr("p3d.chamber", { t: fmtNum(Math.round(st.chamber.current)) }) : "");
+  p3dText($("p3d-job"), sum.job || tr("p3d.no_job"));
   const printing = sum.progress != null;
   $("p3d-prog").classList.toggle("hidden", !printing);
   if (printing) {
@@ -207,12 +214,12 @@ function p3dCard(st) {
     const el = fmtHms(sum.elapsed), left = fmtHms(sum.left);
     if (el) bits.push(tr("printers.elapsed", { t: el }));
     if (left) bits.push(tr("p3d.left", { t: left }));
-    $("p3d-prog-t").textContent = bits.join(" · ");
+    p3dText($("p3d-prog-t"), bits.join(" · "));
     const more = [];
     if (sum.speed != null) more.push(`${tr("printers.speed")} ${Math.round(sum.speed * 100)} %`);
     if (sum.fan != null) more.push(`${tr("printers.fan")} ${Math.round(sum.fan * 100)} %`);
     if (sum.filament != null) more.push(`${tr("files.col.weight")} ${fmtDec(sum.filament, 2)} m`);
-    $("p3d-prog-more").textContent = more.join(" · ");
+    p3dText($("p3d-prog-more"), more.join(" · "));
   }
   const spools = [0, 1, 2, 3].map((n) => ctlSpool(pid, n));
   const rows = p3dRows(st, cs, spools);
@@ -234,19 +241,21 @@ function p3dCard(st) {
     el.style.setProperty("--spool", r.present ? r.color || "var(--text-tertiary)" : "transparent");
     el.classList.toggle("no-spool", !r.present);
     el.classList.toggle("on", P3.zone === `head:${r.n}`);
-    el.querySelector(".p3d-name").textContent = r.present ? r.name || tr("ctl.loaded") : tr("p3d.empty");
+    p3dText(el.querySelector(".p3d-name"), r.present ? r.name || tr("ctl.loaded") : tr("p3d.empty"));
     const tag = el.querySelector(".p3d-tag");
-    tag.textContent = r.active ? tr(sum.state === "printing" ? "printers.extruding" : "printers.active_head_tag") : r.present && r.inHead === false ? tr("p3d.unloaded") : r.used ? tr("printers.used_by_job") : "";
+    p3dText(tag, r.active ? tr(sum.state === "printing" ? "printers.extruding" : "printers.active_head_tag") : r.present && r.inHead === false ? tr("p3d.unloaded") : r.used ? tr("printers.used_by_job") : "");
     // An empty head shows nothing of the spool it had, nor its profile.
-    el.querySelector(".p3d-sub").textContent = r.present ? [...r.detail, profile(r.n)].filter(Boolean).join(" · ") : "";
+    p3dText(el.querySelector(".p3d-sub"), r.present ? [...r.detail, profile(r.n)].filter(Boolean).join(" · ") : "");
     tag.className = "p3d-tag" + (r.active ? " accent" : "");
-    el.querySelector(".p3d-t").textContent = p3dTemp(r.temp, r.target);
+    p3dText(el.querySelector(".p3d-t"), p3dTemp(r.temp, r.target));
   });
   const bed = cs?.bed || (st?.bed && { temp: st.bed.current, target: st.bed.target });
   const b = $("p3d-bed");
   b.classList.toggle("hidden", !bed);
   b.classList.toggle("on", P3.zone === "bed");
-  b.innerHTML = `<span class="p3d-name">${esc(tr("ctl.bed"))}</span><span class="p3d-t">${esc(bed ? p3dTemp(bed.temp, bed.target) : "")}</span>`;
+  if (!b.firstElementChild) b.innerHTML = `<span class="p3d-name"></span><span class="p3d-t"></span>`;
+  p3dText(b.firstElementChild, tr("ctl.bed"));
+  p3dText(b.lastElementChild, bed ? p3dTemp(bed.temp, bed.target) : "");
 }
 
 /* The printer's details, bottom right, one per line; the data's age

@@ -4500,6 +4500,10 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p3d-heads { display: flex; flex-direction: column; gap: 2px; }
 .p3d-row { --spool: transparent; display: flex; align-items: center; gap: 7px; min-width: 0; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
 .p3d-row:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+/* The row takes the click, never its texts: they are rewritten as the
+   printer reports, and WebKit drops a click whose text was replaced
+   while pressed. */
+.p3d-row :not(.p3d-more) { pointer-events: none; }
 .p3d-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .p3d-row.on { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 .p3d-sw { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--spool); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
