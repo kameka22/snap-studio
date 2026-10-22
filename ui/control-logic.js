@@ -30,6 +30,21 @@ function ctlLoaded(h) {
   return h?.feed_state ? h.feed_state === "load_finish" : null;
 }
 
+/* Loading asks for the material and colour first, as the printer's
+   screen does for a spool without an RFID tag (a tagged one says itself). */
+const ctlLoadAsks = (h, cfg) => !!cfg?.materials?.length && h?.official !== true;
+
+/* The material and colour offered for head `slot` (heads.js): what it
+   declares when the printer lists it, else Generic PLA; white. */
+function ctlFilamentPick(materials, slot) {
+  const m = materials.find((x) => x.kind === slot?.kind) || materials.find((x) => x.kind === "PLA") || materials[0];
+  if (!m) return null;
+  const v = m.vendors.find((x) => x.name === slot?.vendor) || m.vendors[0];
+  const sub = v.subs.includes(slot?.sub_type || "") ? slot?.sub_type || "" : v.subs[0];
+  const color = slot?.present && /^#[0-9a-f]{6}$/i.test(slot.color || "") ? slot.color.toLowerCase() : "#ffffff";
+  return { material: m.kind, vendor: v.name, sub_type: sub, color };
+}
+
 /* Why an action cannot run now: an i18n key (ctl.why.*), or "" when it
    can. `kind` as control.rs's Action; `n` the head, `axis` and `dist` a jog. */
 function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
@@ -51,6 +66,12 @@ function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
     const [min, max] = ctlRange(cfg, i);
     const to = st.position[i] + dist;
     return to < min - 1e-6 || to > max + 1e-6 ? "ctl.why.limit" : "";
+  }
+  // A head's material and colour: from the printer's own list; a spool
+  // read from its RFID tag is not edited.
+  if (kind === "filament") {
+    if (!cfg.u1 || !cfg.materials?.length) return "ctl.why.missing";
+    return st.heads.find((x) => x.index === n)?.official ? "ctl.why.official" : "";
   }
   // Loading and unloading: a U1's feed module, which homes X and Y itself.
   if (kind === "load" || kind === "unload") {
@@ -102,4 +123,4 @@ function ctlHeat(temp, target) {
 }
 
 if (typeof module !== "undefined")
-  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlLoaded, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };
+  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlLoaded, ctlLoadAsks, ctlFilamentPick, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };

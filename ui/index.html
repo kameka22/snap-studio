@@ -1495,6 +1495,26 @@
   </div>
 </div>
 
+<div id="ctlfil" class="modal hidden">
+  <div class="modal-box ctl-fil-sheet">
+    <h3 id="ctlfil-title"></h3>
+    <p class="det-sub" data-i18n="ctl.fil.note">The materials the printer knows, as on its screen.</p>
+    <div class="ctl-fil-preview"><i id="ctlfil-preview"></i><b id="ctlfil-preview-t"></b></div>
+    <div class="ctl-fil-grid">
+      <label><span data-i18n="ctl.fil.material">Material</span><select id="ctlfil-material"></select></label>
+      <label><span data-i18n="ctl.fil.vendor">Brand</span><select id="ctlfil-vendor"></select></label>
+      <label><span data-i18n="ctl.fil.sub">Type</span><select id="ctlfil-sub"></select></label>
+    </div>
+    <div class="set-section" data-i18n="ctl.fil.color">Colour</div>
+    <div id="ctlfil-colors" class="ctl-fil-colors" role="radiogroup" aria-label="Colour" data-i18n-aria="ctl.fil.color"></div>
+    <label class="ctl-fil-custom"><input type="color" id="ctlfil-color" /><span data-i18n="ctl.fil.custom">Other colour</span><small id="ctlfil-color-t"></small></label>
+    <div class="modal-actions">
+      <button id="ctlfil-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="ctlfil-ok" class="btn primary"></button>
+    </div>
+  </div>
+</div>
+
 <div id="bmsettings" class="modal hidden">
   <div class="modal-box bm-sheet">
     <h3 data-i18n="bm.settings">Bed Leveling Settings</h3>

@@ -141,6 +141,14 @@ pub(crate) async fn get_json(url: &str) -> Result<Value> {
     Ok(r.json::<Value>().await?)
 }
 
+pub(crate) async fn get_text(url: &str) -> Result<String> {
+    let r = client().get(url).send().await?;
+    if !r.status().is_success() {
+        return Err(anyhow!("HTTP {}", r.status().as_u16()));
+    }
+    Ok(r.text().await?)
+}
+
 fn f32_of(v: &Value) -> Option<f32> {
     v.as_f64().map(|x| x as f32)
 }

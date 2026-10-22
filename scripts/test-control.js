@@ -129,4 +129,25 @@ assert.equal((ctl.match(/invoke\("control_run"/g) || []).length, 1, "one place s
 assert.ok(/ctlOpen\(current\(\)\.id\)/.test(ui("printers.js")), "the printer page opens Control through ctlOpen");
 assert.ok(!/invoke\("control_run"/.test(ui("printers.js")) && !/invoke\("control_run"/.test(ui("maint.js")));
 
+// A head's material and colour, from the printer's list (as its screen).
+const mats = [
+  { kind: "PLA", vendors: [{ name: "Generic", subs: [""] }, { name: "Snapmaker", subs: ["", "Silk", "SnapSpeed"] }] },
+  { kind: "PETG", vendors: [{ name: "Generic", subs: ["", "HF"] }] },
+];
+const ucfg = { ...cfg, materials: mats };
+assert.equal(C.ctlWhy("filament", idle, ucfg, { n: 2 }), "");
+assert.equal(C.ctlWhy("filament", { ...idle, heads: idle.heads.map((h) => (h.index === 2 ? { ...h, official: true } : h)) }, ucfg, { n: 2 }), "ctl.why.official", "an RFID spool says itself");
+assert.equal(C.ctlWhy("filament", idle, cfg, { n: 2 }), "ctl.why.missing", "no list, nothing to declare");
+assert.equal(C.ctlWhy("filament", { ...idle, state: "printing" }, ucfg, { n: 2 }), "ctl.why.printing");
+// Loading asks first, unless the spool's tag tells.
+assert.equal(C.ctlLoadAsks({ official: false }, ucfg), true);
+assert.equal(C.ctlLoadAsks({}, ucfg), true);
+assert.equal(C.ctlLoadAsks({ official: true }, ucfg), false);
+assert.equal(C.ctlLoadAsks({ official: false }, cfg), false, "no list: loads at once, as before");
+// What is offered: the head's declaration when listed, else Generic PLA, white.
+assert.deepEqual(C.ctlFilamentPick(mats, { present: true, kind: "PLA", vendor: "Snapmaker", sub_type: "Silk", color: "#FF7A1A" }), { material: "PLA", vendor: "Snapmaker", sub_type: "Silk", color: "#ff7a1a" });
+assert.deepEqual(C.ctlFilamentPick(mats, { present: true, kind: "PETG", vendor: "Polymaker", sub_type: "HF", color: "#000000" }), { material: "PETG", vendor: "Generic", sub_type: "HF", color: "#000000" }, "an unlisted vendor: the first");
+assert.deepEqual(C.ctlFilamentPick(mats, { present: false, kind: "", vendor: "", sub_type: "", color: "#ffffff" }), { material: "PLA", vendor: "Generic", sub_type: "", color: "#ffffff" }, "an unloaded head");
+assert.equal(C.ctlFilamentPick([], {}), null);
+
 console.log("control: ok");

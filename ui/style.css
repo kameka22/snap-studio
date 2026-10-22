@@ -3719,6 +3719,24 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ctl-c-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .ctl-c .ct-slider b { min-width: 40px; }
 .ctl-c-light { flex-direction: row; align-items: center; }
+.ctl-c-fil { justify-content: center; gap: 6px; }
+.ctl-c-fil svg, .ct-edit svg { width: 13px; height: 13px; fill: currentColor; flex: none; }
+.ct-edit { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--text-tertiary); cursor: pointer; }
+.ct-edit:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); }
+.ct-edit:disabled { opacity: 0.35; cursor: default; }
+/* A head's material and colour: the printer's list, a few colours, any. */
+.ctl-fil-sheet { width: min(460px, 92vw); }
+.ctl-fil-preview { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; font-size: 13px; }
+.ctl-fil-preview i { width: 22px; height: 22px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
+.ctl-fil-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ctl-fil-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); min-width: 0; }
+.ctl-fil-grid select { width: 100%; }
+.ctl-fil-colors { display: grid; grid-template-columns: repeat(auto-fill, 28px); gap: 9px; }
+.ctl-fil-sw { aspect-ratio: 1; border-radius: 50%; border: 0; padding: 0; background: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent); cursor: pointer; }
+.ctl-fil-sw.on { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent), 0 0 0 2px var(--sheet-bg), 0 0 0 4px var(--accent); }
+.ctl-fil-custom { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12.5px; }
+.ctl-fil-custom input { width: 34px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer; }
+.ctl-fil-custom small { margin-left: auto; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 11.5px; }
 .ct-estop.compact { padding: 6px; width: 30px; height: 30px; justify-content: center; margin-left: 0; }
 .ct-help { flex: none; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid var(--control-border); background: var(--control-bg); color: var(--text-secondary); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0; cursor: pointer; }
 .ct-help:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--control-border)); }

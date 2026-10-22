@@ -24,7 +24,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   the U1 feeder's own procedures, as its screen does (homing X and Y when
   needed, the filament's own temperature), and follow the head's filament
   sensor: Load once the filament is in the feed port of an empty head,
-  Unload when the head holds filament. Also opened from the
+  Unload when the head holds filament. **Material & colour** declares a
+  head's spool as the printer's screen does, from the list the printer
+  itself holds (material, brand, type) and a colour; loading a spool
+  without an RFID tag asks it first, so the printer heats to the right
+  temperature (a tagged spool declares itself). Also opened from the
   printer's page (**Control**).
 - **3D printer view** ([#34](https://github.com/kameka22/snap-studio/pull/34)):
   the printer's page shows the U1 in 3D (three.js, bundled with the app),

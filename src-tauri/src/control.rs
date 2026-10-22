@@ -10,7 +10,9 @@
 //! needed, picks the head, heats to the filament's temperature),
 //! `CONTROL_EXTRUDE_ACTION`, `ROUGHLY_CLEAN_NOZZLE`,
 //! `MOVE_TO_DISCARD_FILAMENT_POSITION`, `cavity_fan`, `cavity_led`,
-//! `SET_PURIFIER`. On another Klipper printer the standard ones still work
+//! `SET_PURIFIER`, `SET_PRINT_FILAMENT_CONFIG` (a head's material and
+//! colour, from the list the printer itself holds: config/snapmaker/
+//! filament_parameters.json). On another Klipper printer the standard ones still work
 //! (home, jog, temperatures, fans, motors).
 
 use anyhow::{anyhow, Result};
@@ -32,6 +34,88 @@ pub struct Config {
     pub purifier: bool,
     /// Snapmaker U1 (its macros and its head docks behind the bed).
     pub u1: bool,
+    /// The materials a head can be declared with, as the printer lists
+    /// them (U1; empty elsewhere or unreadable).
+    pub materials: Vec<Material>,
+}
+
+/// A material the U1 knows (`filament_parameters.json`): its type, its
+/// vendors and each vendor's subtypes, named as the printer's screen
+/// writes them ("Generic" and "" for the generic ones).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Material {
+    pub kind: String,
+    pub vendors: Vec<Vendor>,
+}
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Vendor {
+    pub name: String,
+    pub subs: Vec<String>,
+}
+
+/// A JSON object's keys in the file's order (serde_json's map sorts
+/// them), with the nested objects'; other values are dropped.
+#[derive(Default, Debug)]
+struct Keys(Vec<(String, Keys)>);
+
+impl<'de> Deserialize<'de> for Keys {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = Keys;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a JSON value")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, mut m: A) -> std::result::Result<Keys, A::Error> {
+                let mut out = Vec::new();
+                while let Some((k, v)) = m.next_entry::<String, Keys>()? {
+                    out.push((k, v));
+                }
+                Ok(Keys(out))
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut s: A) -> std::result::Result<Keys, A::Error> {
+                while s.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                Ok(Keys::default())
+            }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
+            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
+        }
+        d.deserialize_any(V)
+    }
+}
+
+/// A name safe inside a quoted G-code parameter.
+fn safe_name(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 32 && s.chars().all(|c| c.is_ascii_alphanumeric() || " -_.+".contains(c))
+}
+
+/// The materials of `filament_parameters.json`: `{ "PLA": { "vendor_generic":
+/// { "sub_generic": {…}, "sub_Silk": {…} }, "vendor_Snapmaker": … }, … }`,
+/// in the file's order.
+pub fn parse_materials(json: &str) -> Vec<Material> {
+    let Ok(Keys(top)) = serde_json::from_str::<Keys>(json) else { return Vec::new() };
+    top.into_iter()
+        .filter(|(kind, v)| safe_name(kind) && !v.0.is_empty())
+        .filter_map(|(kind, Keys(vendors))| {
+            let vendors: Vec<Vendor> = vendors
+                .into_iter()
+                .filter_map(|(k, Keys(subs))| {
+                    let v = k.strip_prefix("vendor_")?;
+                    let subs: Vec<String> = subs
+                        .into_iter()
+                        .filter_map(|(s, _)| s.strip_prefix("sub_").map(|x| if x == "generic" { String::new() } else { x.to_string() }))
+                        .filter(|x| x.is_empty() || safe_name(x))
+                        .collect();
+                    (safe_name(v) && !subs.is_empty()).then(|| Vendor { name: if v == "generic" { "Generic".into() } else { v.to_string() }, subs })
+                })
+                .collect();
+            (!vendors.is_empty()).then_some(Material { kind, vendors })
+        })
+        .collect()
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -78,6 +162,9 @@ pub struct HeadState {
     pub feed_state: Option<String>,
     pub inserted: Option<bool>,
     pub auto_feed: Option<bool>,
+    /// The spool read from its RFID tag (`print_task_config.
+    /// filament_official`, U1): its material and colour are not editable.
+    pub official: Option<bool>,
 }
 
 impl HeadState {
@@ -119,6 +206,8 @@ pub enum Action {
     BedTemp { temp: f64 },
     HeatersOff,
     Load { n: u8 },
+    /// Declares head `n`'s material and colour, as the printer's screen does.
+    Filament { n: u8, vendor: String, material: String, sub_type: String, color: String },
     Unload { n: u8 },
     Extrude { n: u8 },
     Retract { n: u8 },
@@ -181,6 +270,7 @@ pub fn parse_config(settings: &Value) -> Config {
         light: settings.get("led cavity_led").is_some(),
         purifier: settings.get("purifier").is_some(),
         u1: settings.get("gcode_macro auto_bed_mesh_calibrate").is_some() || settings.get("auto_screws_tilt_adjust").is_some(),
+        materials: Vec::new(),
     }
 }
 
@@ -207,6 +297,7 @@ pub fn parse_state(s: &Value) -> State {
                 feed_state: has_feed.then(|| feed["channel_state"].as_str().map(str::to_string)).flatten(),
                 inserted: has_feed.then(|| feed["filament_detected"].as_bool()).flatten(),
                 auto_feed: has_feed.then(|| feed["disable_auto"].as_bool().map(|d| !d)).flatten(),
+                official: s["print_task_config"]["filament_official"].get(i).and_then(|v| v.as_bool()),
             })
         })
         .collect();
@@ -341,6 +432,26 @@ pub fn plan(a: &Action, st: &State, cfg: &Config) -> Result<Plan> {
             }
             long(format!("AUTO_FEEDING EXTRUDER={n} LOAD=1"), 10)
         }
+        Action::Filament { n, vendor, material, sub_type, color } => {
+            head(*n)?;
+            let hs = feed_head(*n)?;
+            if hs.official == Some(true) {
+                return Err(anyhow!(crate::t!("err.ctl_official", n = n)));
+            }
+            // Only what the printer lists, as it names it.
+            let known = cfg.materials.iter().find(|m| &m.kind == material).and_then(|m| m.vendors.iter().find(|v| &v.name == vendor)).is_some_and(|v| v.subs.contains(sub_type));
+            if !known {
+                return Err(anyhow!(crate::t!("err.ctl_material", kind = material)));
+            }
+            let hex = color.trim_start_matches('#');
+            if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(anyhow!(crate::t!("err.ctl_color")));
+            }
+            short(format!(
+                "SET_PRINT_FILAMENT_CONFIG CONFIG_EXTRUDER={n} VENDOR=\"{vendor}\" FILAMENT_TYPE=\"{material}\" FILAMENT_SUBTYPE=\"{sub_type}\" FILAMENT_COLOR_RGBA={}FF",
+                hex.to_uppercase()
+            ))
+        }
         Action::Unload { n } => {
             head(*n)?;
             if feed_head(*n)?.loaded() == Some(false) {
@@ -398,20 +509,33 @@ fn fmt_mm(d: f64) -> String {
 const QUERY: &str = "print_stats=state&display_status=progress&machine_state_manager&toolhead=homed_axes,position,extruder\
 &heater_bed&extruder&extruder1&extruder2&extruder3&fan=speed&fan_generic%20cavity_fan&led%20cavity_led&purifier&idle_timeout=state\
 &filament_feed%20left&filament_feed%20right&filament_motion_sensor%20e0_filament&filament_motion_sensor%20e1_filament\
-&filament_motion_sensor%20e2_filament&filament_motion_sensor%20e3_filament";
+&filament_motion_sensor%20e2_filament&filament_motion_sensor%20e3_filament&print_task_config=filament_official";
 
-/// The printer's state now; with `config`, its configuration too.
+/// The printer's state now; with `config`, its configuration too (and a
+/// U1's materials).
 pub async fn read(host: &str, port: u16, config: bool) -> Result<(State, Option<Config>)> {
+    read_with(host, port, config, config).await
+}
+
+async fn read_with(host: &str, port: u16, config: bool, materials: bool) -> Result<(State, Option<Config>)> {
     let base = crate::printers::base(host, port);
     let extra = if config { "&configfile=settings" } else { "" };
     let v = crate::printers::get_json(&format!("{base}/printer/objects/query?{QUERY}{extra}")).await?;
     let s = &v["result"]["status"];
-    Ok((parse_state(s), config.then(|| parse_config(&s["configfile"]["settings"]))))
+    let mut cfg = config.then(|| parse_config(&s["configfile"]["settings"]));
+    // A U1's materials, from the file its firmware reads (best effort).
+    if let Some(c) = cfg.as_mut().filter(|c| c.u1 && materials) {
+        if let Ok(t) = crate::printers::get_text(&format!("{base}/server/files/config/snapmaker/filament_parameters.json")).await {
+            c.materials = parse_materials(&t);
+        }
+    }
+    Ok((parse_state(s), cfg))
 }
 
 /// Carries an action out, after checking it against the printer now.
 pub async fn run(host: &str, port: u16, action: &Action) -> Result<()> {
-    let (st, cfg) = read(host, port, true).await?;
+    // The materials only to check a declaration against them.
+    let (st, cfg) = read_with(host, port, true, matches!(action, Action::Filament { .. })).await?;
     match plan(action, &st, cfg.as_ref().expect("config read"))? {
         Plan::Post(path) => crate::printers::post_path(host, port, path).await.map(|_| ()),
         Plan::Script(s, timeout) => crate::printers::gcode_script_for(host, port, &s, timeout).await,
@@ -422,7 +546,22 @@ pub async fn run(host: &str, port: u16, action: &Action) -> Result<()> {
 mod tests {
     use super::*;
 
+    /// The shape of a U1's filament_parameters.json, in its order.
+    const MATERIALS: &str = r#"{"version":"0.0.10","hard_filaments_max_flow_k":0.4,
+      "PLA":{"vendor_generic":{"sub_generic":{"load_temp":250}},"vendor_Snapmaker":{"sub_generic":{},"sub_Silk":{},"sub_SnapSpeed":{}}},
+      "TPU":{"vendor_generic":{"sub_generic":{}},"vendor_Snapmaker":{"sub_generic":{},"sub_95A HF":{}}},
+      "PETG":{"vendor_generic":{"sub_generic":{},"sub_HF":{}}},
+      "ABS":{"vendor_generic":{"sub_generic":{}}},
+      "BAD\"TYPE":{"vendor_generic":{"sub_generic":{}}},
+      "EMPTY":{}}"#;
+
     fn cfg() -> Config {
+        let mut c = cfg_bare();
+        c.materials = parse_materials(MATERIALS);
+        c
+    }
+
+    fn cfg_bare() -> Config {
         parse_config(&serde_json::json!({
             "extruder": { "max_temp": "300", "min_extrude_temp": "170" },
             "extruder1": { "max_temp": 300, "min_extrude_temp": 170 },
@@ -460,6 +599,7 @@ mod tests {
                 "extruder0": { "module_exist": true, "filament_detected": true, "disable_auto": false, "channel_state": "load_finish" },
                 "extruder1": { "module_exist": true, "filament_detected": true, "disable_auto": false, "channel_state": "load_finish" }
             },
+            "print_task_config": { "filament_official": [false, false, false, false] },
             "filament_feed right": {
                 "extruder2": { "module_exist": true, "filament_detected": true, "disable_auto": false, "channel_state": "preload_finish" },
                 "extruder3": { "module_exist": true, "filament_detected": false, "disable_auto": false, "channel_state": "wait_insert" }
@@ -498,6 +638,42 @@ mod tests {
         let h = &s.heads;
         assert_eq!((h[0].loaded(), h[2].loaded(), h[2].inserted, h[3].inserted, h[2].auto_feed), (Some(true), Some(false), Some(true), Some(false), Some(true)));
         assert!(!parse_config(&serde_json::json!({ "extruder": {} })).u1);
+    }
+
+    #[test]
+    fn reads_the_materials() {
+        let m = parse_materials(MATERIALS);
+        // The file's order, the screen's names, nothing unsafe or empty.
+        assert_eq!(m.iter().map(|x| x.kind.as_str()).collect::<Vec<_>>(), ["PLA", "TPU", "PETG", "ABS"]);
+        assert_eq!(m[0].vendors.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), ["Generic", "Snapmaker"]);
+        assert_eq!(m[0].vendors[1].subs, ["", "Silk", "SnapSpeed"]);
+        assert_eq!(m[1].vendors[1].subs, ["", "95A HF"]);
+        assert!(parse_materials("not json").is_empty());
+        // The live U1's state: no tag on these spools.
+        assert_eq!(idle().heads[0].official, Some(false));
+    }
+
+    #[test]
+    fn declares_a_filament() {
+        let s = idle();
+        let f = |vendor: &str, material: &str, sub: &str, color: &str| Action::Filament { n: 2, vendor: vendor.into(), material: material.into(), sub_type: sub.into(), color: color.into() };
+        // As the screen writes it: "Generic" and an empty subtype for the generic ones.
+        assert_eq!(script(f("Generic", "PLA", "", "#ff7a1a"), &s), "SET_PRINT_FILAMENT_CONFIG CONFIG_EXTRUDER=2 VENDOR=\"Generic\" FILAMENT_TYPE=\"PLA\" FILAMENT_SUBTYPE=\"\" FILAMENT_COLOR_RGBA=FF7A1AFF");
+        assert_eq!(script(f("Snapmaker", "TPU", "95A HF", "000000"), &s), "SET_PRINT_FILAMENT_CONFIG CONFIG_EXTRUDER=2 VENDOR=\"Snapmaker\" FILAMENT_TYPE=\"TPU\" FILAMENT_SUBTYPE=\"95A HF\" FILAMENT_COLOR_RGBA=000000FF");
+        // Only what the printer lists; a real colour.
+        assert!(refused(f("Generic", "PLA", "Silk", "#ffffff"), &s), "Silk is Snapmaker's");
+        assert!(refused(f("Generic", "NYLON", "", "#ffffff"), &s));
+        assert!(refused(f("Generic", "PLA", "", "#fff"), &s));
+        assert!(refused(f("Generic", "PLA", "", "#gg0000"), &s));
+        // A spool read from its tag is not edited.
+        let mut tagged = s.clone();
+        tagged.heads[2].official = Some(true);
+        assert!(refused(f("Generic", "PLA", "", "#ffffff"), &tagged));
+        // Without the printer's list, nothing is declared.
+        assert!(plan(&f("Generic", "PLA", "", "#ffffff"), &s, &cfg_bare()).is_err());
+        // As the interface sends it.
+        let a: Action = serde_json::from_str(r##"{"kind":"filament","n":1,"vendor":"Generic","material":"PETG","sub_type":"HF","color":"#000000"}"##).unwrap();
+        assert_eq!(a, Action::Filament { n: 1, vendor: "Generic".into(), material: "PETG".into(), sub_type: "HF".into(), color: "#000000".into() });
     }
 
     #[test]
