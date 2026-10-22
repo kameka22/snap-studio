@@ -115,7 +115,7 @@ barre latérale.
 
 ### 🔧 Entretien et réglages
 
-Chaque imprimante a sa vue Entretien et réglages, en deux onglets.
+Chaque imprimante a sa vue Entretien et réglages, en trois onglets : Contrôle, Entretien et Nivellement.
 
 **Entretien**, construit à partir de ce que l'imprimante compte et du guide
 de maintenance Snapmaker :
@@ -163,6 +163,24 @@ le temps.
   remesurer ».
 - Un rappel dans Entretien après 30 jours ou 50 impressions, et « Mesurer
   d'abord » dans la fenêtre d'envoi quand le plateau est hors tolérance.
+
+**Contrôle** : les actions de base de l'imprimante, sans G-code — aussi
+accessible depuis la page de l'imprimante (**Contrôle**).
+
+- Origine (tous les axes ou un seul), un pavé de déplacement X, Y et Z (de
+  0,1 à 50 mm), la position en direct ; nettoyer la buse, aller à la
+  position de purge.
+- Une carte par tête, à la couleur de sa bobine : la température en jauge,
+  la consigne au curseur, activer, charger, décharger, extruder, rétracter.
+- La température du plateau ; le ventilateur de pièce, celui de la chambre,
+  le purificateur et la lumière ; une petite vue caméra.
+- Tout couper (chauffe), couper les moteurs, redémarrer le firmware, et
+  l'arrêt d'urgence, toujours à portée.
+- Sûr par construction : bloqué pendant une impression (seuls l'arrêt
+  d'urgence, la lumière et la caméra restent), déplacements et changement de
+  tête seulement après l'origine, Z jamais sous 0,5 mm, températures jamais
+  au-dessus du maximum de chaque chauffe, une action à la fois ; ce qui ne
+  peut pas se faire dit pourquoi.
 
 ### 📂 Fichiers et timelapses de l'imprimante
 
@@ -345,7 +363,7 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Plusieurs plateaux dans Préparer** — onglets de plateaux, agencement automatique sur plusieurs plateaux, tout découper et l'envoyer dans la file ; les 3MF multi-plateaux gardés tels quels | [#18](https://github.com/kameka22/snap-studio/pull/18) |
 | **Impression objet par objet** — un objet après l'autre, avec contrôle de collision pour la tête de la U1 et un ordre réglable | [#22](https://github.com/kameka22/snap-studio/pull/22) |
 | **Alertes plateau et matière** — un plateau et un filament incompatibles signalés avant d'imprimer, et un conseil quand la colle est recommandée | [#16](https://github.com/kameka22/snap-studio/pull/16) |
-| **Assistant de calibration** — les calibrations Klipper pas à pas, depuis un menu Calibration | [#17](https://github.com/kameka22/snap-studio/pull/17) |
+| **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Espace Snapmaker** — Snapmaker Space, Store, Wiki, Forum et compte dans un menu, modèles ouverts directement dans Préparer | [#23](https://github.com/kameka22/snap-studio/pull/23) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |

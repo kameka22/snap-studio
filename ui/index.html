@@ -122,9 +122,11 @@
   </div>
   <div class="tb-actions tb-tabs" data-for="maint">
     <div id="mt-tabs" class="seg" role="group" aria-label="Care &amp; Tuning" data-i18n-aria="maint.title">
+      <!-- Control first: the printer's actions, then its care and its bed. -->
+      <button class="seg-btn labeled" data-mtab="control"><span data-i18n="maint.tab.control">Control</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
       <button class="seg-btn labeled" data-mtab="care"><span data-i18n="maint.tab.care">Care</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
       <button class="seg-btn labeled" data-mtab="level"><span data-i18n="maint.tab.level">Bed Leveling</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
-      <!-- Calibration: #17's assistant; hidden until it lands. -->
+      <!-- Calibration: #17's assistants; hidden until they land. -->
       <button class="seg-btn labeled hidden" data-mtab="calib"><span data-i18n="maint.tab.calib">Calibration</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
     </div>
   </div>
@@ -204,6 +206,7 @@
   <div class="tb-actions" data-for="printers">
     <div id="prn-tools" class="tb-group hidden">
       <span id="prn-pill" class="pill">—</span>
+      <button id="prn-control" class="tb-btn labeled" title="Control the printer: home, jog, heads, temperatures" data-i18n-title="ctl.open_title"><svg viewBox="0 0 24 24"><path d="M12 2l3 3.5h-2V9h-2V5.5H9zM12 22l-3-3.5h2V15h2v3.5h2zM2 12l3.5-3v2H9v2H5.5v2zM22 12l-3.5 3v-2H15v-2h3.5V9zM12 10.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6"/></svg><span data-i18n="maint.tab.control">Control</span></button>
       <button id="prn-refresh" class="tb-btn" title="Refresh" data-i18n-title="printers.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
       <button id="prn-edit" class="tb-btn" title="Edit" data-i18n-title="common.edit"><svg viewBox="0 0 24 24"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8zm14.7-7.6a.8.8 0 0 0 0-1.1l-1.2-1.2a.8.8 0 0 0-1.1 0l-1.4 1.4 2.3 2.3z"/></svg></button>
       <button id="prn-del" class="tb-btn danger" title="Delete" data-i18n-title="common.delete"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg></button>
@@ -561,6 +564,7 @@
   <div class="prn">
     <section class="prn-main hv mt" id="mt-body"></section>
     <section class="prn-main hv bm hidden" id="bm-body"></section>
+    <section class="prn-main hv ctl hidden" id="ct-body"></section>
   </div>
 </section>
 <section id="view-heads" class="view hidden">
@@ -1442,6 +1446,16 @@
   </div>
 </div>
 
+<div id="cthelp" class="modal hidden">
+  <div class="modal-box ct-help-sheet">
+    <h3 data-i18n="ctl.help.title">The Heads' Buttons</h3>
+    <div id="cthelp-body"></div>
+    <div class="modal-actions">
+      <button id="cthelp-close" class="btn primary" data-cancel data-i18n="common.close">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="bmsettings" class="modal hidden">
   <div class="modal-box bm-sheet">
     <h3 data-i18n="bm.settings">Bed Leveling Settings</h3>
@@ -1820,6 +1834,8 @@
 <script src="bedmesh-logic.js"></script>
 <script src="maint.js"></script>
 <script src="bedmesh.js"></script>
+<script src="control-logic.js"></script>
+<script src="control.js"></script>
 <script src="pfiles-logic.js"></script>
 <script src="printer-files.js"></script>
 <script src="pfiles-share.js"></script>

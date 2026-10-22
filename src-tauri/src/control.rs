@@ -1,0 +1,493 @@
+//! Care & Tuning › Control: the printer's basic actions (home, jog, heads,
+//! temperatures, filament, fans, light, motors, restart, emergency stop).
+//!
+//! The interface never sends G-code: it asks for an `Action`, and `plan`
+//! turns it into a script, or refuses it, from what the printer says now.
+//! The commands are the Snapmaker U1's, checked in Snapmaker/u1-klipper
+//! (lava/printer.cfg, lava/fluidd.cfg, klippy/extras): `T<n> A0` to pick a
+//! head, `M104 T<n> S… A0`, `AUTO_FEEDING EXTRUDER=<n>`,
+//! `INNER_FILAMENT_UNLOAD`, `CONTROL_EXTRUDE_ACTION`, `ROUGHLY_CLEAN_NOZZLE`,
+//! `MOVE_TO_DISCARD_FILAMENT_POSITION`, `cavity_fan`, `cavity_led`,
+//! `SET_PURIFIER`. On another Klipper printer the standard ones still work
+//! (home, jog, temperatures, fans, motors).
+
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::time::Duration;
+
+/// What the printer allows, from its configuration (read once).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Config {
+    pub heads: Vec<HeadConfig>,
+    /// `[heater_bed] max_temp` (100 °C on the U1).
+    pub bed_max: f64,
+    /// Travel limits per axis (mm), X, Y, Z.
+    pub min: [f64; 3],
+    pub max: [f64; 3],
+    pub chamber_fan: bool,
+    pub light: bool,
+    pub purifier: bool,
+    /// Snapmaker U1 (its macros and its head docks behind the bed).
+    pub u1: bool,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct HeadConfig {
+    pub index: u8,
+    pub max_temp: f64,
+    pub min_extrude_temp: f64,
+}
+
+/// What the printer says now.
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct State {
+    /// `print_stats.state`: standby, printing, paused, complete…
+    pub state: String,
+    /// `machine_state_manager.main_state` (U1): IDLE, BED_LEVELING… ("" elsewhere).
+    pub main_state: String,
+    pub progress: Option<f64>,
+    pub homed: String,
+    pub position: [f64; 3],
+    /// The active head (index), from `toolhead.extruder`.
+    pub active: Option<u8>,
+    pub heads: Vec<HeadState>,
+    pub bed: Option<Temp>,
+    /// 0–1.
+    pub part_fan: Option<f64>,
+    pub chamber_fan: Option<f64>,
+    pub light: Option<bool>,
+    pub purifier: Option<bool>,
+    /// `idle_timeout.state`: Idle, Ready, Printing.
+    pub idle: String,
+}
+
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct HeadState {
+    pub index: u8,
+    pub temp: f64,
+    pub target: f64,
+}
+
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct Temp {
+    pub temp: f64,
+    pub target: f64,
+}
+
+/// What the interface may ask for.
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Action {
+    Home { axes: String },
+    Jog { axis: String, dist: f64 },
+    Tool { n: u8 },
+    NozzleTemp { n: u8, temp: f64 },
+    BedTemp { temp: f64 },
+    HeatersOff,
+    Load { n: u8 },
+    Unload { n: u8 },
+    Extrude { n: u8 },
+    Retract { n: u8 },
+    Clean,
+    PurgePosition,
+    PartFan { pct: f64 },
+    ChamberFan { pct: f64 },
+    Purifier { on: bool },
+    Light { on: bool },
+    MotorsOff,
+    FirmwareRestart,
+    EmergencyStop,
+}
+
+/// How an action is carried out.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Plan {
+    /// A G-code script, and how long it may take.
+    Script(String, Duration),
+    /// A bare POST to Moonraker.
+    Post(&'static str),
+}
+
+const HEADS: [&str; 4] = ["extruder", "extruder1", "extruder2", "extruder3"];
+/// The jog steps offered (mm).
+pub const STEPS: [f64; 4] = [0.1, 1.0, 10.0, 50.0];
+/// The nozzle never goes under this Z by a jog (mm).
+pub const Z_FLOOR: f64 = 0.5;
+/// A jog in Z moves at most this much.
+const Z_STEP_MAX: f64 = 10.0;
+/// On a U1 the head docks sit behind the bed: a jog stays in front of them
+/// (Snapmaker's own routines keep Y ≤ 250).
+const U1_Y_MAX: f64 = 270.0;
+/// Unloading when the nozzle has no useful target: the macro's own default.
+const UNLOAD_TEMP: f64 = 250.0;
+
+fn num(v: &Value) -> Option<f64> {
+    v.as_f64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())).filter(|x| x.is_finite())
+}
+
+/// The configuration part of `configfile.settings`.
+pub fn parse_config(settings: &Value) -> Config {
+    let heads = HEADS
+        .iter()
+        .enumerate()
+        .filter_map(|(i, name)| {
+            let s = settings.get(*name)?;
+            Some(HeadConfig {
+                index: i as u8,
+                max_temp: num(&s["max_temp"]).unwrap_or(250.0),
+                min_extrude_temp: num(&s["min_extrude_temp"]).unwrap_or(170.0),
+            })
+        })
+        .collect();
+    let axis = |a: &str, k: &str, d: f64| num(&settings[format!("stepper_{a}")][k]).unwrap_or(d);
+    Config {
+        heads,
+        bed_max: num(&settings["heater_bed"]["max_temp"]).filter(|t| *t > 0.0).unwrap_or(100.0),
+        min: [axis("x", "position_min", 0.0), axis("y", "position_min", 0.0), axis("z", "position_min", 0.0)],
+        max: [axis("x", "position_max", 200.0), axis("y", "position_max", 200.0), axis("z", "position_max", 200.0)],
+        chamber_fan: settings.get("fan_generic cavity_fan").is_some(),
+        light: settings.get("led cavity_led").is_some(),
+        purifier: settings.get("purifier").is_some(),
+        u1: settings.get("gcode_macro auto_bed_mesh_calibrate").is_some() || settings.get("auto_screws_tilt_adjust").is_some(),
+    }
+}
+
+/// The objects query's `result.status`.
+pub fn parse_state(s: &Value) -> State {
+    let th = &s["toolhead"];
+    let pos = th["position"].as_array().cloned().unwrap_or_default();
+    let p = |i: usize| pos.get(i).and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let active = th["extruder"].as_str().and_then(|e| HEADS.iter().position(|h| h == &e)).map(|i| i as u8);
+    let heads = HEADS
+        .iter()
+        .enumerate()
+        .filter_map(|(i, name)| {
+            let h = s.get(*name)?;
+            Some(HeadState { index: i as u8, temp: num(&h["temperature"])?, target: num(&h["target"]).unwrap_or(0.0) })
+        })
+        .collect();
+    let hb = &s["heater_bed"];
+    let led = &s["led cavity_led"]["color_data"];
+    let light = led.as_array().map(|rows| rows.iter().any(|r| r.as_array().is_some_and(|c| c.iter().any(|x| x.as_f64().unwrap_or(0.0) > 0.0))));
+    let pur = &s["purifier"];
+    let purifier = pur.is_object().then(|| {
+        let speed = |k: &str| pur[k]["speed"].as_f64().unwrap_or(0.0);
+        speed("inner_fan") > 0.0 || speed("exhaust_fan") > 0.0
+    });
+    State {
+        state: s["print_stats"]["state"].as_str().unwrap_or("").to_string(),
+        main_state: s["machine_state_manager"]["main_state"].as_str().unwrap_or("").to_string(),
+        progress: num(&s["display_status"]["progress"]),
+        homed: th["homed_axes"].as_str().unwrap_or("").to_string(),
+        position: [p(0), p(1), p(2)],
+        active,
+        heads,
+        bed: num(&hb["temperature"]).map(|temp| Temp { temp, target: num(&hb["target"]).unwrap_or(0.0) }),
+        part_fan: num(&s["fan"]["speed"]),
+        chamber_fan: num(&s["fan_generic cavity_fan"]["speed"]),
+        light,
+        purifier,
+        idle: s["idle_timeout"]["state"].as_str().unwrap_or("").to_string(),
+    }
+}
+
+/// Printing or paused: only the emergency stop and the light.
+pub fn busy_printing(st: &State) -> bool {
+    matches!(st.state.as_str(), "printing" | "paused")
+}
+
+/// The U1 in one of its own procedures (bed leveling, knob leveling…).
+pub fn busy_machine(st: &State) -> bool {
+    !st.main_state.is_empty() && st.main_state != "IDLE"
+}
+
+fn homed_all(st: &State) -> bool {
+    ["x", "y", "z"].iter().all(|a| st.homed.contains(a))
+}
+
+/// The action as a script, or why not.
+pub fn plan(a: &Action, st: &State, cfg: &Config) -> Result<Plan> {
+    let short = |s: String| Ok(Plan::Script(s, Duration::from_secs(60)));
+    let long = |s: String, min: u64| Ok(Plan::Script(s, Duration::from_secs(min * 60)));
+    // Always: the emergency stop, and the light (also during a print).
+    match a {
+        Action::EmergencyStop => return Ok(Plan::Post("/printer/emergency_stop")),
+        Action::Light { on } => {
+            if !cfg.light {
+                return Err(anyhow!(crate::t!("err.ctl_missing")));
+            }
+            return short(format!("SET_LED LED=cavity_led WHITE={}", u8::from(*on)));
+        }
+        _ => {}
+    }
+    if busy_printing(st) {
+        return Err(anyhow!(crate::t!("err.ctl_printing")));
+    }
+    if let Action::FirmwareRestart = a {
+        return Ok(Plan::Post("/printer/firmware_restart"));
+    }
+    if busy_machine(st) {
+        return Err(anyhow!(crate::t!("err.ctl_machine_busy", state = st.main_state)));
+    }
+    let head = |n: u8| cfg.heads.iter().find(|h| h.index == n).ok_or_else(|| anyhow!(crate::t!("err.ctl_no_head", n = n)));
+    let need_home = || if homed_all(st) { Ok(()) } else { Err(anyhow!(crate::t!("err.ctl_not_homed"))) };
+    // Picks head `n` first, unless it is the active one.
+    let pick = |n: u8| if st.active == Some(n) { String::new() } else { format!("T{n} A0\n") };
+    match a {
+        Action::Home { axes } => {
+            let axes = axes.to_lowercase();
+            if axes.is_empty() || !axes.chars().all(|c| "xyz".contains(c)) {
+                return Err(anyhow!("axes: {axes}"));
+            }
+            let all = ["x", "y", "z"].iter().all(|c| axes.contains(c));
+            let list: Vec<String> = ["x", "y", "z"].iter().filter(|c| axes.contains(*c)).map(|c| c.to_uppercase()).collect();
+            long(if all { "G28".into() } else { format!("G28 {}", list.join(" ")) }, 3)
+        }
+        Action::Jog { axis, dist } => {
+            need_home()?;
+            let i = ["x", "y", "z"].iter().position(|c| *c == axis.to_lowercase()).ok_or_else(|| anyhow!("axis: {axis}"))?;
+            if !dist.is_finite() || !STEPS.iter().any(|s| (dist.abs() - s).abs() < 1e-9) {
+                return Err(anyhow!("step: {dist}"));
+            }
+            if i == 2 && dist.abs() > Z_STEP_MAX {
+                return Err(anyhow!(crate::t!("err.ctl_z_step", max = Z_STEP_MAX)));
+            }
+            let to = st.position[i] + dist;
+            let max = if i == 1 && cfg.u1 { cfg.max[1].min(U1_Y_MAX) } else { cfg.max[i] };
+            let min = if i == 2 { cfg.min[2].max(Z_FLOOR) } else { cfg.min[i] };
+            if to < min - 1e-6 || to > max + 1e-6 {
+                return Err(anyhow!(crate::t!("err.ctl_out_of_range", axis = axis.to_uppercase(), min = min, max = max)));
+            }
+            let f = if i == 2 { 600 } else { 6000 };
+            short(format!("G91\nG0 {}{} F{f}\nG90", axis.to_uppercase(), fmt_mm(*dist)))
+        }
+        Action::Tool { n } => {
+            head(*n)?;
+            need_home()?;
+            long(format!("T{n} A0"), 2)
+        }
+        Action::NozzleTemp { n, temp } => {
+            let h = head(*n)?;
+            let t = temp.clamp(0.0, h.max_temp).round();
+            short(format!("M104 T{n} S{t} A0"))
+        }
+        Action::BedTemp { temp } => short(format!("M140 S{}", temp.clamp(0.0, cfg.bed_max).round())),
+        Action::HeatersOff => short("TURN_OFF_HEATERS".into()),
+        Action::Load { n } => {
+            head(*n)?;
+            // The feed module heats and picks the head itself.
+            long(format!("AUTO_FEEDING EXTRUDER={n}"), 10)
+        }
+        Action::Unload { n } => {
+            let h = head(*n)?;
+            need_home()?;
+            // The macro heats (M109) to TEMP: the nozzle's own target when it
+            // is a printing one, otherwise the macro's default.
+            let target = st.heads.iter().find(|x| x.index == *n).map_or(0.0, |x| x.target);
+            let t = if target >= h.min_extrude_temp { target } else { UNLOAD_TEMP }.min(h.max_temp).round();
+            long(format!("{}INNER_FILAMENT_UNLOAD TEMP={t}", pick(*n)), 10)
+        }
+        Action::Extrude { n } | Action::Retract { n } => {
+            let h = head(*n)?;
+            let hot = st.heads.iter().find(|x| x.index == *n).is_some_and(|x| x.temp >= h.min_extrude_temp);
+            if !hot {
+                return Err(anyhow!(crate::t!("err.ctl_cold", t = h.min_extrude_temp)));
+            }
+            if st.active != Some(*n) {
+                need_home()?;
+            }
+            let cmd = if matches!(a, Action::Extrude { .. }) { "CONTROL_EXTRUDE_ACTION" } else { "CONTROL_RETRACT_ACTION" };
+            long(format!("{}{cmd} EXTRUDER={n}", pick(*n)), 3)
+        }
+        Action::Clean => {
+            need_home()?;
+            long("ROUGHLY_CLEAN_NOZZLE".into(), 5)
+        }
+        Action::PurgePosition => {
+            need_home()?;
+            long("MOVE_TO_DISCARD_FILAMENT_POSITION".into(), 2)
+        }
+        Action::PartFan { pct } => {
+            let s = (pct.clamp(0.0, 100.0) * 255.0 / 100.0).round();
+            short(if s <= 0.0 { "M107".into() } else { format!("M106 S{s}") })
+        }
+        Action::ChamberFan { pct } => {
+            if !cfg.chamber_fan {
+                return Err(anyhow!(crate::t!("err.ctl_missing")));
+            }
+            short(format!("SET_FAN_SPEED FAN=cavity_fan SPEED={:.2}", pct.clamp(0.0, 100.0) / 100.0))
+        }
+        Action::Purifier { on } => {
+            if !cfg.purifier {
+                return Err(anyhow!(crate::t!("err.ctl_missing")));
+            }
+            short(format!("SET_PURIFIER FAN=inner SPEED={}", u8::from(*on)))
+        }
+        Action::MotorsOff => short("M84".into()),
+        Action::EmergencyStop | Action::Light { .. } | Action::FirmwareRestart => unreachable!(),
+    }
+}
+
+/// 10 → "10", 0.1 → "0.1", -50 → "-50".
+fn fmt_mm(d: f64) -> String {
+    let s = format!("{d:.1}");
+    s.strip_suffix(".0").map(str::to_string).unwrap_or(s)
+}
+
+const QUERY: &str = "print_stats=state&display_status=progress&machine_state_manager&toolhead=homed_axes,position,extruder\
+&heater_bed&extruder&extruder1&extruder2&extruder3&fan=speed&fan_generic%20cavity_fan&led%20cavity_led&purifier&idle_timeout=state";
+
+/// The printer's state now; with `config`, its configuration too.
+pub async fn read(host: &str, port: u16, config: bool) -> Result<(State, Option<Config>)> {
+    let base = crate::printers::base(host, port);
+    let extra = if config { "&configfile=settings" } else { "" };
+    let v = crate::printers::get_json(&format!("{base}/printer/objects/query?{QUERY}{extra}")).await?;
+    let s = &v["result"]["status"];
+    Ok((parse_state(s), config.then(|| parse_config(&s["configfile"]["settings"]))))
+}
+
+/// Carries an action out, after checking it against the printer now.
+pub async fn run(host: &str, port: u16, action: &Action) -> Result<()> {
+    let (st, cfg) = read(host, port, true).await?;
+    match plan(action, &st, cfg.as_ref().expect("config read"))? {
+        Plan::Post(path) => crate::printers::post_path(host, port, path).await.map(|_| ()),
+        Plan::Script(s, timeout) => crate::printers::gcode_script_for(host, port, &s, timeout).await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cfg() -> Config {
+        parse_config(&serde_json::json!({
+            "extruder": { "max_temp": "300", "min_extrude_temp": "170" },
+            "extruder1": { "max_temp": 300, "min_extrude_temp": 170 },
+            "extruder2": { "max_temp": 300 },
+            "extruder3": { "max_temp": 300 },
+            "heater_bed": { "max_temp": "100" },
+            "stepper_x": { "position_min": 0, "position_max": 271 },
+            "stepper_y": { "position_min": 0, "position_max": 335 },
+            "stepper_z": { "position_min": -6, "position_max": 275 },
+            "fan_generic cavity_fan": {}, "led cavity_led": {}, "purifier": {},
+            "gcode_macro auto_bed_mesh_calibrate": {}
+        }))
+    }
+
+    fn idle() -> State {
+        parse_state(&serde_json::json!({
+            "print_stats": { "state": "standby" },
+            "machine_state_manager": { "main_state": "IDLE", "action_code": "IDLE" },
+            "toolhead": { "homed_axes": "xyz", "position": [135.0, 135.0, 10.0, 0.0], "extruder": "extruder1" },
+            "extruder": { "temperature": 24.0, "target": 0.0 },
+            "extruder1": { "temperature": 210.2, "target": 210.0 },
+            "extruder2": { "temperature": 23.0, "target": 0.0 },
+            "extruder3": { "temperature": 23.0, "target": 0.0 },
+            "heater_bed": { "temperature": 58.0, "target": 60.0 },
+            "fan": { "speed": 0.5 }, "fan_generic cavity_fan": { "speed": 0.2 },
+            "led cavity_led": { "color_data": [[0.0, 0.0, 0.0, 1.0]] },
+            "purifier": { "power_detected": true, "inner_fan": { "speed": 0.0 }, "exhaust_fan": { "speed": 0.0 } },
+            "idle_timeout": { "state": "Ready" }
+        }))
+    }
+
+    fn script(a: Action, st: &State) -> String {
+        match plan(&a, st, &cfg()).unwrap() {
+            Plan::Script(s, _) => s,
+            p => panic!("{p:?}"),
+        }
+    }
+    fn refused(a: Action, st: &State) -> bool {
+        plan(&a, st, &cfg()).is_err()
+    }
+
+    #[test]
+    fn reads_the_u1() {
+        let c = cfg();
+        assert_eq!((c.heads.len(), c.heads[0].max_temp, c.heads[2].min_extrude_temp, c.bed_max), (4, 300.0, 170.0, 100.0));
+        assert_eq!((c.min, c.max), ([0.0, 0.0, -6.0], [271.0, 335.0, 275.0]));
+        assert!(c.chamber_fan && c.light && c.purifier && c.u1);
+        let s = idle();
+        assert_eq!((s.active, s.position, s.part_fan, s.chamber_fan, s.light, s.purifier), (Some(1), [135.0, 135.0, 10.0], Some(0.5), Some(0.2), Some(true), Some(false)));
+        assert_eq!((s.heads.len(), s.heads[1].temp, s.bed.clone().unwrap().target, s.main_state.as_str()), (4, 210.2, 60.0, "IDLE"));
+        // Another Klipper: no U1 objects.
+        let o = parse_state(&serde_json::json!({ "toolhead": { "homed_axes": "", "extruder": "extruder" }, "extruder": { "temperature": 20.0, "target": 0.0 } }));
+        assert_eq!((o.active, o.light, o.purifier, o.main_state.as_str()), (Some(0), None, None, ""));
+        assert!(!parse_config(&serde_json::json!({ "extruder": {} })).u1);
+    }
+
+    #[test]
+    fn the_scripts() {
+        let s = idle();
+        assert_eq!(script(Action::Home { axes: "xyz".into() }, &s), "G28");
+        assert_eq!(script(Action::Home { axes: "zx".into() }, &s), "G28 X Z");
+        assert_eq!(script(Action::Jog { axis: "x".into(), dist: 10.0 }, &s), "G91\nG0 X10 F6000\nG90");
+        assert_eq!(script(Action::Jog { axis: "z".into(), dist: -0.1 }, &s), "G91\nG0 Z-0.1 F600\nG90");
+        assert_eq!(script(Action::Tool { n: 2 }, &s), "T2 A0");
+        assert_eq!(script(Action::NozzleTemp { n: 0, temp: 215.4 }, &s), "M104 T0 S215 A0");
+        assert_eq!(script(Action::NozzleTemp { n: 0, temp: 999.0 }, &s), "M104 T0 S300 A0", "never above max_temp");
+        assert_eq!(script(Action::BedTemp { temp: 120.0 }, &s), "M140 S100");
+        assert_eq!(script(Action::HeatersOff, &s), "TURN_OFF_HEATERS");
+        assert_eq!(script(Action::Load { n: 3 }, &s), "AUTO_FEEDING EXTRUDER=3");
+        // Unloading picks the head first, at its printing target or 250 °C.
+        assert_eq!(script(Action::Unload { n: 1 }, &s), "INNER_FILAMENT_UNLOAD TEMP=210");
+        assert_eq!(script(Action::Unload { n: 2 }, &s), "T2 A0\nINNER_FILAMENT_UNLOAD TEMP=250");
+        assert_eq!(script(Action::Extrude { n: 1 }, &s), "CONTROL_EXTRUDE_ACTION EXTRUDER=1");
+        assert_eq!(script(Action::Retract { n: 1 }, &s), "CONTROL_RETRACT_ACTION EXTRUDER=1");
+        assert_eq!(script(Action::Clean, &s), "ROUGHLY_CLEAN_NOZZLE");
+        assert_eq!(script(Action::PurgePosition, &s), "MOVE_TO_DISCARD_FILAMENT_POSITION");
+        assert_eq!(script(Action::PartFan { pct: 50.0 }, &s), "M106 S128");
+        assert_eq!(script(Action::PartFan { pct: 0.0 }, &s), "M107");
+        assert_eq!(script(Action::ChamberFan { pct: 20.0 }, &s), "SET_FAN_SPEED FAN=cavity_fan SPEED=0.20");
+        assert_eq!(script(Action::Purifier { on: true }, &s), "SET_PURIFIER FAN=inner SPEED=1");
+        assert_eq!(script(Action::Light { on: false }, &s), "SET_LED LED=cavity_led WHITE=0");
+        assert_eq!(script(Action::MotorsOff, &s), "M84");
+        assert_eq!(plan(&Action::EmergencyStop, &s, &cfg()).unwrap(), Plan::Post("/printer/emergency_stop"));
+        assert_eq!(plan(&Action::FirmwareRestart, &s, &cfg()).unwrap(), Plan::Post("/printer/firmware_restart"));
+    }
+
+    #[test]
+    fn the_safety_rules() {
+        let s = idle();
+        // Z never under 0.5 mm, never more than 10 mm at a time.
+        let low = State { position: [135.0, 135.0, 0.55], ..s.clone() };
+        assert!(refused(Action::Jog { axis: "z".into(), dist: -0.1 }, &low));
+        assert!(refused(Action::Jog { axis: "z".into(), dist: 50.0 }, &s));
+        // The travel limits; on a U1, Y stays in front of the head docks.
+        assert!(refused(Action::Jog { axis: "x".into(), dist: 50.0 }, &State { position: [250.0, 135.0, 10.0], ..s.clone() }));
+        assert!(refused(Action::Jog { axis: "y".into(), dist: 50.0 }, &State { position: [135.0, 250.0, 10.0], ..s.clone() }));
+        assert!(refused(Action::Jog { axis: "x".into(), dist: -10.0 }, &State { position: [5.0, 135.0, 10.0], ..s.clone() }));
+        // Only the steps offered.
+        assert!(refused(Action::Jog { axis: "x".into(), dist: 7.0 }, &s));
+        assert!(refused(Action::Jog { axis: "e".into(), dist: 1.0 }, &s));
+        // Not homed: no move, no head change, no unload, no cleaning.
+        let cold = State { homed: "".into(), ..s.clone() };
+        for a in [Action::Jog { axis: "x".into(), dist: 1.0 }, Action::Tool { n: 0 }, Action::Unload { n: 1 }, Action::Clean, Action::PurgePosition] {
+            assert!(refused(a, &cold));
+        }
+        assert!(!refused(Action::Home { axes: "xyz".into() }, &cold));
+        assert!(!refused(Action::Extrude { n: 1 }, &cold), "the active head extrudes without homing");
+        // A cold nozzle does not extrude; an unknown head is refused.
+        assert!(refused(Action::Extrude { n: 2 }, &s));
+        assert!(refused(Action::Tool { n: 7 }, &s));
+        // Printing: only the emergency stop and the light.
+        let printing = State { state: "printing".into(), ..s.clone() };
+        assert!(refused(Action::HeatersOff, &printing));
+        assert!(refused(Action::FirmwareRestart, &printing));
+        assert!(!refused(Action::Light { on: true }, &printing));
+        assert!(plan(&Action::EmergencyStop, &printing, &cfg()).is_ok());
+        // The U1 busy with its own procedure: refused, restart allowed.
+        let leveling = State { main_state: "BED_LEVELING".into(), ..s.clone() };
+        assert!(refused(Action::Jog { axis: "x".into(), dist: 1.0 }, &leveling));
+        assert!(plan(&Action::FirmwareRestart, &leveling, &cfg()).is_ok());
+        // What the printer lacks is refused.
+        let bare = parse_config(&serde_json::json!({ "extruder": {} }));
+        assert!(plan(&Action::Light { on: true }, &s, &bare).is_err());
+        assert!(plan(&Action::ChamberFan { pct: 10.0 }, &s, &bare).is_err());
+        // Actions arrive from the interface as JSON.
+        let a: Action = serde_json::from_str(r#"{"kind":"jog","axis":"y","dist":-1}"#).unwrap();
+        assert_eq!(a, Action::Jog { axis: "y".into(), dist: -1.0 });
+        assert!(serde_json::from_str::<Action>(r#"{"kind":"gcode","script":"M112"}"#).is_err(), "no raw G-code");
+    }
+}
