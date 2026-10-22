@@ -91,7 +91,48 @@ function p3dCarriage(pos, bed = 270) {
   return { x: (pos[0] - bed / 2) / 1000, z: (bed / 2 - pos[1]) / 1000 };
 }
 
+/* The panel a zone opens: one per head (its spool, its dock or the
+   carriage), the bed's, the light's. */
+function p3dPanelZone(zone) {
+  const z = p3dParse(zone);
+  if (!z) return null;
+  return z.n == null ? z.kind : `head:${z.n}`;
+}
+
+/* The next side round, as a drag to the right (dir 1) or to the left
+   (dir -1) turns: front, left, back, right. */
+function p3dNextSide(side, dir) {
+  const order = ["front", "left", "back", "right"];
+  const i = Math.max(0, order.indexOf(side));
+  return order[(i + (dir > 0 ? 1 : 3)) % 4];
+}
+
+/* The printer card's head rows, from the page's status, Control's state
+   (fresher, when read) and each head's spool (ctlSpool): temperature and
+   target, active, the spool, and whether the head's sensor sees filament
+   (null: not known). */
+function p3dRows(st, cs, spools) {
+  const noz = st?.nozzles || [];
+  const n = Math.max(cs?.heads?.length || 0, noz.length, (st?.filaments || []).length, spools.length);
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const h = cs?.heads?.find((x) => x.index === i), z = noz.find((x) => x.index === i);
+    const sp = spools[i] || { present: false, color: null, name: "" };
+    rows.push({
+      n: i,
+      temp: h ? h.temp : z ? z.current : null,
+      target: h ? h.target : z ? z.target : 0,
+      active: cs ? cs.active === i : !!z?.active,
+      present: sp.present,
+      color: sp.present ? sp.color : null,
+      name: sp.name,
+      inHead: h && typeof h.filament === "boolean" ? h.filament : null,
+    });
+  }
+  return rows;
+}
+
 /* An easing for the view's turns (smooth start and end). */
 const p3dEase = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
-if (typeof module !== "undefined") module.exports = { P3D_SPOOLS, P3D_YAW, p3dYawTo, p3dSideAt, p3dZoneOf, p3dParse, p3dSideOf, p3dHeat, p3dSummary, p3dCarriage, p3dEase };
+if (typeof module !== "undefined") module.exports = { P3D_SPOOLS, P3D_YAW, p3dYawTo, p3dSideAt, p3dPanelZone, p3dNextSide, p3dRows, p3dZoneOf, p3dParse, p3dSideOf, p3dHeat, p3dSummary, p3dCarriage, p3dEase };

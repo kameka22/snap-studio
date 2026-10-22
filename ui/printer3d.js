@@ -1,22 +1,27 @@
 "use strict";
 /* The printer page's 3D view (#34): the U1 seen from the front, its parts
-   clickable (spools, heads, bed, light). A click opens a quick panel over
-   the view, Prepare-style (.p-float), composed of Care & Tuning ›
-   Control's compact components (control.js) — one command service, one
-   filament source, no copy; "All controls" opens that tab on the right
-   head (ctlOpen). The scene (printer3d/view.js, three.js) loads on the
-   first visit; without WebGL the page keeps its 2D picture (the hero).
-   The rules are in printer3d-logic.js. */
+   clickable (spools, heads, bed, light), filling the page. Over it, as
+   Prepare's panels (.p-float): the printer card top left (state, print,
+   one row per head, the bed), the quick panel of what is selected on the
+   right, the printer's details bottom right, the sides and a quick bar
+   (light, camera, help) along the bottom; the camera as a picture in the
+   picture. The quick panels are made of Care & Tuning › Control's compact
+   components (control.js) — one command service, one filament source, no
+   copy; "All controls" opens that tab on the right head (ctlOpen). The
+   emergency stop sits in the toolbar, beside Control. The scene
+   (printer3d/view.js, three.js) loads on the first visit; without WebGL
+   the page keeps its 2D picture and sections. The rules are in
+   printer3d-logic.js. */
 
 const P3 = {
   view: null,
   loading: null,
   failed: false,
   pid: null,
-  zone: null, // the zone whose panel is open
-  pending: null, // a spool's panel, opened once the view has turned
+  zone: null, // the panel open: head:n, bed, light
   built: "", // what the panel was built for
   timer: 0,
+  hint: localStorage.getItem("snapstudio.p3d.hint") !== "off",
 };
 
 const p3dOn = () => window.currentView === "printers" && !!P3.pid && !$("p3d").classList.contains("hidden");
@@ -26,10 +31,10 @@ function p3dLoad() {
   if (P3.loading) return P3.loading;
   P3.loading = import("./printer3d/view.js")
     .then((m) => {
-      const view = m.createView($("p3d-canvas"), { hover: p3dHover, pick: p3dPick, turn: p3dTurned });
+      const view = m.createView($("p3d-canvas"), { hover: p3dHover, pick: (zone) => p3dPick(zone, true), turn: p3dTurned });
       if (!view) throw new Error("WebGL");
-      view.setTheme(isDark());
       P3.view = view;
+      p3dTheme();
       return view;
     })
     .catch((e) => {
@@ -39,55 +44,63 @@ function p3dLoad() {
     });
   return P3.loading;
 }
+function p3dTheme() {
+  P3.view?.setTheme(isDark(), getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+}
 
 /* The printer page shows a printer (prnRenderDetail): the view follows it. */
 function p3dShow(p) {
   const pid = p?.id || null;
-  if (pid !== P3.pid) {
-    P3.pid = pid;
-    $("p3d").dataset.ctlPid = pid || "";
-    p3dClose();
-    if (P3.view) {
-      P3.view.turn("front", 0);
-      p3dSegment("front");
-    }
+  if (pid === P3.pid) return;
+  P3.pid = pid;
+  $("p3d").dataset.ctlPid = pid || "";
+  $("prn-estop").dataset.ctlPid = pid || "";
+  p3dClose();
+  if (P3.view) {
+    P3.view.turn("front", 0);
+    p3dSegment("front");
   }
 }
 
-/* The page's status (renderStatus): the view replaces the hero while the
+/* The page's status (renderStatus): the view takes the page while the
    printer answers; offline, the "not connected" card is alone. */
 function p3dStatus(st) {
-  const box = $("p3d");
   const online = !!st?.online;
-  const use = online && !P3.failed;
-  box.classList.toggle("hidden", !use);
-  $("prn-hero").classList.toggle("hidden", !online || (use && !!P3.view));
-  if (!use) {
-    p3dStop();
-    return;
-  }
+  // Control's state (temperatures, light, emergency stop) while it answers.
+  if (online) p3dPoll();
+  else p3dStop();
+  p3dEstopPaint();
+  if (!online || P3.failed) return p3dLayout(false);
+  if (P3.view) p3dLayout(true);
   p3dLoad().then((view) => {
-    if (!view) {
-      box.classList.add("hidden");
-      $("prn-hero").classList.toggle("hidden", !P.status.get(P3.pid)?.online);
-      return;
-    }
-    $("prn-hero").classList.add("hidden");
+    p3dLayout(!!view && !!P.status.get(P3.pid)?.online);
+    if (!view) return;
     view.setShown(p3dOn());
     p3dPaint();
-    p3dPoll();
   });
   p3dCard(st);
+  p3dInfo(st);
 }
 
-/* Control's state, every 3 s while the view is shown (light, temperatures,
-   the active head, the carriage); the spools come with the page's status. */
+/* The page with the view (the sections it replaces hidden, the camera in
+   its corner) or without. */
+function p3dLayout(on) {
+  $("p3d").classList.toggle("hidden", !on);
+  $("prn-detail").classList.toggle("p3d-on", on);
+  const cam = $("cam-box");
+  const home = on ? $("p3d") : document.querySelector("#prn-detail .group.cam");
+  if (cam.parentElement !== home) home.appendChild(cam);
+  if (!on) p3dTip(null);
+}
+
+/* Control's state every 3 s while the printer page shows a printer that
+   answers (with or without the view: the emergency stop needs it). */
 function p3dPoll() {
-  if (P3.timer || !p3dOn()) return;
+  if (P3.timer || window.currentView !== "printers" || !P3.pid) return;
   const pid = P3.pid;
   ctlRead(pid, !ctlData(pid).cfg);
   P3.timer = setTimeout(function next() {
-    if (!p3dOn() || P3.pid !== pid) return p3dStop();
+    if (window.currentView !== "printers" || P3.pid !== pid || !P.status.get(pid)?.online) return p3dStop();
     ctlRead(pid);
     P3.timer = setTimeout(next, 3000);
   }, 3000);
@@ -106,11 +119,13 @@ function p3dVisible(on) {
 }
 
 ctlSubscribe((pid) => {
-  if (pid === P3.pid && P3.view) p3dPaint();
+  if (pid !== P3.pid) return;
+  p3dEstopPaint();
+  if (P3.view) p3dPaint();
 });
-window.addEventListener("themechange", () => P3.view?.setTheme(isDark()));
+window.addEventListener("themechange", p3dTheme);
 
-/* ------------------------------------------------------------ the model */
+/* ------------------------------------------------------------ painting */
 
 /* The model and the overlays from what is known: the page's status, and
    Control's state when read. */
@@ -133,13 +148,15 @@ function p3dPaint() {
   });
   p3dCard(st);
   p3dPanelPaint();
-  const box = $("p3d");
-  ctlPaint(box.querySelector(".p3d-estop"), pid);
+  p3dQuick();
 }
 
-/* The status card: state, chamber, the print, the four spools. */
+const p3dTemp = (t, target) => (t == null ? "—" : `${ctlDeg(t)}${target > 0 ? ` → ${ctlDeg(target)}` : ""}`);
+
+/* The printer card: state, chamber, the print, one row per head, the bed. */
 function p3dCard(st) {
-  const pid = P3.pid, sum = p3dSummary(st);
+  const pid = P3.pid, sum = p3dSummary(st), cs = ctlState(pid);
+  if (!pid) return;
   const s = STATES[sum.state] ? sum.state : "standby";
   $("p3d-state").className = "p3d-state " + (STATES[s]?.[1] || "");
   $("p3d-state-t").textContent = stateLabel(sum.state);
@@ -155,18 +172,64 @@ function p3dCard(st) {
     if (left) bits.push(tr("p3d.left", { t: left }));
     $("p3d-prog-t").textContent = bits.join(" · ");
   }
-  const chips = $("p3d-chips");
-  if (!chips.children.length) {
-    chips.innerHTML = P3D_SPOOLS.map(({ n }) => `<button class="p3d-chip" data-zone="spool:${n}"><i></i><b>T${n}</b><small></small></button>`).join("");
+  const spools = [0, 1, 2, 3].map((n) => ctlSpool(pid, n));
+  const rows = p3dRows(st, cs, spools);
+  const box = $("p3d-heads");
+  if (box.children.length !== rows.length) {
+    box.innerHTML = rows
+      .map((r) => `<div class="p3d-row p3d-head" role="listitem" data-zone="head:${r.n}" tabindex="0">
+          <i class="p3d-sw"></i><b>T${r.n}</b><span class="p3d-name"></span><span class="p3d-tag"></span><span class="p3d-t"></span>
+          <button class="p3d-more" data-all="${r.n}" title="${esc(tr("p3d.all_head", { n: r.n }))}" aria-label="${esc(tr("p3d.all_head", { n: r.n }))}">⋯</button>
+        </div>`)
+      .join("");
   }
-  chips.querySelectorAll(".p3d-chip").forEach((c) => {
-    const n = +c.dataset.zone.slice(6), sp = ctlSpool(pid, n);
-    c.style.setProperty("--spool", sp.present ? sp.color || "var(--text-tertiary)" : "transparent");
-    c.classList.toggle("empty", !sp.present);
-    c.classList.toggle("on", p3dParse(P3.zone)?.n === n);
-    c.querySelector("small").textContent = sp.present ? sp.kind || "?" : tr("p3d.empty");
-    c.title = sp.present ? sp.name : tr("ctl.no_spool");
+  rows.forEach((r, i) => {
+    const el = box.children[i];
+    el.style.setProperty("--spool", r.present ? r.color || "var(--text-tertiary)" : "transparent");
+    el.classList.toggle("empty", !r.present);
+    el.classList.toggle("on", P3.zone === `head:${r.n}`);
+    el.querySelector(".p3d-name").textContent = r.present ? r.name || tr("ctl.loaded") : tr("p3d.empty");
+    const tag = el.querySelector(".p3d-tag");
+    tag.textContent = r.active ? tr(sum.state === "printing" ? "printers.extruding" : "printers.active_head_tag") : r.present && r.inHead === false ? tr("p3d.unloaded") : "";
+    tag.className = "p3d-tag" + (r.active ? " accent" : "");
+    el.querySelector(".p3d-t").textContent = p3dTemp(r.temp, r.target);
   });
+  const bed = cs?.bed || (st?.bed && { temp: st.bed.current, target: st.bed.target });
+  const b = $("p3d-bed");
+  b.classList.toggle("hidden", !bed);
+  b.classList.toggle("on", P3.zone === "bed");
+  b.innerHTML = `<span class="p3d-name">${esc(tr("ctl.bed"))}</span><span class="p3d-t">${esc(bed ? p3dTemp(bed.temp, bed.target) : "")}</span>`;
+}
+
+/* The printer's details, bottom right; the data's age follows
+   (updateFreshness writes #p3d-fresh). */
+function p3dInfo(st) {
+  const p = current();
+  if (!p) return;
+  const rows = [[p.model || tr("printers.form.model"), `${p.host}:${p.port}`], [st?.hostname, st?.klipper ? `Klipper ${st.klipper}` : ""]];
+  $("p3d-info-rows").innerHTML = rows
+    .filter((r) => r[0] || r[1])
+    .map(([a, b]) => `<div><b>${esc(a || "")}</b><span>${esc(b || "")}</span></div>`)
+    .join("");
+}
+
+/* The quick bar: the light's state, the camera's. */
+function p3dQuick() {
+  const pid = P3.pid, cs = ctlState(pid), cfg = ctlData(pid).cfg;
+  const light = $("p3d-light");
+  light.classList.toggle("on", !!cs?.light);
+  light.classList.toggle("hidden", !!cfg && !cfg.light);
+  light.disabled = !!ctlBusy(pid) || !!ctlWhy("light", cs, cfg);
+  $("p3d-camera").classList.toggle("on", CAM.on);
+  $("p3d-help").classList.toggle("on", P3.hint);
+  $("p3d-hint").classList.toggle("hidden", !P3.hint);
+}
+
+/* The emergency stop, in the toolbar beside Control. */
+function p3dEstopPaint() {
+  const box = $("prn-estop");
+  if (!box.firstElementChild) box.innerHTML = ctlEstopHtml();
+  if (P3.pid) ctlPaint(box, P3.pid);
 }
 
 /* ------------------------------------------------------------ hover, pick */
@@ -174,24 +237,25 @@ function p3dCard(st) {
 function p3dLabel(zone) {
   const z = p3dParse(zone), pid = P3.pid;
   if (!z) return null;
+  const open = tr("p3d.click_open");
   if (z.kind === "spool") {
     const sp = ctlSpool(pid, z.n);
-    return { title: `T${z.n} · ${sp.present ? sp.name || tr("ctl.loaded") : tr("ctl.no_spool")}`, sub: tr(`p3d.side.${P3D_SPOOLS[z.n].side}`) + " · " + tr("p3d.click_turn"), color: sp.present ? sp.color : null };
+    return { title: `T${z.n} · ${sp.present ? sp.name || tr("ctl.loaded") : tr("ctl.no_spool")}`, sub: `${tr(`p3d.side.${P3D_SPOOLS[z.n].side}`)} · ${open}`, color: sp.present ? sp.color : null };
   }
   if (z.kind === "head") {
     const h = ctlState(pid)?.heads.find((x) => x.index === z.n);
-    return { title: tr("p3d.head", { n: z.n }), sub: h ? `${ctlDeg(h.temp)}${h.target > 0 ? ` → ${ctlDeg(h.target)}` : ""}` : tr("p3d.click_open"), color: ctlSpool(pid, z.n).color };
+    return { title: tr("p3d.head", { n: z.n }), sub: h ? p3dTemp(h.temp, h.target) : open, color: ctlSpool(pid, z.n).color };
   }
   if (z.kind === "bed") {
     const b = ctlState(pid)?.bed;
-    return { title: tr("ctl.bed"), sub: b ? `${ctlDeg(b.temp)}${b.target > 0 ? ` → ${ctlDeg(b.target)}` : ""}` : tr("p3d.click_open") };
+    return { title: tr("ctl.bed"), sub: b ? p3dTemp(b.temp, b.target) : open };
   }
   return { title: tr("ctl.light"), sub: ctlState(pid)?.light ? tr("p3d.on") : tr("p3d.off") };
 }
 
 function p3dTip(zone, x, y) {
   const tip = $("p3d-tip");
-  const l = zone && zone !== P3.zone ? p3dLabel(zone) : null;
+  const l = zone && p3dPanelZone(zone) !== P3.zone ? p3dLabel(zone) : null;
   tip.classList.toggle("hidden", !l);
   if (!l) return;
   tip.innerHTML = `<b>${l.color !== undefined ? `<i style="--spool:${esc(l.color || "transparent")}"></i>` : ""}${esc(l.title)}</b><small>${esc(l.sub)}</small>`;
@@ -201,48 +265,52 @@ function p3dTip(zone, x, y) {
 }
 const p3dHover = (zone, x, y) => p3dTip(zone, x, y);
 
-/* A click: a spool turns the view to its side, then its panel opens; a
-   head zooms on its place; elsewhere the panel opens at once; nothing
-   closes it. */
-function p3dPick(zone) {
+/* A click opens the panel of what was clicked, where it is (the view does
+   not turn); a head clicked on the model also zooms on its place; the
+   open panel's own part, or nothing, closes it. */
+function p3dPick(zone, onModel = false) {
   p3dTip(null);
-  if (!zone) return p3dClose();
-  const side = p3dSideOf(zone);
-  if (side !== "front" && P3.view.side !== side) {
-    P3.pending = zone;
-    p3dSegment(side);
-    P3.view.turn(side);
-    return;
-  }
-  p3dOpen(zone);
+  p3dHintDone();
+  const panel = p3dPanelZone(zone);
+  if (!panel || (panel === P3.zone && !onModel)) return p3dClose();
+  p3dOpen(panel, onModel && p3dParse(zone).kind === "head");
 }
-function p3dTurned(side, dragged) {
+function p3dTurned(side) {
   p3dSegment(side);
-  if (dragged || !P3.pending) return;
-  const zone = P3.pending;
-  P3.pending = null;
-  p3dOpen(zone);
+  p3dHintDone();
 }
 function p3dSegment(side) {
   $("p3d-views").querySelectorAll("[data-side]").forEach((b) => b.classList.toggle("on", b.dataset.side === side));
 }
+function p3dTurn(side) {
+  if (!P3.view) return;
+  p3dSegment(side);
+  P3.view.turn(side);
+  p3dHintDone();
+}
+
+/* The help line: until the first action, or asked for again (?). */
+function p3dHintDone() {
+  if (!P3.hint) return;
+  P3.hint = false;
+  localStorage.setItem("snapstudio.p3d.hint", "off");
+  p3dQuick();
+}
 
 /* ------------------------------------------------------------ the panel */
 
-function p3dOpen(zone) {
+function p3dOpen(zone, zoom = false) {
   P3.zone = zone;
   P3.built = "";
   $("p3d-panel").classList.remove("hidden");
   P3.view?.choose(zone);
-  // A head: a close-up from above on its place.
   const z = p3dParse(zone);
-  P3.view?.focus(z.kind === "head" ? z.n : null);
+  P3.view?.focus(zoom ? z.n : null);
   p3dPanelPaint();
   p3dCard(P.status.get(P3.pid));
 }
 function p3dClose() {
   P3.zone = null;
-  P3.pending = null;
   $("p3d-panel").classList.add("hidden");
   P3.view?.choose(null);
   P3.view?.focus(null);
@@ -250,25 +318,27 @@ function p3dClose() {
 }
 
 /* Builds the panel for its zone (again once Control's configuration is
-   known), then paints it with the components' paints. */
+   known), then paints it with the components' paints. A head's panel: its
+   nozzle (with its spool) then Load / Unload. */
 function p3dPanelPaint() {
   const z = p3dParse(P3.zone), pid = P3.pid;
   if (!z || !pid) return;
   const cfg = ctlData(pid).cfg;
+  const head = z.kind === "head" ? z.n : null;
+  const sp = head != null ? ctlSpool(pid, head) : null;
   const key = `${pid}:${P3.zone}:${cfg ? 1 : 0}`;
   const body = $("p3d-panel-body");
+  const title = $("p3d-panel-t");
+  title.style.setProperty("--spool", sp?.present ? sp.color || "var(--text-tertiary)" : "transparent");
+  title.textContent = head != null ? tr("p3d.head", { n: head }) + (sp.present && sp.name ? ` · ${sp.name}` : "") : tr(z.kind === "bed" ? "ctl.bed" : "ctl.light");
+  title.classList.toggle("p3d-swt", head != null);
   if (P3.built !== key) {
     P3.built = key;
-    const head = z.kind === "spool" || z.kind === "head" ? z.n : null;
+    const wait = `<div class="ctl-c p3d-wait">${esc(tr("p3d.reading"))}</div>`;
     const h = head != null ? cfg?.heads.find((x) => x.index === head) : null;
-    $("p3d-panel-t").textContent =
-      z.kind === "spool" ? tr("p3d.spool_t", { n: z.n, side: tr(`p3d.side.${P3D_SPOOLS[z.n].side}`).toLowerCase() })
-      : z.kind === "head" ? tr("p3d.head", { n: z.n })
-      : tr(z.kind === "bed" ? "ctl.bed" : "ctl.light");
     const parts = [];
-    if (z.kind === "spool") parts.push(ctlSpoolHtml(z.n, { compact: true }));
-    if (head != null) parts.push(h ? ctlHeadHtml(h, { compact: true }) : `<div class="ctl-c p3d-wait">${esc(tr("p3d.reading"))}</div>`);
-    if (z.kind === "bed") parts.push(cfg ? ctlBedHtml(cfg, { compact: true }) : `<div class="ctl-c p3d-wait">${esc(tr("p3d.reading"))}</div>`);
+    if (head != null) parts.push(h ? ctlHeadHtml(h, { compact: true }) : wait, ctlSpoolHtml(head, { compact: true }));
+    if (z.kind === "bed") parts.push(cfg ? ctlBedHtml(cfg, { compact: true }) : wait);
     if (z.kind === "light") parts.push(ctlLightHtml({ compact: true }));
     const all = head != null ? tr("p3d.all_head", { n: head }) : tr("p3d.all");
     body.innerHTML = `${parts.join("")}
@@ -283,32 +353,55 @@ function p3dPanelPaint() {
 
 /* ------------------------------------------------------------ events */
 
-const p3dEstop = () => ($("p3d").querySelector(".p3d-estop").innerHTML = ctlEstopHtml());
-p3dEstop();
 ctlBind($("p3d"));
+ctlBind($("prn-estop"));
 $("p3d-close").addEventListener("click", p3dClose);
-$("p3d-panel").addEventListener("click", (e) => {
+$("p3d").addEventListener("click", (e) => {
   const all = e.target.closest("[data-all]");
-  if (all) ctlOpen(P3.pid, all.dataset.all === "" ? {} : { head: +all.dataset.all });
+  if (all) return ctlOpen(P3.pid, all.dataset.all === "" ? {} : { head: +all.dataset.all });
+  if (e.target.closest("[data-heads-open]") && P3.pid) return headsShow(P3.pid);
+  const row = e.target.closest(".p3d-card [data-zone]");
+  if (row) p3dPick(row.dataset.zone);
 });
-$("p3d-chips").addEventListener("click", (e) => {
-  const c = e.target.closest("[data-zone]");
-  if (c && P3.view) p3dPick(c.dataset.zone);
+$("p3d-heads").addEventListener("keydown", (e) => {
+  const row = e.target.closest("[data-zone]");
+  if (row && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault();
+    p3dPick(row.dataset.zone);
+  }
 });
 $("p3d-views").addEventListener("click", (e) => {
   const b = e.target.closest("[data-side]");
-  if (!b || !P3.view) return;
-  // Turning away from an open spool's side closes its panel.
-  if (P3.zone && p3dSideOf(P3.zone) !== b.dataset.side && p3dSideOf(P3.zone) !== "front") p3dClose();
-  p3dSegment(b.dataset.side);
-  P3.view.turn(b.dataset.side);
+  if (b) p3dTurn(b.dataset.side);
 });
+$("p3d-light").addEventListener("click", () => {
+  const pid = P3.pid;
+  ctlRun(pid, { kind: "light", on: !ctlState(pid)?.light }, tr("ctl.doing.light"));
+});
+$("p3d-camera").addEventListener("click", async () => {
+  await (CAM.on ? camStop() : camStart());
+  p3dQuick();
+});
+$("p3d-help").addEventListener("click", () => {
+  P3.hint = !P3.hint;
+  localStorage.setItem("snapstudio.p3d.hint", P3.hint ? "on" : "off");
+  p3dQuick();
+});
+/* The keyboard, on the printer page: ← → turn, 1–4 a head, Escape closes. */
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && P3.zone && p3dOn() && !document.querySelector(".modal:not(.hidden)")) p3dClose();
+  if (!p3dOn() || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".modal:not(.hidden)")) return;
+  if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+  if (e.key === "Escape" && P3.zone) return p3dClose();
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    e.preventDefault();
+    return p3dTurn(p3dNextSide(P3.view?.side || "front", e.key === "ArrowRight" ? 1 : -1));
+  }
+  const n = "1234".indexOf(e.key);
+  if (n >= 0 && n < $("p3d-heads").children.length) p3dPick(`head:${n}`);
 });
 window.addEventListener("langchange", () => {
   P3.built = "";
-  p3dEstop();
-  $("p3d-chips").innerHTML = "";
+  $("p3d-heads").innerHTML = "";
+  $("prn-estop").innerHTML = "";
   if (P3.pid) p3dStatus(P.status.get(P3.pid));
 });

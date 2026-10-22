@@ -27,17 +27,19 @@ with its packages for macOS, Windows and Linux. What comes next:
   Unload when the head holds filament. Also opened from the
   printer's page (**Control**).
 - **3D printer view** ([#34](https://github.com/kameka22/snap-studio/pull/34)):
-  the printer's page shows the U1 in 3D (three.js, bundled with the app).
-  Hover a part to highlight it; click a spool, a head, the bed or the
-  chamber light to open its quick controls in a panel over the view
-  (Control's compact components: load, unload, temperatures, light), with
-  **All controls** leading to Care & Tuning › Control on that head.
-  Clicking a spool turns the view to its side, clicking a head zooms on
-  its place from above; Left / Front / Right / Back, or drag to turn all
-  the way round. Spools in their declared colours (greyed when empty), the
-  active head and its nozzle's heat, the light, the print's progress and
-  a status card with the four spools; the emergency stop stays in reach.
-  Without WebGL the page keeps its 2D picture.
+  the printer's page shows the U1 in 3D (three.js, bundled with the app),
+  over the whole page. Hover a part to highlight it; click a spool, a head,
+  the bed or the chamber light to open its quick controls in a panel over
+  the view (Control's compact components: temperature, load, unload,
+  light), with **All controls** leading to Care & Tuning › Control on that
+  head; a head clicked on the model is also shown close up from above.
+  The printer card (top left) gathers the state, the print's progress and
+  one row per head (spool, temperature, active, unloaded) plus the bed;
+  a row selects its head. Left / Front / Right / Back, drag or ← → to turn,
+  1–4 for a head, Esc to close. A quick bar for the light and the camera
+  (shown in a corner of the view), the printer's details bottom right, and
+  the emergency stop in the toolbar beside Control. Without WebGL the page
+  keeps its 2D picture.
 
 ### Fixed
 - The send sheet's options (timelapse camera, automatic bed leveling, flow

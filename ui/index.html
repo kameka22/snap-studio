@@ -207,6 +207,7 @@
     <div id="prn-tools" class="tb-group hidden">
       <span id="prn-pill" class="pill">—</span>
       <button id="prn-control" class="tb-btn labeled" title="Control the printer: home, jog, heads, temperatures" data-i18n-title="ctl.open_title"><svg viewBox="0 0 24 24"><path d="M12 2l3 3.5h-2V9h-2V5.5H9zM12 22l-3-3.5h2V15h2v3.5h2zM2 12l3.5-3v2H9v2H5.5v2zM22 12l-3.5 3v-2H15v-2h3.5V9zM12 10.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6"/></svg><span data-i18n="maint.tab.control">Control</span></button>
+      <span id="prn-estop" class="prn-estop" data-ctl-pid=""></span>
       <button id="prn-refresh" class="tb-btn" title="Refresh" data-i18n-title="printers.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
       <button id="prn-edit" class="tb-btn" title="Edit" data-i18n-title="common.edit"><svg viewBox="0 0 24 24"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8zm14.7-7.6a.8.8 0 0 0 0-1.1l-1.2-1.2a.8.8 0 0 0-1.1 0l-1.4 1.4 2.3 2.3z"/></svg></button>
       <button id="prn-del" class="tb-btn danger" title="Delete" data-i18n-title="common.delete"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg></button>
@@ -383,11 +384,15 @@
 
         <div id="p3d" class="p3d hidden" data-ctl-pid="">
           <div id="p3d-canvas" class="p3d-canvas"></div>
-          <div class="p-float p3d-card" role="status">
-            <div class="p3d-card-top"><span id="p3d-state" class="p3d-state"><i></i><b id="p3d-state-t"></b></span><span id="p3d-chamber" class="p3d-chamber"></span></div>
-            <div id="p3d-job" class="p3d-job"></div>
-            <div id="p3d-prog" class="p3d-prog hidden"><div class="p3d-track"><div id="p3d-bar" class="p3d-bar"></div></div><small id="p3d-prog-t"></small></div>
-            <div id="p3d-chips" class="p3d-chips"></div>
+          <div id="p3d-card" class="p-float p3d-card">
+            <div class="p-float-head"><span id="p3d-state" class="p3d-state"><i></i><b id="p3d-state-t"></b></span><span id="p3d-chamber" class="p3d-chamber"></span></div>
+            <div class="p-float-body">
+              <div id="p3d-job" class="p3d-job"></div>
+              <div id="p3d-prog" class="p3d-prog hidden"><div class="p3d-track"><div id="p3d-bar" class="p3d-bar"></div></div><small id="p3d-prog-t"></small></div>
+              <div id="p3d-heads" class="p3d-heads" role="list"></div>
+              <button id="p3d-bed" class="p3d-row p3d-bedrow" data-zone="bed"></button>
+              <button class="btn small p3d-config" data-heads-open data-i18n="heads.configure">Configure</button>
+            </div>
           </div>
           <div id="p3d-panel" class="p-float p3d-panel hidden">
             <div class="p-float-head"><span id="p3d-panel-t" class="p-float-title"></span>
@@ -401,8 +406,15 @@
             <button class="seg-btn" data-side="right" data-i18n="p3d.side.right">Right side</button>
             <button class="seg-btn" data-side="back" data-i18n="p3d.side.back">Back</button>
           </div>
-          <div class="p3d-hint" data-i18n="p3d.hint">Hover a part to highlight it · click to open its controls · drag to turn</div>
-          <div class="p3d-estop"></div>
+          <div class="p3d-bottom">
+            <div id="p3d-hint" class="p3d-hint" data-i18n="p3d.hint">Hover a part to highlight it · click to open its controls · drag or ← → to turn · 1–4: a head</div>
+            <div class="p3d-quick" role="toolbar">
+              <button id="p3d-light" class="p3d-q" title="Chamber light" aria-label="Chamber light" data-i18n-title="ctl.light" data-i18n-aria="ctl.light"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2m-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg></button>
+              <button id="p3d-camera" class="p3d-q" title="Camera" aria-label="Camera" data-i18n-title="printers.camera" data-i18n-aria="printers.camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10a2 2 0 0 1 2 2v1.5l4-2.5v10l-4-2.5V16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/></svg></button>
+              <button id="p3d-help" class="p3d-q" title="Help" aria-label="Help" data-i18n-title="p3d.help" data-i18n-aria="p3d.help"><b aria-hidden="true">?</b></button>
+            </div>
+          </div>
+          <div id="p3d-info" class="p-float p3d-info"><div id="p3d-info-rows"></div><small id="p3d-fresh" class="p3d-fresh"></small></div>
           <div id="p3d-tip" class="p3d-tip hidden"></div>
         </div>
         <div class="hero" id="prn-hero">

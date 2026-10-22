@@ -65,4 +65,33 @@ assert.equal(L.p3dEase(1), 1);
 assert.equal(L.p3dEase(0.5), 0.5);
 assert.ok(L.p3dEase(0.25) < 0.25 && L.p3dEase(0.75) > 0.75);
 
+// One panel per head, whichever of its parts is clicked.
+assert.equal(L.p3dPanelZone("spool:2"), "head:2");
+assert.equal(L.p3dPanelZone("head:2"), "head:2");
+assert.equal(L.p3dPanelZone("bed"), "bed");
+assert.equal(L.p3dPanelZone("light"), "light");
+assert.equal(L.p3dPanelZone(null), null);
+
+// The arrow keys turn side by side, all the way round.
+assert.equal(L.p3dNextSide("front", 1), "left");
+assert.equal(L.p3dNextSide("left", 1), "back");
+assert.equal(L.p3dNextSide("right", 1), "front");
+assert.equal(L.p3dNextSide("front", -1), "right");
+assert.equal(L.p3dNextSide("back", -1), "left");
+assert.equal(L.p3dNextSide("nowhere", 1), "left");
+
+// The printer card's rows: Control's state first, else the page's status.
+const sp = [{ present: true, color: "#6fd6dc", name: "Cyan PLA" }, { present: true, color: "#f4f4f4", name: "White PLA" }, { present: false, color: null, name: "" }, { present: true, color: "#1a1a1a", name: "Black PLA" }];
+const stat = { online: true, nozzles: [{ index: 0, current: 24, target: 0, active: false }, { index: 1, current: 205, target: 210, active: true }], filaments: [{}, {}, {}, {}] };
+let rows = L.p3dRows(stat, null, sp);
+assert.equal(rows.length, 4);
+assert.deepEqual(rows[1], { n: 1, temp: 205, target: 210, active: true, present: true, color: "#f4f4f4", name: "White PLA", inHead: null });
+assert.deepEqual([rows[2].present, rows[2].color, rows[2].temp], [false, null, null], "an empty slot, no nozzle reading");
+const ctl = { active: 3, heads: [0, 1, 2, 3].map((index) => ({ index, temp: 20 + index, target: 0, filament: index !== 2 })) };
+rows = L.p3dRows(stat, ctl, sp);
+assert.deepEqual(rows.map((r) => r.active), [false, false, false, true], "Control's active head wins");
+assert.deepEqual(rows.map((r) => r.temp), [20, 21, 22, 23]);
+assert.deepEqual(rows.map((r) => r.inHead), [true, true, false, true]);
+assert.equal(L.p3dRows(null, null, []).length, 0);
+
 console.log("printer3d: ok");

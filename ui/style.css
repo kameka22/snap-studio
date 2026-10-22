@@ -4438,59 +4438,104 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .disp-sep { width: 1px; height: 16px; background: var(--separator); margin: 0 2px; }
 
 /* ---------- The printer page's 3D view (#34) ----------
-   The scene fills a stage; the overlays float over it as Prepare's
-   panels: the status card top left, the quick panel on the right, the
-   view's sides and the emergency stop along the bottom. */
+   The scene takes the page's height; the overlays float over it as
+   Prepare's panels: the printer card top left, the quick panel on the
+   right, the details bottom right, the sides, the help line and the quick
+   bar along the bottom, the camera as a picture in the picture. The
+   sections it replaces are hidden (.p3d-on). */
 .p3d {
   position: relative;
-  height: clamp(440px, 64vh, 720px);
-  margin-bottom: 16px;
+  height: max(460px, calc(100vh - 96px));
   border-radius: var(--radius-card);
   overflow: hidden;
   background: radial-gradient(120% 90% at 50% 35%, color-mix(in srgb, var(--text) 2%, var(--card-bg)), color-mix(in srgb, var(--text) 7%, var(--card-bg)));
   border: 1px solid var(--card-border);
 }
+.prn-detail.p3d-on #prn-hero, .prn-detail.p3d-on #prn-filaments, .prn-detail.p3d-on #prn-temps,
+.prn-detail.p3d-on #prn-info, .prn-detail.p3d-on #prn-updated, .prn-detail.p3d-on .group.cam { display: none; }
 .p3d-canvas { position: absolute; inset: 0; }
 .p3d-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-.p3d-card { left: 12px; width: min(340px, calc(100% - 24px)); padding: 10px 12px 12px; gap: 6px; }
-.p3d-card-top { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+/* The printer card. */
+.p3d-card { left: 12px; width: min(350px, calc(100% - 24px)); }
+.p3d-card .p-float-head { gap: 8px; }
 .p3d-state { display: inline-flex; align-items: center; gap: 6px; }
 .p3d-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
-.p3d-state.ok i { background: var(--success, #34c759); }
+.p3d-state.ok i { background: var(--success); }
 .p3d-state.busy i { background: var(--accent); }
 .p3d-state.err i { background: var(--danger); }
-.p3d-chamber { margin-left: auto; }
+.p3d-chamber { margin-left: auto; font-weight: 500; }
+.p3d-card .p-float-body { gap: 6px; }
 .p3d-job { font-size: 13px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p3d-prog { display: flex; flex-direction: column; gap: 4px; }
 .p3d-track { height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
 .p3d-bar { height: 100%; border-radius: 3px; background: var(--accent); transition: width 400ms ease; }
 .p3d-prog small { font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.p3d-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 2px; }
-.p3d-chip { --spool: transparent; display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; padding: 5px 6px; border-radius: 8px; border: 1px solid var(--control-border); background: var(--control-bg); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
-.p3d-chip i { flex: none; width: 11px; height: 11px; border-radius: 50%; background: var(--spool); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
-.p3d-chip.empty i { background: repeating-linear-gradient(45deg, transparent 0 2px, color-mix(in srgb, var(--text) 25%, transparent) 2px 3px); }
-.p3d-chip small { color: var(--text-secondary); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.p3d-chip:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--control-border)); }
-.p3d-chip.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.p3d-heads { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.p3d-row { --spool: transparent; display: flex; align-items: center; gap: 7px; min-width: 0; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.p3d-row:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.p3d-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.p3d-row.on { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.p3d-sw { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--spool); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
+.p3d-row.empty .p3d-sw { background: repeating-linear-gradient(45deg, transparent 0 2px, color-mix(in srgb, var(--text) 25%, transparent) 2px 3px); }
+.p3d-row > b { flex: none; font-weight: 600; }
+.p3d-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p3d-row.empty .p3d-name { color: var(--text-tertiary); }
+.p3d-tag { flex: none; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
+.p3d-tag:empty { display: none; }
+.p3d-tag.accent { color: var(--accent); }
+.p3d-t { flex: none; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 12px; }
+.p3d-more { flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--text-tertiary); font: inherit; font-size: 15px; line-height: 1; cursor: pointer; opacity: 0; }
+.p3d-row:hover .p3d-more, .p3d-row.on .p3d-more, .p3d-more:focus-visible { opacity: 1; }
+.p3d-more:hover { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
+.p3d-bedrow { border-top: 1px solid var(--separator); border-radius: 0 0 8px 8px; margin-top: 2px; }
+.p3d-bedrow.on { border-radius: 8px; }
+.p3d-config { align-self: flex-start; margin-top: 2px; }
+/* The quick panel: a head's (its nozzle with its spool, then Load and
+   Unload: the spool component's own row would repeat the nozzle's). */
 .p3d-panel { right: 12px; width: 300px; }
 .p3d-panel .p-float-title { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); }
+.p3d-panel .p-float-title.p3d-swt::before { content: ""; display: inline-block; width: 11px; height: 11px; margin-right: 7px; border-radius: 50%; vertical-align: -1px; background: var(--spool); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
+.p3d-panel .ctl-c + .ctl-c { margin-top: 0; }
+.p3d-panel .ctl-c-spool .ctl-c-row { display: none; }
+/* The title names the head and its spool: the nozzle's row keeps its temperature. */
+.p3d-panel .ctl-c-head .ctl-c-row > b, .p3d-panel .ctl-c-head .ctl-spool { display: none; }
 .p3d-x { flex: none; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text-secondary); cursor: pointer; }
 .p3d-x svg { width: 12px; height: 12px; fill: currentColor; }
 .p3d-x:hover { color: var(--text); }
-.p3d-panel .ctl-c + .ctl-c { margin-top: 0; }
 .p3d-wait { color: var(--text-secondary); }
 .p3d-busy { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
 .p3d-link { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
 .p3d-link:hover { text-decoration: underline; }
+/* Along the bottom: sides, help line and quick bar, details. */
 .p3d-views { position: absolute; left: 12px; bottom: 12px; height: 30px; background: color-mix(in srgb, var(--sheet-bg) var(--glass-mix), transparent); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); box-shadow: var(--glass-edge), var(--sheet-shadow); }
-.p3d-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; border: 1px solid var(--separator); font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; pointer-events: none; }
-@media (max-width: 1100px) { .p3d-hint { display: none; } }
-.p3d-estop { position: absolute; right: 12px; bottom: 12px; }
-.p3d-estop .ct-estop { margin: 0; }
+.p3d-bottom { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+.p3d-hint { padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--sheet-bg) var(--glass-mix), transparent); box-shadow: var(--glass-edge); font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+@media (max-width: 1200px) { .p3d-hint { white-space: normal; max-width: 320px; text-align: center; } }
+.p3d-quick { display: flex; gap: 4px; padding: 4px; border-radius: 999px; pointer-events: auto; background: color-mix(in srgb, var(--sheet-bg) var(--glass-mix), transparent); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); box-shadow: var(--glass-edge), var(--sheet-shadow); }
+.p3d-q { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-secondary); font: inherit; font-size: 14px; cursor: pointer; }
+.p3d-q svg { width: 17px; height: 17px; fill: currentColor; }
+.p3d-q:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); }
+.p3d-q.on { background: var(--accent-soft); color: var(--accent); }
+#p3d-light.on { background: color-mix(in srgb, #ffcc00 22%, transparent); color: #d9a400; }
+.p3d-q:disabled { opacity: 0.4; cursor: default; }
+.p3d-info { top: auto; bottom: 12px; right: 12px; max-width: 280px; padding: 8px 12px; gap: 3px; font-size: 11.5px; }
+.p3d-info div { display: flex; gap: 8px; justify-content: space-between; }
+.p3d-info b { font-weight: 600; }
+.p3d-info span { color: var(--text-secondary); }
+.p3d-fresh { color: var(--text-tertiary); font-size: 11px; }
+.p3d-fresh:empty { display: none; }
+/* The camera, as a picture in the picture (bigger when enlarged). */
+.p3d .cam-box { position: absolute; left: 12px; bottom: 54px; width: 300px; max-width: none; margin: 0; border-radius: 10px; overflow: hidden; box-shadow: var(--sheet-shadow); z-index: 1; }
+.p3d .cam-box.big { width: min(62%, 760px); }
 .p3d-tip { position: absolute; z-index: 2; display: flex; flex-direction: column; gap: 2px; max-width: 260px; padding: 7px 10px; border-radius: 8px; background: rgba(28, 28, 30, 0.88); color: #fff; font-size: 12px; pointer-events: none; }
 .p3d-tip b { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .p3d-tip i { width: 10px; height: 10px; border-radius: 50%; background: var(--spool); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4); }
 .p3d-tip small { color: rgba(255, 255, 255, 0.72); font-size: 11px; }
+/* The emergency stop in the toolbar, beside Control. */
+.prn-estop { display: inline-flex; }
+.prn-estop:empty { display: none; }
+.prn-estop .ct-estop { margin: 0; padding: 5px 12px; gap: 6px; font-size: 11px; box-shadow: none; }
+.prn-estop .ct-estop svg { width: 14px; height: 14px; }
 
 /* ======================================================================
    macOS theme (macOS 26 Tahoe, Liquid Glass). Structure, not only colors:
@@ -4679,5 +4724,5 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .disp-mock[data-mock="macos"] .dm-sheet { background: var(--mt-glass-strong); border-radius: 10px; box-shadow: var(--mt-edge), var(--mt-shadow); }
 .disp-mock[data-mock="macos"] .dm-pills { display: flex; }
 
-:root[data-theme="macos"] .p3d-views { border-radius: 999px; background: var(--mt-glass-strong); -webkit-backdrop-filter: var(--mt-blur); backdrop-filter: var(--mt-blur); box-shadow: var(--mt-edge), var(--mt-shadow); }
+:root[data-theme="macos"] .p3d-views, :root[data-theme="macos"] .p3d-quick { border-radius: 999px; background: var(--mt-glass-strong); -webkit-backdrop-filter: var(--mt-blur); backdrop-filter: var(--mt-blur); box-shadow: var(--mt-edge), var(--mt-shadow); }
 :root[data-theme="macos"] .p3d { border-radius: var(--mt-radius); }

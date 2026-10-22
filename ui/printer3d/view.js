@@ -9,13 +9,14 @@ import { createSnapmakerU1 } from './u1-model.js';
 const TARGET = new THREE.Vector3(0, 0.37, 0);
 const ABOVE = new THREE.Vector3(0, 0.36, 0.2); // a head's close-up: from above, a little in front
 const PITCH = 0.16; // the camera a little above, as someone standing in front
-const HULL = 0.0028; // outline width, metres
+// Outline widths, metres: hovered, chosen, and the chosen part's halo.
+const HULL = { hover: 0.0028, chosen: 0.0055, glow: 0.013 };
 
 // An outline: the part's back faces pushed out along their normals.
-function hullMaterial(color) {
-  const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide, transparent: true, opacity: 0.95, depthWrite: false });
+function hullMaterial(color, width, opacity = 1) {
+  const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide, transparent: true, opacity, depthWrite: false });
   m.onBeforeCompile = (s) => {
-    s.uniforms.uHull = { value: HULL };
+    s.uniforms.uHull = { value: width };
     s.vertexShader = 'uniform float uHull;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normal * uHull;');
   };
   return m;
@@ -73,21 +74,28 @@ export function createView(host, on = {}) {
   part.castShadow = true;
   root.add(part);
 
-  // The clickable parts, by zone: their meshes, each with its outline.
-  const zones = new Map(); // zone → [hull meshes]
-  const hover = hullMaterial('#7fb2ff'), chosen = hullMaterial('#0a84ff');
+  // The clickable parts, by zone: their meshes, each with an outline and
+  // a halo (shown when chosen).
+  const zones = new Map(); // zone → [{ line, glow }]
+  const hover = hullMaterial('#7fb2ff', HULL.hover, 0.9);
+  const chosen = hullMaterial('#0a84ff', HULL.chosen);
+  const glow = hullMaterial('#0a84ff', HULL.glow, 0.22);
   const addZone = (zone, group) => {
     const hulls = [];
-    group.traverse((m) => {
-      if (!m.isMesh || m.userData.hull) return;
-      const h = new THREE.Mesh(m.geometry, hover);
-      h.userData.hull = true;
-      h.visible = false;
-      h.renderOrder = -1;
-      h.raycast = () => {};
-      m.add(h);
-      hulls.push(h);
-    });
+    const meshes = [];
+    group.traverse((m) => m.isMesh && !m.userData.hull && meshes.push(m));
+    for (const m of meshes) {
+      const hull = (mat, order) => {
+        const h = new THREE.Mesh(m.geometry, mat);
+        h.userData.hull = true;
+        h.visible = false;
+        h.renderOrder = order;
+        h.raycast = () => {};
+        m.add(h);
+        return h;
+      };
+      hulls.push({ line: hull(hover, -1), glow: hull(glow, -2) });
+    }
     zones.set(zone, hulls);
   };
   u1.SPOOL_OF_HEAD.forEach((name, n) => addZone(`spool:${n}`, u1.spools[name]));
@@ -105,17 +113,17 @@ export function createView(host, on = {}) {
   const st = { active: null, printing: false, yaw: 0, from: 0, to: 0, t0: 0, dur: 0, side: 'front', hover: null, chosen: null, spin: 0, focus: null };
   // The camera: where it is, where it looks, and its move under way.
   const cam = { p: new THREE.Vector3(), t: TARGET.clone(), base: new THREE.Vector3(), move: null };
-  // A head's parts: its dock, and the carriage when it is the active one.
-  const partsOf = (zone) => {
+  // A head's parts: its dock, its spool, and the carriage when it is the
+  // active one (a hovered spool alone).
+  const partsOf = (zone, whole) => {
     const z = p3dParse(zone);
     if (z?.kind !== 'head') return zones.get(zone) || [];
-    return [...zones.get(`dock:${z.n}`), ...(st.active === z.n ? zones.get('toolhead') : [])];
+    return [...zones.get(`dock:${z.n}`), ...(whole ? zones.get(`spool:${z.n}`) : []), ...(st.active === z.n ? zones.get('toolhead') : [])];
   };
   const outline = () => {
-    for (const hulls of zones.values()) hulls.forEach((h) => (h.visible = false));
-    for (const [zone, mat] of [[st.hover, hover], [st.chosen, chosen]]) {
-      if (zone) partsOf(zone).forEach((h) => { h.material = mat; h.visible = true; });
-    }
+    for (const hulls of zones.values()) hulls.forEach((h) => (h.line.visible = h.glow.visible = false));
+    if (st.hover) partsOf(st.hover, false).forEach((h) => { h.line.material = hover; h.line.visible = true; });
+    if (st.chosen) partsOf(st.chosen, true).forEach((h) => { h.line.material = chosen; h.line.visible = h.glow.visible = true; });
   };
 
   // ---- framing: the whole printer, centred in the stage (a panel opening
@@ -288,8 +296,14 @@ export function createView(host, on = {}) {
       outline();
       draw();
     },
-    /** dark themes: a softer shadow, a little less light */
-    setTheme(dark) {
+    /** dark themes: a softer shadow, a little less light; the outlines in
+     *  the theme's accent */
+    setTheme(dark, accent) {
+      if (accent) {
+        chosen.color.set(accent);
+        glow.color.set(accent);
+        hover.color.set(accent).lerp(new THREE.Color(dark ? '#000000' : '#ffffff'), 0.35);
+      }
       floor.material.opacity = dark ? 0.32 : 0.16;
       renderer.toneMappingExposure = dark ? 0.92 : 1;
       draw();

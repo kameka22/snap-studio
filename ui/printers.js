@@ -565,23 +565,25 @@ function setOfflineSeen(seen) {
 function updateFreshness() {
   const seen = P.seen.get(P.sel);
   const live = P.live.get(P.sel);
-  const box = $("prn-updated");
   const st = P.status.get(P.sel);
+  // The footer, and its copy in the 3D view's details (printer3d.js).
+  const say = (t) => {
+    $("prn-updated").textContent = t;
+    $("p3d-fresh").textContent = t;
+  };
   // Offline: the card carries the last-connection time, no footer.
   if (st && !st.online) {
-    box.textContent = "";
+    say("");
     setOfflineSeen(seen);
     return;
   }
   if (!seen) {
-    box.textContent = live ? tr("printers.live.connecting") : "";
+    say(live ? tr("printers.live.connecting") : "");
     return;
   }
   const age = Math.round((Date.now() - seen) / 1000);
   // Printer answering HTTP but live feed down: the data may be stale.
-  box.textContent = live
-    ? tr("printers.live.age", { s: age })
-    : tr("printers.live.offline", { time: fmtSeen(seen) });
+  say(live ? tr("printers.live.age", { s: age }) : tr("printers.live.offline", { time: fmtSeen(seen) }));
 }
 
 /* ------------------------------------------------------------ form */
