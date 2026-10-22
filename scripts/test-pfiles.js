@@ -99,6 +99,23 @@ s = L.pflToggle(s, "a");
 assert.deepEqual([...s], ["b"]);
 assert.deepEqual([...L.pflToggle(s, "b", true)], ["b"]);
 
+// Deleting: one batch per root, in order of first appearance, a video's
+// picture right after it. Two roots' videos are never sent under one root.
+assert.deepEqual(
+  L.pflDeleteBatches([
+    { root: "camera", path: "20260107114733.mp4", thumb: "20260107114733.jpg" },
+    { root: "timelapse", path: "timelapse_Cube_20261019_1530.mp4" },
+    { root: "camera", path: "20260108120000.mp4", thumb: null },
+    { root: "timelapse", path: "sub/x.mp4", thumb: "sub/x.png" },
+  ]),
+  [
+    { root: "camera", paths: ["20260107114733.mp4", "20260107114733.jpg", "20260108120000.mp4"] },
+    { root: "timelapse", paths: ["timelapse_Cube_20261019_1530.mp4", "sub/x.mp4", "sub/x.png"] },
+  ]
+);
+assert.deepEqual(L.pflDeleteBatches([{ root: "gcodes", path: "a.gcode" }]), [{ root: "gcodes", paths: ["a.gcode"] }]);
+assert.deepEqual(L.pflDeleteBatches([]), []);
+
 // prn: addresses: a space is %20 (Rust decodes it; a "+" would stay "+").
 assert.equal(L.pflPrnQuery("p 1", "gcodes", ".thumbs/Support écran+1.png"), "/f?id=p%201&root=gcodes&p=.thumbs%2FSupport%20%C3%A9cran%2B1.png");
 

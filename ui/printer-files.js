@@ -300,7 +300,7 @@ function pflRenderDetail() {
       <button class="btn primary" data-act="print">${esc(tr("pfiles.print"))}</button>
       <button class="btn" data-act="download"${PFL.busy ? " disabled" : ""}>${esc(tr("common.download"))}</button>
       <button class="btn" data-act="share">${esc(tr("share.button"))}</button>
-      <button class="btn danger" data-act="delete"${can.ok ? "" : " disabled"} title="${esc(can.ok ? tr("common.delete") : pflWhy(can.reason))}">${esc(tr("common.delete"))}</button>
+      <button class="btn danger" data-act="delete"${can.ok && !PFL.busy ? "" : " disabled"} title="${esc(can.ok ? tr("common.delete") : pflWhy(can.reason))}">${esc(tr("common.delete"))}</button>
     </div>
     ${can.ok ? "" : `<p class="pfl-why">${esc(pflWhy(can.reason))}</p>`}
     <dl class="info">${row("pfiles.col.sent", fmtDate(f.modified))}${row("pfiles.col.size", fmtSize(f.size))}${row("pfiles.meta.time", m.estimated_time ? fmtDuration(m.estimated_time) : null)}${row(
@@ -332,7 +332,8 @@ function pflRenderSelbar() {
   if (one) {
     const can = pflCanChange(one, PFL.data.printing);
     $("pfl-seldl").disabled = PFL.busy;
-    $("pfl-seldel").disabled = $("pfl-selren").disabled = !can.ok;
+    $("pfl-selren").disabled = !can.ok;
+    $("pfl-seldel").disabled = !can.ok || PFL.busy;
     $("pfl-seldel").title = $("pfl-selren").title = can.ok ? "" : pflWhy(can.reason);
     return;
   }
@@ -343,7 +344,7 @@ function pflRenderSelbar() {
   // Only the file being printed is kept; read-only videos are tried anyway
   // (the printer's camera service can delete them, printer_files.rs).
   const busy = picked.find((f) => !pflCanChange(f, PFL.data.printing).ok);
-  $("pfl-seldel").disabled = !picked.length || !!busy;
+  $("pfl-seldel").disabled = !picked.length || !!busy || PFL.busy;
   $("pfl-seldel").title = busy ? pflWhy("printing") : "";
 }
 const pflPicked = () => pflList().filter((f) => PFL.picked.has(pflKey(f)));
@@ -430,7 +431,7 @@ async function pflDownload(files) {
 }
 
 async function pflDelete(files) {
-  if (!files.length) return;
+  if (!files.length || PFL.busy) return;
   const blocked = files.map((f) => pflCanChange(f, PFL.data.printing)).find((c) => !c.ok);
   if (blocked) {
     toast(pflWhy(blocked.reason), true);
@@ -441,19 +442,40 @@ async function pflDelete(files) {
   const many = files[0].root === "gcodes" ? "pfiles.del.title_files" : "pfiles.del.title_videos";
   const title = one ? tr("pfiles.del.title_one", { name }) : tr(many, { n: files.length });
   if (!(await confirmDelete(title, tr("pfiles.del.text")))) return;
-  // A video's picture goes with it.
-  const paths = files.flatMap((f) => [f.path, ...(f.thumb ? [f.thumb] : [])]);
+  // Several timelapses take a while (the camera service, one by one): the
+  // delete buttons wait, so the same files are not asked twice.
+  PFL.busy = true;
+  pflRenderBusy();
+  toast(tr("pfiles.deleting", { n: files.length }));
+  const failed = [];
   try {
-    const errs = await invoke("pf_delete", { printerId: PFL.pid, root: files[0].root, paths });
-    const failed = files.map((f) => errs[paths.indexOf(f.path)]).filter(Boolean);
+    // One call per root: a path is only deleted, and checked, under its own.
+    for (const { root, paths } of pflDeleteBatches(files)) {
+      const errs = await invoke("pf_delete", { printerId: PFL.pid, root, paths });
+      // The files' own errors; a picture's is never shown (its video's stands).
+      for (const f of files) {
+        const err = f.root === root ? errs[paths.indexOf(f.path)] : null;
+        if (err) failed.push(err);
+      }
+    }
     if (failed.length === 1) toast(failed[0], true);
     else if (failed.length) toast(tr("pfiles.del.failed", { n: failed.length, err: failed[0] }), true);
   } catch (e) {
     toast(String(e), true);
+  } finally {
+    PFL.busy = false;
   }
   if (PFL.player && files.some((f) => pflKey(f) === PFL.player)) pflClosePlayer();
   PFL.picked = new Set();
   await pflLoad();
+  pflRenderBusy();
+}
+
+/* The buttons that wait while a download or a delete runs. */
+function pflRenderBusy() {
+  pflRenderDetail();
+  pflRenderSelbar();
+  $("pfl-pdl").disabled = $("pfl-pdel").disabled = PFL.busy;
 }
 
 function pflRenameOpen(f) {

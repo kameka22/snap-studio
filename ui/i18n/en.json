@@ -1487,6 +1487,10 @@
     "one": "Delete {n} video from the printer?",
     "other": "Delete {n} videos from the printer?"
   },
+  "pfiles.deleting": {
+    "one": "Deleting…",
+    "other": "Deleting {n} files…"
+  },
   "pfiles.del.failed": {
     "one": "{n} file was not deleted: {err}",
     "other": "{n} files were not deleted: {err}"
