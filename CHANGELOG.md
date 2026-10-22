@@ -56,6 +56,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   firmware does not know. If the printer does not apply one, a dialog says
   so once the print has started
   ([#39](https://github.com/kameka22/snap-studio/pull/39)).
+- Sites opened in the Library's tabs can no longer read local files
+  through the app's own protocols (`gcode://`, `thumb://`, `mesh://`,
+  `prn://`, `cam://`): only the app's window gets an answer. A malformed
+  colour (a non-ASCII character in a preset, a file or the printer's
+  report) no longer crashes slicing, file reading or the jobs monitor
+  ([#46](https://github.com/kameka22/snap-studio/pull/46)).
 
 ## [0.12.0] — 2026-10-21
 
