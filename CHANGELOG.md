@@ -56,6 +56,13 @@ with its packages for macOS, Windows and Linux. What comes next:
   firmware does not know. If the printer does not apply one, a dialog says
   so once the print has started
   ([#39](https://github.com/kameka22/snap-studio/pull/39)).
+- Sheets opened while a Library site is shown (the queue's next print, an
+  update, sign-in, share, rename, the welcome assistant) no longer sit
+  invisible under the site, the app blocked behind their backdrop. In the
+  printer form, Enter on a button (Cancel, Test, a found printer) is that
+  button's click instead of a save, and the message after an edit says
+  "updated" rather than "added". A corrupt stored setting no longer stops
+  the app at launch ([#45](https://github.com/kameka22/snap-studio/pull/45)).
 
 ## [0.12.0] — 2026-10-21
 
