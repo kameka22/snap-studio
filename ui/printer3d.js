@@ -1,8 +1,8 @@
 "use strict";
 /* The printer page's 3D view (#34): the U1 seen from the front, its parts
    clickable (spools, heads, bed, light), filling the page. Over it, as
-   Prepare's panels (.p-float): the printer card top left (state, print,
-   one row per head, the bed), the quick panel of what is selected on the
+   Prepare's panels (.p-float): the print's status top centre, the heads
+   card top left (one row per head, the bed), the quick panel of what is selected on the
    right, the printer's details bottom right, the sides and a quick bar
    (light, camera, help) along the bottom; the camera as a picture in the
    picture. The quick panels are made of Care & Tuning › Control's compact
@@ -181,7 +181,8 @@ function p3dPaint() {
 const P3D_CONTROL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 3.5h-2V9h-2V5.5H9zM12 22l-3-3.5h2V15h2v3.5h2zM2 12l3.5-3v2H9v2H5.5v2zM22 12l-3.5 3v-2H15v-2h3.5V9zM12 10.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6"/></svg>';
 const p3dTemp = (t, target) => (t == null ? "—" : `${ctlDeg(t)}${target > 0 ? ` → ${ctlDeg(target)}` : ""}`);
 
-/* The printer card: state, chamber, the print, one row per head, the bed. */
+/* The print's status (top centre: state, job, chamber, progress) and the
+   heads card (one row per head, the bed). */
 function p3dCard(st) {
   const pid = P3.pid, sum = p3dSummary(st), cs = ctlState(pid);
   if (!pid) return;
