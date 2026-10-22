@@ -192,8 +192,10 @@ function p3dCard(st) {
   const pid = P3.pid, sum = p3dSummary(st), cs = ctlState(pid);
   if (!pid) return;
   const s = STATES[sum.state] ? sum.state : "standby";
-  $("p3d-state").className = "p3d-state " + (STATES[s]?.[1] || "");
-  $("p3d-state-t").textContent = stateLabel(sum.state);
+  // An action under way (an unload takes minutes) says so instead.
+  const busy = ctlBusy(pid);
+  $("p3d-state").className = "p3d-state " + (busy ? "busy" : STATES[s]?.[1] || "");
+  $("p3d-state-t").textContent = busy || stateLabel(sum.state);
   $("p3d-chamber").textContent = st?.chamber ? tr("p3d.chamber", { t: fmtNum(Math.round(st.chamber.current)) }) : "";
   $("p3d-job").textContent = sum.job || tr("p3d.no_job");
   const printing = sum.progress != null;
@@ -235,7 +237,8 @@ function p3dCard(st) {
     el.querySelector(".p3d-name").textContent = r.present ? r.name || tr("ctl.loaded") : tr("p3d.empty");
     const tag = el.querySelector(".p3d-tag");
     tag.textContent = r.active ? tr(sum.state === "printing" ? "printers.extruding" : "printers.active_head_tag") : r.present && r.inHead === false ? tr("p3d.unloaded") : r.used ? tr("printers.used_by_job") : "";
-    el.querySelector(".p3d-sub").textContent = [...r.detail, profile(r.n)].filter(Boolean).join(" · ");
+    // An empty head shows nothing of the spool it had, nor its profile.
+    el.querySelector(".p3d-sub").textContent = r.present ? [...r.detail, profile(r.n)].filter(Boolean).join(" · ") : "";
     tag.className = "p3d-tag" + (r.active ? " accent" : "");
     el.querySelector(".p3d-t").textContent = p3dTemp(r.temp, r.target);
   });
@@ -384,7 +387,7 @@ function p3dPanelPaint() {
   const body = $("p3d-panel-body");
   const title = $("p3d-panel-t");
   title.style.setProperty("--spool", sp?.present ? sp.color || "var(--text-tertiary)" : "transparent");
-  title.textContent = head != null ? tr("p3d.head", { n: head }) + (sp.present && sp.name ? ` · ${sp.name}` : "") : tr(z.kind === "bed" ? "ctl.bed" : "ctl.light");
+  title.textContent = head != null ? `${tr("p3d.head", { n: head })} · ${sp.present ? sp.name || tr("ctl.loaded") : tr("p3d.empty")}` : tr(z.kind === "bed" ? "ctl.bed" : "ctl.light");
   title.classList.toggle("p3d-swt", head != null);
   if (P3.built !== key) {
     P3.built = key;

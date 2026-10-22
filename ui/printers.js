@@ -287,7 +287,10 @@ function renderStatus(st) {
   if (st.fan != null) chips.push(chip(tr("printers.fan"), Math.round(st.fan * 100) + " %"));
   $("prn-chips").innerHTML = chips.join("");
 
-  // Loaded filaments (U1) and temperatures
+  // Loaded filaments (U1) and temperatures. The live status is the spools'
+  // freshest source: the heads' own copy (heads.js, Control, the 3D view)
+  // follows it, or an unloaded spool would linger there.
+  if (st.online && Array.isArray(st.filaments) && P.sel) headsSetSlots(P.sel, st.filaments);
   renderFilaments(st);
   const rows = [];
   if (!(st.filaments || []).length) {
@@ -385,7 +388,7 @@ function renderFilaments(st) {
     return `<div class="frow${on ? " on" : ""}">
       <span class="fbar"></span>
       <span class="fsw" style="${sw}"></span>
-      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span>${prof[f.index] ? `<span class="fprof">${esc(prof[f.index])}</span>` : ""}</span>
+      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span>${f.present && prof[f.index] ? `<span class="fprof">${esc(prof[f.index])}</span>` : ""}</span>
       <span class="ftags">${tags.join("")}<span class="ftemp">${esc(temp)}</span></span>
     </div>`;
   });

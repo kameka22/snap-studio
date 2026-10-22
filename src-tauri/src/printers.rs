@@ -993,6 +993,26 @@ mod tests {
         assert!(!st.filaments[0].used);
     }
 
+    /// An unloaded slot, as a U1 reports it after "Unload": type, subtype
+    /// and vendor "NONE", filament_exist false, the colour left white.
+    #[test]
+    fn decode_unloaded_slot() {
+        let v: Value = serde_json::from_str(
+            r#"{"result":{"status":{"print_task_config":{
+              "filament_vendor":["Generic","Generic","NONE","Generic"],
+              "filament_type":["PLA","PLA","NONE","PETG"],
+              "filament_sub_type":["","","NONE",""],
+              "filament_color_rgba":["FFFFFFFF","000000FF","FFFFFFFF","000000FF"],
+              "filament_exist":[true,true,false,true]}}}}"#,
+        )
+        .unwrap();
+        let mut st = Status::default();
+        apply_objects(&v, &mut st);
+        let t2 = &st.filaments[2];
+        assert_eq!((t2.kind.as_str(), t2.sub_type.as_str(), t2.vendor.as_str(), t2.present), ("", "", "", false));
+        assert_eq!(st.filaments[3].vendor, "Generic");
+    }
+
     /// Fallback when only the ARGB integer is given.
     #[test]
     fn decode_filament_color_from_int() {
@@ -1028,12 +1048,11 @@ mod tests {
     }
 }
 
+/// A text of `print_task_config`; the U1 reports an empty slot's type,
+/// subtype and vendor as "NONE": read as nothing.
 fn str_at(v: Option<&Value>, i: usize) -> String {
-    v.and_then(|a| a.get(i))
-        .and_then(|x| x.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string()
+    let s = v.and_then(|a| a.get(i)).and_then(|x| x.as_str()).unwrap_or("").trim();
+    if s.eq_ignore_ascii_case("none") { String::new() } else { s.to_string() }
 }
 
 /// Color of a slot: "RRGGBBAA" string or ARGB integer depending on firmware.
