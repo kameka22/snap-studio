@@ -403,23 +403,33 @@ function ctBuild() {
       <section class="ct-card ct-move">
         <div class="ct-card-head">${esc(tr("ctl.move"))}<span class="ct-pos" id="ct-pos"></span></div>
         <div class="ct-move-body">
-          <div class="ct-pad" role="group" aria-label="${esc(tr("ctl.move_xy"))}">
-            <span></span>${jog("y", 1, "up", "Y+")}<span></span>
-            ${jog("x", -1, "left", "X−")}<button class="ct-jog ct-home" data-act="home" data-axes="xy" title="${esc(tr("ctl.home_xy"))}" aria-label="${esc(tr("ctl.home_xy"))}">${ctlIcon("home")}<small>XY</small></button>${jog("x", 1, "right", "X+")}
-            <span></span>${jog("y", -1, "down", "Y−")}<span></span>
+          <div class="ct-padwrap">
+            <div class="ct-pad" role="group" aria-label="${esc(tr("ctl.move_xy"))}">
+              <span></span>${jog("y", 1, "up", "Y+")}<span></span>
+              ${jog("x", -1, "left", "X−")}<button class="ct-jog ct-home" data-act="home" data-axes="xy" title="${esc(tr("ctl.home_xy"))}" aria-label="${esc(tr("ctl.home_xy"))}">${ctlIcon("home")}<small>XY</small></button>${jog("x", 1, "right", "X+")}
+              <span></span>${jog("y", -1, "down", "Y−")}<span></span>
+            </div>
+            <span class="ct-padcap">X · Y</span>
           </div>
-          <div class="ct-zpad" role="group" aria-label="${esc(tr("ctl.move_z"))}">
-            ${jog("z", 1, "up", "Z+")}
-            <button class="ct-jog ct-home" data-act="home" data-axes="z" title="${esc(tr("ctl.home_z"))}" aria-label="${esc(tr("ctl.home_z"))}">${ctlIcon("home")}<small>Z</small></button>
-            ${jog("z", -1, "down", "Z−")}
+          <div class="ct-padwrap">
+            <div class="ct-zpad" role="group" aria-label="${esc(tr("ctl.move_z"))}">
+              ${jog("z", 1, "up", "Z+")}
+              <button class="ct-jog ct-home" data-act="home" data-axes="z" title="${esc(tr("ctl.home_z"))}" aria-label="${esc(tr("ctl.home_z"))}">${ctlIcon("home")}<small>Z</small></button>
+              ${jog("z", -1, "down", "Z−")}
+            </div>
+            <span class="ct-padcap">Z</span>
           </div>
         </div>
-        <div class="ct-row"><span class="ct-k">${esc(tr("ctl.step"))}</span>
-          <div class="seg ct-steps" id="ct-steps" role="radiogroup" aria-label="${esc(tr("ctl.step"))}">${CTL_STEPS.map((s) => `<button class="seg-btn" role="radio" data-step-pick="${s}">${esc(fmtDec(s, s < 1 ? 1 : 0))}</button>`).join("")}</div>
-          <span class="ct-unit">mm</span></div>
-        <div class="ct-row ct-homes">
-          <button class="btn small primary" data-act="home" data-axes="xyz">${ctlIcon("home")} ${esc(tr("ctl.home_all"))}</button>
-          <button class="btn small" data-act="home" data-axes="x">X</button><button class="btn small" data-act="home" data-axes="y">Y</button><button class="btn small" data-act="home" data-axes="z">Z</button>
+        <div class="ct-settings">
+          <div class="ct-row"><span class="ct-k">${esc(tr("ctl.step"))}</span>
+            <div class="seg ct-steps" id="ct-steps" role="radiogroup" aria-label="${esc(tr("ctl.step"))}">${CTL_STEPS.map((s) => `<button class="seg-btn" role="radio" data-step-pick="${s}">${esc(fmtDec(s, s < 1 ? 1 : 0))} <small>mm</small></button>`).join("")}</div>
+          </div>
+          <div class="ct-row ct-homes"><span class="ct-k">${esc(tr("ctl.home"))}</span>
+            <div class="ct-homegrp">
+              <button class="btn small primary" data-act="home" data-axes="xyz">${ctlIcon("home")} XYZ</button>
+              <button class="btn small" data-act="home" data-axes="x">X</button><button class="btn small" data-act="home" data-axes="y">Y</button><button class="btn small" data-act="home" data-axes="z">Z</button>
+            </div>
+          </div>
         </div>
         <div class="ct-warn hidden" id="ct-nohome"><span></span><button class="btn small primary" data-act="home" data-axes="xyz">${esc(tr("ctl.home_now"))}</button></div>
         <div class="ct-row ct-tools">${ctlBtn("clean", null, tr("ctl.clean"))}${ctlBtn("purge_position", null, tr("ctl.purge"))}</div>

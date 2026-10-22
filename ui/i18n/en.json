@@ -1719,7 +1719,7 @@
   "ctl.move_z": "Move in Z",
   "ctl.home_xy": "Home X and Y",
   "ctl.home_z": "Home Z",
-  "ctl.home_all": "Home XYZ",
+  "ctl.home": "Home",
   "ctl.home_now": "Home Now",
   "ctl.step": "Step",
   "ctl.not_homed": "The printer is not homed: moves, head changes and cleaning wait for it.",

@@ -1722,7 +1722,7 @@
   "ctl.move_z": "Déplacer en Z",
   "ctl.home_xy": "Origine X et Y",
   "ctl.home_z": "Origine Z",
-  "ctl.home_all": "Origine XYZ",
+  "ctl.home": "Origine",
   "ctl.home_now": "Faire l'origine",
   "ctl.step": "Pas",
   "ctl.not_homed": "L'origine n'est pas faite : les déplacements, le changement de tête et le nettoyage l'attendent.",
