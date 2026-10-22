@@ -3764,8 +3764,11 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ct-warn { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; font-size: 12.5px; color: var(--warning-text, var(--warning)); background: color-mix(in srgb, var(--warning) 11%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
 .ct-warn span { flex: 1; }
 /* Head cards, edged with their spool's colour. */
-/* Always 2 × 2: four heads in two rows, whatever the width. */
-.ct-head-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* Always 2 × 2: four heads in two rows, whatever the width; the rows
+   share the card's height (as tall as Movement), each card spreading its
+   parts rather than leaving a gap below. */
+.ct-head-grid { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 8px; }
+.ct-head-grid > .ct-head { justify-content: space-between; }
 .ct-head { --spool: var(--separator); display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--spool) 5%, var(--control-bg)); border: 1px solid color-mix(in srgb, var(--spool) 45%, var(--card-border)); border-left: 4px solid var(--spool); }
 .ct-head.active { box-shadow: 0 0 0 2px var(--accent) inset; }
 .ct-head.empty { opacity: 0.85; }
