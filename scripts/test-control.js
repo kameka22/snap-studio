@@ -36,11 +36,22 @@ assert.deepEqual(C.ctlRange(cfg, 1), [0, 270]);
 assert.deepEqual(C.ctlRange({ ...cfg, u1: false }, 1), [0, 335]);
 assert.deepEqual(C.ctlRange(cfg, 2), [0.5, 275]);
 
-// Not homed: moves, head changes and cleaning wait; homing and heating do
-// not, nor loading and unloading (the feed module homes X and Y itself).
+// Not homed: moves and cleaning wait; homing and heating do not, nor a
+// head change, loading and unloading (a U1 homes X and Y itself).
 const notHomed = { ...idle, homed: "" };
-for (const [k, o] of [["jog", { axis: "x", dist: 1 }], ["tool", { n: 2 }], ["clean", {}], ["purge_position", {}]]) assert.equal(why(k, notHomed, o), "ctl.why.home", k);
+for (const [k, o] of [["jog", { axis: "x", dist: 1 }], ["clean", {}], ["purge_position", {}]]) assert.equal(why(k, notHomed, o), "ctl.why.home", k);
 assert.equal(why("unload", notHomed, { n: 1 }), "");
+assert.equal(why("tool", notHomed, { n: 2 }), "", "T<n> homes X and Y on a U1");
+assert.equal(C.ctlWhy("tool", notHomed, { ...cfg, u1: false }, { n: 2 }), "ctl.why.home", "another printer: homed first");
+// After the U1's "G28 X Y": X and Y jog, Z waits; Z homes once X and Y are.
+const xyHomed = { ...idle, homed: "xy" };
+assert.equal(why("jog", xyHomed, { axis: "x", dist: 1 }), "");
+assert.equal(why("jog", xyHomed, { axis: "y", dist: -1 }), "");
+assert.equal(why("jog", xyHomed, { axis: "z", dist: 1 }), "ctl.why.home");
+assert.equal(why("clean", xyHomed), "");
+assert.equal(why("home", notHomed, { axes: "z" }), "ctl.why.home_xy");
+assert.equal(why("home", xyHomed, { axes: "z" }), "");
+assert.equal(why("home", notHomed, { axes: "xyz" }), "");
 
 // The spools, as a U1 reads them: T0 T1 loaded, T2 in the port, T3 empty.
 const feed = (h, filament, feed_state, inserted, auto_feed = true) => ({ ...h, filament, feed_state, inserted, auto_feed });
@@ -61,7 +72,7 @@ assert.equal(C.ctlWhy("load", spools, { ...cfg, u1: false }, { n: 2 }), "ctl.why
 assert.equal(why("home", notHomed), "");
 assert.equal(why("nozzle_temp", notHomed, { n: 0 }), "");
 assert.equal(why("extrude", notHomed, { n: 1 }), "", "the active head extrudes without homing");
-assert.equal(why("extrude", { ...notHomed, heads: idle.heads.map((h) => ({ ...h, temp: 220 })) }, { n: 2 }), "ctl.why.home", "another head must be picked first");
+assert.equal(why("extrude", { ...notHomed, heads: idle.heads.map((h) => ({ ...h, temp: 220 })) }, { n: 2 }), "", "picking it homes X and Y on a U1");
 
 // Printing: only the emergency stop and the light.
 const printing = { ...idle, state: "printing", progress: 0.42 };

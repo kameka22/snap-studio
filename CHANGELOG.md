@@ -19,7 +19,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   temperature, part and chamber fans, purifier, chamber light, a camera
   view, all heaters off, motors off, firmware restart and the emergency
   stop. Locked during a print (emergency stop, light and camera stay);
-  moves and head changes once homed, Z never under 0.5 mm, temperatures
+  each move once its axis is homed (as Klipper; a U1 homes X and Y
+  together, Z after them, and picks a head or loads after homing X and Y
+  itself), Z never under 0.5 mm, temperatures
   within each heater's maximum, one action at a time. Load and unload run
   the U1 feeder's own procedures, as its screen does (homing X and Y when
   needed, the filament's own temperature), and follow the head's filament

@@ -3774,7 +3774,9 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ct-steps .seg-btn small { font-size: 10px; color: var(--text-tertiary); margin-left: 1px; }
 .ct-settings { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--separator); }
 .ct-settings .ct-k { flex: 0 0 52px; }
-.ct-homegrp { flex: 1; display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 6px; }
+.ct-homegrp { flex: 1; display: flex; gap: 6px; }
+.ct-homegrp .btn { flex: 1; }
+.ct-homegrp .btn:first-child { flex: 1.6; }
 .ct-homegrp .btn { justify-content: center; }
 .ct-homes .btn svg { width: 13px; height: 13px; fill: currentColor; vertical-align: -2px; }
 .ct-tools { padding-top: 12px; border-top: 1px solid var(--separator); display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

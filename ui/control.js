@@ -268,7 +268,7 @@ function ctlPaint(root, pid) {
   const step = +root.dataset.step || 0;
   root.querySelectorAll("[data-act]").forEach((b) => {
     const kind = b.dataset.act;
-    const opts = { n: b.dataset.n == null ? null : +b.dataset.n, axis: b.dataset.axis, dist: b.dataset.sign ? +b.dataset.sign * step : 0 };
+    const opts = { n: b.dataset.n == null ? null : +b.dataset.n, axis: b.dataset.axis, dist: b.dataset.sign ? +b.dataset.sign * step : 0, axes: b.dataset.axes || "" };
     const why = kind === "emergency_stop" ? (st || cfg ? "" : "ctl.why.offline") : busy ? "ctl.why.busy" : ctlWhy(kind, st, cfg, opts);
     b.disabled = !!why;
     if (why) b.title = tr(why, { t: fmtNum(Math.round(cfg?.heads.find((h) => h.index === opts.n)?.min_extrude_temp || 170)) });
@@ -436,7 +436,10 @@ function ctBuild() {
           <div class="ct-row ct-homes"><span class="ct-k">${esc(tr("ctl.home"))}</span>
             <div class="ct-homegrp">
               <button class="btn small primary" data-act="home" data-axes="xyz">${ctlIcon("home")} XYZ</button>
-              <button class="btn small" data-act="home" data-axes="x">X</button><button class="btn small" data-act="home" data-axes="y">Y</button><button class="btn small" data-act="home" data-axes="z">Z</button>
+              ${cfg?.u1
+                // A U1 homes X and Y together (its G28 override).
+                ? `<button class="btn small" data-act="home" data-axes="xy">XY</button><button class="btn small" data-act="home" data-axes="z">Z</button>`
+                : `<button class="btn small" data-act="home" data-axes="x">X</button><button class="btn small" data-act="home" data-axes="y">Y</button><button class="btn small" data-act="home" data-axes="z">Z</button>`}
             </div>
           </div>
         </div>
@@ -486,8 +489,9 @@ function ctUpdate() {
     : state === "busy" ? tr("ctl.st.busy", { state: st.main_state }) : tr(`ctl.st.${state}`);
   $("ct-state").className = `ct-state ${state}`;
   $("ct-state-t").textContent = stateText;
-  const homed = ctlHomed(st);
-  $("ct-homed").textContent = st ? tr(homed ? "ctl.homed" : "ctl.not_homed_short") : "";
+  const homed = ctlHomed(st), xy = ctlHomed(st, "xy");
+  // X and Y only (a U1's "G28 X Y", its feeder or a head change): said.
+  $("ct-homed").textContent = st ? tr(homed ? "ctl.homed" : xy ? "ctl.homed_xy" : "ctl.not_homed_short") : "";
   $("ct-homed").className = `ct-chip${st && !homed ? " warn" : ""}`;
   $("ct-active").textContent = st?.active != null ? tr("ctl.active_head", { n: st.active }) : "";
   $("ct-busy").classList.toggle("hidden", !busy);
@@ -505,9 +509,9 @@ function ctUpdate() {
   // Homed a moment ago, not any more, nothing moved: Klipper's standby
   // (5 min without a command) turned the motors off. Said as such.
   if (homed) CT.homedSeen = true;
-  $("ct-nohome").classList.toggle("hidden", !st || homed || !!lock);
+  $("ct-nohome").classList.toggle("hidden", !st || homed || xy || !!lock);
   $("ct-nohome").querySelector("span").textContent = tr(CT.homedSeen && !homed && st?.idle === "Idle" ? "ctl.not_homed_idle" : "ctl.not_homed");
-  $("ct-pos").textContent = st && homed ? `X ${ctMm(st.position[0])}  Y ${ctMm(st.position[1])}  Z ${ctMm(st.position[2])}` : "";
+  $("ct-pos").textContent = st && xy ? `X ${ctMm(st.position[0])}  Y ${ctMm(st.position[1])}${homed ? `  Z ${ctMm(st.position[2])}` : ""}` : "";
   root.dataset.step = String(CT.step);
   document.querySelectorAll("#ct-steps [data-step-pick]").forEach((b) => {
     const on = +b.dataset.stepPick === CT.step;

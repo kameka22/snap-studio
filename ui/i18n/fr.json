@@ -1727,7 +1727,7 @@
   "ctl.home": "Origine",
   "ctl.home_now": "Faire l'origine",
   "ctl.step": "Pas",
-  "ctl.not_homed": "L'origine n'est pas faite : les déplacements, le changement de tête et le nettoyage l'attendent.",
+  "ctl.not_homed": "L'origine n'est pas faite : les déplacements et le nettoyage de la buse l'attendent (un changement de tête ou un chargement fait l'origine X et Y tout seul).",
   "ctl.not_homed_idle": "L'origine a été perdue : après 5 minutes sans commande, Klipper coupe les moteurs (et la chauffe). Refaites l'origine pour déplacer.",
   "ctl.help.title": "Les boutons des têtes",
   "ctl.help.temp_t": "Curseur Buse",
@@ -1735,7 +1735,7 @@
   "ctl.help.temp_when": "Jamais au-dessus du maximum de la buse (300 °C sur le U1).",
   "ctl.help.tool_t": "Activer",
   "ctl.help.tool": "Prend physiquement cette tête : l'active retourne à sa station et celle-ci est saisie.",
-  "ctl.help.tool_when": "Origine faite ; grisé si c'est déjà la tête active.",
+  "ctl.help.tool_when": "La U1 fait l'origine X et Y elle-même si besoin ; grisé si c'est déjà la tête active.",
   "ctl.help.load_t": "Charger",
   "ctl.help.load": "Charge dans la tête le filament engagé dans le port d'alimentation : le module du U1 fait l'origine X et Y si besoin, prend la tête, chauffe à la température du filament, l'amène et purge, comme depuis l'écran. Bobine sans puce RFID : sa matière et sa couleur sont demandées d'abord.",
   "ctl.help.load_when": "Tête vide, filament engagé dans son port d'alimentation, alimentation automatique activée ; pas pendant une impression.",
@@ -1744,7 +1744,7 @@
   "ctl.help.unload_when": "Filament dans la tête ; pas besoin de faire l'origine avant.",
   "ctl.help.extrude_t": "↓ Extruder",
   "ctl.help.extrude": "Pousse 30 mm de filament dans la buse : pour purger, ou vérifier que le filament passe.",
-  "ctl.help.extrude_when": "Buse à 170 °C ou plus ; origine faite si ce n'est pas la tête active.",
+  "ctl.help.extrude_when": "Buse à 170 °C ou plus ; une autre tête est d'abord prise (la U1 fait l'origine X et Y elle-même).",
   "ctl.help.retract_t": "↑ Rétracter",
   "ctl.help.retract": "Retire le filament de la buse.",
   "ctl.help.retract_when": "Comme Extruder.",
@@ -1792,6 +1792,7 @@
   "ctl.st.offline": "Non connectée",
   "ctl.homed": "✓ Origine faite",
   "ctl.not_homed_short": "Origine non faite",
+  "ctl.homed_xy": "Origine X Y · Z à faire",
   "ctl.active_head": "Tête active : T{n}",
   "ctl.lock.printing": "Les commandes sont bloquées pendant une impression. Seuls l'arrêt d'urgence, la lumière et la caméra restent disponibles.",
   "ctl.lock.busy": "L'imprimante exécute une de ses procédures : les commandes attendent qu'elle se termine. L'arrêt d'urgence reste disponible.",
@@ -2035,5 +2036,7 @@
   "ctl.help.filament_when": "Pas pour une bobine lue par sa puce RFID (elle se déclare seule) ; remet à zéro la calibration de débit de la tête, comme sur l'écran.",
   "err.ctl_official": "La bobine de T{n} est lue par sa puce RFID : non modifiable",
   "err.ctl_material": "L'imprimante ne connaît pas cette matière ({kind})",
-  "err.ctl_color": "Couleur invalide"
+  "err.ctl_color": "Couleur invalide",
+  "ctl.why.home_xy": "Faites d'abord l'origine X et Y : la U1 ne fait Z qu'ensuite",
+  "err.ctl_home_xy_first": "Faites d'abord l'origine X et Y : la U1 ne fait Z qu'ensuite"
 }

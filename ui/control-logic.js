@@ -11,7 +11,7 @@ const CTL_Z_STEP_MAX = 10;
 /* On a U1 the head docks sit behind the bed. */
 const CTL_U1_Y_MAX = 270;
 
-const ctlHomed = (st) => !!st && ["x", "y", "z"].every((a) => (st.homed || "").includes(a));
+const ctlHomed = (st, axes = "xyz") => !!st && [...axes].every((a) => (st.homed || "").includes(a));
 const ctlPrinting = (st) => ["printing", "paused"].includes(st?.state);
 const ctlMachineBusy = (st) => !!st?.main_state && st.main_state !== "IDLE";
 
@@ -47,7 +47,7 @@ function ctlFilamentPick(materials, slot) {
 
 /* Why an action cannot run now: an i18n key (ctl.why.*), or "" when it
    can. `kind` as control.rs's Action; `n` the head, `axis` and `dist` a jog. */
-function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
+function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0, axes = "" } = {}) {
   if (!st || !cfg) return "ctl.why.offline";
   if (kind === "emergency_stop") return "";
   if (kind === "light") return cfg.light ? "" : "ctl.why.missing";
@@ -58,8 +58,11 @@ function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
   if (n != null && !head) return "ctl.why.missing";
   if (kind === "chamber_fan" && !cfg.chamber_fan) return "ctl.why.missing";
   if (kind === "purifier" && !cfg.purifier) return "ctl.why.missing";
+  // Homing: on a U1 X and Y home together, and Z only once they are.
+  if (kind === "home") return cfg.u1 && axes === "z" && !ctlHomed(st, "xy") ? "ctl.why.home_xy" : "";
   if (kind === "jog") {
-    if (!ctlHomed(st)) return "ctl.why.home";
+    // Klipper needs the axis moved homed, not the others.
+    if (!ctlHomed(st, axis || "xyz")) return "ctl.why.home";
     const i = ["x", "y", "z"].indexOf(axis);
     if (i < 0 || !CTL_STEPS.some((s) => Math.abs(Math.abs(dist) - s) < 1e-9)) return "ctl.why.limit";
     if (i === 2 && Math.abs(dist) > CTL_Z_STEP_MAX) return "ctl.why.zstep";
@@ -83,11 +86,15 @@ function ctlWhy(kind, st, cfg, { n = null, axis = null, dist = 0 } = {}) {
     if (h.auto_feed === false) return "ctl.why.auto_off";
     return h.inserted === false ? "ctl.why.insert" : "";
   }
-  if (["tool", "clean", "purge_position"].includes(kind) && !ctlHomed(st)) return "ctl.why.home";
+  // A U1 homes X and Y itself to pick a head (T<n>); cleaning and the
+  // purge position need them homed (MOVE_TO_XY_IDLE_POSITION). Another
+  // printer: everything homed.
+  if (kind === "tool" && !cfg.u1 && !ctlHomed(st)) return "ctl.why.home";
+  if (["clean", "purge_position"].includes(kind) && !ctlHomed(st, cfg.u1 ? "xy" : "xyz")) return "ctl.why.home";
   if (kind === "extrude" || kind === "retract") {
     const h = st.heads.find((x) => x.index === n);
     if (!h || h.temp < head.min_extrude_temp) return "ctl.why.cold";
-    if (st.active !== n && !ctlHomed(st)) return "ctl.why.home";
+    if (st.active !== n && !cfg.u1 && !ctlHomed(st)) return "ctl.why.home";
   }
   if (kind === "tool" && st.active === n) return "ctl.why.active";
   return "";

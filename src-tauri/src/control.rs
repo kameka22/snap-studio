@@ -336,8 +336,8 @@ pub fn busy_machine(st: &State) -> bool {
     !st.main_state.is_empty() && st.main_state != "IDLE"
 }
 
-fn homed_all(st: &State) -> bool {
-    ["x", "y", "z"].iter().all(|a| st.homed.contains(a))
+fn homed(st: &State, axes: &str) -> bool {
+    axes.chars().all(|a| st.homed.contains(a))
 }
 
 /// The action as a script, or why not.
@@ -365,7 +365,13 @@ pub fn plan(a: &Action, st: &State, cfg: &Config) -> Result<Plan> {
         return Err(anyhow!(crate::t!("err.ctl_machine_busy", state = st.main_state)));
     }
     let head = |n: u8| cfg.heads.iter().find(|h| h.index == n).ok_or_else(|| anyhow!(crate::t!("err.ctl_no_head", n = n)));
-    let need_home = || if homed_all(st) { Ok(()) } else { Err(anyhow!(crate::t!("err.ctl_not_homed"))) };
+    // What must be homed (checked in Snapmaker/u1-klipper): Klipper moves
+    // need the axes moved homed; a U1 homes X and Y itself to pick a head
+    // (T<n>, the feeder), and its idle position (cleaning, purge) needs
+    // X and Y. Another printer: everything.
+    let need = |axes: &str| if homed(st, axes) { Ok(()) } else { Err(anyhow!(crate::t!("err.ctl_not_homed"))) };
+    let need_home = || need("xyz");
+    let need_xy = || need(if cfg.u1 { "xy" } else { "xyz" });
     // Loading and unloading: a U1's feed module, and the head's state.
     let feed_head = |n: u8| {
         if !cfg.u1 {
@@ -381,13 +387,22 @@ pub fn plan(a: &Action, st: &State, cfg: &Config) -> Result<Plan> {
             if axes.is_empty() || !axes.chars().all(|c| "xyz".contains(c)) {
                 return Err(anyhow!("axes: {axes}"));
             }
+            // A U1 homes X and Y together, and Z only once they are
+            // (homing_xyz_override).
+            let mut axes = axes;
+            if cfg.u1 && (axes.contains('x') || axes.contains('y')) {
+                axes = format!("xy{}", if axes.contains('z') { "z" } else { "" });
+            }
+            if cfg.u1 && axes == "z" && !homed(st, "xy") {
+                return Err(anyhow!(crate::t!("err.ctl_home_xy_first")));
+            }
             let all = ["x", "y", "z"].iter().all(|c| axes.contains(c));
             let list: Vec<String> = ["x", "y", "z"].iter().filter(|c| axes.contains(*c)).map(|c| c.to_uppercase()).collect();
             long(if all { "G28".into() } else { format!("G28 {}", list.join(" ")) }, 3)
         }
         Action::Jog { axis, dist } => {
-            need_home()?;
             let i = ["x", "y", "z"].iter().position(|c| *c == axis.to_lowercase()).ok_or_else(|| anyhow!("axis: {axis}"))?;
+            need(["x", "y", "z"][i])?;
             if !dist.is_finite() || !STEPS.iter().any(|s| (dist.abs() - s).abs() < 1e-9) {
                 return Err(anyhow!("step: {dist}"));
             }
@@ -401,11 +416,19 @@ pub fn plan(a: &Action, st: &State, cfg: &Config) -> Result<Plan> {
                 return Err(anyhow!(crate::t!("err.ctl_out_of_range", axis = axis.to_uppercase(), min = min, max = max)));
             }
             let f = if i == 2 { 600 } else { 6000 };
-            short(format!("G91\nG0 {}{} F{f}\nG90", axis.to_uppercase(), fmt_mm(*dist)))
+            // In relative mode, then the printer's own mode back: a U1 macro
+            // may have left it relative (INNER_ROUGHLY_CLEAN_NOZZLE…).
+            short(format!(
+                "SAVE_GCODE_STATE NAME=snapstudio_jog\nG91\nG0 {}{} F{f}\nRESTORE_GCODE_STATE NAME=snapstudio_jog",
+                axis.to_uppercase(),
+                fmt_mm(*dist)
+            ))
         }
         Action::Tool { n } => {
             head(*n)?;
-            need_home()?;
+            if !cfg.u1 {
+                need_home()?;
+            }
             long(format!("T{n} A0"), 2)
         }
         Action::NozzleTemp { n, temp } => {
@@ -465,18 +488,18 @@ pub fn plan(a: &Action, st: &State, cfg: &Config) -> Result<Plan> {
             if !hot {
                 return Err(anyhow!(crate::t!("err.ctl_cold", t = h.min_extrude_temp)));
             }
-            if st.active != Some(*n) {
+            if st.active != Some(*n) && !cfg.u1 {
                 need_home()?;
             }
             let cmd = if matches!(a, Action::Extrude { .. }) { "CONTROL_EXTRUDE_ACTION" } else { "CONTROL_RETRACT_ACTION" };
             long(format!("{}{cmd} EXTRUDER={n}", pick(*n)), 3)
         }
         Action::Clean => {
-            need_home()?;
+            need_xy()?;
             long("ROUGHLY_CLEAN_NOZZLE".into(), 5)
         }
         Action::PurgePosition => {
-            need_home()?;
+            need_xy()?;
             long("MOVE_TO_DISCARD_FILAMENT_POSITION".into(), 2)
         }
         Action::PartFan { pct } => {
@@ -680,9 +703,15 @@ mod tests {
     fn the_scripts() {
         let s = idle();
         assert_eq!(script(Action::Home { axes: "xyz".into() }, &s), "G28");
-        assert_eq!(script(Action::Home { axes: "zx".into() }, &s), "G28 X Z");
-        assert_eq!(script(Action::Jog { axis: "x".into(), dist: 10.0 }, &s), "G91\nG0 X10 F6000\nG90");
-        assert_eq!(script(Action::Jog { axis: "z".into(), dist: -0.1 }, &s), "G91\nG0 Z-0.1 F600\nG90");
+        // A U1 homes X and Y together.
+        assert_eq!(script(Action::Home { axes: "zx".into() }, &s), "G28");
+        assert_eq!(script(Action::Home { axes: "x".into() }, &s), "G28 X Y");
+        assert_eq!(script(Action::Home { axes: "z".into() }, &s), "G28 Z");
+        let other = Config { u1: false, ..cfg() };
+        assert_eq!(plan(&Action::Home { axes: "zx".into() }, &s, &other).map(|p| format!("{p:?}")).unwrap(), format!("{:?}", Plan::Script("G28 X Z".into(), Duration::from_secs(180))));
+        // A jog leaves the printer's coordinate mode as it found it.
+        assert_eq!(script(Action::Jog { axis: "x".into(), dist: 10.0 }, &s), "SAVE_GCODE_STATE NAME=snapstudio_jog\nG91\nG0 X10 F6000\nRESTORE_GCODE_STATE NAME=snapstudio_jog");
+        assert_eq!(script(Action::Jog { axis: "z".into(), dist: -0.1 }, &s), "SAVE_GCODE_STATE NAME=snapstudio_jog\nG91\nG0 Z-0.1 F600\nRESTORE_GCODE_STATE NAME=snapstudio_jog");
         assert_eq!(script(Action::Tool { n: 2 }, &s), "T2 A0");
         assert_eq!(script(Action::NozzleTemp { n: 0, temp: 215.4 }, &s), "M104 T0 S215 A0");
         assert_eq!(script(Action::NozzleTemp { n: 0, temp: 999.0 }, &s), "M104 T0 S300 A0", "never above max_temp");
@@ -720,12 +749,24 @@ mod tests {
         // Only the steps offered.
         assert!(refused(Action::Jog { axis: "x".into(), dist: 7.0 }, &s));
         assert!(refused(Action::Jog { axis: "e".into(), dist: 1.0 }, &s));
-        // Not homed: no move, no head change, no cleaning; the feed module
-        // homes by itself to load or unload.
+        // Not homed: no move, no cleaning; a U1 homes X and Y itself to
+        // pick a head (T<n>) and to load or unload.
         let cold = State { homed: "".into(), ..s.clone() };
-        for a in [Action::Jog { axis: "x".into(), dist: 1.0 }, Action::Tool { n: 0 }, Action::Clean, Action::PurgePosition] {
+        for a in [Action::Jog { axis: "x".into(), dist: 1.0 }, Action::Clean, Action::PurgePosition] {
             assert!(refused(a, &cold));
         }
+        assert!(!refused(Action::Tool { n: 0 }, &cold));
+        assert!(plan(&Action::Tool { n: 0 }, &cold, &Config { u1: false, ..cfg() }).is_err(), "another printer: homed first");
+        // Only the axis moved needs homing: after the U1's "G28 X Y", X and Y
+        // jog, Z waits; Z homes only once X and Y are.
+        let xy = State { homed: "xy".into(), ..s.clone() };
+        assert!(!refused(Action::Jog { axis: "x".into(), dist: 1.0 }, &xy));
+        assert!(!refused(Action::Jog { axis: "y".into(), dist: -1.0 }, &xy));
+        assert!(refused(Action::Jog { axis: "z".into(), dist: 1.0 }, &xy));
+        assert!(!refused(Action::Clean, &xy), "cleaning needs X and Y");
+        assert!(refused(Action::Home { axes: "z".into() }, &cold), "Z before X and Y: the U1 refuses");
+        assert!(!refused(Action::Home { axes: "z".into() }, &xy));
+        assert!(!refused(Action::Extrude { n: 1 }, &State { homed: "".into(), ..s.clone() }));
         assert!(!refused(Action::Unload { n: 1 }, &cold));
         assert!(!refused(Action::Load { n: 2 }, &cold));
         // Loading: not a loaded head, not without filament in the port, not
