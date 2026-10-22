@@ -517,7 +517,8 @@ function buildMesh(gl, data) {
   gl.vertexAttribPointer(aCol, 3, gl.UNSIGNED_BYTE, true, 0, 0);
 
   gl.bindVertexArray(null);
-  return { prog, vao, count: data.n * 3, min: data.min, max: data.max, truncated: data.truncated };
+  // The buffers are kept to be freed: deleting a VAO does not free them.
+  return { prog, vao, bufs: [pb, cb], count: data.n * 3, min: data.min, max: data.max, truncated: data.truncated };
 }
 
 /* Bed grid: lines every 10 mm, emphasized border. */
@@ -555,7 +556,16 @@ function buildGrid(gl, w = PLATE.w, d = PLATE.d) {
   gl.enableVertexAttribArray(aMain);
   gl.vertexAttribPointer(aMain, 1, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
-  return { prog, vao, count: pos.length / 3 };
+  return { prog, vao, bufs: [pb, mb], count: pos.length / 3 };
+}
+
+/* Frees a drawable (VAO, its buffers, its program): a VAO deleted alone
+   leaves its buffers on the GPU. */
+function disposeDrawable(gl, d) {
+  if (!d) return;
+  gl.deleteVertexArray(d.vao);
+  for (const b of d.bufs || []) gl.deleteBuffer(b);
+  gl.deleteProgram(d.prog);
 }
 
 /* ---------------------------------------------------------------- physical bed */
@@ -646,6 +656,7 @@ function buildBed(gl, w, d, model, onReady) {
   gl.enableVertexAttribArray(aUV);
   gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 20, 12);
   gl.bindVertexArray(null);
+  bed.quadBuf = qb;
 
   // Plate: the manufacturer's mesh, centered on the printable area.
   bedFile(a.model, loadStl)
@@ -666,7 +677,13 @@ function buildBed(gl, w, d, model, onReady) {
       gl.enableVertexAttribArray(p);
       gl.vertexAttribPointer(p, 3, gl.FLOAT, false, 0, 0);
       gl.bindVertexArray(null);
-      bed.plate = { prog, vao, count: pos.length / 3, aCol: gl.getAttribLocation(prog, "aCol") };
+      const plate = { prog, vao, bufs: [pb], count: pos.length / 3, aCol: gl.getAttribLocation(prog, "aCol") };
+      // The bed was replaced while its model loaded: nothing to keep.
+      if (bed.disposed) {
+        disposeDrawable(gl, plate);
+        return;
+      }
+      bed.plate = plate;
       onReady?.();
     })
     .catch((e) => console.warn("plaque :", e.message));
@@ -692,6 +709,10 @@ function buildBed(gl, w, d, model, onReady) {
       const aniso = gl.getExtension("EXT_texture_filter_anisotropic");
       if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
       gl.bindTexture(gl.TEXTURE_2D, null);
+      if (bed.disposed) {
+        gl.deleteTexture(tex);
+        return;
+      }
       bed.texture = tex;
       onReady?.();
     })
@@ -701,12 +722,11 @@ function buildBed(gl, w, d, model, onReady) {
 
 function disposeBed(gl, bed) {
   if (!bed) return;
+  bed.disposed = true;
   gl.deleteVertexArray(bed.quad);
+  if (bed.quadBuf) gl.deleteBuffer(bed.quadBuf);
   gl.deleteProgram(bed.tex);
-  if (bed.plate) {
-    gl.deleteVertexArray(bed.plate.vao);
-    gl.deleteProgram(bed.plate.prog);
-  }
+  disposeDrawable(gl, bed.plate);
   if (bed.texture) gl.deleteTexture(bed.texture);
 }
 
@@ -911,8 +931,7 @@ function disposeScene() {
   const gl = V.gl;
   if (!gl) return;
   if (V.mesh) {
-    gl.deleteVertexArray(V.mesh.vao);
-    gl.deleteProgram(V.mesh.prog);
+    disposeDrawable(gl, V.mesh);
     V.mesh = null;
   }
   if (V.paths) {
