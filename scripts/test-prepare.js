@@ -142,3 +142,16 @@ assert.strictEqual(L.plTools({ n: 1 })["p-slice"].on, false);
 assert.strictEqual(L.plTools({ n: 1 })["p-save"].on, true);
 
 console.log("prepare: ok");
+
+// Bulk buttons of the object list: "all" without a relevant selection or
+// with the whole side selected, "some" with a count otherwise; a mixed
+// selection counts each side alone.
+{
+  const on = [{ id: 1 }, { id: 2 }], off = [{ id: 3 }, { id: 4 }, { id: 5 }];
+  assert.deepEqual(L.plBulk(new Set(), on), { mode: "all", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1]), on), { mode: "some", n: 1 });
+  assert.deepEqual(L.plBulk(new Set([1, 2]), on), { mode: "all", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1, 3, 4]), off), { mode: "some", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1, 3, 4]), on), { mode: "some", n: 1 });
+  assert.deepEqual(L.plBulk(new Set([9]), off), { mode: "all", n: 3 });
+}

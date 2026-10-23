@@ -11,6 +11,14 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Prepare › object list** ([#51](https://github.com/kameka22/snap-studio/pull/51)):
+  the colour and heads frame only shows for objects on the plate (heads
+  do not apply off it); each on-plate object has a "−" to take it off,
+  mirroring the "+" of an off-plate one; "Add All" and "Take All Off"
+  follow the selection, becoming "Add 2 Objects" or "Take 1 Object Off"
+  when part of a side is selected, each side counting its own objects.
+
 ### Fixed
 - **Camera**: a camera that failed to start on the Prints record is
   switched off again instead of retrying every second; two quick toggles

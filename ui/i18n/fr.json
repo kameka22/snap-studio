@@ -1570,6 +1570,12 @@
   "prepare.drop_off": "Déposer ici pour le sortir du plateau",
   "prepare.put": "Mettre sur le plateau",
   "prepare.put_all": "Tout ajouter",
+  "prepare.put_all.title": "Mettre tous les objets hors plateau sur le plateau",
+  "prepare.put_n": {
+    "one": "Ajouter 1 objet",
+    "other": "Ajouter {n} objets"
+  },
+  "prepare.put_n.title": "Mettre les objets hors plateau sélectionnés sur le plateau",
   "prepare.fix.title": "Dépasse du plateau : recentrer ou exclure",
   "prepare.fix.in": "Recentrer sur le plateau",
   "prepare.fix.out": "Exclure du plateau",
@@ -1592,6 +1598,12 @@
   "prepare.list.hide": "Masquer la liste",
   "prepare.park_all": "Tout sortir",
   "prepare.park_all.title": "Sortir tous les objets à côté du plateau (non découpés)",
+  "prepare.park": "Sortir du plateau",
+  "prepare.park_n": {
+    "one": "Sortir 1 objet",
+    "other": "Sortir {n} objets"
+  },
+  "prepare.park_n.title": "Sortir les objets sélectionnés à côté du plateau (non découpés)",
   "prepare.scale.split": "Échelle par axe (X, Y, Z)",
   "prepare.scale.join": "Une seule échelle, proportions conservées",
   "prepare.list.hint": "Clic : sélectionner · ⌘ clic : ajouter ou retirer · ⇧ clic : toutes les lignes jusqu’à celle-ci · glisser : sur le plateau ou à côté",

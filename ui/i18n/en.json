@@ -1567,6 +1567,12 @@
   "prepare.drop_off": "Drop here to take it off the plate",
   "prepare.put": "Put on the plate",
   "prepare.put_all": "Add All",
+  "prepare.put_all.title": "Put every off-plate object on the plate",
+  "prepare.put_n": {
+    "one": "Add 1 Object",
+    "other": "Add {n} Objects"
+  },
+  "prepare.put_n.title": "Put the selected off-plate objects on the plate",
   "prepare.fix.title": "Sticks out of the plate: recenter or exclude",
   "prepare.fix.in": "Recenter on the Plate",
   "prepare.fix.out": "Exclude from the Plate",
@@ -1589,6 +1595,12 @@
   "prepare.list.hide": "Hide the list",
   "prepare.park_all": "Take All Off",
   "prepare.park_all.title": "Move every object beside the plate (not sliced)",
+  "prepare.park": "Take off the plate",
+  "prepare.park_n": {
+    "one": "Take 1 Object Off",
+    "other": "Take {n} Objects Off"
+  },
+  "prepare.park_n.title": "Move the selected objects beside the plate (not sliced)",
   "prepare.scale.split": "Scale each axis (X, Y, Z)",
   "prepare.scale.join": "One scale, proportions kept",
   "prepare.list.hint": "Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it",
