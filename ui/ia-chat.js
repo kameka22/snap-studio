@@ -530,7 +530,11 @@ function chatHandle(ev, live) {
       else if (ev.is_error && ev.result) chatNote(String(ev.result), "error");
       break;
     case "exited":
-      if (CHAT.busy.has(CHAT.id)) chatNote(tr("chat.exited"), "muted");
+      if (CHAT.busy.has(CHAT.id)) {
+        chatNote(tr("chat.exited"), "muted");
+        // What the process said on stderr: the reason, when it failed to start.
+        if (ev.stderr) chatNote(String(ev.stderr), "muted pre");
+      }
       chatSetBusy(false);
       break;
     case "auth_failed":
@@ -646,8 +650,13 @@ async function chatOpen(c) {
 }
 
 function chatLeave() {
+  const id = CHAT.id;
   CHAT.id = null;
   chatClearAttachments();
+  // An idle Claude is not kept running (nor its sandbox) while the
+  // conversation is not shown: the next message resumes it. One that is
+  // answering goes on, and its end is still reported to the list.
+  if (id && !CHAT.busy.has(id)) invoke("ia_chat_close", { id }).catch(() => {});
 }
 
 /* ------------------------------------------------------------ sending */

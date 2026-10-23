@@ -172,8 +172,85 @@ pub async fn install(app: AppHandle) -> Result<Status> {
     }
     CANCEL.store(false, Ordering::Relaxed);
     let res = install_inner(&app, a).await;
+    // Whatever ended it early (a failure, Cancel) leaves no `.part` behind.
+    if res.is_err() {
+        let _ = std::fs::remove_file(part_path());
+    }
     BUSY.store(false, Ordering::SeqCst);
     res.map(|_| status())
+}
+
+fn part_path() -> PathBuf {
+    root().join(format!(".download-{}.part", manifest().version))
+}
+
+/// Seconds without a byte before the download is given up: a stalled
+/// connection must not keep the install busy for ever.
+const STALL_S: u32 = 30;
+
+/// `a.url` to `part`, its size and checksum verified. Cancel is read every
+/// second, whether bytes come or not.
+async fn download(app: &AppHandle, a: &Asset, part: &Path) -> Result<()> {
+    use futures_util::StreamExt;
+    let resp = reqwest::Client::builder()
+        .user_agent("Snap-Studio")
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .build()?
+        .get(&a.url)
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(anyhow!(crate::t!("err.download_refused", status = resp.status())));
+    }
+    let total = resp.content_length().unwrap_or(a.size);
+    let mut file = std::fs::File::create(part)?;
+    let mut hash = Sha256::new();
+    let mut done = 0u64;
+    let mut last = 0u64;
+    let mut idle = 0u32;
+    let mut stream = resp.bytes_stream();
+    emit(app, "download", 0, total);
+    loop {
+        if CANCEL.load(Ordering::Relaxed) {
+            return Err(anyhow!(crate::t!("err.download_cancelled")));
+        }
+        let chunk = match tokio::time::timeout(std::time::Duration::from_secs(1), stream.next()).await {
+            Err(_) => {
+                idle += 1;
+                if idle >= STALL_S {
+                    return Err(anyhow!(crate::t!("err.download_stalled")));
+                }
+                continue;
+            }
+            Ok(None) => break,
+            Ok(Some(chunk)) => chunk?,
+        };
+        idle = 0;
+        done += chunk.len() as u64;
+        // More than announced: not the file the manifest describes.
+        if done > a.size {
+            return Err(anyhow!(crate::t!("err.download_size", got = done, want = a.size)));
+        }
+        file.write_all(&chunk)?;
+        hash.update(&chunk);
+        // One update per half megabyte is enough for the progress bar.
+        if done - last > 512 * 1024 || done == total {
+            emit(app, "download", done, total);
+            last = done;
+        }
+    }
+    file.flush()?;
+    drop(file);
+    if done != a.size {
+        return Err(anyhow!(crate::t!("err.download_size", got = done, want = a.size)));
+    }
+
+    emit(app, "verify", done, total);
+    let got = hex(&hash.finalize());
+    if !got.eq_ignore_ascii_case(&a.sha256) {
+        return Err(anyhow!(crate::t!("err.checksum")));
+    }
+    Ok(())
 }
 
 async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
@@ -183,47 +260,7 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
     let part = root.join(format!(".download-{}.part", manifest().version));
 
     // Streamed download, checksum computed on the way.
-    let resp = reqwest::Client::builder()
-        .user_agent("Snap-Studio")
-        .build()?
-        .get(&a.url)
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        return Err(anyhow!(crate::t!("err.download_refused", status = resp.status())));
-    }
-    let total = resp.content_length().unwrap_or(a.size);
-    let mut file = std::fs::File::create(&part)?;
-    let mut hash = Sha256::new();
-    let mut done = 0u64;
-    let mut last = 0u64;
-    let mut stream = resp.bytes_stream();
-    emit(app, "download", 0, total);
-    while let Some(chunk) = stream.next().await {
-        if CANCEL.load(Ordering::Relaxed) {
-            drop(file);
-            let _ = std::fs::remove_file(&part);
-            return Err(anyhow!(crate::t!("err.download_cancelled")));
-        }
-        let chunk = chunk?;
-        file.write_all(&chunk)?;
-        hash.update(&chunk);
-        done += chunk.len() as u64;
-        // One update per half megabyte is enough for the progress bar.
-        if done - last > 512 * 1024 || done == total {
-            emit(app, "download", done, total);
-            last = done;
-        }
-    }
-    file.flush()?;
-    drop(file);
-
-    emit(app, "verify", done, total);
-    let got = hex(&hash.finalize());
-    if !got.eq_ignore_ascii_case(&a.sha256) {
-        let _ = std::fs::remove_file(&part);
-        return Err(anyhow!(crate::t!("err.checksum")));
-    }
+    download(app, a, &part).await?;
 
     // Extraction off the async thread, into a temporary folder.
     emit(app, "extract", 0, a.unpacked);

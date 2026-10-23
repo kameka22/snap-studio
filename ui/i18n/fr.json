@@ -844,6 +844,8 @@
   "err.engine_busy": "installation déjà en cours",
   "err.download_refused": "téléchargement refusé : {status}",
   "err.download_cancelled": "téléchargement annulé",
+  "err.download_stalled": "téléchargement bloqué : aucune donnée depuis 30 s",
+  "err.download_size": "taille de téléchargement inattendue ({got} octets au lieu de {want})",
   "err.checksum": "empreinte invalide : fichier corrompu ou modifié",
   "err.archive": "archive illisible : {err}",
   "err.extract": "décompression impossible : {err}",

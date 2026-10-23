@@ -185,7 +185,11 @@ fn argv(engine: &str, tools: &Tools, claude_args: &[&str]) -> Result<Vec<String>
 /// Runs a command with a deadline; returns its standard output, up to the
 /// line for which `enough` says so (the command is then stopped).
 fn run(argv: &[String], envs: &[(String, String)], deadline: Duration, enough: impl Fn(&str) -> bool) -> Result<String> {
-    let cwd = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
+    // An empty folder of our own, not the home: in container mode yolobox
+    // mounts the working directory into the sandbox, and a sign-in check
+    // has no business seeing the user's files (nor a stray CLAUDE.md).
+    let cwd = crate::ia::root().join(".auth-check");
+    std::fs::create_dir_all(&cwd)?;
     let mut cmd = Command::new(&argv[0]);
     cmd.args(&argv[1..])
         .current_dir(cwd)

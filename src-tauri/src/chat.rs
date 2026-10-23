@@ -46,18 +46,8 @@ pub const CLI_ARGS: [&str; 9] = [
 /// Tool results kept in the log and sent to the view, in characters.
 const RESULT_CAP: usize = 20_000;
 
-/// Permission modes the view offers. In the container, `bypassPermissions`
-/// is where yolobox starts.
-pub const MODES: [&str; 4] = ["acceptEdits", "default", "plan", "bypassPermissions"];
-
 /// Models a conversation may choose; none is the account's default.
 pub const MODELS: [&str; 3] = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001"];
-
-/// The mode chosen for each conversation, kept for its next start.
-fn chosen_modes() -> &'static Mutex<HashMap<String, String>> {
-    static M: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
-    M.get_or_init(|| Mutex::new(HashMap::new()))
-}
 
 // ------------------------------------------------------------ command line
 
@@ -68,7 +58,6 @@ fn chosen_modes() -> &'static Mutex<HashMap<String, String>> {
 /// flags after the subcommand and Claude's passed through. The initial request
 /// is not an argument any more: it is the first message.
 pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec<String>> {
-    let mode = chosen_modes().lock().unwrap().get(&c.id).cloned();
     let claude = tools
         .claude
         .as_ref()
@@ -98,17 +87,13 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
         // The engine found running at the last check (Docker, Podman…).
         argv.extend(crate::setup::runtime_args());
         argv.extend(inner);
-        if mode.as_deref() == Some("plan") {
-            argv.push("--permission-mode".into());
-            argv.push("plan".into());
-        }
         return Ok(argv);
     }
 
-    // Locally, Claude works on your Mac: by default file edits are accepted
-    // outright and commands ask — in the chat, as permission cards.
+    // Locally, Claude works on your Mac: file edits are accepted outright
+    // and commands ask — in the chat, as permission cards.
     inner.push("--permission-mode".into());
-    inner.push(mode.unwrap_or_else(|| "acceptEdits".into()));
+    inner.push("acceptEdits".into());
     let mut argv = vec![claude.to_string_lossy().to_string()];
     argv.extend(inner);
     Ok(argv)
@@ -469,6 +454,26 @@ pub fn is_open(id: &str) -> bool {
     sessions().lock().map(|s| s.contains_key(id)).unwrap_or(false)
 }
 
+/// Bytes of stderr kept: enough for the reason of a failed start.
+const STDERR_TAIL: usize = 2048;
+
+/// Reads `r` to its end into `into`, keeping its last `cap` bytes.
+fn tail_into(mut r: impl std::io::Read, into: &Mutex<Vec<u8>>, cap: usize) {
+    let mut buf = [0u8; 1024];
+    loop {
+        let n = match r.read(&mut buf) {
+            Ok(0) | Err(_) => return,
+            Ok(n) => n,
+        };
+        let Ok(mut v) = into.lock() else { return };
+        v.extend_from_slice(&buf[..n]);
+        if v.len() > cap {
+            let cut = v.len() - cap;
+            v.drain(..cut);
+        }
+    }
+}
+
 /// Starts Claude and the thread that reads it. `listener` gets each view
 /// event, then `{"type":"exited"}` when the process ends.
 fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], listener: Listener) -> Result<Session> {
@@ -477,7 +482,7 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], liste
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     if let Some(p) = crate::pty::child_path() {
         cmd.env("PATH", p);
     }
@@ -498,6 +503,13 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], liste
     let mut child = cmd.spawn()?;
     let stdout = child.stdout.take().ok_or_else(|| anyhow!("no stdout"))?;
     let stdin = child.stdin.take().ok_or_else(|| anyhow!("no stdin"))?;
+    // What Claude (or yolobox) says on stderr, its tail kept: a process that
+    // fails to start says why there, and "exited" must carry it.
+    let errs: Arc<Mutex<Vec<u8>>> = Arc::default();
+    if let Some(stderr) = child.stderr.take() {
+        let errs = errs.clone();
+        std::thread::spawn(move || tail_into(stderr, &errs, STDERR_TAIL));
+    }
     let permissions: Arc<Mutex<HashMap<String, Value>>> = Arc::default();
 
     let pending = permissions.clone();
@@ -564,10 +576,11 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], liste
         // Its exit code, said in the terminal view and the console: a
         // session ending by itself must be explainable.
         let code = mine.and_then(|mut s| s.child.wait().ok()).map(|st| st.code());
+        let stderr = errs.lock().map(|b| String::from_utf8_lossy(&b).trim().to_string()).unwrap_or_default();
         if let Some(code) = code {
-            eprintln!("[chat] Claude ended for {id}: code {code:?}");
+            eprintln!("[chat] Claude ended for {id}: code {code:?}{}", if stderr.is_empty() { String::new() } else { format!("\n{stderr}") });
         }
-        listener(json!({ "type": "exited", "code": code.flatten() }));
+        listener(json!({ "type": "exited", "code": code.flatten(), "stderr": stderr }));
     });
 
     Ok(Session {
@@ -748,28 +761,6 @@ pub fn answer(id: &str, request_id: &str, allow: bool, always: bool, input: Opti
         &crate::ia::workspace(id),
         &[json!({ "type": "permission_answer", "request_id": request_id, "allow": allow, "always": always, "answers": answers })],
     );
-    Ok(())
-}
-
-/// Changes the permission mode: at once when Claude runs, at its next start
-/// otherwise.
-pub fn set_mode(id: &str, mode: &str) -> Result<()> {
-    if !MODES.contains(&mode) {
-        return Err(anyhow!("unknown mode: {mode}"));
-    }
-    chosen_modes().lock().unwrap().insert(id.to_string(), mode.to_string());
-    if is_open(id) {
-        let rid = {
-            let mut s = sessions().lock().unwrap();
-            let sess = s.get_mut(id).ok_or_else(|| anyhow!(crate::t!("err.terminal_closed")))?;
-            sess.next += 1;
-            format!("mode-{}", sess.next)
-        };
-        write_line(
-            id,
-            &json!({ "type": "control_request", "request_id": rid, "request": { "subtype": "set_permission_mode", "mode": mode } }),
-        )?;
-    }
     Ok(())
 }
 
@@ -964,20 +955,6 @@ mod tests {
         let answered = json!({ "questions": [], "answers": { "Red or blue?": "Blue" } });
         let ask = permission_response("r2", &request, true, false, Some(&answered), "no");
         assert_eq!(ask["response"]["response"]["updatedInput"]["answers"]["Red or blue?"], "Blue");
-    }
-
-    #[test]
-    fn a_chosen_mode_starts_with_claude() {
-        let mut c = conv("local");
-        c.id = "mode-test".into();
-        assert!(set_mode(&c.id, "nonsense").is_err());
-        set_mode(&c.id, "plan").unwrap();
-        let argv = command_line(&c, &tools(), false).unwrap();
-        assert!(argv.windows(2).any(|w| w == ["--permission-mode", "plan"]));
-        c.engine = "container".into();
-        let argv = command_line(&c, &tools(), false).unwrap();
-        assert!(argv.windows(2).any(|w| w == ["--permission-mode", "plan"]));
-        chosen_modes().lock().unwrap().remove(&c.id);
     }
 
     #[test]

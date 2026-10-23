@@ -1493,12 +1493,6 @@ fn ia_chat_answer(
     chat::answer(&id, &request_id, allow, always, input).map_err(|e| e.to_string())
 }
 
-/// Permission mode of the conversation (accept edits, ask, plan…).
-#[tauri::command]
-fn ia_chat_mode(id: String, mode: String) -> Result<(), String> {
-    chat::set_mode(&id, &mode).map_err(|e| e.to_string())
-}
-
 /// Claude model of the conversation; none: the account's default.
 #[tauri::command]
 fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
@@ -1559,21 +1553,10 @@ fn auth_term_open(app: tauri::AppHandle, kind: String, cols: u16, rows: u16) -> 
     auth::term_open(&app, &kind, cols, rows).map_err(|e| e.to_string())
 }
 
-/// Opens — or reopens — a conversation's terminal.
-#[tauri::command]
-fn pty_open(app: tauri::AppHandle, id: String, cols: u16, rows: u16) -> Result<(), String> {
-    let c = ia::get(&id).map_err(|e| e.to_string())?;
-    pty::open(&app, &c, cols, rows).map_err(|e| e.to_string())
-}
-
+/// Keystrokes for the sign-in terminal (`auth_term_open`).
 #[tauri::command]
 fn pty_write(id: String, data: String) -> Result<(), String> {
     pty::write(&id, &data).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn pty_resize(id: String, cols: u16, rows: u16) -> Result<(), String> {
-    pty::resize(&id, cols, rows).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1585,12 +1568,6 @@ fn pty_close(id: String) {
 #[tauri::command]
 fn ia_resumable(id: String) -> bool {
     ia::has_session(&id)
-}
-
-/// True if a terminal is already running for this conversation.
-#[tauri::command]
-fn pty_running(id: String) -> bool {
-    pty::is_open(&id)
 }
 
 /// Working folder, to open it in the Finder.
@@ -2055,12 +2032,10 @@ pub fn run() {
             ia_versions,
             ia_revert,
             ia_stats,
-            pty_open,
             ia_chat_history,
             ia_chat_send,
             ia_chat_stop,
             ia_chat_answer,
-            ia_chat_mode,
             ia_chat_model,
             ia_chat_running,
             ia_chat_close,
@@ -2071,9 +2046,7 @@ pub fn run() {
             auth_sandbox_clear,
             auth_term_open,
             pty_write,
-            pty_resize,
             pty_close,
-            pty_running,
             ia_resumable,
             fav_list,
             fav_add,
