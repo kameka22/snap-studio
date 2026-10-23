@@ -1032,6 +1032,8 @@ async function openViewer(path, name, kind, bust) {
     $("v-msg").classList.add("hidden");
     frameCamera();
   } catch (e) {
+    // A newer file took the viewer meanwhile: this one's failure is moot.
+    if (V.path !== path) return;
     $("v-msg").textContent = tr(gcode ? "viewer.bad_paths" : "viewer.bad_mesh", { err: e.message });
   }
 }

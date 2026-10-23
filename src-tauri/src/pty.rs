@@ -35,6 +35,15 @@ struct Session {
     /// does not consume, and that must not freeze everything else.
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
+    /// Which process this is: a reader thread only ends its own session,
+    /// never the one opened after it under the same key.
+    token: u64,
+}
+
+fn next_token() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(1);
+    N.fetch_add(1, Ordering::Relaxed)
 }
 
 fn sessions() -> &'static Mutex<HashMap<String, Session>> {
@@ -90,10 +99,6 @@ pub fn child_path() -> Option<std::ffi::OsString> {
 }
 
 /// True if a terminal is already running for this conversation.
-pub fn is_open(id: &str) -> bool {
-    sessions().lock().map(|s| s.contains_key(id)).unwrap_or(false)
-}
-
 /// Bytes read from a terminal, for a caller that watches its output.
 pub type Tap = Box<dyn FnMut(&[u8]) + Send>;
 
@@ -138,12 +143,14 @@ pub fn spawn_terminal(
     let mut reader = pair.master.try_clone_reader()?;
     let writer = pair.master.take_writer()?;
 
+    let token = next_token();
     sessions().lock().unwrap().insert(
         key.to_string(),
         Session {
             master: pair.master,
             writer: Arc::new(Mutex::new(writer)),
             child,
+            token,
         },
     );
 
@@ -167,6 +174,13 @@ pub fn spawn_terminal(
                     );
                 }
             }
+        }
+        // Only this process's session: the key may since hold a newer one
+        // (the auth terminal reopened), which must neither be closed nor
+        // reported as exited.
+        let mine = sessions().lock().unwrap().get(&id).is_some_and(|s| s.token == token);
+        if !mine {
+            return;
         }
         let code = close_and_wait(&id);
         let _ = app.emit("ia-exit", Exit { id, code });

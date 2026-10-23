@@ -516,15 +516,6 @@ async function refreshSelected() {
   }
 }
 
-async function refreshAll() {
-  if (P.busy) return;
-  P.busy = true;
-  await Promise.all(P.list.map(pollOne));
-  P.busy = false;
-  prnRenderList();
-  if (current()) renderStatus(P.status.get(P.sel));
-}
-
 /* Live feed: the printer pushes its changes over WebSocket (Moonraker
    JSON-RPC). Connections only live while this tab is shown. */
 function startLive() {
@@ -727,13 +718,34 @@ function closeForm() {
   P.editing = null;
 }
 
+/* The port typed, 1 to 65535 (the field's `max` is not enforced while
+   typing, and Rust refuses anything else), or null. */
+function portOf(input) {
+  const n = Math.round(+input.value || 7125);
+  return n >= 1 && n <= 65535 ? n : null;
+}
+
 async function probeForm() {
   const host = $("pf-host").value.trim();
   if (!host) return;
   const box = $("pf-test");
+  const port = portOf($("pf-port"));
+  if (!port) {
+    box.className = "pf-test err";
+    box.textContent = tr("printers.form.port_invalid");
+    return;
+  }
   box.className = "pf-test";
   box.textContent = tr("printers.form.testing");
-  const r = await invoke("printer_probe", { host, port: +$("pf-port").value || 7125 });
+  // A slow answer for a host typed before must not fill in the fields now.
+  const seq = (P.probeSeq = (P.probeSeq || 0) + 1);
+  let r;
+  try {
+    r = await invoke("printer_probe", { host, port });
+  } catch (e) {
+    r = { ok: false, detail: String(e) };
+  }
+  if (seq !== P.probeSeq) return;
   box.className = "pf-test " + (r.ok ? "ok" : "err");
   box.textContent = r.detail;
   if (r.ok) {
@@ -811,6 +823,8 @@ async function camStart() {
   const p = current();
   if (!p) return void ($("cam-toggle").checked = false);
   camStop();
+  // Two quick toggles: only the last start goes on (one keep-alive).
+  const gen = (CAM.gen = (CAM.gen || 0) + 1);
   Object.assign(CAM, { id: p.id, on: true });
   $("cam-toggle").checked = true;
   $("cam-note").textContent = tr("printers.cam.starting");
@@ -818,12 +832,12 @@ async function camStart() {
   try {
     await invoke("camera_start", { printerId: p.id });
   } catch (e) {
-    if (CAM.id !== p.id) return;
+    if (gen !== CAM.gen) return;
     camStop();
     $("cam-note").textContent = String(e);
     return;
   }
-  if (!CAM.on || CAM.id !== p.id) return;
+  if (gen !== CAM.gen || !CAM.on) return;
   CAM.keep = setInterval(() => invoke("camera_start", { printerId: p.id }).catch(() => {}), 10000);
   camNext();
 }
@@ -895,8 +909,7 @@ window.addEventListener("langchange", () => {
   prnRenderList();
   prnRenderDetail();
   discRender();
-  if (P.editing !== undefined && !$("pmodal").classList.contains("hidden"))
-    $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
+  if (!$("pmodal").classList.contains("hidden")) $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
 });
 
 prnLoad();

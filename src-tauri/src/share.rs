@@ -152,7 +152,11 @@ pub fn copy(path: &Path) -> Result<()> {
     let uri = url::Url::from_file_path(path).map_err(|_| anyhow!("bad path"))?;
     let mut child = std::process::Command::new(argv[0]).args(&argv[1..]).stdin(std::process::Stdio::piped()).spawn()?;
     child.stdin.take().ok_or_else(|| anyhow!("no stdin"))?.write_all(format!("{uri}\r\n").as_bytes())?;
-    // xclip stays to serve the selection: it is not waited for.
+    // xclip stays to serve the selection: not waited for here, but reaped
+    // when it ends, or it would stay a zombie until the app quits.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
     Ok(())
 }
 

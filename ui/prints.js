@@ -361,12 +361,9 @@ function pjRenderDetail({ job, live, active }) {
   else if (!active || PJ.cam.id !== live.printer_id) pjCamStop();
 }
 
-/* Background tracking refreshes the record; an open drop-down's selection
-   must not jump: wait until it closes. */
+/* Background tracking refreshes the record. */
 function pjRefreshDetail() {
   if (window.currentView !== "prints") return;
-  const a = document.activeElement;
-  if (a && a.closest("#pj-detail") && a.tagName === "SELECT") return;
   pjRender();
 }
 
@@ -457,14 +454,22 @@ async function pjCamStart() {
   const id = $("pj-detail").dataset.printer;
   if (!id) return;
   pjCamStop();
+  // Two quick toggles: only the last start goes on (one keep-alive, one
+  // chain of images).
+  const gen = (PJ.cam.gen = (PJ.cam.gen || 0) + 1);
   Object.assign(PJ.cam, { id, on: true });
   pjRender();
   try {
     await invoke("camera_start", { printerId: id });
   } catch (e) {
+    if (gen !== PJ.cam.gen) return;
+    // Off again, or every redraw of the record would ask for an image
+    // and retry every second.
+    pjCamStop(true);
     $("pj-cam-note") && ($("pj-cam-note").textContent = String(e));
     return;
   }
+  if (gen !== PJ.cam.gen || !PJ.cam.on) return;
   PJ.cam.keep = setInterval(() => invoke("camera_start", { printerId: id }).catch(() => {}), 10000);
   pjCamNext();
 }

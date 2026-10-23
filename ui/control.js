@@ -656,6 +656,8 @@ async function ctCamStart() {
   const pid = CT.pid;
   if (!pid) return;
   ctCamStop();
+  // Two quick toggles: only the last start goes on (one keep-alive).
+  const gen = (CT.cam.gen = (CT.cam.gen || 0) + 1);
   Object.assign(CT.cam, { on: true, pid });
   $("ct-cam-sw").checked = true;
   $("ct-cam-note").textContent = tr("printers.cam.starting");
@@ -663,11 +665,12 @@ async function ctCamStart() {
   try {
     await invoke("camera_start", { printerId: pid });
   } catch (e) {
+    if (gen !== CT.cam.gen) return;
     ctCamStop();
     $("ct-cam-note").textContent = String(e);
     return;
   }
-  if (!CT.cam.on || CT.pid !== pid) return;
+  if (gen !== CT.cam.gen || !CT.cam.on || CT.pid !== pid) return;
   CT.cam.keep = setInterval(() => invoke("camera_start", { printerId: pid }).catch(() => {}), 10000);
   ctCamNext();
 }

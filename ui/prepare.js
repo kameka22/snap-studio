@@ -334,7 +334,10 @@ async function prLoadMesh(o) {
 
 async function prLoadMeshNow(o) {
   const key = meshKey(o);
-  if (PR.meshes.has(key)) return PR.meshes.get(key);
+  const had = PR.meshes.get(key);
+  // A read that failed is tried again after a moment: a passing error
+  // must not leave the object invisible (yet selectable) for the session.
+  if (had && !(had.failed && Date.now() - had.at > 5000)) return had;
   const entry = { loading: true };
   PR.meshes.set(key, entry);
   const q = `/b?p=${encodeURIComponent(o.path)}&i=${o.item}${o.piece != null ? "&c=" + o.piece : ""}&b=400000`;
@@ -345,7 +348,7 @@ async function prLoadMeshNow(o) {
     err = e;
   }
   if (!buf) {
-    PR.meshes.set(key, { failed: String(err?.message || err) });
+    PR.meshes.set(key, { failed: String(err?.message || err), at: Date.now() });
     toast(tr("prepare.bad_mesh", { name: o.name }), true);
     return null;
   }
@@ -392,7 +395,12 @@ async function prLoadMeshNow(o) {
       prRenderInspector();
       prSchedule();
     })
-    .catch(() => {});
+    // No hull: the box stands in for resting, footprint and "lay on face"
+    // (the face tool says so when it finds nothing to work with).
+    .catch((e) => {
+      entry.hullErr = String(e?.message || e);
+      console.warn("hull:", o.name, entry.hullErr);
+    });
   return entry;
 }
 
@@ -780,6 +788,13 @@ function prBindInteractions(canvas) {
       if (fh) {
         prLayOnFace(fh);
         return;
+      }
+      // Nothing to lay on: say why when an object's hull could not be read
+      // (once), rather than a click that does nothing.
+      const noHull = PR.objects.map((o) => PR.meshes.get(meshKey(o))).find((m) => m?.hullErr);
+      if (noHull && !PR.hullSaid) {
+        PR.hullSaid = true;
+        toast(tr("prepare.orient_failed", { err: noHull.hullErr }), true);
       }
     }
     if (pan) {
@@ -1634,6 +1649,7 @@ function groupBox(list) {
    block to a free spot. The other plates follow, beside it. */
 async function prepareAddFile(path, { remember = true } = {}) {
   let items;
+  if (typeof headsForget === "function") headsForget(path);
   const name = path.split(/[\\/]/).pop();
   PRL.reading.push(name);
   prLoadingShow();
@@ -2018,13 +2034,9 @@ function prArrange() {
       p.o.pos = [p.cx + dx, p.cy + dy];
     }
   }
-  // What does not fit waits on the right of the plate.
-  let y = 0;
-  for (const o of left) {
-    const b = groupBox([{ ...o, pos: [0, 0] }]);
-    o.pos = [PR.bed.w + 20 - b.x0, y - b.y0];
-    y += b.y1 - b.y0 + 10;
-  }
+  // What does not fit waits beside the plate, in the parking's free spots:
+  // never on top of an object already parked there.
+  prPark(left);
   prSave();
   prRenderInspector();
   prSchedule();

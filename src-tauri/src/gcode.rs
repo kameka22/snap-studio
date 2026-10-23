@@ -180,7 +180,8 @@ fn parse_duration(s: &str) -> Option<u32> {
                 _ => 0,
             };
             if mult > 0 {
-                total += v * mult;
+                // Saturating: a nonsense "99999999d" must not overflow.
+                total = total.saturating_add(v.saturating_mul(mult));
                 any = true;
             }
             num.clear();

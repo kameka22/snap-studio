@@ -59,12 +59,6 @@ fn last_rect() -> &'static Mutex<Rect> {
     R.get_or_init(|| Mutex::new(Rect { x: 0.0, y: 0.0, w: 800.0, h: 600.0 }))
 }
 
-/// Open tabs, in opening order.
-fn tabs() -> &'static Mutex<Vec<String>> {
-    static T: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
-    T.get_or_init(|| Mutex::new(Vec::new()))
-}
-
 /// Opens a tab, or brings it back to the front if it already exists. `id`
 /// names the tab, not the site: a site may be open in several tabs.
 pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
@@ -125,7 +119,6 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     // Linux: Tauri stacked the view under ours; it goes over the main view.
     #[cfg(target_os = "linux")]
     gtk_layer::adopt(app, &_view);
-    tabs().lock().unwrap().push(id.to_string());
     show_only(app, Some(id));
     Ok(())
 }
@@ -371,7 +364,6 @@ pub fn close_tab(app: &AppHandle, id: &str) {
     if let Some(wv) = app.get_webview(&label(id)) {
         let _ = wv.close();
     }
-    tabs().lock().unwrap().retain(|t| t != id);
 }
 
 pub fn navigate(app: &AppHandle, id: &str, url: &str) -> Result<()> {
@@ -398,14 +390,24 @@ pub fn command(app: &AppHandle, id: &str, what: &str) -> Result<()> {
     Ok(())
 }
 
-/// Registrable domain: "www.printables.com" gives "printables.com".
+/// Registrable domain: "www.printables.com" gives "printables.com", and
+/// "shop.example.co.uk" gives "example.co.uk" (the usual two-level public
+/// suffixes).
 fn registrable(host: &str) -> String {
+    const TWO_LEVEL: [&str; 12] = ["co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "com.br", "co.za", "com.mx"];
     let parts: Vec<&str> = host.split('.').collect();
-    if parts.len() >= 2 {
-        parts[parts.len() - 2..].join(".")
+    let keep = if parts.len() >= 3 && TWO_LEVEL.contains(&parts[parts.len() - 2..].join(".").as_str()) { 3 } else { 2 };
+    if parts.len() >= keep {
+        parts[parts.len() - keep..].join(".")
     } else {
         host.to_string()
     }
+}
+
+/// True for the domain itself and its subdomains, never for a longer name
+/// that merely ends with it ("notprintables.com").
+fn under(domain: &str, base: &str) -> bool {
+    domain == base || domain.strip_suffix(base).is_some_and(|d| d.ends_with('.'))
 }
 
 /// Logs a site out by deleting only its login cookies, from one of its tabs.
@@ -429,7 +431,7 @@ pub fn logout(app: &AppHandle, tab: &str, site: &str) -> Result<usize> {
     let mut n = 0;
     for c in wv.cookies()? {
         let dom = c.domain().unwrap_or_default().trim_start_matches('.').to_string();
-        if dom.ends_with(&base) {
+        if under(&dom, &base) {
             if wv.delete_cookie(c).is_ok() {
                 n += 1;
             }
@@ -469,5 +471,21 @@ mod tests {
         std::fs::write(&first, b"x").unwrap();
         let second = unique_path(&dir, "piece.3mf");
         assert_eq!(second.file_name().unwrap(), "piece (2).3mf");
+    }
+}
+
+#[cfg(test)]
+mod domain_tests {
+    use super::{registrable, under};
+
+    #[test]
+    fn a_site_s_cookies_and_no_other_s() {
+        assert_eq!(registrable("www.printables.com"), "printables.com");
+        assert_eq!(registrable("shop.example.co.uk"), "example.co.uk");
+        assert_eq!(registrable("localhost"), "localhost");
+        assert!(under("printables.com", "printables.com"));
+        assert!(under("api.printables.com", "printables.com"));
+        assert!(!under("notprintables.com", "printables.com"));
+        assert!(!under("printables.community", "printables.com"));
     }
 }
