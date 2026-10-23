@@ -460,7 +460,6 @@ pub async fn start_print(
     Ok(StartRoute::Legacy)
 }
 
-/// Pause, resume or cancel the running print.
 /// A bare POST to Moonraker (`/printer/emergency_stop`…): its `result`
 /// (Null when there is none).
 pub(crate) async fn post_path(host: &str, port: u16, path: &str) -> Result<Value> {
@@ -471,6 +470,7 @@ pub(crate) async fn post_path(host: &str, port: u16, path: &str) -> Result<Value
     Ok(r.json::<Value>().await.map(|v| v["result"].clone()).unwrap_or(Value::Null))
 }
 
+/// Pause, resume or cancel the running print.
 pub async fn print_action(host: &str, port: u16, action: &str) -> Result<()> {
     let action = match action {
         "pause" | "resume" | "cancel" => action,
@@ -518,14 +518,23 @@ pub async fn upload(
     start: bool,
     progress: impl Fn(u64, u64) + Send + Sync + 'static,
 ) -> Result<()> {
-    let data = std::fs::read(path)?;
-    let total = data.len() as u64;
-    let chunks: Vec<Vec<u8>> = data.chunks(64 * 1024).map(|c| c.to_vec()).collect();
+    // Read as it is sent, 64 KiB at a time: a G-code of hundreds of
+    // megabytes is not held in memory (it was, twice over).
+    let total = std::fs::metadata(path)?.len();
+    let mut file = std::io::BufReader::with_capacity(256 * 1024, std::fs::File::open(path)?);
     let mut sent = 0u64;
-    let stream = futures_util::stream::iter(chunks.into_iter().map(move |c| {
-        sent += c.len() as u64;
-        progress(sent, total);
-        Ok::<Vec<u8>, std::io::Error>(c)
+    let stream = futures_util::stream::iter(std::iter::from_fn(move || {
+        let mut buf = vec![0u8; 64 * 1024];
+        match std::io::Read::read(&mut file, &mut buf) {
+            Ok(0) => None,
+            Ok(n) => {
+                buf.truncate(n);
+                sent += n as u64;
+                progress(sent, total);
+                Some(Ok::<Vec<u8>, std::io::Error>(buf))
+            }
+            Err(e) => Some(Err(e)),
+        }
     }));
     let part = reqwest::multipart::Part::stream_with_length(reqwest::Body::wrap_stream(stream), total)
         .file_name(remote_name.to_string())

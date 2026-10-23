@@ -371,24 +371,30 @@ fn monitor() -> &'static Mutex<Monitor> {
     M.get_or_init(Default::default)
 }
 
+/// The monitor, poisoning recovered: a panic while it was held (a tick on
+/// odd data) must not take `prints_status` and the queue down with it.
+fn mon() -> std::sync::MutexGuard<'static, Monitor> {
+    monitor().lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn busy(state: &str) -> bool {
     matches!(state, "printing" | "paused")
 }
 
 /// Last known snapshot.
 pub fn snapshot() -> Vec<Live> {
-    monitor().lock().unwrap().snapshot.clone()
+    mon().snapshot.clone()
 }
 
 /// "Later": no new question before the next print.
 pub fn dismiss(printer_id: &str) {
-    monitor().lock().unwrap().asked.insert(printer_id.to_string());
+    mon().asked.insert(printer_id.to_string());
 }
 
 /// Asks the question again for free printers with a queue (when the UI
 /// starts, or on demand).
 pub fn ask_again(app: &AppHandle) {
-    let mut m = monitor().lock().unwrap();
+    let mut m = mon();
     m.asked.clear();
     let snap = m.snapshot.clone();
     drop(m);
@@ -402,7 +408,7 @@ pub fn ask_again(app: &AppHandle) {
 fn offer_next(app: &AppHandle, live: &Live, finished: Option<Job>) {
     let Some(next) = next_for(&live.printer_id) else { return };
     {
-        let mut m = monitor().lock().unwrap();
+        let mut m = mon();
         if !m.asked.insert(live.printer_id.clone()) {
             return;
         }
@@ -443,7 +449,7 @@ async fn tick(app: &AppHandle) {
         }
         snap.push(live);
     }
-    monitor().lock().unwrap().snapshot = snap.clone();
+    mon().snapshot = snap.clone();
     let _ = app.emit("prints-status", snap);
 }
 
@@ -460,7 +466,7 @@ fn observe(app: &AppHandle, live: &Live) -> bool {
     let id = &live.printer_id;
     let state = live.status.state.as_str();
     if busy(state) {
-        let mut m = monitor().lock().unwrap();
+        let mut m = mon();
         m.states.insert(id.clone(), state.to_string());
         m.idle.insert(id.clone(), 0);
         // New print: the question may be asked again when it ends.
@@ -469,7 +475,7 @@ fn observe(app: &AppHandle, live: &Live) -> bool {
     }
     let pending = has_printing(id);
     let was_busy = {
-        let mut m = monitor().lock().unwrap();
+        let mut m = mon();
         let n = m.idle.entry(id.clone()).or_insert(0);
         *n += 1;
         let confirmed = *n >= 2;

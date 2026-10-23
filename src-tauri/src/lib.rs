@@ -230,26 +230,32 @@ fn meta_of(path: &str) -> MetaDto {
     dto
 }
 
-/// Metadata of a batch of files, read in parallel.
+/// Metadata of a batch of files, read in parallel. Off the async runtime:
+/// a large folder would otherwise hold one of its workers for the whole
+/// batch, with the status polls and the send progress behind it.
 #[tauri::command]
 async fn read_metas(paths: Vec<String>) -> Vec<MetaDto> {
-    let workers = std::thread::available_parallelism()
-        .map(|n| n.get().clamp(2, 8))
-        .unwrap_or(4);
-    let chunk = paths.len().div_ceil(workers).max(1);
-    let mut out: Vec<MetaDto> = Vec::with_capacity(paths.len());
-    std::thread::scope(|s| {
-        let mut handles = Vec::new();
-        for part in paths.chunks(chunk) {
-            handles.push(s.spawn(move || part.iter().map(|p| meta_of(p)).collect::<Vec<_>>()));
-        }
-        for h in handles {
-            if let Ok(v) = h.join() {
-                out.extend(v);
+    tauri::async_runtime::spawn_blocking(move || {
+        let workers = std::thread::available_parallelism()
+            .map(|n| n.get().clamp(2, 8))
+            .unwrap_or(4);
+        let chunk = paths.len().div_ceil(workers).max(1);
+        let mut out: Vec<MetaDto> = Vec::with_capacity(paths.len());
+        std::thread::scope(|s| {
+            let mut handles = Vec::new();
+            for part in paths.chunks(chunk) {
+                handles.push(s.spawn(move || part.iter().map(|p| meta_of(p)).collect::<Vec<_>>()));
             }
-        }
-    });
-    out
+            for h in handles {
+                if let Ok(v) = h.join() {
+                    out.extend(v);
+                }
+            }
+        });
+        out
+    })
+    .await
+    .unwrap_or_default()
 }
 
 /// On-demand geometry analysis: real bounding box and triangle count.
@@ -702,7 +708,7 @@ async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Resu
     let mut out = Vec::new();
     for path in &paths {
         let r = match printer_files::check_change(&root, path, printing.as_deref()) {
-            Ok(()) if root == "gcodes" => printer_files::delete(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            Ok(()) if root == "gcodes" => printer_files::delete_retrying(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
             // Timelapses: also through the camera service when Moonraker
             // only lists them (a U1's read-only `camera` folder).
             Ok(()) => printer_files::delete_video(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
