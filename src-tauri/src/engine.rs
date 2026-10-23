@@ -50,10 +50,15 @@ struct Manifest {
 fn manifest() -> &'static Manifest {
     static M: OnceLock<Manifest> = OnceLock::new();
     M.get_or_init(|| {
-        serde_json::from_str(include_str!("../engine.json")).unwrap_or(Manifest {
-            version: String::new(),
-            source: String::new(),
-            platforms: HashMap::new(),
+        serde_json::from_str(include_str!("../engine.json")).unwrap_or_else(|e| {
+            // Said in the console: "no engine referenced" alone would hide a
+            // build whose manifest is broken.
+            eprintln!("[engine] engine.json is unreadable: {e}");
+            Manifest {
+                version: String::new(),
+                source: String::new(),
+                platforms: HashMap::new(),
+            }
         })
     })
 }
@@ -321,13 +326,15 @@ fn prune_old(root: &Path, keep: &Path) {
 
 /// Deletes the installed engine (Snap Studio's settings and data stay).
 pub fn remove() -> Result<Status> {
-    if BUSY.load(Ordering::Relaxed) {
+    // Taken, not just read: an install starting at the same moment would
+    // otherwise rename its engine into a folder being removed.
+    if BUSY.swap(true, Ordering::SeqCst) {
         return Err(anyhow!(crate::t!("err.engine_busy")));
     }
     let dir = install_dir();
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir)?;
-    }
+    let r = if dir.exists() { std::fs::remove_dir_all(&dir).map_err(Into::into) } else { Ok(()) };
+    BUSY.store(false, Ordering::SeqCst);
+    r?;
     Ok(status())
 }
 

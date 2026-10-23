@@ -1666,9 +1666,8 @@ fn delete_conversation(id: &str) -> Result<IaDeleted, String> {
     // never someone else's Claude session.
     ia::get(id).map_err(|_| t!("err.conv_unknown"))?;
     // Deleting under a running Claude would leave it running without a
-    // directory, and still writing its transcript: both close first, and each
+    // directory, and still writing its transcript: it closes first, and the
     // close waits for its process to exit.
-    pty::close(id);
     chat::close(id);
     ia::watch_stop(id);
     // Listed before the folder goes: the project folder's name derives from it.
@@ -1697,7 +1696,7 @@ struct IaDeletePlan {
 fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
     ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
     let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
-    Ok(IaDeletePlan { files: found.paths.len(), running: pty::is_open(&id) || chat::is_open(&id) })
+    Ok(IaDeletePlan { files: found.paths.len(), running: chat::is_open(&id) })
 }
 
 #[tauri::command]

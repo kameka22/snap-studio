@@ -143,11 +143,14 @@ fn check_claude() -> Item {
     let Some(bin) = crate::util::which("claude") else {
         return item("claude", State::Missing, &BOTH, None);
     };
-    let version = probe(&bin, &["--version"], Duration::from_secs(10)).and_then(|(_, out)| parse_version(&out));
+    // A slow machine takes a while to answer `--version` (Node starts up):
+    // long enough not to take silence for an unknown version.
+    let version = probe(&bin, &["--version"], Duration::from_secs(20)).and_then(|(_, out)| parse_version(&out));
     match version {
         Some(v) if v >= MIN_CLAUDE => item("claude", State::Ok, &BOTH, Some(version_str(v))),
         Some(v) => item("claude", State::TooOld, &BOTH, Some(version_str(v))),
-        // Present but silent: let the account check say more.
+        // Present but silent: let the account check say more (its own call
+        // fails on a Claude too old for the protocol).
         None => item("claude", State::Ok, &BOTH, None),
     }
 }
@@ -181,7 +184,8 @@ fn runtime_state(name: &str) -> State {
         "podman" => &["info", "--format", "{{.Host.Arch}}"],
         _ => &["system", "status"],
     };
-    match probe(&bin, args, Duration::from_millis(2500)) {
+    // A cold Docker Desktop answers `info` in a few seconds: not "stopped".
+    match probe(&bin, args, Duration::from_secs(8)) {
         Some((true, _)) => State::Ok,
         _ => State::Stopped,
     }

@@ -216,10 +216,6 @@ pub fn for_view(event: &Value) -> Option<Value> {
             "init" => Some(json!({
                 "type": "system", "subtype": "init", "model": event["model"], "mode": event["permissionMode"],
             })),
-            // A mode change, by the view or by Claude (leaving plan mode).
-            "status" if event["permissionMode"].is_string() => {
-                Some(json!({ "type": "system", "subtype": "mode", "mode": event["permissionMode"] }))
-            }
             "api_retry" => Some(json!({
                 "type": "system", "subtype": "api_retry", "attempt": event["attempt"],
                 "max_retries": event["max_retries"], "error": event["error"],
@@ -397,7 +393,18 @@ fn attachment_name(dir: &Path, name: &str) -> String {
         .map(|c| if c.is_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '-' })
         .collect();
     let clean = if clean.trim_matches('-').is_empty() { "image.png".to_string() } else { clean };
-    let n = std::fs::read_dir(dir).map(|d| d.count()).unwrap_or(0) + 1;
+    // One past the highest number in the folder, not the count of files:
+    // after a deletion, a count would give a number already used by an
+    // attachment the log still points at (and `seen-*.png` live here too).
+    let n = std::fs::read_dir(dir)
+        .map(|d| {
+            d.flatten()
+                .filter_map(|e| e.file_name().to_str().and_then(|s| s.split('-').next()?.parse::<u32>().ok()))
+                .max()
+                .unwrap_or(0)
+        })
+        .unwrap_or(0)
+        + 1;
     format!("{n:03}-{clean}")
 }
 
@@ -695,10 +702,6 @@ fn ensure_started(app: &AppHandle, c: &Conversation) -> Result<()> {
     if !ws.is_dir() {
         return Err(anyhow!(crate::t!("err.no_workspace")));
     }
-    // One process per session: the terminal view gives way.
-    if crate::pty::is_open(&c.id) {
-        crate::pty::close(&c.id);
-    }
     crate::ia::refresh_workspace(&c.id);
     let argv = command_line(c, &Tools::detect(), crate::ia::has_session(&c.id))?;
     let envs = crate::auth::sandbox_env(&c.engine);
@@ -958,10 +961,10 @@ mod tests {
     }
 
     #[test]
-    fn mode_changes_reach_the_view() {
-        let v = for_view(&json!({ "type": "system", "subtype": "status", "status": null, "permissionMode": "plan" })).unwrap();
-        assert_eq!(v["subtype"], "mode");
-        assert_eq!(v["mode"], "plan");
+    fn status_events_stay_out_of_the_view() {
+        // Nothing sets a mode any more: a status, with or without a mode, is
+        // not the view's business.
+        assert!(for_view(&json!({ "type": "system", "subtype": "status", "status": null, "permissionMode": "plan" })).is_none());
         assert!(for_view(&json!({ "type": "system", "subtype": "status", "status": "requesting" })).is_none());
     }
 

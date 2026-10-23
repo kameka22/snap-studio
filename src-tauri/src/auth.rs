@@ -105,12 +105,19 @@ pub fn set_sandbox_token(token: &str) -> Result<()> {
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d)?;
         }
-        std::fs::write(&p, token)?;
+        // Created readable by its owner only, from the first byte: a file
+        // written then chmod'ed is readable by all in between.
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
+            use std::io::Write;
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&p)?;
+            f.write_all(token.as_bytes())?;
+            // An existing file keeps its old mode on open: set anyway.
             std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600))?;
         }
+        #[cfg(not(unix))]
+        std::fs::write(&p, token)?;
         Ok(())
     }
 }

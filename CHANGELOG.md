@@ -12,6 +12,30 @@ with its packages for macOS, Windows and Linux. What comes next:
 ## [Unreleased]
 
 ### Fixed
+- **Camera**: a camera that failed to start on the Prints record is
+  switched off again instead of retrying every second; two quick toggles
+  no longer leave two keep-alives running.
+- **Printer form**: the connection test checks the port first, shows its
+  error, and a slow answer for a host typed before no longer fills in
+  the fields; a model file dropped on the window opens its folder rather
+  than leaving a dead entry in the recent folders; a model exported
+  again is read again when added to the plate.
+- **Prepare**: a mesh that could not be read is tried again rather than
+  staying invisible; what Arrange cannot fit is parked in a free spot;
+  the face tool says when an object's hull could not be read.
+- **Printer files**: a print file's delete is retried when the printer
+  did not answer; a timelapse's removal is given five seconds to show;
+  sending a large G-code no longer holds it in memory twice.
+- **Engine**: on macOS the engine's executable is the one its bundle
+  names; without a downloaded engine only Snapmaker Orca is used, never
+  another slicer; a binary STL with a few trailing bytes opens.
+- **AI**: the terminal view no longer obeys escape sequences printed by
+  the model or a tool; a conversation being answered is redrawn on
+  language change; the checks of what the AI needs run at most every
+  30 s; the sign-in terminal reopened quickly is no longer closed by the
+  previous one; attachments keep distinct numbers after a deletion.
+- **Library**: logging out of a site no longer deletes the cookies of a
+  longer domain that ends the same.
 - **Slicing**: Stop works during the preparation too (it used to wait for
   the engine); a saved G-code never overwrites an existing one, it is
   numbered; a failed or stopped slice leaves no work folder behind, and
