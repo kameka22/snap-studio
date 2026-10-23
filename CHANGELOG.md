@@ -24,6 +24,39 @@ with its packages for macOS, Windows and Linux. What comes next:
   Cancel, Test or a found printer no longer saves the printer, and an
   edited printer says "updated" rather than "added". A corrupt stored
   setting no longer stops the app from loading.
+- **Slicing**: Stop works during the preparation too (it used to wait for
+  the engine); a saved G-code never overwrites an existing one, it is
+  numbered; a failed or stopped slice leaves no work folder behind, and
+  at most eight previews are kept; a 3MF is read once rather than once
+  per object when Prepare opens; two quick machine changes in the slice
+  sheet no longer mix their process lists; an error raised before the
+  slice sheet knew its job is shown instead of leaving it on "Preparing".
+- **Printers**: a print refused by the printer, or one that timed out,
+  is reported as such instead of being started a second way; an error
+  message cleared on the printer goes away from the Printers tab, and a
+  stopped Klipper stays shown as stopped; searching again ignores the
+  previous search's late answers; a host typed with a scheme or a
+  trailing slash gets the same address for status, files and the live
+  feed (`https://` keeps TLS).
+- **Files**: sharing a file then another one before the first was
+  fetched no longer shares the first under the second one's name;
+  renaming refuses a source outside the print files.
+- **AI**: opening a conversation that is answering no longer doubles
+  its last messages; the "session lost" hint stays on its conversation;
+  switching the AI off in Settings locks the open conversation; a send
+  that fails after leaving the conversation marks it as failed; an idle
+  conversation's Claude (and its sandbox) is stopped when the
+  conversation is left, and resumed by the next message; when Claude
+  stops by itself, what it wrote on its error output is shown; the
+  sign-in check no longer mounts the whole home folder into the sandbox;
+  an engine download that stalls fails after 30 s and can be cancelled
+  at any moment.
+- **Windows**: file names are cut at the backslash in the slice sheet,
+  the plate save and the saved toasts.
+
+### Changed
+- Tests run on every pull request (Rust unit tests, interface logic
+  scripts, translation catalogs).
 
 ## [0.13.0] — 2026-10-22
 
