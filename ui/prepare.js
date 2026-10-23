@@ -1914,9 +1914,10 @@ async function prOrient(all) {
 /* Saves the whole plate as 3MF (the model's parts and extruders kept). */
 async function prSavePlate() {
   if (!PR.objects.length) return;
-  const dir = state.dir || PR.objects[0].path.replace(/\/[^/]*$/, "");
+  const dir = state.dir || PR.objects[0].path.replace(/[\\/][^\\/]*$/, "");
+  const sep = dir.includes("\\") ? "\\" : "/"; // Windows paths too
   const dest = await window.__TAURI__.dialog
-    .save({ defaultPath: dir + "/" + tr("prepare.default_name"), filters: [{ name: "3MF", extensions: ["3mf"] }] })
+    .save({ defaultPath: dir + sep + tr("prepare.default_name"), filters: [{ name: "3MF", extensions: ["3mf"] }] })
     .catch(() => null);
   if (!dest) return;
   const identity = Array.from({ length: 16 }, (_, i) => i);
@@ -1925,7 +1926,7 @@ async function prSavePlate() {
       scene: PR.objects.map((o) => ({ path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, extruder_map: identity })),
       path: dest,
     });
-    toast(tr("prepare.saved", { name: dest.split("/").pop() }));
+    toast(tr("prepare.saved", { name: dest.split(/[\\/]/).pop() }));
     if (state.dir && dest.startsWith(state.dir)) refresh();
   } catch (e) {
     toast(tr("printers.form.save_failed", { err: e }), true);
@@ -2173,7 +2174,7 @@ function prepareScene() {
     return null;
   }
   const files = [...new Set(on.map((o) => o.path))];
-  const name = files.length === 1 ? files[0].split("/").pop().replace(/\.(3mf|stl)$/i, "") : tr("slice.plate").toLowerCase();
+  const name = files.length === 1 ? files[0].split(/[\\/]/).pop().replace(/\.(3mf|stl)$/i, "") : tr("slice.plate").toLowerCase();
   return {
     name,
     files,

@@ -133,7 +133,7 @@ async function sliceLoad() {
       const m = models[i];
       return {
         path,
-        stem: path.split("/").pop().replace(/\.(3mf|stl)$/i, ""),
+        stem: path.split(/[\\/]/).pop().replace(/\.(3mf|stl)$/i, ""),
         filaments: m?.filaments || [],
         used: m?.used?.length ? m.used : [1],
       };
@@ -238,8 +238,14 @@ $("s-beds").addEventListener("click", (e) => {
 
 async function onMachineChange(mem) {
   const machine = $("s-machine").value;
+  // Two quick changes (0.4 then 0.6): only the last one's lists may land,
+  // or the process list and the remembered adjustments would be the
+  // other machine's.
+  const seq = (SL.machineSeq = (SL.machineSeq || 0) + 1);
   try {
-    SL.lists = await invoke("slice_lists", { machine });
+    const lists = await invoke("slice_lists", { machine });
+    if (seq !== SL.machineSeq) return;
+    SL.lists = lists;
     const m = mem || rememberFor(machine);
     // The first choice known and offered for this machine; failing that, the
     // standard 0.20 mm profile.
@@ -251,10 +257,11 @@ async function onMachineChange(mem) {
     renderHeads(m.filaments || (m.filament ? [m.filament] : null), false);
     renderModelMap(false);
     await loadDefaults(m.simple);
+    if (seq !== SL.machineSeq) return;
     spdLoad(m.speed);
     advLoad(m.adv);
   } catch (e) {
-    setSliceMessage(String(e), "err");
+    if (seq === SL.machineSeq) setSliceMessage(String(e), "err");
   }
 }
 
@@ -579,8 +586,10 @@ async function startSlice() {
   showSliceBusy(true);
   setSliceMessage(tr("slice.preparing"), "busy");
   setSliceProgress(0);
+  SL.starting = true;
+  SL.early = [];
   try {
-    SL.job = await invoke("slice_start", {
+    const job = await invoke("slice_start", {
       request: {
         source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
         overrides: { ...advOverrides(), ...spdOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
@@ -591,16 +600,32 @@ async function startSlice() {
     // queued print back to Prepare.
     const plate = typeof prPlateOf === "function" ? prPlateOf(SL.source.items.map((it) => it.id)) : [];
     SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel, plate };
+    SL.job = job;
+    // What the job said before its id was known.
+    const early = SL.early.filter((p) => p.id === job);
+    SL.starting = false;
+    SL.early = [];
+    for (const p of early) await onSliceProgress({ payload: p });
   } catch (e) {
+    SL.starting = false;
+    SL.early = [];
     showSliceBusy(false);
     setSliceProgress(null);
     setSliceMessage(String(e), "err");
   }
 }
 
-listen("slice-progress", async (e) => {
+async function onSliceProgress(e) {
   const p = e.payload;
-  if (!SL.job || p.id !== SL.job) return;
+  // Rust emits from the moment the job is spawned, before `slice_start`
+  // has answered with its id: what arrives meanwhile is kept, and replayed
+  // once the id is known (an early error would otherwise be lost, the
+  // sheet stuck on "Preparing").
+  if (!SL.job) {
+    if (SL.starting) SL.early.push(p);
+    return;
+  }
+  if (p.id !== SL.job) return;
   if (p.phase === "preparation") {
     setSliceMessage(tr("slice.preparing_model"), "busy");
   } else if (p.phase === "slicing") {
@@ -632,7 +657,8 @@ listen("slice-progress", async (e) => {
     SL.job = null;
     setSliceMessage(p.message || tr("slice.engine_silent"), "err");
   }
-});
+}
+listen("slice-progress", onSliceProgress);
 
 /* The counter runs in the UI when the engine reports no progress. */
 let elapsedTimer = 0;
@@ -688,7 +714,7 @@ async function savePreview() {
   try {
     const path = await invoke("slice_save", { id: pv.job, dir: null });
     pv.saved = path;
-    toast(tr("slice.gcode_saved", { name: path.split("/").pop() }));
+    toast(tr("slice.gcode_saved", { name: path.split(/[\\/]/).pop() }));
     await refresh();
   } catch (e) {
     toast(String(e), true);
