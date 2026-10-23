@@ -547,7 +547,8 @@ function chatHandle(ev, live) {
 listen("ia-chat", (e) => {
   const { id, events } = e.payload;
   for (const ev of events) {
-    if (id === CHAT.id) chatHandle(ev, true);
+    if (id === CHAT.id && CHAT.loading === id) CHAT.early.push(ev);
+    else if (id === CHAT.id) chatHandle(ev, true);
     else if (ev.type === "result" || ev.type === "exited" || ev.type === "error") {
       CHAT.busy.delete(id);
       if ((ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") || ev.type === "error") IA.failed.add(id);
@@ -607,11 +608,21 @@ async function chatOpen(c) {
   chatClearAttachments();
   chatModelFill(c);
   let past = [];
+  // Live events of this conversation wait while its past is read: the log
+  // is written before an event is sent, so one arriving now may already be
+  // in the past; rendered twice, a tool row or a message would double.
+  CHAT.loading = c.id;
+  CHAT.early = [];
   try {
     past = (await invoke("ia_chat_history", { id: c.id })) || [];
   } catch {}
   if (CHAT.id !== c.id) return;
   for (const ev of past) chatHandle(ev, false);
+  const seen = new Set(past.map((ev) => JSON.stringify(ev)));
+  const early = CHAT.early.filter((ev) => !seen.has(JSON.stringify(ev)));
+  CHAT.loading = null;
+  CHAT.early = [];
+  for (const ev of early) chatHandle(ev, true);
   chatList.scrollTop = chatList.scrollHeight;
   const busy = CHAT.busy.has(c.id);
   CHAT.busy.delete(c.id);
@@ -664,7 +675,10 @@ async function chatSend(text, attachments) {
       chatSetBusy(false);
       chatNote(String(e), "error");
     } else {
+      // Left meanwhile: the card in the list must still show the failure.
       CHAT.busy.delete(id);
+      IA.failed.add(id);
+      iaStatusChanged();
     }
   }
 }

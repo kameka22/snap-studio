@@ -65,9 +65,23 @@ async function iaRefresh() {
   });
 }
 
+/* Why a conversation is only read: its mode is not ready (anymore). */
+const iaLockFor = (c) => (AIS.report && !iaModes().includes(c.engine) ? iaLockReason(c) : null);
+
 /* New checks, or a new choice in Settings. */
 window.addEventListener("aichange", () => {
-  if (!IA.open) iaRender();
+  const c = IA.open ? IA.list.find((x) => x.id === IA.open) : null;
+  if (c) {
+    // The open conversation follows: AI switched off in Settings, or Docker
+    // gone, locks it; back again unlocks it.
+    const locked = iaLockFor(c);
+    if (locked !== IA.locked) {
+      IA.locked = locked;
+      if (locked) IA.view = "chat";
+      iaRender();
+      iaHint(c);
+    }
+  } else iaRender();
   if (!$("iamodal").classList.contains("hidden")) iaRenderEngines();
   iaApplyAi();
 });
@@ -962,6 +976,8 @@ async function iaHint(c) {
   try {
     resumable = await invoke("ia_resumable", { id: c.id });
   } catch {}
+  // Another conversation opened meanwhile: its own hint stands.
+  if (IA.open !== c.id) return;
   if (resumable) {
     el.classList.add("hidden");
     return;
@@ -975,7 +991,7 @@ async function iaOpen(id) {
   if (!c) return;
   IA.open = id;
   // A conversation whose mode is not ready (anymore) is only read.
-  IA.locked = AIS.report && !iaModes().includes(c.engine) ? iaLockReason(c) : null;
+  IA.locked = iaLockFor(c);
   if (IA.locked) IA.view = "chat";
   iaRender();
   $("ia-left").dataset.mode = IA.view;
@@ -1500,7 +1516,7 @@ async function iaSave(then) {
     iaMarkSaved(c, path);
     if (path !== before) {
       await refresh();
-      toast(tr("ia.saved_toast", { name: path.split("/").pop() }));
+      toast(tr("ia.saved_toast", { name: path.split(/[\\/]/).pop() }));
     }
     if (then) await then(path);
   } catch (e) {
