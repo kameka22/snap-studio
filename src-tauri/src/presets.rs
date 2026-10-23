@@ -383,7 +383,8 @@ impl Index {
         if x1 > x0 && y1 > y0 {
             (x1 - x0, y1 - y0)
         } else {
-            (256.0, 256.0)
+            // Unknown shape: the U1's bed, as `slice::bed` assumes too.
+            (270.0, 270.0)
         }
     }
 

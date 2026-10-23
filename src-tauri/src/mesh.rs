@@ -254,7 +254,10 @@ fn parse_part(data: &[u8]) -> Part {
                 "basematerials" | "colorgroup" => cur_group = None,
                 "object" => {
                     if let Some(id) = cur_id.take() {
-                        // Deferred colors: groups may be declared after the object.
+                        // Colors resolved here, from the groups read so far: a
+                        // group declared after the object (never seen from a
+                        // slicer; the spec puts resources before their use)
+                        // would leave the object uncolored.
                         let mut obj = std::mem::take(&mut cur);
                         obj.color = cur_pid
                             .and_then(|pid| groups.get(&pid))
@@ -275,9 +278,6 @@ fn parse_part(data: &[u8]) -> Part {
         buf.clear();
     }
 
-    // Second pass for objects whose color group had not been read yet.
-    let group_keys: Vec<u32> = groups.keys().copied().collect();
-    let _ = group_keys;
     part
 }
 

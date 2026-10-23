@@ -432,8 +432,10 @@ async fn slice_lists(machine: Option<String>) -> Result<slice::PresetLists, Stri
 
 /// Starting values of the simplified settings for a given preset.
 #[tauri::command]
-async fn slice_defaults(machine: String, process: String) -> Result<slice::Simple, String> {
-    slice::defaults(&machine, &process).map_err(|e| e.to_string())
+async fn slice_defaults(_machine: String, process: String) -> Result<slice::Simple, String> {
+    // `machine` is still sent by the sheet; a process's quick settings do
+    // not depend on it.
+    slice::defaults(&process).map_err(|e| e.to_string())
 }
 
 /// Starts a background slice; progress arrives through the `slice-progress`

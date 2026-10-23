@@ -47,10 +47,11 @@ pub fn engine() -> Option<PathBuf> {
     if crate::engine::referenced() {
         return crate::engine::installed();
     }
-    let list = crate::slicers::list();
-    list.iter()
+    // Snapmaker Orca only: another slicer's profiles are not the U1's, and
+    // its command line may differ (`err.not_orca` says so otherwise).
+    crate::slicers::list()
+        .iter()
         .find(|s| s.name == "Snapmaker Orca")
-        .or_else(|| list.first())
         .map(|s| PathBuf::from(&s.path))
 }
 
@@ -227,10 +228,11 @@ impl Simple {
 }
 
 /// Starting values of a given preset.
-pub fn defaults(machine: &str, process: &str) -> Result<Simple> {
+/// The quick settings of a process preset (the machine does not change
+/// them: a process is what it is whichever machine prints it).
+pub fn defaults(process: &str) -> Result<Simple> {
     let app = engine().ok_or_else(|| anyhow!(crate::engine::missing()))?;
     let idx = index_for(&app)?;
-    let _ = machine;
     let cfg = idx
         .flatten(process)
         .ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = process)))?;
@@ -714,7 +716,14 @@ pub fn run_job(
         // A scene has no source file: the result takes the plate's name, in the
         // folder of its first object.
         let scene_source = req.scene.first().map(|it| {
-            let name = req.name.clone().unwrap_or_else(|| "plate".into());
+            // The plate's name becomes a file name: no separator, no control
+            // character (they would send the result to a folder that is not there).
+            let name = req
+                .name
+                .as_deref()
+                .map(|n| n.chars().map(|c| if c == '/' || c == '\\' || c.is_control() { '_' } else { c }).collect::<String>())
+                .filter(|n| !n.trim().is_empty())
+                .unwrap_or_else(|| "plate".into());
             Path::new(&it.path).with_file_name(format!("{name}.3mf"))
         });
         let source = scene_source.as_deref().unwrap_or(Path::new(&req.source));
@@ -1184,7 +1193,7 @@ mod tests {
             .unwrap_or(&l.processes[0])
             .name
             .clone();
-        let d = defaults(&machine, &process).unwrap();
+        let d = defaults(&process).unwrap();
         println!("“{process}” → {d:?}");
         assert!(d.layer_height.unwrap_or(0.0) > 0.0);
         assert!(d.infill.unwrap_or(-1.0) >= 0.0, "infill read");
