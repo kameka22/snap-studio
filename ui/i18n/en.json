@@ -319,6 +319,7 @@
   },
   "welcome.models.none": "no models yet",
   "printers.form.host_missing": "Enter the printer's IP address or host name.",
+  "printers.form.port_invalid": "The port must be between 1 and 65535.",
   "printers.form.testing": "Testing…",
   "printers.form.save_failed": "Could not save: {err}",
   "welcome.printer.added": {

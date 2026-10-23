@@ -1128,7 +1128,9 @@ listen("tauri://drag-leave", () => document.body.classList.remove("dragover"));
 listen("tauri://drag-drop", (e) => {
   document.body.classList.remove("dragover");
   const p = e.payload?.paths?.[0];
-  if (p) openDir(p.replace(/\/[^/]+\.3mf$/i, ""));
+  // A file dropped opens its folder (a file path pushed to the recents
+  // would stay there as a dead entry); a folder opens itself.
+  if (p) openDir(p.replace(/[\\/][^\\/]+\.(3mf|stl|gcode|gco|g|obj|step|stp)$/i, ""));
 });
 
 /* rubber-band selection in the empty area */

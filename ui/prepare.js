@@ -1634,6 +1634,7 @@ function groupBox(list) {
    block to a free spot. The other plates follow, beside it. */
 async function prepareAddFile(path, { remember = true } = {}) {
   let items;
+  if (typeof headsForget === "function") headsForget(path);
   const name = path.split(/[\\/]/).pop();
   PRL.reading.push(name);
   prLoadingShow();
