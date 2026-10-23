@@ -26,7 +26,9 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// Keychain item of the sandbox token: Snap Studio's, apart from Claude's.
+#[cfg(target_os = "macos")]
 const SERVICE: &str = "fr.carlini.snapstudio.claude-sandbox";
+#[cfg(target_os = "macos")]
 const ACCOUNT: &str = "sandbox";
 
 /// Width of the `setup-token` terminal: a token is about 110 characters.
