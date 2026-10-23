@@ -524,14 +524,20 @@ pub struct BuildItem {
     pub xf: Mat,
 }
 
+const ROOT_KEY: &str = "3D/3dmodel.model";
+
 /// Occurrences of the main model's `<build>`, in file order.
 pub fn build_items(zip: &mut Zip) -> Result<Vec<BuildItem>> {
-    let root_key = "3D/3dmodel.model".to_string();
     let mut ctx = Ctx { zip, parts: HashMap::new() };
-    if !ctx.part(&root_key) {
+    root_items(&mut ctx)
+}
+
+/// The root part parsed (once per context) and its occurrences.
+fn root_items(ctx: &mut Ctx) -> Result<Vec<BuildItem>> {
+    if !ctx.part(ROOT_KEY) {
         return Err(anyhow!(crate::t!("err.no_model")));
     }
-    let part = ctx.parts.get(&root_key).unwrap();
+    let part = ctx.parts.get(ROOT_KEY).unwrap();
     let mut items: Vec<BuildItem> = part.build.iter().map(|(id, xf, _)| BuildItem { objid: *id, xf: *xf }).collect();
     if items.is_empty() {
         let mut ids: Vec<u32> = part.objects.keys().copied().collect();
@@ -552,14 +558,28 @@ pub struct ItemMesh {
 
 /// Loads occurrence `index` of the `<build>`, in its own frame.
 pub fn load_item(zip: &mut Zip, index: usize, budget: usize) -> Result<ItemMesh> {
-    let root_key = "3D/3dmodel.model".to_string();
-    let item = *build_items(zip)?
+    let mut ctx = Ctx { zip, parts: HashMap::new() };
+    let item = *root_items(&mut ctx)?
         .get(index)
         .ok_or_else(|| anyhow!(crate::t!("err.no_object", index = index)))?;
+    item_mesh(&mut ctx, item, budget)
+}
+
+/// Every occurrence of the `<build>`, each in its own frame, with the
+/// container's parts parsed once for all of them (the root `.model` of a
+/// dense file is long to read: once per object would multiply it).
+pub fn load_items(zip: &mut Zip, budget: usize) -> Result<Vec<(BuildItem, ItemMesh)>> {
     let mut ctx = Ctx { zip, parts: HashMap::new() };
-    if !ctx.part(&root_key) {
-        return Err(anyhow!(crate::t!("err.no_model")));
+    let items = root_items(&mut ctx)?;
+    let mut out = Vec::with_capacity(items.len());
+    for item in items {
+        out.push((item, item_mesh(&mut ctx, item, budget)?));
     }
+    Ok(out)
+}
+
+/// One occurrence, in its own frame, from a context whose root is parsed.
+fn item_mesh(ctx: &mut Ctx, item: BuildItem, budget: usize) -> Result<ItemMesh> {
     // The file's orientation and scale kept, translation removed: the position
     // becomes the plate's.
     let mut lin = item.xf;
@@ -568,8 +588,8 @@ pub fn load_item(zip: &mut Zip, index: usize, budget: usize) -> Result<ItemMesh>
     lin.0[10] = 0.0;
     lin.0[11] = 0.0;
     let mut insts = Vec::new();
-    ctx.collect(&root_key, item.objid, item.objid, lin, None, 0, &mut insts);
-    let mut mesh = emit(&mut ctx, &insts, budget)?;
+    ctx.collect(ROOT_KEY, item.objid, item.objid, lin, None, 0, &mut insts);
+    let mut mesh = emit(ctx, &insts, budget)?;
     let c = [
         (mesh.min[0] + mesh.max[0]) / 2.0,
         (mesh.min[1] + mesh.max[1]) / 2.0,

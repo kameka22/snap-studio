@@ -191,12 +191,12 @@ pub fn items(path: &Path) -> Result<Vec<PlateItem>> {
         }]);
     }
     let mut zip = crate::model3mf::open(path)?;
-    let build = crate::mesh::build_items(&mut zip)?;
+    // All at once: the container is parsed a single time for every object.
+    let loaded = crate::mesh::load_items(&mut zip, FULL_BUDGET)?;
     let (names, plates) = crate::model3mf::object_settings(&mut zip);
-    let many = build.len() > 1;
-    let mut out = Vec::with_capacity(build.len());
-    for (i, b) in build.iter().enumerate() {
-        let it = crate::mesh::load_item(&mut zip, i, FULL_BUDGET)?;
+    let many = loaded.len() > 1;
+    let mut out = Vec::with_capacity(loaded.len());
+    for (i, (b, it)) in loaded.iter().enumerate() {
         let mut extruders = crate::mesh::colors_used(&it.mesh);
         if extruders.is_empty() {
             extruders.push(1);
