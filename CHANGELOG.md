@@ -11,6 +11,20 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Fixed
+- **Prepare** ([#44](https://github.com/kameka22/snap-studio/pull/44)): the
+  keyboard shortcuts no longer act on the plate while the slice preview is
+  open (Backspace there removed the objects just sliced), and the meshes
+  of removed objects are freed from the graphics card instead of staying
+  there for the session.
+- **Sheets over the Library** ([#45](https://github.com/kameka22/snap-studio/pull/45)):
+  a sheet opened while a site is shown in the Library (the queue's next
+  print, an update, a sign-in, a share, a rename, the welcome assistant)
+  now shows over it instead of under it. In the printer form, Enter on
+  Cancel, Test or a found printer no longer saves the printer, and an
+  edited printer says "updated" rather than "added". A corrupt stored
+  setting no longer stops the app from loading.
+
 ## [0.13.0] — 2026-10-22
 
 ### Added
