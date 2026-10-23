@@ -19,6 +19,15 @@ const LIB = {
   tabs: [],          // { id, site, title, url }
   active: "home",    // "home", "favs" or a tab id
   visible: false,    // is the Explore view on screen?
+  /* Sites pinned to the sidebar, under Snapmaker Space (ids). */
+  pins: new Set((() => {
+    try {
+      const v = JSON.parse(localStorage.getItem("snapstudio.libpins") || "[]");
+      return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  })()),
 };
 
 const libPinned = (id) => id === "home" || id === "favs";
@@ -259,6 +268,7 @@ async function loadIcons() {
       if (data) {
         LIB.icons.set(s.id, data);
         renderHome();
+        renderPins();
         renderTabs();
       }
     })
@@ -504,8 +514,58 @@ function siteCard(s, hero = false) {
         <span class="ex-host">${esc(siteHost(s))}</span>
       </span>
       ${hero ? `<span class="btn primary ex-go">${esc(tr("common.open"))}</span>` : ""}
+      ${s.id === "space" ? "" : `<span class="ex-pin${LIB.pins.has(s.id) ? " on" : ""}" data-pin="${esc(s.id)}" role="button" title="${esc(tr(LIB.pins.has(s.id) ? "explore.unpin" : "explore.pin"))}"><svg viewBox="0 0 24 24"><path d="M16 3v2h-1v6l3 3v2h-5v6l-1 1-1-1v-6H6v-2l3-3V5H8V3z"/></svg></span>`}
     </button>`;
 }
+
+/* ------------------------------------------------------------ pins */
+
+/* A site pinned to the sidebar, under Snapmaker Space: one click opens its
+   tab, or brings it back. Snapmaker Space itself is always there. */
+function savePins() {
+  localStorage.setItem("snapstudio.libpins", JSON.stringify([...LIB.pins]));
+}
+function togglePin(id) {
+  if (id === "space") return;
+  if (LIB.pins.has(id)) LIB.pins.delete(id);
+  else LIB.pins.add(id);
+  savePins();
+  renderPins();
+  renderHome();
+}
+function renderPins() {
+  const box = $("side-pins");
+  box.innerHTML = "";
+  for (const id of LIB.pins) {
+    const s = LIB.sites.find((x) => x.id === id);
+    if (!s) continue;
+    const b = document.createElement("button");
+    b.className = "side-item";
+    b.dataset.site = s.id;
+    b.innerHTML = `<span class="glyph ex-glyph">${siteIcon(s, 16)}</span><span class="lbl">${esc(siteName(s))}</span>`;
+    b.onclick = () => {
+      switchView("library");
+      showSite(s);
+    };
+    b.oncontextmenu = (e) => {
+      e.preventDefault();
+      nativeMenu([{ id: "expin:open:" + s.id, label: tr("common.open") }, {}, { id: "expin:unpin:" + s.id, label: tr("explore.unpin") }], e.clientX, e.clientY);
+    };
+    box.appendChild(b);
+  }
+  sideSync();
+}
+onMenu("expin", (arg) => {
+  const i = arg.indexOf(":");
+  const what = arg.slice(0, i), id = arg.slice(i + 1);
+  const s = LIB.sites.find((x) => x.id === id);
+  if (!s) return;
+  if (what === "open") {
+    switchView("library");
+    openSite(s);
+  }
+  if (what === "pin" || what === "unpin") togglePin(id);
+});
 
 /* Home: the Snapmaker ecosystem (Space wide, the four others beside), the
    Store's picks, then the model libraries. The "+" picker lists the same
@@ -521,15 +581,32 @@ function renderHome() {
   $("ex-pick-libs").innerHTML = libs.map((s) => siteCard(s)).join("");
 }
 
-/* A card, on the home or in the picker: a new tab on that site. */
+/* A card, on the home or in the picker: a new tab on that site; its pin
+   toggles the sidebar entry; a right click offers both. */
 for (const id of ["lib-home", "lib-picker"]) {
   $(id).addEventListener("click", (e) => {
+    const pin = e.target.closest("[data-pin]");
+    if (pin) {
+      e.stopPropagation();
+      togglePin(pin.dataset.pin);
+      return;
+    }
     const card = e.target.closest("[data-site]");
     if (!card) return;
     const s = LIB.sites.find((x) => x.id === card.dataset.site);
     if (!s) return;
     closeSheet($("lib-picker"));
     openSite(s);
+  });
+  $(id).addEventListener("contextmenu", (e) => {
+    const card = e.target.closest("[data-site]");
+    if (!card) return;
+    e.preventDefault();
+    const s = LIB.sites.find((x) => x.id === card.dataset.site);
+    if (!s) return;
+    const items = [{ id: "expin:open:" + s.id, label: tr("common.open") }];
+    if (s.id !== "space") items.push({}, { id: "expin:" + (LIB.pins.has(s.id) ? "unpin" : "pin") + ":" + s.id, label: tr(LIB.pins.has(s.id) ? "explore.unpin" : "explore.pin") });
+    nativeMenu(items, e.clientX, e.clientY);
   });
 }
 
@@ -587,6 +664,7 @@ $("ex-store-more").addEventListener("click", () => {
     LIB.sites = [];
   }
   renderHome();
+  renderPins();
   renderTabs();
   await loadFavs();
   loadIcons();
@@ -595,6 +673,7 @@ $("ex-store-more").addEventListener("click", () => {
 
 window.addEventListener("langchange", () => {
   renderHome();
+  renderPins();
   renderTabs();
   renderFavs();
 });

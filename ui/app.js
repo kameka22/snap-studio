@@ -243,7 +243,12 @@ function sideSync() {
       if (j?.state === "printing") target = document.querySelector(`#side-prints [data-pj="live:${CSS.escape(j.printer_id)}"]`);
     }
   }
-  if (v === "library" && typeof LIB !== "undefined" && LIB.active === "favs") target = $("side-favs");
+  if (v === "library" && typeof LIB !== "undefined") {
+    if (LIB.active === "favs") target = $("side-favs");
+    // A site's tab lights its pinned entry (Snapmaker Space is always there).
+    const t = LIB.tabs.find((x) => x.id === LIB.active);
+    if (t) target = document.querySelector(`.sidebar .side-item[data-site="${CSS.escape(t.site)}"]`);
+  }
   if (!target) target = document.querySelector(`.sidebar .side-item[data-view="${v}"]`);
   document.querySelectorAll(".sidebar .side-item").forEach((el) => el.classList.toggle("on", el === target));
   // The open folder's count shows on its entry.

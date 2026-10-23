@@ -11,6 +11,8 @@
   "snap.space": "Snapmaker Space",
   "explore.snapmaker": "Écosystème Snapmaker",
   "explore.libraries": "Bibliothèques",
+  "explore.pin": "Épingler dans la barre latérale",
+  "explore.unpin": "Retirer de la barre latérale",
   "explore.pick": "Ouvrir un site",
   "explore.desc.space": "Les modèles de la communauté, prêts pour le U1 : un téléchargement va droit sur le plateau.",
   "explore.desc.store": "Imprimantes, têtes, filaments et pièces, chez Snapmaker.",

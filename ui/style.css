@@ -1622,6 +1622,14 @@ body.no-toolbar .toolbar { display: none; }
 .ex-split .snap-products { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); margin-top: 0; }
 @container (max-width: 700px) { .ex-snap, .ex-split { grid-template-columns: 1fr; } }
 
+/* The pin at a card's corner: shown on hover, or when set. */
+.ex-card .ex-pin { position: absolute; top: 8px; right: 8px; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 6px; color: var(--text-secondary); opacity: 0; transition: opacity 120ms ease; }
+.ex-card:hover .ex-pin, .ex-card .ex-pin.on { opacity: 1; }
+.ex-card .ex-pin:hover { background: var(--control-bg-hover); color: var(--text); }
+.ex-card .ex-pin.on { color: var(--accent); }
+.ex-card .ex-pin svg { width: 14px; height: 14px; fill: currentColor; }
+.side-item .ex-glyph img, .side-item .ex-glyph .brand { width: 16px; height: 16px; }
+
 /* The "+" picker: a sheet of the same cards, under the tab strip. */
 .ex-picker { width: min(720px, calc(100vw - 48px)); max-height: calc(100vh - 80px); overflow-y: auto; }
 .ex-picker .ex-grid { margin-bottom: 18px; }

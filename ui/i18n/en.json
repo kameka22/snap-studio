@@ -11,6 +11,8 @@
   "snap.space": "Snapmaker Space",
   "explore.snapmaker": "Snapmaker ecosystem",
   "explore.libraries": "Libraries",
+  "explore.pin": "Pin to the sidebar",
+  "explore.unpin": "Unpin from the sidebar",
   "explore.pick": "Open a site",
   "explore.desc.space": "The community's models, ready for the U1: a download goes straight to the plate.",
   "explore.desc.store": "Printers, heads, filaments and spare parts, from Snapmaker.",
