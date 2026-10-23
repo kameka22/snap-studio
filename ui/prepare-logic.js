@@ -172,6 +172,15 @@ function plTools({ n = 0, sel = 0, onBed = 0, sliceable = false, tool = null, or
   };
 }
 
+/* The bulk button of one side of the list (on or off the plate): "all"
+   when no object of that side is selected, or every one of them is;
+   "some", with the count, otherwise. Only this side's objects count: a
+   mixed selection gives each side its own number. */
+function plBulk(selected, side) {
+  const n = side.filter((o) => selected.has(o.id)).length;
+  return n > 0 && n < side.length ? { mode: "some", n } : { mode: "all", n: side.length };
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
+  module.exports = { plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
 }

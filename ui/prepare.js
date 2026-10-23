@@ -1058,6 +1058,7 @@ function prStatus() {
    one plate's: with several plates, one such list per plate. */
 const PR_ICON = {
   plus: '<svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>',
+  minus: '<svg viewBox="0 0 24 24"><path d="M5 11h14v2H5z"/></svg>',
   warn: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.5 23 21.5H1zM11 9.5v6h2v-6zm0 8v2h2v-2z"/></svg>',
   keys: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1m1 2v8h16V8zm1 1h2v2H5zm3 0h2v2H8zm3 0h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2zM7 13h10v2H7z"/></svg>',
   slider: '<svg viewBox="0 0 24 24"><path d="M3 11h5.2a3 3 0 0 1 5.6 0H21v2h-7.2a3 3 0 0 1-5.6 0H3z"/></svg>',
@@ -1101,18 +1102,24 @@ function prRenderInspector() {
       : st === "out" ? (o.plate > 1 ? `<span class="tag">${esc(tr("prepare.tag.plate", { n: o.plate }))}</span>` : "")
       : overlap.has(o.id) ? `<span class="tag warn">${esc(tr("prepare.tag.overlap"))}</span>`
       : "";
+    // One action per row, on its own object: "+" puts an off-plate object
+    // on the plate, "−" takes an on-plate one off; an object sticking out
+    // keeps its warning instead.
     const act =
       st === "partial" ? `<button type="button" class="p-ico p-warn" data-fix="${o.id}" title="${esc(tr("prepare.fix.title"))}">${PR_ICON.warn}</button>`
       : st === "out" ? `<button type="button" class="p-ico" data-put="${o.id}" title="${esc(tr("prepare.put"))}">${PR_ICON.plus}</button>`
-      : "";
-    const open = !PR.fold.has(o.id);
-    const heads = live ? prHeads(o, pid, slots, n) : {};
+      : `<button type="button" class="p-ico" data-park="${o.id}" title="${esc(tr("prepare.park"))}">${PR_ICON.minus}</button>`;
+    // Heads only apply on the plate: an off-plate row has no colour/heads
+    // frame, hence nothing to fold.
+    const out = st === "out";
+    const open = !out && !PR.fold.has(o.id);
+    const heads = live && !out ? prHeads(o, pid, slots, n) : {};
     const spool = (h) => slots.find((x) => x.index === h);
     const dots = [...new Set(Object.values(heads).map((x) => x.h))]
       .map((h) => spool(h)?.present && spool(h).color ? `<i style="background:${esc(spool(h).color)}"></i>` : "")
       .join("");
     const head = `<div class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}" role="button" tabindex="0">
-      <span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>
+      ${out ? `<span class="p-tw"></span>` : `<span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>`}
       <span class="k">${esc(o.name)}</span>${tag}<span class="p-dots">${dots}</span>${act}</div>`;
     if (!open || !live) return head;
     const model = headsModelNow(o.path);
@@ -1134,11 +1141,15 @@ function prRenderInspector() {
   };
   const g = prGroups();
   const offOpen = !PRUI.offFolded;
+  // The bulk buttons follow the selection: "Add 2 Objects" / "Take 1 Off"
+  // when part of a side is selected, "Add All" / "Take All Off" otherwise.
+  const onBulk = plBulk(PR.sel, g.on), offBulk = plBulk(PR.sel, g.off);
+  const bulk = (b, all, some) => (b.mode === "some" ? tr(some, { n: b.n }) : tr(all));
   $("p-list").innerHTML = `
     <div class="p-grp p-on">
       <div class="p-grp-head">
         <span class="k">${esc(tr("prepare.on_bed", { n: g.on.length }))}</span>
-        ${g.on.length ? `<button type="button" class="btn" data-parkall title="${esc(tr("prepare.park_all.title"))}">${esc(tr("prepare.park_all"))}</button>` : ""}
+        ${g.on.length ? `<button type="button" class="btn" data-parkall title="${esc(bulk(onBulk, "prepare.park_all.title", "prepare.park_n.title"))}">${esc(bulk(onBulk, "prepare.park_all", "prepare.park_n"))}</button>` : ""}
       </div>
       ${g.on.length ? `<div class="group">${g.on.map(row).join("")}</div>` : `<div class="vp-sub">${esc(tr("prepare.nothing"))}</div>`}
     </div>
@@ -1146,7 +1157,7 @@ function prRenderInspector() {
       <div class="p-grp-head">
         <span class="p-tw" data-offfold>${offOpen ? "▾" : "▸"}</span>
         <span class="k">${esc(tr("prepare.off_bed", { n: g.off.length }))}</span>
-        ${g.off.length ? `<button type="button" class="btn" data-putall>${esc(tr("prepare.put_all"))}</button>` : ""}
+        ${g.off.length ? `<button type="button" class="btn" data-putall title="${esc(bulk(offBulk, "prepare.put_all.title", "prepare.put_n.title"))}">${esc(bulk(offBulk, "prepare.put_all", "prepare.put_n"))}</button>` : ""}
       </div>
       ${g.off.length ? `<div class="vp-sub">${esc(tr("prepare.off_note", { n: g.off.length }))}</div>` : ""}
       ${g.off.length ? `<div class="group">${g.off.map(row).join("")}</div>` : ""}
@@ -1492,17 +1503,28 @@ $("p-list").addEventListener("click", (e) => {
     prRenderInspector();
     return;
   }
+  // Bulk buttons: the selected objects of that side when some are, else
+  // the whole side (a mixed selection gives each side its own objects).
+  const side = (list) => {
+    const b = plBulk(PR.sel, list);
+    return (b.mode === "some" ? list.filter((o) => PR.sel.has(o.id)) : list).map((o) => o.id);
+  };
   if (e.target.closest("[data-parkall]")) {
-    prParkAll();
+    prParkIds(side(prGroups().on));
     return;
   }
   if (e.target.closest("[data-putall]")) {
-    prPutOnBed(prGroups().off.map((o) => o.id));
+    prPutOnBed(side(prGroups().off));
     return;
   }
   const put = e.target.closest("[data-put]");
   if (put) {
     prPutOnBed([+put.dataset.put]);
+    return;
+  }
+  const park = e.target.closest("[data-park]");
+  if (park) {
+    prParkIds([+park.dataset.park]);
     return;
   }
   const fix = e.target.closest("[data-fix]");
@@ -1545,10 +1567,16 @@ function prListPick(id, e) {
 
 /* Every object of the plate taken off it, beside it: one undo step. */
 function prParkAll() {
-  const on = prGroups().on;
-  if (!on.length) return;
+  prParkIds(prGroups().on.map((o) => o.id));
+}
+
+/* Takes objects off the plate, beside it, as one undo step: those given
+   that are on it (fully or partly). */
+function prParkIds(ids) {
+  const list = PR.objects.filter((o) => ids.includes(o.id) && bedState(o) !== "out");
+  if (!list.length) return;
   prRemember();
-  prPark(on);
+  prPark(list);
   prSave();
   prRenderInspector();
   prSchedule();
