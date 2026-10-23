@@ -1622,8 +1622,8 @@ body.no-toolbar .toolbar { display: none; }
 .ex-split .snap-products { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); margin-top: 0; }
 @container (max-width: 700px) { .ex-snap, .ex-split { grid-template-columns: 1fr; } }
 
-/* The pin at a card's corner: shown on hover, or when set. */
-.ex-card .ex-pin { position: absolute; top: 8px; right: 8px; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 6px; color: var(--text-secondary); opacity: 0; transition: opacity 120ms ease; }
+/* The pin at a card's corner: grey and always there, blue once set. */
+.ex-card .ex-pin { position: absolute; top: 8px; right: 8px; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 6px; color: var(--text-secondary); opacity: 0.55; transition: opacity 120ms ease, color 120ms ease; }
 .ex-card:hover .ex-pin, .ex-card .ex-pin.on { opacity: 1; }
 .ex-card .ex-pin:hover { background: var(--control-bg-hover); color: var(--text); }
 .ex-card .ex-pin.on { color: var(--accent); }
