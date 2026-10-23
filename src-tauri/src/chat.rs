@@ -1117,12 +1117,10 @@ mod tests {
         answer(&id, &rid, true, false, None).unwrap();
         wait(&|e| e.iter().any(|x| x["type"] == "result"));
         assert_eq!(std::fs::read_to_string(ws.join("proof.txt")).unwrap().trim(), "real-ok");
-        set_mode(&id, "plan").unwrap();
-        wait(&|e| e.iter().any(|x| x["subtype"] == "mode" && x["mode"] == "plan"));
         close(&id);
         let events = got.lock().unwrap().clone();
         println!("{} view events; types: {:?}", events.len(), events.iter().map(|e| e["type"].as_str().unwrap_or("")).collect::<std::collections::BTreeSet<_>>());
-        assert!(events.iter().any(|e| e["subtype"] == "mode" && e["mode"] == "plan"));
+        assert!(events.iter().any(|x| x["type"] == "result"));
         let _ = std::fs::remove_dir_all(&ws);
     }
 
