@@ -2137,8 +2137,9 @@ mod tests {
     fn dump_meta() {
         let dir = std::env::var("PROBE_DIR")
             .unwrap_or_else(|_| format!("{}/Downloads", std::env::var("HOME").unwrap()));
-        let mut files: Vec<_> = std::fs::read_dir(dir)
-            .unwrap()
+        // Local probe over real 3MFs; skip when Downloads (or PROBE_DIR) is absent (CI).
+        let Ok(rd) = std::fs::read_dir(&dir) else { return; };
+        let mut files: Vec<_> = rd
             .flatten()
             .map(|e| e.path())
             .filter(|p| p.extension().map(|e| e.eq_ignore_ascii_case("3mf")).unwrap_or(false))
