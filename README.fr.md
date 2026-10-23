@@ -37,8 +37,8 @@
 
 ## Fonctions
 
-**Du fichier à l'impression :** [Bibliothèque](#-bibliothèque) ·
-[Fichiers](#-fichiers) · [Préparer](#-préparer) · [IA](#-ia) ·
+**Du fichier à l'impression :** [Explorer](#-explorer) ·
+[Fichiers](#-fichiers) · [Préparer](#-préparer) · [Créer](#-créer) ·
 [Découpe](#️-découpe) · [Vérification des bobines](#-vérification-des-bobines) ·
 [Impressions](#-impressions) · [Caméra](#-caméra)<br>
 **Votre imprimante :** [Vue 3D](#-votre-imprimante-en-3d) ·
@@ -46,16 +46,24 @@
 [Fichiers de l'imprimante](#-fichiers-et-timelapses-de-limprimante) · et
 l'[Affichage](#-affichage)
 
-### 📚 Bibliothèque
+### 🧭 Explorer
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Bibliothèque" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Accueil Explorer : Space, Store, Wiki, Forum, Compte, bibliothèques et coups de cœur Store" />
 
-Les sites de modèles que vous utilisez, dans l'app.
+L'écosystème Snapmaker et les sites de modèles que vous utilisez, dans
+l'app.
 
-- MakerWorld, Printables, Thingiverse et Cults3D en onglets, sessions
-  conservées.
-- Les téléchargements arrivent dans [Fichiers](#-fichiers).
-- Les favoris dans la barre latérale.
+- Une page d'accueil avec Snapmaker Space, Store, Wiki, Forum et Compte,
+  quelques produits à la une sur le Store, et les bibliothèques :
+  MakerWorld, Printables, Thingiverse et Cults3D. Chacun s'ouvre dans un
+  onglet, sessions conservées.
+- Pas de barre d'adresse : Précédent, Suivant et Recharger flottent sur
+  la page.
+- Épinglez n'importe quel site dans la barre latérale, sous Snapmaker
+  Space ; les favoris y sont aussi.
+- Un modèle téléchargé depuis un onglet va droit dans
+  [Préparer](#-préparer) ; les autres fichiers arrivent dans
+  [Fichiers](#-fichiers).
 
 <br clear="both">
 
@@ -88,7 +96,7 @@ Le plateau U1 comme dans Orca — puis découper.
 
 <br clear="both">
 
-### ✦ IA
+### ✦ Créer
 
 <img align="left" width="48%" hspace="12" src="docs/screenshots/ai-chat.png" alt="Une conversation IA" />
 
@@ -450,7 +458,7 @@ profils et les têtes sont ceux de la U1.
 
 **Qu'est-ce qui sort de mon ordinateur ?** Aucune télémétrie. Snap Studio
 échange avec GitHub (vérifier les mises à jour, télécharger le moteur), vos
-imprimantes sur le réseau local, les sites ouverts dans la Bibliothèque et,
+imprimantes sur le réseau local, les sites ouverts dans Explorer et,
 si vous utilisez l'IA, Anthropic par Claude Code.
 
 **Pourquoi macOS m'avertit-il au premier lancement ?** L'app n'est pas
@@ -464,7 +472,7 @@ imprimantes, favoris et conversations sont repris au premier lancement.
 
 | | |
 |---|---|
-| ⌥⌘1 … ⌥⌘4 | Bibliothèque / IA / Fichiers / Préparer |
+| ⌥⌘1 … ⌥⌘4 | Explorer / Créer / Fichiers / Préparer |
 | ⌘O · ⌘R · ⌘F | ouvrir un dossier · actualiser · rechercher |
 | ⌘1 / ⌘2 | vignettes / liste |
 | ⏎ · double-clic | préparer (ajouter au plateau) ; G-code : trajectoires |
@@ -495,7 +503,6 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Alertes plateau et matière** — un plateau et un filament incompatibles signalés avant d'imprimer, et un conseil quand la colle est recommandée | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
-| **Espace Snapmaker** — Snapmaker Space, Store, Wiki, Forum et compte dans un menu, modèles ouverts directement dans Préparer | [#23](https://github.com/kameka22/snap-studio/pull/23) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **D'autres agents IA** — OpenCode à côté de Claude Code (OpenAI, Google, Mistral, modèles locaux…), un seul actif à la fois | [plan](docs/plans/ai-agents.md) |
 

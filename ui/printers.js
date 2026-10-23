@@ -25,6 +25,8 @@ function switchView(v) {
   document.querySelectorAll(".views > .view").forEach((s) => {
     s.classList.toggle("hidden", s.id !== "view-" + v);
   });
+  // Explore's tab strip stands in for the toolbar.
+  document.body.classList.toggle("no-toolbar", v === "library");
   if (typeof p3dVisible === "function") p3dVisible(v === "printers");
   if (v === "printers") startLive();
   else {
@@ -37,7 +39,7 @@ function switchView(v) {
   if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
   if (v === "prints") pjRender();
   else if (typeof pjCamStop === "function") pjCamStop();
-  // The Library's native views must only live in its tab.
+  // Explore's native views must only live in its tab.
   libSetVisible(v === "library");
   if (v === "settings") {
     refreshCacheSize();
@@ -62,7 +64,7 @@ document.querySelectorAll(".sidebar .side-item[data-view]").forEach((b) =>
 /* Titles of the views that have nothing more specific to show. */
 function tbDefaults() {
   tbSet("prepare", tr("slice.plate"));
-  tbSet("library", tr("nav.library"));
+  tbSet("library", tr("nav.explore"));
   tbSet("printers", tr("nav.printers"));
   tbSet("settings", tr("nav.settings"));
 }

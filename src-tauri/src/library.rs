@@ -22,13 +22,21 @@ pub struct Site {
     pub id: &'static str,
     pub name: &'static str,
     pub url: &'static str,
+    /// Which sidebar entry lists it: the Library (model sites) or the
+    /// Snapmaker hub (the maker's own spaces). Same views, same tabs.
+    pub hub: &'static str,
 }
 
 pub const SITES: &[Site] = &[
-    Site { id: "makerworld", name: "MakerWorld", url: "https://makerworld.com/" },
-    Site { id: "printables", name: "Printables", url: "https://www.printables.com/" },
-    Site { id: "thingiverse", name: "Thingiverse", url: "https://www.thingiverse.com/" },
-    Site { id: "cults3d", name: "Cults3D", url: "https://cults3d.com/fr" },
+    Site { id: "makerworld", name: "MakerWorld", url: "https://makerworld.com/", hub: "library" },
+    Site { id: "printables", name: "Printables", url: "https://www.printables.com/", hub: "library" },
+    Site { id: "thingiverse", name: "Thingiverse", url: "https://www.thingiverse.com/", hub: "library" },
+    Site { id: "cults3d", name: "Cults3D", url: "https://cults3d.com/fr", hub: "library" },
+    Site { id: "space", name: "Space", url: "https://space.snapmaker.com/", hub: "snapmaker" },
+    Site { id: "store", name: "Store", url: "https://shop.snapmaker.com/", hub: "snapmaker" },
+    Site { id: "wiki", name: "Wiki", url: "https://wiki.snapmaker.com/", hub: "snapmaker" },
+    Site { id: "forum", name: "Forum", url: "https://forum.snapmaker.com/", hub: "snapmaker" },
+    Site { id: "account", name: "Account", url: "https://account.snapmaker.com/", hub: "snapmaker" },
 ];
 
 pub fn sites() -> Vec<Site> {
@@ -37,6 +45,131 @@ pub fn sites() -> Vec<Site> {
 
 fn label(id: &str) -> String {
     format!("lib-{id}")
+}
+
+/// The floating navigation (`overlay.html`): a small transparent view of
+/// ours laid over the site's, at its top-left, with Back, Forward and
+/// Reload. Views cannot be reordered once added, so a fresh one (a new
+/// label) is made after each site's view, which puts it on top; the older
+/// one is closed. Shown with a site, hidden with it.
+const NAV_SIZE: (f64, f64) = (112.0, 40.0);
+
+fn nav_rect(r: Rect) -> Rect {
+    Rect { x: r.x + 10.0, y: r.y + 10.0, w: NAV_SIZE.0, h: NAV_SIZE.1 }
+}
+
+fn nav_label() -> &'static Mutex<String> {
+    static L: OnceLock<Mutex<String>> = OnceLock::new();
+    L.get_or_init(|| Mutex::new(String::new()))
+}
+
+/// The tab shown, for the floating navigation's buttons.
+fn visible_tab() -> &'static Mutex<Option<String>> {
+    static V: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    V.get_or_init(Default::default)
+}
+
+fn ensure_nav(app: &AppHandle) -> Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(1);
+    let old = nav_label().lock().unwrap().clone();
+    let lbl = format!("lib-nav-{}", N.fetch_add(1, Ordering::Relaxed));
+    let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
+    let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App("overlay.html".into())).transparent(true);
+    let r = nav_rect(*last_rect().lock().unwrap());
+    let dy = title_offset(&window);
+    let _view = window.add_child(builder, LogicalPosition::new(r.x, r.y + dy), LogicalSize::new(r.w, r.h))?;
+    #[cfg(target_os = "linux")]
+    gtk_layer::adopt(app, &_view);
+    *nav_label().lock().unwrap() = lbl;
+    if let Some(wv) = app.get_webview(&old) {
+        let _ = wv.close();
+    }
+    Ok(())
+}
+
+/// Back, forward or reload on the tab shown (the floating navigation).
+pub fn nav_command(app: &AppHandle, what: &str) -> Result<()> {
+    let id = visible_tab().lock().unwrap().clone().ok_or_else(|| anyhow!("no tab shown"))?;
+    command(app, &id, what)
+}
+
+/// A site's icon as a data URL, kept on disk: the home's cards show the
+/// real thing rather than an initial. The page's `<link rel="icon">`
+/// (apple-touch, svg or png first), else `/favicon.ico`; None when
+/// nothing answers.
+pub async fn favicon(id: &str) -> Option<String> {
+    let site = SITES.iter().find(|s| s.id == id)?;
+    let dir = dirs::cache_dir()?.join("fr.carlini.snapstudio").join("favicons");
+    let file = dir.join(id);
+    if let Ok(s) = std::fs::read_to_string(&file) {
+        if s.starts_with("data:") {
+            return Some(s);
+        }
+    }
+    let client = crate::printers::client();
+    let base = url::Url::parse(site.url).ok()?;
+    let timeout = std::time::Duration::from_secs(12);
+    let html = client.get(site.url).header("User-Agent", UA).timeout(timeout).send().await.ok()?.text().await.ok()?;
+    let mut candidates: Vec<String> = icon_links(&html).into_iter().filter_map(|h| base.join(&h).ok()).map(|u| u.to_string()).collect();
+    candidates.push(base.join("/favicon.ico").ok()?.to_string());
+    for u in candidates {
+        let Ok(r) = client.get(&u).header("User-Agent", UA).timeout(timeout).send().await else { continue };
+        if !r.status().is_success() {
+            continue;
+        }
+        let header = r.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").split(';').next().unwrap_or("").trim().to_string();
+        let Ok(bytes) = r.bytes().await else { continue };
+        if bytes.is_empty() || bytes.len() > 512 * 1024 {
+            continue;
+        }
+        let lu = u.to_ascii_lowercase();
+        let mime = if header.starts_with("image/") {
+            header
+        } else if lu.ends_with(".svg") {
+            "image/svg+xml".into()
+        } else if lu.ends_with(".png") {
+            "image/png".into()
+        } else {
+            "image/x-icon".into()
+        };
+        let data = format!("data:{mime};base64,{}", crate::util::b64_encode(&bytes));
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(&file, &data);
+        return Some(data);
+    }
+    None
+}
+
+/// `href` of a page's `<link rel="… icon …">` tags, the better-looking
+/// first: apple-touch, then svg, then png, then the rest.
+pub fn icon_links(html: &str) -> Vec<String> {
+    let lower = html.to_ascii_lowercase();
+    let mut out: Vec<(i32, String)> = Vec::new();
+    let mut from = 0;
+    while let Some(i) = lower[from..].find("<link") {
+        let start = from + i;
+        let Some(end) = lower[start..].find('>') else { break };
+        let (tag, ltag) = (&html[start..start + end], &lower[start..start + end]);
+        from = start + end;
+        let attr = |name: &str| -> Option<String> {
+            let k = format!("{name}=\"");
+            let p = ltag.find(&k)? + k.len();
+            let q = tag[p..].find('"')? + p;
+            Some(tag[p..q].to_string())
+        };
+        let Some(rel) = attr("rel") else { continue };
+        let rel = rel.to_ascii_lowercase();
+        if !rel.split_whitespace().any(|r| r == "icon" || r == "apple-touch-icon") {
+            continue;
+        }
+        let Some(href) = attr("href") else { continue };
+        let lh = href.to_ascii_lowercase();
+        let score = if rel.contains("apple") { 3 } else if lh.ends_with(".svg") { 2 } else if lh.ends_with(".png") { 1 } else { 0 };
+        out.push((score, href));
+    }
+    out.sort_by(|a, b| b.0.cmp(&a.0));
+    out.into_iter().map(|(_, h)| h).collect()
 }
 
 /// Rectangle of the browsing area, in interface points.
@@ -119,6 +252,10 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     // Linux: Tauri stacked the view under ours; it goes over the main view.
     #[cfg(target_os = "linux")]
     gtk_layer::adopt(app, &_view);
+    // The floating navigation, made again so that it sits above this view.
+    if let Err(e) = ensure_nav(app) {
+        eprintln!("[lib] floating navigation: {e}");
+    }
     show_only(app, Some(id));
     Ok(())
 }
@@ -332,10 +469,22 @@ mod gtk_layer {
 /// Shows a tab and hides the others; `None` hides them all.
 pub fn show_only(app: &AppHandle, id: Option<&str>) {
     let wanted = id.map(label);
+    *visible_tab().lock().unwrap() = id.map(String::from);
     // Copied out, the lock released: `place` waits for the main thread.
     let rect = *last_rect().lock().unwrap();
+    let nav = nav_label().lock().unwrap().clone();
     for (lbl, wv) in app.webviews() {
         if !lbl.starts_with("lib-") {
+            continue;
+        }
+        // The floating navigation goes with the site shown.
+        if lbl.starts_with("lib-nav") {
+            if wanted.is_some() && lbl == nav {
+                place(&wv, nav_rect(rect));
+                let _ = wv.show();
+            } else {
+                let _ = wv.hide();
+            }
             continue;
         }
         if Some(&lbl) == wanted.as_ref() {
@@ -356,6 +505,10 @@ pub fn set_rect(app: &AppHandle, rect: Rect, viewport: f64, visible: Option<&str
     if let Some(id) = visible {
         if let Some(wv) = app.get_webview(&label(id)) {
             place(&wv, rect);
+        }
+        let nav = nav_label().lock().unwrap().clone();
+        if let Some(wv) = app.get_webview(&nav) {
+            place(&wv, nav_rect(rect));
         }
     }
 }
@@ -487,5 +640,23 @@ mod domain_tests {
         assert!(under("api.printables.com", "printables.com"));
         assert!(!under("notprintables.com", "printables.com"));
         assert!(!under("printables.community", "printables.com"));
+    }
+}
+
+#[cfg(test)]
+mod icon_tests {
+    use super::icon_links;
+
+    #[test]
+    fn the_page_s_icons_best_first() {
+        let html = r#"<html><head>
+            <link rel="stylesheet" href="/a.css">
+            <link rel="icon" href="/favicon.ico" sizes="32x32">
+            <LINK REL="Icon" TYPE="image/svg+xml" HREF="/icon.svg">
+            <link rel="apple-touch-icon" href="https://cdn.x/touch.png">
+            <link rel="shortcut icon" href="/old.ico">
+        </head></html>"#;
+        assert_eq!(icon_links(html), vec!["https://cdn.x/touch.png", "/icon.svg", "/favicon.ico", "/old.ico"]);
+        assert!(icon_links("<html><body>no links</body></html>").is_empty());
     }
 }

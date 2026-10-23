@@ -263,7 +263,7 @@ function iaRender() {
   sideCount("ia", IA.list.length);
   const c = detail && IA.list.find((x) => x.id === IA.open);
   if (c) tbSet("ia", c.title, `${iaOrigin(c)} · ${iaEngineName(c)}`);
-  else tbSet("ia", tr("nav.ia"), IA.list.length ? tr("ia.count", { n: IA.list.length }) : "");
+  else tbSet("ia", tr("nav.create"), IA.list.length ? tr("ia.count", { n: IA.list.length }) : "");
   $("ia-detail").classList.toggle("hidden", !detail);
   $("ia-empty").classList.toggle("hidden", detail || IA.list.length > 0);
   $("ia-listbar").classList.toggle("hidden", detail || IA.list.length === 0);
@@ -310,7 +310,7 @@ function iaRenderList() {
     .map((g) => (titled && g.key ? `<h4 class="ia-group" role="presentation">${esc(tr(IA_GROUP_LABEL[g.key]))}</h4>` : "") + g.items.map(iaCard).join(""))
     .join("");
   const n = IA.list.length;
-  tbSet("ia", tr("nav.ia"), n ? (shown.length < n ? tr("ia.count_shown", { shown: shown.length, n }) : tr("ia.count", { n })) : "");
+  tbSet("ia", tr("nav.create"), n ? (shown.length < n ? tr("ia.count_shown", { shown: shown.length, n }) : tr("ia.count", { n })) : "");
 }
 
 /* ------------------------------------------------------------ list controls */
