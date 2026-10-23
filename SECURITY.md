@@ -19,7 +19,7 @@ advisory is published with credit to you, unless you prefer otherwise.
 ## Scope
 
 Snap Studio talks to your printers on the local network, to the model
-sites you open in the Library, to GitHub (updates, slicing engine) and, if
+sites you open in Explore, to GitHub (updates, slicing engine) and, if
 you use the AI, runs Claude Code on your computer or in a container. Of
 particular interest:
 

@@ -35,22 +35,26 @@
 
 ## Features
 
-**From file to print:** [Library](#-library) · [Files](#-files) ·
-[Prepare](#-prepare) · [AI](#-ai) · [Slicing](#️-slicing) ·
+**From file to print:** [Explore](#-explore) · [Files](#-files) ·
+[Prepare](#-prepare) · [Create](#-create) · [Slicing](#️-slicing) ·
 [Spool check](#-spool-check) · [Prints](#-prints) · [Camera](#-camera)<br>
 **Your printer:** [3D view](#-your-printer-in-3d) · [Control](#-control) ·
 [Care](#-care) · [Bed Leveling](#-bed-leveling) ·
 [Printer files](#-printer-files-and-timelapses) · and the [Display](#-display)
 
-### 📚 Library
+### 🧭 Explore
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Library" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Explore" />
 
-The model sites you use, inside the app.
+The Snapmaker ecosystem and the model sites you use, inside the app.
 
-- MakerWorld, Printables, Thingiverse and Cults3D in tabs, sessions kept.
-- Downloads land in [Files](#-files).
-- Favorites in the sidebar.
+- A home with Snapmaker Space, Store, Wiki, Forum and Account, a few
+  products featured from the Store, and the libraries: MakerWorld,
+  Printables, Thingiverse and Cults3D. Each opens in a tab, sessions kept.
+- No address bar: Back, Forward and Reload float over the page.
+- Pin any site to the sidebar, under Snapmaker Space; Favorites there too.
+- A model downloaded from any tab goes straight to [Prepare](#-prepare);
+  other files land in [Files](#-files).
 
 <br clear="both">
 
@@ -81,7 +85,7 @@ The U1 plate as in Orca — then slice.
 
 <br clear="both">
 
-### ✦ AI
+### ✦ Create
 
 <img align="left" width="48%" hspace="12" src="docs/screenshots/ai-chat.png" alt="An AI conversation" />
 
@@ -414,7 +418,7 @@ U1's.
 
 **What leaves my computer?** No telemetry. Snap Studio talks to GitHub (to
 check for updates and download the engine), to your printers on the local
-network, to the sites you open in the Library, and — if you use the AI —
+network, to the sites you open in Explore, and — if you use the AI —
 to Anthropic through Claude Code.
 
 **Why does macOS warn me at the first launch?** The app is not signed with
@@ -427,7 +431,7 @@ printers, favorites and conversations are carried over on first launch.
 
 | | |
 |---|---|
-| ⌥⌘1 … ⌥⌘4 | Library / AI / Files / Prepare |
+| ⌥⌘1 … ⌥⌘4 | Explore / Create / Files / Prepare |
 | ⌘O · ⌘R · ⌘F | open a folder · refresh · search |
 | ⌘1 / ⌘2 | thumbnails / list |
 | ⏎ · double-click | prepare (add to the plate); G-code: toolpaths |
@@ -457,7 +461,6 @@ with its pull request (drafts, approved or under discussion):
 | **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
-| **Snapmaker hub** — Snapmaker Space, Store, Wiki, Forum and account in one menu, models opened straight in Prepare | [#23](https://github.com/kameka22/snap-studio/pull/23) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
 

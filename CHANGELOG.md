@@ -45,6 +45,8 @@ with its packages for macOS, Windows and Linux. What comes next:
   when part of a side is selected, each side counting its own objects.
 
 ### Changed
+- **Create**: the AI entry of the sidebar, and its view, now read
+  Create; Settings › AI keeps its name.
 - **Explore's tabs**: no toolbar and no address bar any more; the tab
   strip takes the top of the view. Back, Forward and Reload float over
   the page at its top-left, discreet until the pointer comes. The star
