@@ -13,7 +13,13 @@ const TRACE_C = { dim: "\x1b[90m", user: "\x1b[1;36m", tool: "\x1b[33m", bold: "
 /* Lines of a tool result shown; the rest is counted. */
 const TRACE_RESULT_LINES = 8;
 
-const traceNl = (s) => String(s).replace(/\r?\n/g, "\r\n");
+/* Text for the terminal: line ends as xterm wants them, and no control
+   or escape character of the text's own (a tool result may carry a file's
+   ANSI colours, a page's escape sequences: the terminal would obey them). */
+const traceNl = (s) =>
+  String(s)
+    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "")
+    .replace(/\r?\n/g, "\r\n");
 
 /* What a tool was given, in one line: the command, the file, otherwise
    its input as compact JSON. */
@@ -95,8 +101,6 @@ function traceEvent(ev, st, t) {
       return `${C.dim}${t("trace.exited")}${ev.code != null ? ` (${t("trace.code", { code: ev.code })})` : ""}${C.off}\r\n`;
     case "auth_failed":
       return `${C.err}${t("trace.auth")}${C.off}\r\n`;
-    case "error":
-      return `${C.err}✗ ${traceNl(ev.text || "")}${C.off}\r\n`;
     case "system":
       return ev.subtype === "api_retry" ? `${C.tool}${t("trace.retry", { n: ev.attempt, max: ev.max_retries })}${C.off}\r\n` : "";
     default:

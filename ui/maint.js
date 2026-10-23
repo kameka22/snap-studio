@@ -396,7 +396,6 @@ $("mt-body").addEventListener("click", (e) => {
     const id = row.dataset.mtToggle;
     MT.open.has(id) ? MT.open.delete(id) : MT.open.add(id);
     row.parentElement.classList.toggle("open");
-    row.parentElement.querySelector(".mt-chev");
   }
 });
 $("mt-refresh").addEventListener("click", () => {

@@ -540,11 +540,6 @@ function chatHandle(ev, live) {
     case "auth_failed":
       if (live) chatAuthFailed();
       break;
-    case "error":
-      if (CHAT.id) IA.failed.add(CHAT.id);
-      chatSetBusy(false);
-      chatNote(ev.text, "error");
-      break;
   }
 }
 
@@ -553,9 +548,9 @@ listen("ia-chat", (e) => {
   for (const ev of events) {
     if (id === CHAT.id && CHAT.loading === id) CHAT.early.push(ev);
     else if (id === CHAT.id) chatHandle(ev, true);
-    else if (ev.type === "result" || ev.type === "exited" || ev.type === "error") {
+    else if (ev.type === "result" || ev.type === "exited") {
       CHAT.busy.delete(id);
-      if ((ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") || ev.type === "error") IA.failed.add(id);
+      if (ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") IA.failed.add(id);
       iaStatusChanged();
     }
   }
@@ -871,5 +866,8 @@ chatList.addEventListener("click", (e) => {
 /* A new language: the conversation is drawn again from its past. */
 window.addEventListener("langchange", () => {
   const c = CHAT.id && IA.list.find((x) => x.id === CHAT.id);
-  if (c && !CHAT.busy.has(c.id)) chatOpen(c);
+  // Redrawn even while answering (notes, permission cards and labels
+  // change language); only a text being streamed is left alone, it
+  // would lose its partial text until the next piece.
+  if (c && !CHAT.streaming) chatOpen(c);
 });
