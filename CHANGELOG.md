@@ -11,6 +11,13 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Changed
+- **App icon**: thick-line 3D printer mark (build plate + nozzle, rainbow accent),
+  sized for the macOS Dock; applied to the app bundle, in-app chrome, and the
+  site favicon ([#23](https://github.com/kameka22/snap-studio/pull/23)).
+- **Explore screenshot** on the README and the site: the Explore home (Space,
+  Store, Wiki, Forum, Account, libraries and Store picks).
+
 ### Added
 - **Explore** ([#23](https://github.com/kameka22/snap-studio/pull/23)):
   the Library becomes Explore, with the Snapmaker ecosystem beside the

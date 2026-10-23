@@ -44,7 +44,7 @@
 
 ### 🧭 Explore
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Explore" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Explore home: Space, Store, Wiki, Forum, Account, libraries and Store picks" />
 
 The Snapmaker ecosystem and the model sites you use, inside the app.
 

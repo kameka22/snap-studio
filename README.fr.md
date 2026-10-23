@@ -48,7 +48,7 @@ l'[Affichage](#-affichage)
 
 ### 🧭 Explorer
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Explorer" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Accueil Explorer : Space, Store, Wiki, Forum, Compte, bibliothèques et coups de cœur Store" />
 
 L'écosystème Snapmaker et les sites de modèles que vous utilisez, dans
 l'app.
