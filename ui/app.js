@@ -175,7 +175,8 @@ function tbRender() {
   const t = TB[v] || { title: "", sub: "" };
   $("tb-title").textContent = t.title;
   $("tb-sub").textContent = t.sub;
-  document.querySelectorAll(".tb-actions").forEach((el) => el.classList.toggle("on", el.dataset.for === v));
+  // `data-for` may name several views ("library snapmaker": the same tabs).
+  document.querySelectorAll(".tb-actions").forEach((el) => el.classList.toggle("on", el.dataset.for.split(" ").includes(v)));
 }
 
 /* ------------------------------------------------------------- sidebar */

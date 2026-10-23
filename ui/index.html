@@ -19,11 +19,15 @@
   <nav class="side-nav">
     <div class="side-block">
       <button class="side-item" data-view="library">
-        <span class="glyph" style="color: #FF9500"><svg viewBox="0 0 24 24"><path d="M4 4h5v16H4zm6 0h4v16h-4zm5.3.6 3.9-1 3.8 14.6-3.9 1z"/></svg></span>
-        <span class="lbl" data-i18n="nav.library">Library</span>
+        <span class="glyph" style="color: #FF9500"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m4.2 3.8-6 2.4-2.4 6 6-2.4zM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></svg></span>
+        <span class="lbl" data-i18n="nav.explore">Explore</span>
         <span class="count" id="count-library"></span>
       </button>
       <div class="side-group side-sub">
+        <button id="side-space" class="side-item">
+          <span class="glyph" style="color: #1F6FEB"><svg viewBox="-1.5 4.6 15.3 15.3"><path d="M4.86179 10.6289C3.67929 10.4313 2.92954 9.76981 3.04174 9.21311C3.20023 8.41243 4.48069 8.20452 6.2117 8.15297C7.65631 8.12232 9.09352 8.36032 10.4448 8.854L11.4261 6.64095C9.79357 5.939 8.03083 5.56263 6.24375 5.53442C2.71228 5.53442 0 7.34885 0 9.38493C0 11.598 2.71762 13.0224 5.34263 13.2629C7.47968 13.4588 8.79575 14.2234 8.7263 14.9502C8.6604 15.5911 7.55804 15.909 6.3417 15.964C4.56705 16.0451 2.79337 15.7852 1.12373 15.1994L0.144251 17.433C2.27184 18.3763 4.61947 18.7621 6.95076 18.5516C10.2935 18.2492 12.2934 16.1358 12.0441 14.4279C11.5579 11.0842 6.92405 10.9777 4.86179 10.6289Z"/></svg></span>
+          <span class="lbl" data-i18n="snap.space">Snapmaker Space</span>
+        </button>
         <button id="side-favs" class="side-item">
           <span class="glyph" style="color: #FFCC00"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></span>
           <span class="lbl" data-i18n="library.favorites">Favorites</span>
@@ -97,9 +101,6 @@
   <div class="tb-actions tb-add" data-for="ia">
     <button id="ia-new" class="tb-btn labeled" title="Create an object" data-i18n-title="ia.new.button"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="ia.new_object">New Object</span></button>
   </div>
-  <div class="tb-actions tb-add" data-for="library">
-    <button id="lib-add" class="tb-btn labeled" title="Open a site" data-i18n-title="library.open_site"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="library.open">Open…</span></button>
-  </div>
   <div class="tb-actions tb-add" data-for="prepare">
     <button id="p-add" class="tb-btn labeled" title="Add files to the plate" data-i18n-title="prepare.add.title"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="common.add">Add</span></button>
   </div>
@@ -153,15 +154,6 @@
     <div id="ia-dacts" class="tb-group hidden">
       <button id="ia-folder" class="tb-btn" title="Show the working folder" data-i18n-title="ia.show_workspace"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
       <button id="ia-delete" class="btn ia-delete-btn" title="Delete the conversation and its Claude session" data-i18n-title="ia.delete.button_title"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg><span data-i18n="ia.delete.button">Delete Conversation</span></button>
-    </div>
-  </div>
-  <div class="tb-actions" data-for="library">
-    <div id="lib-bar" class="tb-group hidden">
-      <button id="lib-back" class="tb-btn" title="Back" data-i18n-title="library.back"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
-      <button id="lib-fwd" class="tb-btn" title="Forward" data-i18n-title="library.forward"><svg viewBox="0 0 24 24"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z"/></svg></button>
-      <button id="lib-reload" class="tb-btn" title="Reload" data-i18n-title="library.reload"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
-      <div id="lib-url" class="tb-url" title=""></div>
-      <button id="lib-fav" class="tb-btn" title="Add to favorites" data-i18n-title="library.fav"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></button>
     </div>
   </div>
   <div class="tb-actions" data-for="prepare">
@@ -621,23 +613,42 @@
 </section>
 
 <section id="view-library" class="view hidden">
-  <div class="lib-tabs">
+  <div class="lib-tabs" data-tauri-drag-region>
     <button class="lib-tab pin on" data-tab="home" title="Home" data-i18n-title="library.home">
       <svg viewBox="0 0 24 24"><path d="m12 3 9 8h-3v9h-5v-6h-2v6H6v-9H3z"/></svg>
     </button>
-    <button class="lib-tab pin" data-tab="favs">
+    <button class="lib-tab pin" data-tab="favs" title="Favorites" data-i18n-title="library.favorites">
       <svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg>
-      <span data-i18n="library.favorites">Favorites</span>
+    </button>
+    <button id="lib-add" class="lib-tab pin add" title="Open a site" data-i18n-title="library.open_site">
+      <svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
     </button>
     <div id="lib-tablist" class="lib-tablist"></div>
+    <span id="lib-status" class="lib-status hidden"></span>
+    <div id="lib-actions" class="lib-actions hidden">
+      <button id="lib-fav" class="tb-btn" title="Add to favorites" data-i18n-title="library.fav"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></button>
+      <button id="lib-ext" class="tb-btn" title="Open in the browser" data-i18n-title="library.open_browser"><svg viewBox="0 0 24 24"><path d="M14 4h6v6h-2V7.4l-7.3 7.3-1.4-1.4L16.6 6H14zM5 6h6v2H7v9h9v-4h2v6H5z"/></svg></button>
+    </div>
   </div>
 
   <div id="lib-frame" class="lib-frame">
     <div id="lib-home" class="lib-home">
-      <div class="lib-start">
-        <h1 data-i18n="library.start.title">Find models to print</h1>
-        <p data-i18n="library.start.text">Open a site, then star the models you want to print: they wait for you in Favorites.</p>
-        <div id="lib-sites" class="lib-sites"></div>
+      <div class="ex-home">
+        <div class="ex-section">
+          <h2 data-i18n="explore.snapmaker">Snapmaker ecosystem</h2>
+          <div id="ex-snap" class="ex-snap"></div>
+        </div>
+        <div id="ex-store" class="ex-section hidden">
+          <div class="ex-head">
+            <h2 data-i18n="snap.store.title">Featured on the Store</h2>
+            <button id="ex-store-more" class="btn small" data-i18n="snap.store.more">See the Store</button>
+          </div>
+          <div id="ex-products" class="snap-products"></div>
+        </div>
+        <div class="ex-section">
+          <h2 data-i18n="explore.libraries">Libraries</h2>
+          <div id="ex-libs"></div>
+        </div>
       </div>
     </div>
     <div id="lib-favs" class="lib-home hidden">
@@ -652,6 +663,18 @@
     </div>
   </div>
 </section>
+<div id="lib-picker" class="modal hidden">
+  <div class="modal-box ex-picker" role="dialog" aria-labelledby="ex-picker-title">
+    <div class="ex-head">
+      <h3 id="ex-picker-title" data-i18n="explore.pick">Open a site</h3>
+      <button id="lib-picker-close" class="tb-btn" title="Close" data-i18n-title="common.close"><svg viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6 10.6 12 5 6.4z"/></svg></button>
+    </div>
+    <h2 data-i18n="explore.snapmaker">Snapmaker ecosystem</h2>
+    <div id="ex-pick-snap" class="ex-grid"></div>
+    <h2 data-i18n="explore.libraries">Libraries</h2>
+    <div id="ex-pick-libs" class="ex-grid"></div>
+  </div>
+</div>
 
 <section id="view-ia" class="view hidden">
   <div id="ia-blocked" class="ia-blocked hidden">

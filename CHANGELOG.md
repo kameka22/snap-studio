@@ -12,6 +12,16 @@ with its packages for macOS, Windows and Linux. What comes next:
 ## [Unreleased]
 
 ### Added
+- **Explore** ([#23](https://github.com/kameka22/snap-studio/pull/23)):
+  the Library becomes Explore, with the Snapmaker ecosystem beside the
+  model libraries. Its home shows Snapmaker Space, Store, Wiki, Forum and
+  Account as cards with the sites' own icons, a few products featured
+  from the Store, then the libraries; each opens in a tab. The sidebar
+  entry always lands on the home; "Snapmaker Space" and "Favorites" sit
+  under it. A "+" in the tab strip opens the same cards in a sheet. A
+  model (.3mf, .stl) downloaded from any tab goes straight to the plate
+  in Prepare.
+
 - **Prepare › colour modes** ([#52](https://github.com/kameka22/snap-studio/pull/52)):
   heads are assigned "by object" (each object chooses, under its row, as
   before) or "by colour" (the plate's colours, as the 3MF names them, are
@@ -33,6 +43,13 @@ with its packages for macOS, Windows and Linux. What comes next:
   mirroring the "+" of an off-plate one; "Add All" and "Take All Off"
   follow the selection, becoming "Add 2 Objects" or "Take 1 Object Off"
   when part of a side is selected, each side counting its own objects.
+
+### Changed
+- **Explore's tabs**: no toolbar and no address bar any more; the tab
+  strip takes the top of the view. Back, Forward and Reload float over
+  the page at its top-left, discreet until the pointer comes. The star
+  and "open in the browser" sit at the right of the tab strip; download
+  notices show in it.
 
 ### Fixed
 - **Camera**: a camera that failed to start on the Prints record is
