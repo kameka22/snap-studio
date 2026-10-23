@@ -313,6 +313,10 @@
           <button type="button" id="p-objects-fold" class="p-tw p-fold">▾</button>
           <span class="p-float-title" data-i18n="prepare.objects" title="Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it" data-i18n-title="prepare.list.hint">Objects</span>
           <span id="p-objects-n" class="p-float-n"></span>
+          <div id="p-assoc" class="seg" role="radiogroup" title="How colours get their heads" data-i18n-title="prepare.assoc.title">
+            <button type="button" class="seg-btn" role="radio" data-assoc="object" data-i18n="prepare.assoc.object">By object</button>
+            <button type="button" class="seg-btn" role="radio" data-assoc="colour" data-i18n="prepare.assoc.colour">By colour</button>
+          </div>
           <select id="p-printer" class="hidden"></select>
         </div>
         <div id="p-list" class="p-float-body"></div>
@@ -934,6 +938,15 @@
         </span>
         <input type="checkbox" id="set-spool-check" class="sw" role="switch" />
       </label>
+      <div class="grow-row">
+        <span class="k"><span data-i18n="settings.assoc">Colour to head assignment</span>
+          <span class="sub" data-i18n="settings.assoc.sub">The mode Prepare starts with; it can be changed above the object list at any time</span>
+        </span>
+        <select id="set-assoc">
+          <option value="object" data-i18n="prepare.assoc.object">By object</option>
+          <option value="colour" data-i18n="prepare.assoc.colour">By colour</option>
+        </select>
+      </div>
     </div>
       </div>
     </div>
@@ -1661,6 +1674,20 @@
   </div>
 </div>
 
+<div id="assocmodal" class="modal hidden">
+  <div class="modal-box" role="dialog" aria-labelledby="assoc-title">
+    <h3 id="assoc-title" data-i18n="prepare.assoc.modal.title">Two ways to assign heads</h3>
+    <p data-i18n="prepare.assoc.modal.object">By object: each object chooses a head for each of its colours, under its row.</p>
+    <p data-i18n="prepare.assoc.modal.colour">By colour: the plate's colours, as the 3MF names them, are assigned once for every object, above the list, as Snapmaker Orca does.</p>
+    <p data-i18n="prepare.assoc.modal.handoff">Switching keeps what agrees: a colour every object sends to the same head keeps it; one the objects disagree on waits for your choice, and the slice waits with it.</p>
+    <p class="det-sub" data-i18n="prepare.assoc.modal.default">The mode Prepare starts with is set in Settings › Prepare.</p>
+    <label class="q-check"><input id="assoc-noshow" type="checkbox" /> <span data-i18n="prepare.assoc.modal.noshow">Don't show this again</span></label>
+    <div class="modal-actions">
+      <button id="assoc-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="assoc-go" class="btn primary" data-i18n="prepare.assoc.modal.go">Switch</button>
+    </div>
+  </div>
+</div>
 <div id="authmodal" class="modal hidden">
   <div class="modal-box auth-box">
     <h3 data-i18n="auth.title">Claude account</h3>
