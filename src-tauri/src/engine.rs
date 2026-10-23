@@ -259,7 +259,6 @@ async fn download(app: &AppHandle, a: &Asset, part: &Path) -> Result<()> {
 }
 
 async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
-    use futures_util::StreamExt;
     let root = root();
     std::fs::create_dir_all(&root)?;
     let part = root.join(format!(".download-{}.part", manifest().version));
@@ -332,7 +331,7 @@ pub fn remove() -> Result<Status> {
         return Err(anyhow!(crate::t!("err.engine_busy")));
     }
     let dir = install_dir();
-    let r = if dir.exists() { std::fs::remove_dir_all(&dir).map_err(Into::into) } else { Ok(()) };
+    let r: Result<()> = if dir.exists() { std::fs::remove_dir_all(&dir).map_err(anyhow::Error::from) } else { Ok(()) };
     BUSY.store(false, Ordering::SeqCst);
     r?;
     Ok(status())

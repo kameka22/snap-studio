@@ -1185,7 +1185,6 @@ mod tests {
     #[test]
     fn simple_reads_and_writes_preset_values() {
         let Ok(l) = lists(None) else { return };
-        let machine = l.selected.get("machine").cloned().unwrap_or_else(|| l.machines[0].name.clone());
         let process = l
             .processes
             .iter()
