@@ -1004,7 +1004,7 @@ function prObjectMenu(e) {
    Colour…" once it has one), its colour/heads frame in "by object" mode. */
 function prMenuFor(id, x, y) {
   if (!PR.sel.has(id)) prSelect([id], false);
-  const o = PR.objects.find((x) => x.id === id);
+  const o = PR.objects.find((ob) => ob.id === id);
   PR.menuId = id;
   PR.menuAt = { x, y };
   const many = PR.sel.size > 1;
@@ -2710,11 +2710,19 @@ function prAssocApply(mode) {
   if (mode === PR.assoc) return;
   prRemember();
   if (mode === "colour") {
-    const effective = (o) => Object.fromEntries(Object.entries(prHeads(o)).map(([ext, v]) => [ext, v.h]));
+    // Only the objects that bring colours to the banner vote: an
+    // uncoloured one (its colour is a stand-in) or one with a picked head
+    // would otherwise weigh on colour 1.
+    const effective = (o) =>
+      prBannerColours(o).length ? Object.fromEntries(Object.entries(prHeads(o)).map(([ext, v]) => [ext, v.h])) : {};
     PR.colourHeads = plMigrateToColour(PR.objects, bedState, effective, plPlateColours(PR.objects, bedState, prBannerColours));
   } else {
-    const heads = plMigrateToObject(PR.objects, bedState, prColors, PR.colourHeads);
-    for (const o of PR.objects) if (heads[o.id]) o.heads = heads[o.id];
+    const heads = plMigrateToObject(PR.objects, bedState, prBannerColours, PR.colourHeads);
+    for (const o of PR.objects) {
+      if (heads[o.id]) o.heads = heads[o.id];
+      // A head picked for the whole object becomes its choice for each colour.
+      if (o.pick != null && bedState(o) !== "out") o.heads = Object.fromEntries(prColors(o).map((ext) => [ext, o.pick]));
+    }
   }
   PR.assoc = mode;
   prSave();
