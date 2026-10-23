@@ -1622,6 +1622,15 @@
   "prepare.assoc.modal.default": "Le mode de départ de Préparer se règle dans Réglages › Préparer.",
   "prepare.assoc.modal.noshow": "Ne plus afficher",
   "prepare.assoc.modal.go": "Changer de mode",
+  "prepare.menu.colour": "Colorer…",
+  "prepare.menu.recolour": "Changer la couleur…",
+  "prepare.colour.missing": "Pas de couleur dans le fichier : choisissez la tête qui imprime cet objet",
+  "prepare.colour.change": "Imprimé avec la tête T{h} · cliquer pour changer",
+  "prepare.colour.plate": "Reprendre les couleurs du plateau",
+  "prepare.tip.uncoloured": {
+    "one": "{n} objet n'a pas encore de couleur : choisissez sa tête sur sa ligne",
+    "other": "{n} objets n'ont pas encore de couleur : choisissez leur tête sur leur ligne"
+  },
   "settings.assoc": "Attribution des couleurs aux têtes",
   "settings.assoc.sub": "Le mode de départ de Préparer ; il se change à tout moment au-dessus de la liste des objets",
   "prepare.list.hint":"Clic : sélectionner · ⌘ clic : ajouter ou retirer · ⇧ clic : toutes les lignes jusqu’à celle-ci · glisser : sur le plateau ou à côté",

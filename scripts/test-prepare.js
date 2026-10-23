@@ -180,3 +180,15 @@ console.log("prepare: ok");
   assert.deepEqual(L.plMigrateToColour([], stateOf, headsOf, []), {});
   assert.deepEqual(L.plUnmapped([], {}), []);
 }
+
+// "By colour" mode: an on-plate object without a colour from its file,
+// and without a head picked by hand, blocks the slice.
+{
+  const objs = [
+    { id: 1, extruders: [1], st: "in" },
+    { id: 2, extruders: [], st: "in" },
+    { id: 3, extruders: [], st: "in", pick: 2 },
+    { id: 4, extruders: [], st: "out" },
+  ];
+  assert.deepEqual(L.plUncoloured(objs, (o) => o.st, (o) => o.extruders || []), [2]);
+}

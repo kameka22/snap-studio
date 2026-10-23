@@ -65,8 +65,8 @@ void main() { frag = uColor; }`;
 /* ------------------------------------------------------------ state */
 
 /* An object as stored: placement and choices, never its mesh. */
-const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free }) => ({
-  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free,
+const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free }) => ({
+  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free,
 });
 
 function prSave() {
@@ -996,8 +996,19 @@ const normDeg = (a) => {
 function prObjectMenu(e) {
   const hit = prPick(e);
   if (!hit) return;
-  if (!PR.sel.has(hit.id)) prSelect([hit.id], false);
+  prMenuFor(hit.id, e.clientX, e.clientY);
+}
+
+/* The object's menu, from the plate or from its row in the list. "Colour…"
+   acts on this object (`PR.menuId`): the palette in "by colour" mode ("Change
+   Colour…" once it has one), its colour/heads frame in "by object" mode. */
+function prMenuFor(id, x, y) {
+  if (!PR.sel.has(id)) prSelect([id], false);
+  const o = PR.objects.find((x) => x.id === id);
+  PR.menuId = id;
+  PR.menuAt = { x, y };
   const many = PR.sel.size > 1;
+  const coloured = PR.assoc === "colour" && o && (o.pick != null || prOwnColours(o).length > 0);
   nativeMenu([
     { id: "prep:dup", label: many ? tr("prepare.menu.dup_many", { n: PR.sel.size }) : tr("prepare.menu.dup") },
     { id: "prep:split", label: tr("prepare.menu.split") },
@@ -1005,11 +1016,12 @@ function prObjectMenu(e) {
     { id: "prep:resetrot", label: tr("prepare.menu.reset_rot") },
     { id: "prep:orient", label: tr("prepare.menu.orient") },
     { id: "prep:facetool", label: tr("prepare.menu.face") },
+    { id: "prep:colour", label: tr(coloured ? "prepare.menu.recolour" : "prepare.menu.colour") },
     {},
     { id: "prep:arrange", label: tr("prepare.menu.arrange") },
     {},
     { id: "prep:del", label: many ? tr("prepare.menu.del_many", { n: PR.sel.size }) : tr("prepare.menu.del") },
-  ], e.clientX, e.clientY);
+  ], x, y);
 }
 
 function prPan(dx, dy) {
@@ -1036,13 +1048,15 @@ function prStatus() {
   // The toolbar shows only what can act on the plate as it is; Save,
   // Clear and Slice stay (on the right: the others come and go on their
   // left without moving them).
-  // "By colour" mode: a colour without a head blocks the slice.
-  const unmapped = prUnmapped();
+  // "By colour" mode: a colour without a head, or an uncoloured object
+  // without a picked one, blocks the slice.
+  const blockers = prBlockers();
+  const blocked = blockers.colours.length + blockers.objects.length;
   const tools = plTools({
     n,
     sel: PR.sel.size,
     onBed: g.on.length,
-    sliceable: (g.sliced > 0 || g.partial > 0) && !unmapped.length,
+    sliceable: (g.sliced > 0 || g.partial > 0) && !blocked,
     tool: PR.tool,
     orienting: !!PR.orienting,
     splitting: !!PR.splitting,
@@ -1060,7 +1074,8 @@ function prStatus() {
   const slice = $("p-slice");
   slice.textContent = g.sliced ? tr("prepare.slice_n", { n: g.sliced }) : tr("prepare.slice");
   slice.title = [
-    unmapped.length ? tr("prepare.tip.unmapped", { n: unmapped.length }) : "",
+    blockers.colours.length ? tr("prepare.tip.unmapped", { n: blockers.colours.length }) : "",
+    blockers.objects.length ? tr("prepare.tip.uncoloured", { n: blockers.objects.length }) : "",
     g.partial ? tr("prepare.tip.partial", { n: g.partial }) : "",
     g.off.length ? tr("prepare.tip.off", { n: g.off.length }) : "",
   ].filter(Boolean).join("\n");
@@ -1126,6 +1141,19 @@ function prRenderInspector() {
       : st === "out" ? (o.plate > 1 ? `<span class="tag">${esc(tr("prepare.tag.plate", { n: o.plate }))}</span>` : "")
       : overlap.has(o.id) ? `<span class="tag warn">${esc(tr("prepare.tag.overlap"))}</span>`
       : "";
+    // "By colour" mode, an on-plate object the 3MF gives no colour: a
+    // warning until a head is picked for it (a palette), then a chip
+    // showing that head, to change it.
+    let pickUi = "";
+    if (PR.assoc === "colour" && st !== "out" && (o.pick != null || !prOwnColours(o).length)) {
+      if (o.pick == null) {
+        pickUi = `<button type="button" class="p-ico p-warn" data-pick="${o.id}" title="${esc(tr("prepare.colour.missing"))}">${PR_ICON.warn}</button>`;
+      } else {
+        const s = slots.find((x) => x.index === o.pick);
+        const c = s?.present && s.color ? s.color : "";
+        pickUi = `<button type="button" class="p-chip" data-pick="${o.id}" title="${esc(tr("prepare.colour.change", { h: o.pick }))}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${o.pick}</button>`;
+      }
+    }
     // One action per row, on its own object: "+" puts an off-plate object
     // on the plate, "−" takes an on-plate one off; an object sticking out
     // keeps its warning instead.
@@ -1147,7 +1175,7 @@ function prRenderInspector() {
       .join("");
     const head = `<div class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}" role="button" tabindex="0">
       ${bare ? `<span class="p-tw"></span>` : `<span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>`}
-      <span class="k">${esc(o.name)}</span>${tag}<span class="p-dots">${dots}</span>${act}</div>`;
+      <span class="k">${esc(o.name)}</span>${tag}${pickUi}<span class="p-dots">${dots}</span>${act}</div>`;
     if (!open || !live) return head;
     const model = headsModelNow(o.path);
     return head + prColors(o).map((ext) => {
@@ -1558,6 +1586,13 @@ $("p-list").addEventListener("click", (e) => {
     prParkIds([+park.dataset.park]);
     return;
   }
+  // The warning or chip of an uncoloured object: the palette, under it.
+  const pick = e.target.closest("[data-pick]");
+  if (pick) {
+    const r = pick.getBoundingClientRect();
+    prColourPalette(PR.objects.find((o) => o.id === +pick.dataset.pick), r.left, r.bottom);
+    return;
+  }
   const fix = e.target.closest("[data-fix]");
   if (fix) {
     const r = fix.getBoundingClientRect();
@@ -1572,6 +1607,13 @@ $("p-list").addEventListener("click", (e) => {
   }
   const row = e.target.closest(".p-obj");
   if (row) prListPick(+row.dataset.id, e);
+});
+/* A row's menu: the same as the object's on the plate. */
+$("p-list").addEventListener("contextmenu", (e) => {
+  const row = e.target.closest(".p-obj");
+  if (!row) return;
+  e.preventDefault();
+  prMenuFor(+row.dataset.id, e.clientX, e.clientY);
 });
 $("p-list").addEventListener("keydown", (e) => {
   const row = e.target.closest?.(".p-obj");
@@ -2261,6 +2303,13 @@ $("p-add").addEventListener("click", prAddFiles);
 $("p-save").addEventListener("click", prSavePlate);
 $("p-clear").addEventListener("click", prClear);
 onMenu("prep", async (what) => {
+  const byId = (id) => PR.objects.find((o) => o.id === +id);
+  if (what === "colour") prColourAction(byId(PR.menuId), PR.menuAt?.x || 0, PR.menuAt?.y || 0);
+  if (what.startsWith("pick:")) {
+    const [, id, h] = what.split(":");
+    prSetPick(byId(id), +h);
+  }
+  if (what.startsWith("unpick:")) prSetPick(byId(what.slice(7)), null);
   if (what === "dup") prDuplicate();
   if (what === "split") prSplit();
   if (what === "center") prCenterSelection();
@@ -2512,30 +2561,92 @@ function prHeads(o, pid = headsActive(), slots = headsSlots(pid), n = headsCount
 
 /* ------------------------------------------------------------ colour modes */
 
+/* The colours the 3MF gives an object (none: an uncoloured object, which
+   "by colour" mode asks a head for, on its row). */
+function prOwnColours(o) {
+  return o.extruders?.length ? o.extruders : [];
+}
+
+/* The colours an object brings to the plate's banner: none once a head
+   was picked for it, which prints the whole object. */
+function prBannerColours(o) {
+  return o.pick != null ? [] : prOwnColours(o);
+}
+
 /* The plate's colours, each with what the 3MF says of it (from the first
    on-plate object carrying it): { ext, kind, color }. */
 function prPlateColours() {
-  return plPlateColours(PR.objects, bedState, prColors).map((ext) => {
-    const o = PR.objects.find((x) => bedState(x) !== "out" && prColors(x).includes(ext));
+  return plPlateColours(PR.objects, bedState, prBannerColours).map((ext) => {
+    const o = PR.objects.find((x) => bedState(x) !== "out" && prBannerColours(x).includes(ext));
     const f = o ? headsModelNow(o.path)?.filaments?.find((x) => x.index === ext) : null;
     return { ext, kind: f?.kind, color: f?.color };
   });
 }
 
-/* The plate's colours still without a head ("by colour" mode only). A
-   declaration: `prStatus` may run before this point of the file. */
+/* What blocks the slice in "by colour" mode: the plate's colours without
+   a head, and the uncoloured objects without a picked one. Declarations:
+   `prStatus` may run before this point of the file. */
+function prBlockers() {
+  if (PR.assoc !== "colour") return { colours: [], objects: [] };
+  return {
+    colours: plUnmapped(plPlateColours(PR.objects, bedState, prBannerColours), PR.colourHeads),
+    objects: plUncoloured(PR.objects, bedState, prOwnColours),
+  };
+}
 function prUnmapped() {
-  return PR.assoc === "colour" ? plUnmapped(plPlateColours(PR.objects, bedState, prColors), PR.colourHeads) : [];
+  return prBlockers().colours;
 }
 
-/* An object's heads as the slice gets them: its own in "by object" mode,
-   the plate's in "by colour" mode (a colour still unmapped keeps the
-   object's; the slice is blocked while one is). */
+/* An object's heads as the slice gets them: its own in "by object" mode;
+   in "by colour" mode the plate's, or the head picked for the object on
+   its row, which prints the whole object (a colour still unmapped keeps
+   the object's; the slice is blocked while one is). */
 function prSliceHeads(o) {
   if (PR.assoc !== "colour") return o.heads || {};
   const heads = { ...(o.heads || {}) };
-  for (const ext of prColors(o)) if (PR.colourHeads[ext] != null) heads[ext] = PR.colourHeads[ext];
+  for (const ext of prColors(o)) {
+    if (o.pick != null) heads[ext] = o.pick;
+    else if (PR.colourHeads[ext] != null) heads[ext] = PR.colourHeads[ext];
+  }
   return heads;
+}
+
+/* The head picked for an object in "by colour" mode (null: the plate's
+   colours again). */
+function prSetPick(o, h) {
+  if (!o) return;
+  prRemember();
+  if (h == null) delete o.pick;
+  else o.pick = h;
+  prSave();
+  prRenderInspector();
+  prSchedule();
+}
+
+/* The palette: a native menu of the heads, with the spool each holds. */
+function prColourPalette(o, x, y) {
+  if (!o) return;
+  const pid = headsActive(), slots = headsSlots(pid), n = headsCount(pid);
+  const items = Array.from({ length: n }, (_, h) => {
+    const s = slots.find((x) => x.index === h);
+    const what = s ? (s.present ? [s.kind, s.color].filter(Boolean).join(" · ") : tr("printers.empty_tag")) : "";
+    return { id: `prep:pick:${o.id}:${h}`, label: `T${h}${what ? " · " + what : ""}`, checked: o.pick === h };
+  });
+  if (o.pick != null) items.push({}, { id: `prep:unpick:${o.id}`, label: tr("prepare.colour.plate") });
+  nativeMenu(items, x, y);
+}
+
+/* "Colour…" from a menu: the palette in "by colour" mode; in "by object"
+   mode the object's colour/heads frame, unfolded in the list. */
+function prColourAction(o, x, y) {
+  if (!o) return;
+  if (PR.assoc === "colour") return prColourPalette(o, x, y);
+  PR.fold.delete(o.id);
+  if (PRUI.listFolded) {
+    PRUI.listFolded = false;
+    pruiSave();
+  }
+  prSelect([o.id], false);
 }
 
 /* "By colour" mode: the banner above the list, one row per colour of the
@@ -2600,7 +2711,7 @@ function prAssocApply(mode) {
   prRemember();
   if (mode === "colour") {
     const effective = (o) => Object.fromEntries(Object.entries(prHeads(o)).map(([ext, v]) => [ext, v.h]));
-    PR.colourHeads = plMigrateToColour(PR.objects, bedState, effective, plPlateColours(PR.objects, bedState, prColors));
+    PR.colourHeads = plMigrateToColour(PR.objects, bedState, effective, plPlateColours(PR.objects, bedState, prBannerColours));
   } else {
     const heads = plMigrateToObject(PR.objects, bedState, prColors, PR.colourHeads);
     for (const o of PR.objects) if (heads[o.id]) o.heads = heads[o.id];

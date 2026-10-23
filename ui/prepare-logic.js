@@ -228,9 +228,16 @@ function plMigrateToObject(objects, stateOf, coloursOf, colourHeads) {
   return out;
 }
 
+/* "By colour" mode: the on-plate objects the 3MF gives no colour, and
+   that have no head picked by hand either: each blocks the slice until
+   one is chosen on its row. Their ids. */
+function plUncoloured(objects, stateOf, ownColoursOf) {
+  return objects.filter((o) => stateOf(o) !== "out" && !ownColoursOf(o).length && o.pick == null).map((o) => o.id);
+}
+
 /* The plate's colours still without a head: they block the slice. */
 const plUnmapped = (colours, colourHeads) => colours.filter((c) => colourHeads[c] == null);
 
 if (typeof module !== "undefined") {
-  module.exports = { plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
+  module.exports = { plUncoloured, plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
 }

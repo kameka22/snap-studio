@@ -2322,6 +2322,8 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 /* Prepare: the colour → head mode switch in the list's header, and the
    "by colour" banner (one row per colour of the plate). */
 #p-assoc { margin-left: auto; }
+.p-chip { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elev, transparent); font-size: 10px; font-weight: 600; cursor: pointer; }
+.p-chip i { width: 9px; height: 9px; border-radius: 50%; background: #999; }
 .p-colours .p-color.unmapped .p-color-lbl { color: var(--danger); }
 .p-colours .p-color .tag { margin-left: 4px; }
 
