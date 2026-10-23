@@ -1578,6 +1578,7 @@ body.no-toolbar .toolbar { display: none; }
 .ex-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ex-head h2, .ex-head h3 { margin: 0 0 12px; }
 .ex-snap { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr); gap: 12px; align-items: stretch; }
+.ex-snap .ex-four { grid-auto-rows: 1fr; }
 .ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .ex-grid.ex-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ex-card {
@@ -1608,11 +1609,18 @@ body.no-toolbar .toolbar { display: none; }
 .ex-card .ex-name { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
 .ex-card .ex-desc { font-size: 11.5px; color: var(--text-secondary); line-height: 1.3; }
 .ex-card .ex-host { font-size: 10.5px; color: var(--text-tertiary, var(--text-secondary)); opacity: 0.8; }
-.ex-card.hero { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 22px; min-height: 160px; }
+/* The hero fills its cell: as tall as the two rows of cards beside it. */
+.ex-card.hero { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 22px; height: 100%; box-sizing: border-box; }
 .ex-card.hero .ex-name { font-size: 18px; }
 .ex-card.hero .ex-desc { font-size: 12.5px; }
 .ex-card.hero .ex-go { align-self: flex-end; pointer-events: none; }
-@container (max-width: 700px) { .ex-snap { grid-template-columns: 1fr; } }
+/* Below: the libraries on the left, the Store's picks on the right; one
+   column when the picks are not there. */
+.ex-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.ex-split:has(> .hidden) { grid-template-columns: 1fr; }
+.ex-split .ex-grid { grid-template-columns: 1fr; }
+.ex-split .snap-products { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); margin-top: 0; }
+@container (max-width: 700px) { .ex-snap, .ex-split { grid-template-columns: 1fr; } }
 
 /* The "+" picker: a sheet of the same cards, under the tab strip. */
 .ex-picker { width: min(720px, calc(100vw - 48px)); max-height: calc(100vh - 80px); overflow-y: auto; }
