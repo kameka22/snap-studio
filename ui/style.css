@@ -2319,6 +2319,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 /* Wide enough for "Color 1" beside the four head tokens. */
 .p-objects { left: 12px; width: 300px; }
 .p-insp { right: 12px; width: 300px; }
+/* Prepare: the colour → head mode switch in the list's header, and the
+   "by colour" banner (one row per colour of the plate). */
+#p-assoc { margin-left: auto; }
+.p-colours .p-color.unmapped .p-color-lbl { color: var(--danger); }
+.p-colours .p-color .tag { margin-left: 4px; }
+
 .p-float-head {
   flex: none;
   display: flex;

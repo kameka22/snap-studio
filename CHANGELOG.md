@@ -12,6 +12,16 @@ with its packages for macOS, Windows and Linux. What comes next:
 ## [Unreleased]
 
 ### Added
+- **Prepare › colour modes** ([#52](https://github.com/kameka22/snap-studio/pull/52)):
+  heads are assigned "by object" (each object chooses, under its row, as
+  before) or "by colour" (the plate's colours, as the 3MF names them, are
+  assigned once for every object in a banner above the list, as Snapmaker
+  Orca does). The switch sits in the object list's header; Settings ›
+  Prepare chooses the mode Prepare starts with. The first switch explains
+  the two modes once. Switching keeps the associations that agree: a
+  colour every object sends to the same head keeps it, one the objects
+  disagree on waits for a choice, and the slice waits with it. The
+  header now reads "Objects (n)" with the total only.
 - **Prepare › object list** ([#51](https://github.com/kameka22/snap-studio/pull/51)):
   the colour and heads frame only shows for objects on the plate (heads
   do not apply off it); each on-plate object has a "−" to take it off,
