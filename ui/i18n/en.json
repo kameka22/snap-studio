@@ -841,6 +841,8 @@
   "err.engine_busy": "installation already in progress",
   "err.download_refused": "download refused: {status}",
   "err.download_cancelled": "download cancelled",
+  "err.download_stalled": "download stalled: no data for 30 s",
+  "err.download_size": "unexpected download size ({got} bytes instead of {want})",
   "err.checksum": "invalid checksum: file corrupted or modified",
   "err.archive": "unreadable archive: {err}",
   "err.extract": "could not extract: {err}",

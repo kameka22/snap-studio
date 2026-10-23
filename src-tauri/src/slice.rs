@@ -337,6 +337,10 @@ struct Preview {
     gcode: PathBuf,
     source: PathBuf,
     out_dir: Option<PathBuf>,
+    /// Order of arrival: the oldest go when there are too many.
+    seq: u64,
+    /// Where `save` last put it: saving again overwrites that copy only.
+    saved: Option<PathBuf>,
 }
 
 fn previews() -> &'static Mutex<std::collections::HashMap<String, Preview>> {
@@ -344,10 +348,44 @@ fn previews() -> &'static Mutex<std::collections::HashMap<String, Preview>> {
     P.get_or_init(Default::default)
 }
 
+/// Previews kept at once. The sheet shows one; a few more cover a print
+/// being sent while the next slice runs. Beyond that, the oldest working
+/// folders (a whole plate.3mf and its G-code each) would pile up in the
+/// temporary folder until `discard`, which only the sheet calls.
+const MAX_PREVIEWS: usize = 8;
+
+/// Keeps a finished slice, letting the oldest go past `MAX_PREVIEWS`.
+fn remember_preview(id: String, p: Preview) {
+    remember_in(&mut previews().lock().unwrap(), id, p, MAX_PREVIEWS);
+}
+
+fn remember_in(list: &mut std::collections::HashMap<String, Preview>, id: String, p: Preview, max: usize) {
+    list.insert(id, p);
+    while list.len() > max {
+        let Some(oldest) = list.iter().min_by_key(|(_, p)| p.seq).map(|(k, _)| k.clone()) else { break };
+        if let Some(p) = list.remove(&oldest) {
+            let _ = std::fs::remove_dir_all(&p.work);
+        }
+    }
+}
+
+fn next_seq() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(1);
+    N.fetch_add(1, Ordering::Relaxed)
+}
+
 /// Prefix of the working folders, in the system's temporary folder.
 const WORK_PREFIX: &str = "snapstudio_slice_";
 
-type Jobs = Mutex<std::collections::HashMap<String, u32>>;
+/// A slice under way: its engine process once started. Registered from the
+/// first step, so that `cancel` reaches a job still preparing (presets,
+/// scene written out), which can take a while on a dense plate.
+struct Job {
+    pid: Option<u32>,
+}
+
+type Jobs = Mutex<std::collections::HashMap<String, Job>>;
 
 fn jobs() -> &'static Jobs {
     static J: OnceLock<Jobs> = OnceLock::new();
@@ -619,6 +657,8 @@ pub fn run_job(
         });
 
         let work = std::env::temp_dir().join(format!("{WORK_PREFIX}{job_id}"));
+        // Nothing of a failed slice is worth keeping: its folder goes now,
+        // not with the day-old ones at the next start.
         let fail = |msg: String| {
             report(Progress {
                 id: job_id.clone(),
@@ -629,7 +669,22 @@ pub fn run_job(
                 ..Default::default()
             });
             jobs().lock().unwrap().remove(&job_id);
+            let _ = std::fs::remove_dir_all(&work);
         };
+        let cancelled_now = || {
+            let _ = std::fs::remove_dir_all(&work);
+            report(Progress {
+                id: job_id.clone(),
+                phase: "cancelled".into(),
+                elapsed_s: el(&t0),
+                message: None,
+                gcode: None,
+                ..Default::default()
+            });
+        };
+        // `cancel` removes the job: from here on, its absence means "stop".
+        jobs().lock().unwrap().insert(job_id.clone(), Job { pid: None });
+        let is_cancelled = || !jobs().lock().unwrap().contains_key(&job_id);
         let _ = std::fs::create_dir_all(&work);
 
         let mut overrides = req.simple.clone().unwrap_or_default().to_overrides();
@@ -648,6 +703,9 @@ pub fn run_job(
             Ok(p) => p,
             Err(e) => return fail(e.to_string()),
         };
+        if is_cancelled() {
+            return cancelled_now();
+        }
 
         // The engine crashes loading a 3MF with external geometry ("production"
         // extension), and on projects too. So the geometry is re-emitted into a
@@ -682,6 +740,10 @@ pub fn run_job(
             source.to_path_buf()
         };
 
+        // Writing the scene out is the long part of the preparation.
+        if is_cancelled() {
+            return cancelled_now();
+        }
         let out = work.join("out");
         let _ = std::fs::create_dir_all(&out);
         let settings = format!("{};{}", prep.machine.display(), prep.process.display());
@@ -719,11 +781,24 @@ pub fn run_job(
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn();
-        let child = match child {
+        let mut child = match child {
             Ok(c) => c,
             Err(e) => return fail(crate::t!("err.engine_start", err = e)),
         };
-        jobs().lock().unwrap().insert(job_id.clone(), child.id());
+        // Registered with its process, unless cancelled meanwhile: then the
+        // engine just started has nothing to do.
+        let registered = match jobs().lock().unwrap().get_mut(&job_id) {
+            Some(job) => {
+                job.pid = Some(child.id());
+                true
+            }
+            None => false,
+        };
+        if !registered {
+            terminate(child.id());
+            let _ = child.wait();
+            return cancelled_now();
+        }
 
         // The pipe reader lives for the duration of the slice: a scoped thread can
         // therefore borrow `report`.
@@ -752,18 +827,9 @@ pub fn run_job(
             Ok(o) => o,
             Err(e) => return fail(e.to_string()),
         };
-        let cancelled = !jobs().lock().unwrap().contains_key(&job_id);
-        jobs().lock().unwrap().remove(&job_id);
+        let cancelled = jobs().lock().unwrap().remove(&job_id).is_none();
         if cancelled {
-            let _ = std::fs::remove_dir_all(&work);
-            return report(Progress {
-                id: job_id.clone(),
-                phase: "cancelled".into(),
-                elapsed_s: el(&t0),
-                message: None,
-                gcode: None,
-                ..Default::default()
-            });
+            return cancelled_now();
         }
 
         let mut logs = String::from_utf8_lossy(&output.stdout).to_string();
@@ -810,13 +876,15 @@ pub fn run_job(
             .ok()
             .and_then(|f| crate::gcode::parse(f).ok())
             .map(|d| crate::gcode::stats(&d));
-        previews().lock().unwrap().insert(
+        remember_preview(
             job_id.clone(),
             Preview {
                 work: work.clone(),
                 gcode: first.clone(),
                 source: source.to_path_buf(),
                 out_dir: req.out_dir.as_ref().map(PathBuf::from),
+                seq: next_seq(),
+                saved: None,
             },
         );
 
@@ -838,6 +906,9 @@ pub fn preview_gcode(id: &str) -> Option<PathBuf> {
 
 /// Saves the preview under a meaningful name, next to the model by default.
 /// The preview stays available (for sending to the printer, for instance).
+/// A file already there under that name is kept: the new one is numbered,
+/// as a download is — unless it is this preview's own earlier save, which
+/// is the same G-code, written again.
 pub fn save(id: &str, dir: Option<&str>) -> Result<PathBuf> {
     // Paths taken under the lock, copy done outside it.
     let (gcode, dest) = {
@@ -848,9 +919,16 @@ pub fn save(id: &str, dir: Option<&str>) -> Result<PathBuf> {
             .or_else(|| p.out_dir.clone())
             .or_else(|| p.source.parent().map(|d| d.to_path_buf()))
             .unwrap_or_else(std::env::temp_dir);
-        (p.gcode.clone(), dest_dir.join(output_name(&p.source, &p.gcode)))
+        let dest = match &p.saved {
+            Some(s) if s.parent() == Some(dest_dir.as_path()) => s.clone(),
+            _ => crate::library::unique_path(&dest_dir, &output_name(&p.source, &p.gcode)),
+        };
+        (p.gcode.clone(), dest)
     };
     std::fs::copy(&gcode, &dest).map_err(|e| anyhow!(crate::t!("err.gcode_copy", err = e)))?;
+    if let Some(p) = previews().lock().unwrap().get_mut(id) {
+        p.saved = Some(dest.clone());
+    }
     Ok(dest)
 }
 
@@ -982,16 +1060,19 @@ fn terminate(pid: u32) {
     let _ = cmd.args(["/PID", &pid.to_string(), "/T", "/F"]).status();
 }
 
-/// Interrupts a running slice.
+/// Interrupts a slice, preparing or running. False: no such job (done, or
+/// already cancelled).
 pub fn cancel(id: &str) -> bool {
-    let pid = jobs().lock().unwrap().remove(id);
-    match pid {
-        Some(pid) => {
-            // The engine has nothing to save, the working folder is cleaned up by
-            // the thread waiting for it.
+    let job = jobs().lock().unwrap().remove(id);
+    match job {
+        // The engine has nothing to save, the working folder is cleaned up by
+        // the thread waiting for it.
+        Some(Job { pid: Some(pid) }) => {
             terminate(pid);
             true
         }
+        // Still preparing: the thread sees the job gone at its next step.
+        Some(Job { pid: None }) => true,
         None => false,
     }
 }
@@ -1767,6 +1848,78 @@ mod tests {
         println!("output name: {n}");
         assert!(n.starts_with("Ma piece"));
         assert!(n.ends_with(".gcode"));
+    }
+}
+
+#[cfg(test)]
+mod cancel_and_previews {
+    use super::*;
+
+    #[test]
+    fn a_preparing_job_can_be_cancelled() {
+        jobs().lock().unwrap().insert("lotc-prep".into(), Job { pid: None });
+        assert!(cancel("lotc-prep"), "known, still preparing: stopped at its next step");
+        assert!(!jobs().lock().unwrap().contains_key("lotc-prep"));
+        assert!(!cancel("lotc-prep"), "already gone");
+    }
+
+    fn fake_preview(base: &Path, i: usize) -> (PathBuf, Preview) {
+        let work = base.join(format!("w{i}"));
+        std::fs::create_dir_all(&work).unwrap();
+        let gcode = work.join("a.gcode");
+        std::fs::write(&gcode, "; test\nG1 X0\n").unwrap();
+        let p = Preview {
+            work: work.clone(),
+            gcode,
+            source: base.join("Piece.3mf"),
+            out_dir: Some(base.to_path_buf()),
+            seq: next_seq(),
+            saved: None,
+        };
+        (work, p)
+    }
+
+    #[test]
+    fn the_oldest_previews_go_past_the_cap() {
+        let base = std::env::temp_dir().join("snapstudio_lotc_cap");
+        let _ = std::fs::remove_dir_all(&base);
+        let mut list = std::collections::HashMap::new();
+        let works: Vec<PathBuf> = (0..5)
+            .map(|i| {
+                let (work, p) = fake_preview(&base, i);
+                remember_in(&mut list, format!("p{i}"), p, 3);
+                work
+            })
+            .collect();
+        assert_eq!(list.len(), 3);
+        assert!(!works[0].exists() && !works[1].exists(), "the two oldest folders are gone");
+        assert!(works[2].exists() && works[4].exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_save_never_overwrites_another_file() {
+        let base = std::env::temp_dir().join("snapstudio_lotc_save");
+        let _ = std::fs::remove_dir_all(&base);
+        let (_, p) = fake_preview(&base, 0);
+        let name = output_name(&p.source, &p.gcode);
+        // Someone else's G-code under the name the save would take.
+        std::fs::write(base.join(&name), "; theirs").unwrap();
+        previews().lock().unwrap().insert("lotc-save".into(), p);
+        let first = save("lotc-save", None).unwrap();
+        assert_ne!(first, base.join(&name), "numbered, not overwritten");
+        assert_eq!(std::fs::read_to_string(base.join(&name)).unwrap(), "; theirs");
+        // Saving the same preview again writes over its own copy only.
+        let again = save("lotc-save", None).unwrap();
+        assert_eq!(again, first);
+        // Another folder: a fresh name there, the first copy untouched.
+        let other = base.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        let elsewhere = save("lotc-save", Some(other.to_str().unwrap())).unwrap();
+        assert_eq!(elsewhere, other.join(&name));
+        assert!(first.is_file());
+        previews().lock().unwrap().remove("lotc-save");
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
 

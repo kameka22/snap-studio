@@ -293,12 +293,13 @@ mod tests {
         let dir = std::env::var("PROBE_DIR").unwrap_or_else(|_| {
             format!("{}/Downloads", std::env::var("HOME").unwrap())
         });
+        // Local probe over real 3MFs; skip when Downloads (or PROBE_DIR) is absent (CI).
+        let Ok(rd) = std::fs::read_dir(&dir) else { return; };
         let out = std::path::PathBuf::from(
             std::env::var("PROBE_OUT").unwrap_or_else(|_| "/tmp/probe".into()),
         );
         std::fs::create_dir_all(&out).unwrap();
-        let mut files: Vec<_> = std::fs::read_dir(&dir)
-            .unwrap()
+        let mut files: Vec<_> = rd
             .flatten()
             .map(|e| e.path())
             .filter(|p| {
