@@ -2687,6 +2687,7 @@ function prSetColourHead(ext, h) {
   PR.colourHeads = { ...PR.colourHeads, [ext]: h };
   prSave();
   prRenderInspector();
+  prSchedule(); // the objects on the plate take the colour
 }
 
 /* Changing mode: explained once (a sheet, until dismissed for good),
@@ -2761,13 +2762,27 @@ async function prRefreshColors() {
   prSave();
 }
 
+/* The head showing each colour of an object on the plate, in the current
+   mode: "by object", the object's (chosen or deduced); "by colour", the
+   head picked for the object, else the plate's for that colour — an
+   unmapped colour has none, and keeps the file's colour as a cue. */
+function prShownHeads(o, pid, slots) {
+  if (PR.assoc !== "colour") return Object.fromEntries(Object.entries(prHeads(o, pid, slots)).map(([ext, v]) => [ext, v.h]));
+  const out = {};
+  for (const ext of prColors(o)) {
+    const h = o.pick != null ? o.pick : PR.colourHeads[ext];
+    if (h != null) out[ext] = h;
+  }
+  return out;
+}
+
 /* Spool color of each color of an object, for the shader. */
 function prHeadColors(gl, o, mesh) {
   const col = new Float32Array(17 * 3), on = new Float32Array(17);
   const pid = typeof headsActive === "function" ? headsActive() : "";
   if (pid) {
     const slots = headsSlots(pid);
-    for (const [ext, { h }] of Object.entries(prHeads(o, pid, slots))) {
+    for (const [ext, h] of Object.entries(prShownHeads(o, pid, slots))) {
       const s = slots.find((x) => x.index === h);
       const rgb = s?.present && s.color ? hexToRgb(s.color) : null;
       if (!rgb || ext > 16) continue;
