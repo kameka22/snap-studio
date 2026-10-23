@@ -124,13 +124,34 @@ fn client() -> &'static reqwest::Client {
     })
 }
 
-pub(crate) fn base(host: &str, port: u16) -> String {
-    let h = host.trim().trim_end_matches('/');
-    if h.starts_with("http://") || h.starts_with("https://") {
+/// A printer's `host:port`, the one rule for every address built from a
+/// saved printer: a scheme the user typed is dropped, a trailing slash too,
+/// and the saved port is added unless the host carries one already
+/// ("192.168.1.50:7125"). HTTP and WebSocket thus reach the same port.
+pub(crate) fn authority(host: &str, port: u16) -> String {
+    let h = host.trim();
+    let h = ["http://", "https://", "ws://", "wss://"].iter().fold(h, |h, s| h.strip_prefix(s).unwrap_or(h));
+    let h = h.trim_end_matches('/');
+    if h.contains(':') {
         h.to_string()
     } else {
-        format!("http://{}:{}", h, port)
+        format!("{h}:{port}")
     }
+}
+
+/// A host given as `https://` or `wss://` (a reverse proxy) keeps TLS, for
+/// HTTP and for the WebSocket alike.
+fn secure(host: &str) -> bool {
+    let h = host.trim();
+    h.starts_with("https://") || h.starts_with("wss://")
+}
+
+pub(crate) fn base(host: &str, port: u16) -> String {
+    format!("{}://{}", if secure(host) { "https" } else { "http" }, authority(host, port))
+}
+
+pub(crate) fn ws_url(host: &str, port: u16) -> String {
+    format!("{}://{}/websocket", if secure(host) { "wss" } else { "ws" }, authority(host, port))
 }
 
 pub(crate) async fn get_json(url: &str) -> Result<Value> {
@@ -414,10 +435,22 @@ pub async fn start_print(
         }
         Err(e) => e,
     };
-    // An answer that came too late: the print may have started all the same.
-    let st = status(host, port).await;
-    if matches!(st.state.as_str(), "printing" | "paused") {
-        return Ok(StartRoute::Orca);
+    // Only a firmware without the method is asked the other way. A refusal
+    // (busy, nozzle mismatch: a JSON-RPC error) is the answer; so is a
+    // connection failure, which the other way would meet too.
+    let (missing, late) = match err.downcast_ref::<WsError>() {
+        Some(w) => (w.method_missing(), matches!(w, WsError::Timeout { .. })),
+        None => (false, false),
+    };
+    if late {
+        // An answer that came too late: the print may have started all the same.
+        let st = status(host, port).await;
+        if matches!(st.state.as_str(), "printing" | "paused") {
+            return Ok(StartRoute::Orca);
+        }
+    }
+    if !missing {
+        return Err(err);
     }
     eprintln!("[print] start_local_print unavailable ({err}): SET_PRINT_PREFERENCES then printer.print.start");
     gcode_script_checked(host, port, &legacy_preferences_script(opts))
@@ -535,12 +568,7 @@ pub async fn ws_session(
 ) -> Result<(Value, Vec<String>)> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
-    let h = host
-        .trim()
-        .trim_end_matches('/')
-        .trim_start_matches("http://")
-        .trim_start_matches("https://");
-    let url = if h.contains(':') { format!("ws://{h}/websocket") } else { format!("ws://{h}:{port}/websocket") };
+    let url = ws_url(host, port);
     let run = async {
         let (mut ws, _) = tokio_tungstenite::connect_async(url.as_str()).await?;
         let req = serde_json::json!({ "jsonrpc": "2.0", "method": method, "params": params, "id": 1 });
@@ -561,7 +589,12 @@ pub async fn ws_session(
             let _ = ws.close(None).await;
             if let Some(e) = v.get("error") {
                 let msg = e.get("message").and_then(|m| m.as_str()).unwrap_or("erreur");
-                return Err(anyhow!("{method} : {msg}"));
+                return Err(WsError::Rpc {
+                    method: method.to_string(),
+                    code: e.get("code").and_then(|c| c.as_i64()).unwrap_or(0),
+                    message: msg.to_string(),
+                }
+                .into());
             }
             return Ok((v.get("result").cloned().unwrap_or(Value::Null), responses));
         }
@@ -569,8 +602,40 @@ pub async fn ws_session(
     };
     tokio::time::timeout(timeout, run)
         .await
-        .map_err(|_| anyhow!(crate::t!("err.ws_no_answer", method = method)))?
+        .map_err(|_| WsError::Timeout { method: method.to_string() })?
 }
+
+/// What a WebSocket request can fail on, when the caller must tell them
+/// apart (`start_print`): the printer answered with an error, or did not
+/// answer in time. Connection failures stay plain errors.
+#[derive(Debug)]
+pub enum WsError {
+    /// Answered with a JSON-RPC error. `code` -32601 is a method the
+    /// firmware does not have, as opposed to a request it refused.
+    Rpc { method: String, code: i64, message: String },
+    Timeout { method: String },
+}
+
+impl WsError {
+    /// The firmware does not know the method: another way may be tried.
+    pub fn method_missing(&self) -> bool {
+        match self {
+            WsError::Rpc { code, message, .. } => *code == -32601 || message.to_ascii_lowercase().contains("method not found"),
+            WsError::Timeout { .. } => false,
+        }
+    }
+}
+
+impl std::fmt::Display for WsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WsError::Rpc { method, message, .. } => write!(f, "{method} : {message}"),
+            WsError::Timeout { method } => f.write_str(&crate::t!("err.ws_no_answer", method = method)),
+        }
+    }
+}
+
+impl std::error::Error for WsError {}
 
 /// Wakes the U1's camera: it then publishes a continuously renewed image,
 /// and switches itself off unless restarted (about 10 s).
@@ -671,8 +736,10 @@ pub fn apply_status(s: &Value, st: &mut Status) {
             .map(String::from);
         st.elapsed_s = ps.get("print_duration").and_then(f32_of);
         st.filament_mm = ps.get("filament_used").and_then(f32_of);
-        if let Some(m) = ps.get("message").and_then(|x| x.as_str()).filter(|m| !m.is_empty()) {
-            st.message = Some(m.to_string());
+        // Given, even empty, it is the printer's word: a message it has
+        // cleared goes away too (the live feed starts from the last status).
+        if let Some(m) = ps.get("message").and_then(|x| x.as_str()) {
+            st.message = Some(m.to_string()).filter(|m| !m.is_empty());
         }
         if let Some(i) = ps.get("info") {
             let cur = i.get("current_layer").and_then(|x| x.as_u64());
@@ -1138,5 +1205,51 @@ mod hex_tests {
         // Not six characters at the cut: the integer form stands in.
         assert_eq!(slot_color(&cfg, 1).as_deref(), Some("#ff00ff"));
         assert_eq!(slot_color(&cfg, 2).as_deref(), Some("#123456"));
+    }
+}
+
+#[cfg(test)]
+mod address_tests {
+    use super::{apply_status, authority, base, ws_url, Status, WsError};
+
+    #[test]
+    fn one_rule_for_every_address() {
+        assert_eq!(authority("192.168.1.50", 7125), "192.168.1.50:7125");
+        // A scheme and a trailing slash, as a user may type them: the saved port stands.
+        assert_eq!(base("http://192.168.1.50/", 7125), "http://192.168.1.50:7125");
+        // TLS stays when the host says so (a reverse proxy), for both.
+        assert_eq!(ws_url("https://u1.local/", 7125), "wss://u1.local:7125/websocket");
+        assert_eq!(base("https://u1.local/", 7125), "https://u1.local:7125");
+        assert_eq!(base("wss://u1.local:443", 7125), "https://u1.local:443");
+        // A port in the host wins over the saved one.
+        assert_eq!(base(" 192.168.1.50:80 ", 7125), "http://192.168.1.50:80");
+        assert_eq!(ws_url("ws://192.168.1.50:80", 7125), "ws://192.168.1.50:80/websocket");
+    }
+
+    #[test]
+    fn only_a_missing_method_is_tried_another_way() {
+        let method = "server.files.start_local_print";
+        let missing = WsError::Rpc { method: method.into(), code: -32601, message: "Method not found".into() };
+        let refused = WsError::Rpc { method: method.into(), code: -32000, message: "Printer is busy".into() };
+        let late = WsError::Timeout { method: method.into() };
+        assert!(missing.method_missing());
+        assert!(!refused.method_missing());
+        assert!(!late.method_missing());
+        assert_eq!(refused.to_string(), "server.files.start_local_print : Printer is busy");
+        // Through anyhow, the kind is still told.
+        let e: anyhow::Error = late.into();
+        assert!(matches!(e.downcast_ref::<WsError>(), Some(WsError::Timeout { .. })));
+    }
+
+    #[test]
+    fn a_cleared_message_goes_away() {
+        let mut st = Status { message: Some("old error".into()), ..Default::default() };
+        apply_status(&serde_json::json!({"print_stats": {"state": "standby", "message": ""}}), &mut st);
+        assert_eq!(st.message, None);
+        apply_status(&serde_json::json!({"print_stats": {"state": "error", "message": "Heater failed"}}), &mut st);
+        assert_eq!(st.message.as_deref(), Some("Heater failed"));
+        // Not given (a partial update): the last message stands.
+        apply_status(&serde_json::json!({"print_stats": {"state": "error"}}), &mut st);
+        assert_eq!(st.message.as_deref(), Some("Heater failed"));
     }
 }

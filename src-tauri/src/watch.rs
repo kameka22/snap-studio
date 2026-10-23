@@ -103,13 +103,9 @@ async fn run(app: AppHandle, p: Printer) {
     }
 }
 
+/// The same address rule as every HTTP request (`printers::authority`).
 fn ws_url(p: &Printer) -> String {
-    let h = p.host.trim().trim_end_matches('/');
-    let h = h
-        .trim_start_matches("http://")
-        .trim_start_matches("https://")
-        .trim_start_matches("ws://");
-    format!("ws://{}:{}/websocket", h, p.port)
+    printers::ws_url(&p.host, p.port)
 }
 
 /// Merges a partial update into the current snapshot.
@@ -176,6 +172,13 @@ pub async fn session_with(
         state: "standby".into(),
         ..Default::default()
     };
+    // Klipper down: the snapshot's `print_stats` is stale until it is back
+    // (ready, then a fresh subscription), and must not read as a print.
+    let mut down = false;
+    let keep_down = |st: &mut Status| {
+        st.state = "error".into();
+        st.message = Some(crate::t!("err.klipper_down"));
+    };
 
     loop {
         // Prolonged silence signals a dead link: reconnect.
@@ -234,6 +237,9 @@ pub async fn session_with(
                     next.nozzles.clear();
                     next.filaments.clear();
                     printers::apply_status(&Value::Object(snapshot.clone()), &mut next);
+                    if down {
+                        keep_down(&mut next);
+                    }
                     st = next;
                     out(true, st.clone());
                 }
@@ -254,19 +260,24 @@ pub async fn session_with(
                     next.nozzles.clear();
                     next.filaments.clear();
                     printers::apply_status(&Value::Object(snapshot.clone()), &mut next);
+                    if down {
+                        keep_down(&mut next);
+                    }
                     st = next;
                     out(true, st.clone());
                 }
             }
             (_, "notify_klippy_ready") => {
+                down = false;
                 st.klipper = Some("ready".into());
                 st.message = None;
+                // A fresh inventory and subscription: the snapshot is renewed.
                 send(&mut tx, json!({"jsonrpc":"2.0","id":2,"method":"printer.objects.list"})).await?;
             }
             (_, "notify_klippy_disconnected") | (_, "notify_klippy_shutdown") => {
+                down = true;
                 st.klipper = Some("shutdown".into());
-                st.state = "error".into();
-                st.message = Some(crate::t!("err.klipper_down"));
+                keep_down(&mut st);
                 out(true, st.clone());
             }
             _ => {}

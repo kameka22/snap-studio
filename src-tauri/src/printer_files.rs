@@ -780,6 +780,8 @@ pub fn display_name(path: &str) -> String {
 
 /// Renames a print file; returns its new path.
 pub async fn rename(host: &str, port: u16, path: &str, new_name: &str) -> Result<String> {
+    // The source as much as the destination: nothing outside `gcodes`.
+    file_url("", "gcodes", path)?;
     let dest = rename_target(path, new_name)?;
     file_url("", "gcodes", &dest)?;
     let r = client()
@@ -1304,5 +1306,16 @@ mod hex_tests {
         assert_eq!(color("#FF8000FF").as_deref(), Some("#ff8000"));
         assert_eq!(color("#aaaaaé"), None);
         assert_eq!(color("zzzzzz"), None);
+    }
+}
+
+#[cfg(test)]
+mod rename_tests {
+    #[test]
+    fn a_source_outside_gcodes_is_refused() {
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        // Refused before any request: the port is never reached.
+        let e = rt.block_on(super::rename("127.0.0.1", 1, "../config/printer.cfg", "x")).unwrap_err();
+        assert!(e.to_string().contains("invalid path"), "{e}");
     }
 }

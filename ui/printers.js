@@ -596,7 +596,9 @@ function updateFreshness() {
 /* "On the network" list, shared by the add sheet and the welcome assistant:
    one search at a time, shown in the last list opened. Printers arrive as
    they answer, one per address. */
-const DISC = { items: new Map(), running: false, error: null, picked: null, view: null };
+/* `search` numbers each search: a stopped one may still report a printer
+   or its end while the next runs, and those are ignored. */
+const DISC = { items: new Map(), running: false, error: null, picked: null, view: null, search: 0 };
 
 function discoveryList(box, onPick) {
   DISC.view = { box, onPick };
@@ -616,10 +618,12 @@ async function discoverStart() {
   DISC.picked = null;
   DISC.error = null;
   DISC.running = true;
+  const search = ++DISC.search;
   discRender();
   try {
-    await invoke("printer_discover_start");
+    await invoke("printer_discover_start", { search });
   } catch (e) {
+    if (search !== DISC.search) return; // another search has started since
     DISC.running = false;
     DISC.error = String(e);
     discRender();
@@ -639,7 +643,8 @@ const discModel = (f) => f.model || (f.service === "snapmaker" ? "Snapmaker U1" 
 const discKnown = (f) => P.list.some((p) => p.host === f.ip);
 
 listen("printer-found", (e) => {
-  const f = e.payload;
+  const { search, printer: f } = e.payload;
+  if (search !== DISC.search) return; // a stopped search, still winding down
   const prev = DISC.items.get(f.ip);
   // A U1 sometimes announces itself twice (Snapmaker and Moonraker): the
   // richer Snapmaker record wins.
@@ -647,7 +652,8 @@ listen("printer-found", (e) => {
   DISC.items.set(f.ip, f);
   discRender();
 });
-listen("printer-discover-done", () => {
+listen("printer-discover-done", (e) => {
+  if (e.payload?.search !== DISC.search) return;
   DISC.running = false;
   discRender();
 });
