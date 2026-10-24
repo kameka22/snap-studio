@@ -543,7 +543,7 @@ function showSliceBusy(busy) {
   $("s-cancel").classList.toggle("hidden", busy);
   $("s-stop").classList.toggle("hidden", !busy);
   document
-    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn)")
+    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn), #s-tower button")
     .forEach((el) => (el.disabled = busy));
   if (busy) closePicker();
   // Unlocked: the chips of empty heads must stay inactive.

@@ -376,24 +376,30 @@ function advRenderTower() {
   if (!box) return;
   const wall = +advVal("wipe_tower_filament") > 0 ? +advVal("wipe_tower_filament") - 1 : null;
   const a = spTowerAdvice({ heads: advTowerHeads(), tower: advTowerOn(), wall });
-  box.classList.toggle("hidden", !a);
-  if (!a) {
-    box.innerHTML = "";
-    return;
+  let html = "";
+  if (a) {
+    const heads = (g) => g.heads.map((n) => "T" + n).join(", ");
+    const list = a.families.map((g) => `<b>${esc(g.family)}</b> (${esc(heads(g))})`).join(" · ");
+    const off = `<button class="btn small" data-tower="off">${esc(tr("slice.tower.off"))}</button>`;
+    if (a.state === "walled") {
+      const g = a.families.find((x) => x.heads.includes(wall));
+      html = `<span class="sl-tower-t">${tr("slice.tower.walled", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
+        <span class="sl-tower-acts">${off}<button class="btn small" data-tower="undo">${esc(tr("slice.tower.undo"))}</button></span>`;
+    } else {
+      const walls = a.families
+        .map((g) => `<button class="btn small" data-tower-wall="${g.heads[0]}">${esc(tr("slice.tower.wall", { m: g.family, t: `T${g.heads[0]}` }))}</button>`)
+        .join("");
+      html = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${walls}</span>`;
+    }
   }
-  const heads = (g) => g.heads.map((n) => "T" + n).join(", ");
-  const list = a.families.map((g) => `<b>${esc(g.family)}</b> (${esc(heads(g))})`).join(" · ");
-  const off = `<button class="btn small" data-tower="off">${esc(tr("slice.tower.off"))}</button>`;
-  if (a.state === "walled") {
-    const g = a.families.find((x) => x.heads.includes(wall));
-    box.innerHTML = `<span class="sl-tower-t">${tr("slice.tower.walled", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
-      <span class="sl-tower-acts">${off}<button class="btn small" data-tower="undo">${esc(tr("slice.tower.undo"))}</button></span>`;
-    return;
-  }
-  const walls = a.families
-    .map((g) => `<button class="btn small" data-tower-wall="${g.heads[0]}">${esc(tr("slice.tower.wall", { m: g.family, t: `T${g.heads[0]}` }))}</button>`)
-    .join("");
-  box.innerHTML = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${walls}</span>`;
+  // Rewritten only when it changes (the summary is refreshed often): a
+  // focused button keeps its focus, the screen reader is not repeated.
+  if (html === ADV.tower) return;
+  ADV.tower = html;
+  box.innerHTML = html;
+  box.classList.toggle("hidden", !html);
+  // Locked while slicing, as the sheet's other settings (showSliceBusy).
+  box.querySelectorAll("button").forEach((b) => (b.disabled = !!SL.job));
 }
 
 $("s-tower")?.addEventListener("click", (e) => {
