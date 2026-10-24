@@ -29,6 +29,9 @@ const ADV_ENGINE_DEFAULTS = {
   enable_prime_tower: "0", prime_tower_width: "60", prime_volume: "45", prime_tower_brim_width: "3",
   flush_into_infill: "0", flush_into_objects: "0", flush_into_support: "1",
   wall_filament: "1", sparse_infill_filament: "1", solid_infill_filament: "1",
+  wipe_tower_filament: "0", ooze_prevention: "0", standby_temperature_delta: "-5", preheat_time: "30",
+  // A filament key (sent to every filament, slice.rs): 0 on the U1's.
+  idle_temperature: "0", print_sequence: "by layer",
 };
 const advVal = (k) => (k in SL.adv ? SL.adv[k] : ADV.defaults[k]);
 const advOn = (k) => String(advVal(k)) === "1" || advVal(k) === true;
@@ -37,9 +40,13 @@ const isTree = () => String(advVal("support_type") || "").startsWith("tree");
 /* Orca: a tree support in "default" style is organic ("Default (Grid/Organic)"). */
 const isOrganic = () => isTree() && ["organic", "default"].includes(advVal("support_style"));
 
-/* Keys holding a head number, 1-based. Only the support ones accept 0
-   ("default": the engine picks); the per-feature ones start at 1. */
-const ADV_FILAMENT = new Set(["support_filament", "support_interface_filament", "wall_filament", "sparse_infill_filament", "solid_infill_filament"]);
+/* Keys holding a head number, 1-based. The support ones and the prime
+   tower's accept 0 ("default": the engine picks); the per-feature ones
+   start at 1. */
+const ADV_FILAMENT = new Set(["support_filament", "support_interface_filament", "wall_filament", "sparse_infill_filament", "solid_infill_filament", "wipe_tower_filament"]);
+const ADV_HEAD_AUTO = new Set(["support_filament", "support_interface_filament", "wipe_tower_filament"]);
+/* Units the settings catalog leaves out. */
+const ADV_UNITS = { standby_temperature_delta: "°C", idle_temperature: "°C" };
 /* Values hidden from a list: handled elsewhere ("no_brim" is the switch) or
    needing tools the app does not have (painted brim). */
 const ADV_HIDE = { brim_type: ["no_brim", "painted"] };
@@ -70,7 +77,8 @@ const ADV_CATS = {
   mm: {
     title: "slice.adv.mm",
     groups: [
-      { t: "slice.adv.g.tower", keys: ["enable_prime_tower", "prime_tower_width", "prime_volume", "prime_tower_brim_width"] },
+      { t: "slice.adv.g.tower", keys: ["enable_prime_tower", "wipe_tower_filament", "prime_tower_width", "prime_volume", "prime_tower_brim_width"] },
+      { t: "slice.adv.g.ooze", keys: ["ooze_prevention", "standby_temperature_delta", "preheat_time", "idle_temperature"] },
       { t: "slice.adv.g.flush", keys: ["flush_into_infill", "flush_into_objects", "flush_into_support"] },
       { t: "slice.adv.g.features", keys: ["wall_filament", "sparse_infill_filament", "solid_infill_filament"] },
     ],
@@ -84,6 +92,11 @@ const ADV_WHEN = {
   prime_tower_width: () => advOn("enable_prime_tower"),
   prime_volume: () => advOn("enable_prime_tower"),
   prime_tower_brim_width: () => advOn("enable_prime_tower"),
+  wipe_tower_filament: () => advOn("enable_prime_tower"),
+  // The other heads' temperature while one prints: with ooze prevention.
+  standby_temperature_delta: () => advOn("ooze_prevention"),
+  preheat_time: () => advOn("ooze_prevention"),
+  idle_temperature: () => advOn("ooze_prevention"),
 };
 
 /* Category keys that apply right now (multi-material only with several
@@ -195,7 +208,8 @@ function advLabel(k, v = advVal(k)) {
   if (ADV_FILAMENT.has(k)) return +v > 0 ? `T${+v - 1}` : tr("slice.adv.default_head");
   if (def?.enum) return def.enum[v] ?? v;
   if (def?.type === "bool") return tr(String(v) === "1" ? "common.yes" : "common.no");
-  return `${v}${def?.unit && !String(v).endsWith("%") ? " " + def.unit : ""}`;
+  const unit = def?.unit || ADV_UNITS[k];
+  return `${v}${unit && !String(v).endsWith("%") ? " " + unit : ""}`;
 }
 
 function advRenderRows() {
@@ -254,7 +268,7 @@ function advField(k) {
   const mod = k in SL.adv;
   let input;
   if (ADV_FILAMENT.has(k)) {
-    const opts = [...(k.startsWith("support_") ? [{ value: "0", label: tr("slice.adv.default_head") }] : []), ...advHeadChoices()];
+    const opts = [...(ADV_HEAD_AUTO.has(k) ? [{ value: "0", label: tr("slice.adv.default_head") }] : []), ...advHeadChoices()];
     input = `<select class="field" data-k="${k}">${opts
       .map((o) => `<option value="${o.value}"${String(v ?? opts[0].value) === o.value ? " selected" : ""}>${esc(o.label)}</option>`)
       .join("")}</select>`;
@@ -270,7 +284,7 @@ function advField(k) {
     const pct = def.type === "percent" || String(v ?? "").endsWith("%");
     const num = v == null ? "" : String(v).replace(/%$/, "");
     const step = def.type === "int" ? 1 : 0.1;
-    input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : def.unit || "")}</span>`;
+    input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : def.unit || ADV_UNITS[k] || "")}</span>`;
   }
   return `<div class="grow-row adv-row${mod ? " mod" : ""}" title="${esc(def.tooltip || "")}">
     <span class="k">${esc(def.label)}${mod ? `<small class="sub">${esc(tr("slice.adv.profile_value", { v: advLabel(k, ADV.defaults[k]) || "—" }))}</small>` : ""}</span>
@@ -316,6 +330,8 @@ function advHeads() {
     const v = +o[k];
     if (!(v > 0)) continue;
     if (k.startsWith("support") && !$("s-supports").checked) continue;
+    // The tower's outer wall: only with a tower.
+    if (k === "wipe_tower_filament" && !advTowerOn()) continue;
     out[k] = v - 1;
   }
   return out;
@@ -331,6 +347,62 @@ function advHeadsSummary() {
   ].filter(Boolean);
   return { supports: list("support_filament", "support_interface_filament"), others: others.join(" · ") };
 }
+
+/* ------------------------------------------------------------ prime tower */
+
+/* A prime tower is printed: on, with several heads, layer by layer (the
+   engine prints none object by object). */
+const advTowerOn = () => multiHead() && advOn("enable_prime_tower") && advVal("print_sequence") !== "by object";
+
+/* The heads the plate prints with — its colors' heads, and those the
+   advanced settings send supports, walls, infill or the tower's wall to —
+   with their filament's material (the profile's type, else its name). */
+function advTowerHeads() {
+  const names = [...document.querySelectorAll("#s-heads select")].map((s) => s.value);
+  const used = new Set([...slUsedSet(), ...Object.values(advHeads())].filter((n) => n < names.length));
+  return [...used].sort((a, b) => a - b).map((n) => {
+    const p = SL.lists?.filaments?.find((f) => f.name === names[n]);
+    return { n, material: p?.ftype || spMaterialFromName(names[n]) };
+  });
+}
+
+/* The tower shared by materials that do not bond (spoolcheck.js): it
+   comes off or collapses. Said above the Slice button, with the fixes the
+   engine allows (one tower per plate): no tower — the U1's tower only
+   primes the nozzle, ooze prevention covers the rest — or its outer wall
+   in one material, the wiki's advice (the inside still mixes). */
+function advRenderTower() {
+  const box = $("s-tower");
+  if (!box) return;
+  const wall = +advVal("wipe_tower_filament") > 0 ? +advVal("wipe_tower_filament") - 1 : null;
+  const a = spTowerAdvice({ heads: advTowerHeads(), tower: advTowerOn(), wall });
+  box.classList.toggle("hidden", !a);
+  if (!a) {
+    box.innerHTML = "";
+    return;
+  }
+  const heads = (g) => g.heads.map((n) => "T" + n).join(", ");
+  const list = a.families.map((g) => `<b>${esc(g.family)}</b> (${esc(heads(g))})`).join(" · ");
+  const off = `<button class="btn small" data-tower="off">${esc(tr("slice.tower.off"))}</button>`;
+  if (a.state === "walled") {
+    const g = a.families.find((x) => x.heads.includes(wall));
+    box.innerHTML = `<span class="sl-tower-t">${tr("slice.tower.walled", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
+      <span class="sl-tower-acts">${off}<button class="btn small" data-tower="undo">${esc(tr("slice.tower.undo"))}</button></span>`;
+    return;
+  }
+  const walls = a.families
+    .map((g) => `<button class="btn small" data-tower-wall="${g.heads[0]}">${esc(tr("slice.tower.wall", { m: g.family, t: `T${g.heads[0]}` }))}</button>`)
+    .join("");
+  box.innerHTML = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${walls}</span>`;
+}
+
+$("s-tower")?.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tower], [data-tower-wall]");
+  if (!b) return;
+  if (b.dataset.tower === "off") advSet("enable_prime_tower", "0");
+  else if (b.dataset.tower === "undo") advSet("wipe_tower_filament", null);
+  else advSet("wipe_tower_filament", String(+b.dataset.towerWall + 1));
+});
 
 /* An emptied plate is a new print: the heads chosen for supports, walls
    or infill are forgotten, in every machine's memory — the spools will

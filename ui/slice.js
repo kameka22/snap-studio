@@ -483,6 +483,8 @@ function slSummary() {
   $("s-summary").innerHTML = parts
     .map((p) => (typeof p === "object" ? `<span class="${esc(p.cls)}">${esc(p.text)}</span>` : `<span>${esc(p)}</span>`))
     .join("");
+  // What goes to the engine changed: the prime tower's materials too.
+  if (typeof advRenderTower === "function") advRenderTower();
 }
 
 /* Adjustments touched by hand: they survive a profile change. */
