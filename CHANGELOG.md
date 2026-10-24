@@ -11,6 +11,14 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **What's new**: a page on the site presents each version's highlights
+  (screenshots, smaller improvements, previous versions), in English and
+  French. A card above Settings in the sidebar announces it after an
+  update ("What's new in 0.14 — Explore and 3 more") until it is opened,
+  then stays as a plain line; it opens the page in a sheet over the app,
+  with "Open in the Browser" and a message to try again when offline.
+
 ## [0.14.1] — 2026-10-24
 
 ### Fixed
