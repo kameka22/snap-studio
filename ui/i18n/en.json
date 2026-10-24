@@ -2097,5 +2097,13 @@
   "err.ctl_material": "The printer does not list this material ({kind})",
   "err.ctl_color": "Not a colour",
   "ctl.why.home_xy": "Home X and Y first: the U1 homes Z only then",
-  "err.ctl_home_xy_first": "Home X and Y first: the U1 homes Z only then"
+  "err.ctl_home_xy_first": "Home X and Y first: the U1 homes Z only then",
+  "whatsnew.title": "What's New",
+  "whatsnew.card": "What's New in {v}",
+  "whatsnew.more": {"one": "{first} and {n} more", "other": "{first} and {n} more"},
+  "whatsnew.browser": "Open in the Browser",
+  "whatsnew.error": "The page could not be loaded",
+  "whatsnew.error_sub": "Check the internet connection, then try again. The changelog lists every change too.",
+  "whatsnew.retry": "Try Again",
+  "whatsnew.changelog": "Open the Changelog"
 }

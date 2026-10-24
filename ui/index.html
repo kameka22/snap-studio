@@ -76,6 +76,17 @@
       </button>
     </div>
   </nav>
+  <div id="side-wn" class="side-wn">
+    <button id="wn-card" class="wn-card hidden" type="button">
+      <img src="assets/app-icon.png" alt="" />
+      <span class="t"><b id="wn-card-title"></b><span id="wn-card-sub"></span></span>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M8.6 5.4 10 4l8 8-8 8-1.4-1.4 6.6-6.6z"/></svg>
+    </button>
+    <button id="wn-line" class="side-item" type="button">
+      <span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M10 2.5c.7 4.3 2.7 6.4 7 7.2-4.3.8-6.3 2.9-7 7.3-.7-4.4-2.7-6.5-7-7.3 4.3-.8 6.3-2.9 7-7.2zM18.2 13.2c.4 2.1 1.3 3.1 3.3 3.5-2 .4-2.9 1.4-3.3 3.6-.4-2.2-1.3-3.2-3.3-3.6 2-.4 2.9-1.4 3.3-3.5z"/></svg></span>
+      <span class="lbl" data-i18n="whatsnew.title">What's new</span>
+    </button>
+  </div>
   <div class="side-footer">
     <button class="side-item" data-view="settings">
       <span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span>
@@ -1554,6 +1565,32 @@
   </div>
 </div>
 
+<div id="wn-modal" class="modal wn-modal hidden">
+  <div id="wn-sheet" class="wn-sheet" role="dialog" aria-modal="true" aria-labelledby="wn-title" data-state="loading">
+    <div class="wn-bar">
+      <span class="wn-ttl" id="wn-title"><svg viewBox="0 0 24 24"><path d="M10 2.5c.7 4.3 2.7 6.4 7 7.2-4.3.8-6.3 2.9-7 7.3-.7-4.4-2.7-6.5-7-7.3 4.3-.8 6.3-2.9 7-7.2zM18.2 13.2c.4 2.1 1.3 3.1 3.3 3.5-2 .4-2.9 1.4-3.3 3.6-.4-2.2-1.3-3.2-3.3-3.6 2-.4 2.9-1.4 3.3-3.5z"/></svg><span data-i18n="whatsnew.title">What's new</span></span>
+      <span class="wn-url"><span><svg viewBox="0 0 24 24"><path d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2m-7-2a2 2 0 0 1 4 0v2h-4z"/></svg><span id="wn-address"></span></span></span>
+      <button id="wn-browser" class="wn-ib" type="button" title="Open in the Browser" data-i18n-title="whatsnew.browser" aria-label="Open in the Browser" data-i18n-aria="whatsnew.browser"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.4l-9.3 9.3-1.4-1.4L17.6 5H14zM5 5h6v2H5v12h12v-6h2v8H3V5z"/></svg></button>
+      <button id="wn-close" class="wn-ib close" type="button" data-cancel title="Close" data-i18n-title="common.close" aria-label="Close" data-i18n-aria="common.close"><svg viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6 10.6 12 5 6.4z"/></svg></button>
+    </div>
+    <div class="wn-body">
+      <iframe id="wn-frame" title="What's new" data-i18n-title="whatsnew.title" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe>
+      <div id="wn-loading" class="wn-state"><span class="spinner"></span></div>
+      <div id="wn-error" class="wn-state hidden">
+        <div class="wn-err">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>
+          <b data-i18n="whatsnew.error">The page could not be loaded</b>
+          <span data-i18n="whatsnew.error_sub">Check the internet connection, then try again.</span>
+          <div class="wn-err-actions">
+            <button id="wn-retry" class="btn primary" type="button" data-i18n="whatsnew.retry">Try Again</button>
+            <button id="wn-changelog" class="btn" type="button" data-i18n="whatsnew.changelog">Open the Changelog</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="bmsettings" class="modal hidden">
   <div class="modal-box bm-sheet">
     <h3 data-i18n="bm.settings">Bed Leveling Settings</h3>
@@ -1966,6 +2003,8 @@
 <script src="auth.js"></script>
 <script src="settings.js"></script>
 <script src="update.js"></script>
+<script src="whatsnew-logic.js"></script>
+<script src="whatsnew.js"></script>
 <script src="welcome.js"></script>
 </body>
 </html>
