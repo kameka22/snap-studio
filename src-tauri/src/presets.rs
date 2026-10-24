@@ -200,9 +200,10 @@ impl Index {
         let e = self.entries.get(name)?;
         let obj = e.json.as_object()?;
         let mut out = match obj.get("inherits").and_then(|v| v.as_str()) {
-            Some(parent) if !parent.is_empty() => {
-                self.flatten_inner(parent, seen, depth + 1).unwrap_or_default()
-            }
+            // A parent that is missing (a user preset from another Orca
+            // version), in a cycle or too deep: no configuration at all,
+            // rather than a partial one the engine fails on.
+            Some(parent) if !parent.is_empty() => self.flatten_inner(parent, seen, depth + 1)?,
             _ => Map::new(),
         };
         for (k, v) in obj {
@@ -382,7 +383,8 @@ impl Index {
         if x1 > x0 && y1 > y0 {
             (x1 - x0, y1 - y0)
         } else {
-            (256.0, 256.0)
+            // Unknown shape: the U1's bed, as `slice::bed` assumes too.
+            (270.0, 270.0)
         }
     }
 
@@ -890,5 +892,24 @@ mod tests {
         let p = prepare(&idx, &dir, machine, &process, &[filament], &[], &ovr).unwrap();
         let pr: Value = serde_json::from_slice(&std::fs::read(&p.process).unwrap()).unwrap();
         assert_eq!(pr["layer_height"], "0.28");
+    }
+}
+
+#[cfg(test)]
+mod inheritance_tests {
+    use super::{Entry, Index, Kind};
+    use std::collections::HashMap;
+
+    #[test]
+    fn a_missing_parent_resolves_to_nothing() {
+        let mut entries = HashMap::new();
+        entries.insert("Child".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Child", "inherits": "Gone", "layer_height": "0.2"}), user: true });
+        entries.insert("Whole".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Whole", "inherits": "Base", "layer_height": "0.2"}), user: true });
+        entries.insert("Base".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Base", "wall_loops": "2"}), user: false });
+        let idx = Index { entries, selected: Default::default() };
+        assert!(idx.flatten("Child").is_none(), "no partial configuration for a parent that is not there");
+        let whole = idx.flatten("Whole").unwrap();
+        assert_eq!(whole["wall_loops"], "2");
+        assert_eq!(whole["layer_height"], "0.2");
     }
 }

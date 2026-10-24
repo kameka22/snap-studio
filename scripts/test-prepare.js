@@ -142,3 +142,53 @@ assert.strictEqual(L.plTools({ n: 1 })["p-slice"].on, false);
 assert.strictEqual(L.plTools({ n: 1 })["p-save"].on, true);
 
 console.log("prepare: ok");
+
+// Bulk buttons of the object list: "all" without a relevant selection or
+// with the whole side selected, "some" with a count otherwise; a mixed
+// selection counts each side alone.
+{
+  const on = [{ id: 1 }, { id: 2 }], off = [{ id: 3 }, { id: 4 }, { id: 5 }];
+  assert.deepEqual(L.plBulk(new Set(), on), { mode: "all", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1]), on), { mode: "some", n: 1 });
+  assert.deepEqual(L.plBulk(new Set([1, 2]), on), { mode: "all", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1, 3, 4]), off), { mode: "some", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1, 3, 4]), on), { mode: "some", n: 1 });
+  assert.deepEqual(L.plBulk(new Set([9]), off), { mode: "all", n: 3 });
+}
+
+// Colour modes: the plate's colours, the hand-off between the two modes,
+// and what blocks the slice.
+{
+  const objs = [
+    { id: 1, extruders: [1, 2], heads: { 1: 0, 2: 1 }, st: "in" },
+    { id: 2, extruders: [2, 3], heads: { 2: 1 }, st: "in" },
+    { id: 3, extruders: [3], heads: { 3: 3 }, st: "in" },
+    { id: 4, extruders: [4], heads: { 4: 2 }, st: "out" },
+  ];
+  const stateOf = (o) => o.st, coloursOf = (o) => o.extruders;
+  const headsOf = (o) => Object.fromEntries(o.extruders.map((c) => [c, o.heads[c] ?? c - 1]));
+  // Off-plate colours are not the plate's.
+  assert.deepEqual(L.plPlateColours(objs, stateOf, coloursOf), [1, 2, 3]);
+  // Colour 2: both objects agree on T1. Colour 3: object 2 defaults to T2, object 3 chose T3 → conflict.
+  assert.deepEqual(L.plMigrateToColour(objs, stateOf, headsOf, [1, 2, 3]), { 1: 0, 2: 1, 3: null });
+  assert.deepEqual(L.plUnmapped([1, 2, 3], { 1: 0, 2: 1, 3: null }), [3]);
+  // Colour → object: the global heads become each object's own; unmapped colours keep the object's choice.
+  const back = L.plMigrateToObject(objs, stateOf, coloursOf, { 1: 2, 2: null, 3: 0 });
+  assert.deepEqual(back, { 1: { 1: 2, 2: 1 }, 2: { 2: 1, 3: 0 }, 3: { 3: 0 } });
+  assert.equal(back[4], undefined, "off-plate objects are left alone");
+  // Nothing on the plate: nothing to map, nothing blocks.
+  assert.deepEqual(L.plMigrateToColour([], stateOf, headsOf, []), {});
+  assert.deepEqual(L.plUnmapped([], {}), []);
+}
+
+// "By colour" mode: an on-plate object without a colour from its file,
+// and without a head picked by hand, blocks the slice.
+{
+  const objs = [
+    { id: 1, extruders: [1], st: "in" },
+    { id: 2, extruders: [], st: "in" },
+    { id: 3, extruders: [], st: "in", pick: 2 },
+    { id: 4, extruders: [], st: "out" },
+  ];
+  assert.deepEqual(L.plUncoloured(objs, (o) => o.st, (o) => o.extruders || []), [2]);
+}

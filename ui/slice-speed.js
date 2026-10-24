@@ -160,6 +160,8 @@ async function spdFlowNote() {
   const machine = $("s-machine").value;
   const used = typeof slUsedSet === "function" ? slUsedSet() : new Set();
   const names = [...new Set([...document.querySelectorAll("#s-heads select")].filter((_, i) => !used.size || used.has(i)).map((s) => s.value).filter(Boolean))];
+  // Heads changed again while the profiles were read: that call's list wins.
+  const seq = (SPDUI.flowSeq = (SPDUI.flowSeq || 0) + 1);
   const got = await Promise.all(
     names.map(async (name) => {
       if (!(name in SPDUI.flows)) {
@@ -171,7 +173,7 @@ async function spdFlowNote() {
     })
   );
   const el = $("spd-flow");
-  if (!el || ADV.cat !== "speed") return;
+  if (!el || ADV.cat !== "speed" || seq !== SPDUI.flowSeq) return;
   const list = got.filter(Boolean);
   el.textContent = list.length ? tr("slice.speed.flow_list", { list: list.join(" · ") }) : tr("slice.speed.flow");
 }

@@ -5,6 +5,16 @@
    a 3MF of colored parts, the instructions, the tools and the export skill.
    The detail screen holds the conversation and the 3D pane. */
 
+/* A stored value, or null: a throwing storage (private mode, cleared site
+   data) must not stop this script at load. */
+const iaLs = (k) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+
 const IA = {
   list: [],
   engine: null,
@@ -17,14 +27,14 @@ const IA = {
   open: null,
   /* How the open conversation shows: "chat" (ia-chat.js) or "term", the raw
      Claude Code terminal on the same session. */
-  view: localStorage.getItem("snapstudio.iaview") === "term" ? "term" : "chat",
+  view: iaLs("snapstudio.iaview") === "term" ? "term" : "chat",
   /* One emulator per conversation: leaving the tab must not erase anything.
      id -> { term, fit, el, dead } */
   terms: new Map(),
   /* List: search, filters and order (ia-list.js), kept between launches. */
   q: "",
   filters: iaStored("snapstudio.ia.filters", { kind: "all", state: "all", engine: "all" }),
-  sort: IA_SORTS.includes(localStorage.getItem("snapstudio.ia.sort")) ? localStorage.getItem("snapstudio.ia.sort") : IA_SORTS[0],
+  sort: IA_SORTS.includes(iaLs("snapstudio.ia.sort")) ? iaLs("snapstudio.ia.sort") : IA_SORTS[0],
   /* Card selected with the keyboard (or last clicked), by id. */
   sel: null,
   /* Card whose title is being edited. */
@@ -58,16 +68,32 @@ async function iaRefresh() {
   }
   iaRender();
   // What the AI needs changes without notice — Docker starts and stops —
-  // and checking takes a moment: on the side, each time the tab opens.
-  aiCheck(true).then(() => {
-    if (!IA.open) iaRender();
-    iaApplyAi();
-  });
+  // and checking takes a moment: on the side, when the tab opens, at most
+  // once every 30 s (the Docker and Python probes are not free). The
+  // "aichange" event the check raises redraws the list.
+  if (Date.now() - (IA.checkedAt || 0) > 30000) {
+    IA.checkedAt = Date.now();
+    aiCheck(true).then(iaApplyAi);
+  }
 }
+
+/* Why a conversation is only read: its mode is not ready (anymore). */
+const iaLockFor = (c) => (AIS.report && !iaModes().includes(c.engine) ? iaLockReason(c) : null);
 
 /* New checks, or a new choice in Settings. */
 window.addEventListener("aichange", () => {
-  if (!IA.open) iaRender();
+  const c = IA.open ? IA.list.find((x) => x.id === IA.open) : null;
+  if (c) {
+    // The open conversation follows: AI switched off in Settings, or Docker
+    // gone, locks it; back again unlocks it.
+    const locked = iaLockFor(c);
+    if (locked !== IA.locked) {
+      IA.locked = locked;
+      if (locked) IA.view = "chat";
+      iaRender();
+      iaHint(c);
+    }
+  } else iaRender();
   if (!$("iamodal").classList.contains("hidden")) iaRenderEngines();
   iaApplyAi();
 });
@@ -237,7 +263,7 @@ function iaRender() {
   sideCount("ia", IA.list.length);
   const c = detail && IA.list.find((x) => x.id === IA.open);
   if (c) tbSet("ia", c.title, `${iaOrigin(c)} · ${iaEngineName(c)}`);
-  else tbSet("ia", tr("nav.ia"), IA.list.length ? tr("ia.count", { n: IA.list.length }) : "");
+  else tbSet("ia", tr("nav.create"), IA.list.length ? tr("ia.count", { n: IA.list.length }) : "");
   $("ia-detail").classList.toggle("hidden", !detail);
   $("ia-empty").classList.toggle("hidden", detail || IA.list.length > 0);
   $("ia-listbar").classList.toggle("hidden", detail || IA.list.length === 0);
@@ -284,7 +310,7 @@ function iaRenderList() {
     .map((g) => (titled && g.key ? `<h4 class="ia-group" role="presentation">${esc(tr(IA_GROUP_LABEL[g.key]))}</h4>` : "") + g.items.map(iaCard).join(""))
     .join("");
   const n = IA.list.length;
-  tbSet("ia", tr("nav.ia"), n ? (shown.length < n ? tr("ia.count_shown", { shown: shown.length, n }) : tr("ia.count", { n })) : "");
+  tbSet("ia", tr("nav.create"), n ? (shown.length < n ? tr("ia.count_shown", { shown: shown.length, n }) : tr("ia.count", { n })) : "");
 }
 
 /* ------------------------------------------------------------ list controls */
@@ -527,7 +553,7 @@ function iaPromptFit() {
 
 function iaSheet(mode) {
   IA.mode = mode;
-  IA.newModel = localStorage.getItem(IA_NEW_MODEL_KEY) || "";
+  IA.newModel = iaLs(IA_NEW_MODEL_KEY) || "";
   const create = mode === "create";
   $("ia-cfields").classList.toggle("hidden", !create);
   $("ia-new-icon").innerHTML = IA_GLYPH;
@@ -962,6 +988,8 @@ async function iaHint(c) {
   try {
     resumable = await invoke("ia_resumable", { id: c.id });
   } catch {}
+  // Another conversation opened meanwhile: its own hint stands.
+  if (IA.open !== c.id) return;
   if (resumable) {
     el.classList.add("hidden");
     return;
@@ -975,7 +1003,7 @@ async function iaOpen(id) {
   if (!c) return;
   IA.open = id;
   // A conversation whose mode is not ready (anymore) is only read.
-  IA.locked = AIS.report && !iaModes().includes(c.engine) ? iaLockReason(c) : null;
+  IA.locked = iaLockFor(c);
   if (IA.locked) IA.view = "chat";
   iaRender();
   $("ia-left").dataset.mode = IA.view;
@@ -1084,7 +1112,7 @@ function iaChatApply(r, save = true) {
 }
 /* The user's choice is kept apart from what fits: a narrow window clamps
    the column without forgetting it. */
-let iaChatWanted = iaRatioOk(parseFloat(localStorage.getItem(IA_CHAT_KEY)));
+let iaChatWanted = iaRatioOk(parseFloat(iaLs(IA_CHAT_KEY)));
 let iaChatR = iaChatApply(iaChatWanted, false);
 const iaChatSet = (r) => {
   iaChatR = iaChatApply(r);
@@ -1139,7 +1167,7 @@ iaResizeObserver.observe($("ia-term"));
    object alone, framed closer), the choice kept. The viewer is shared with
    Files and Prepare: their own setting comes back when it leaves. */
 const IA_BED_KEY = "snapstudio.ia.bed";
-IA.bed = localStorage.getItem(IA_BED_KEY) === "1";
+IA.bed = iaLs(IA_BED_KEY) === "1";
 IA.viewerOwned = false;
 function iaBedApply() {
   $("ia-bed").checked = IA.bed;
@@ -1500,7 +1528,7 @@ async function iaSave(then) {
     iaMarkSaved(c, path);
     if (path !== before) {
       await refresh();
-      toast(tr("ia.saved_toast", { name: path.split("/").pop() }));
+      toast(tr("ia.saved_toast", { name: path.split(/[\\/]/).pop() }));
     }
     if (then) await then(path);
   } catch (e) {

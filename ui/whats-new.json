@@ -1,0 +1,25 @@
+{
+  "version": "0.14",
+  "highlights": [
+    {
+      "id": "explore",
+      "en": "Explore",
+      "fr": "Explorer"
+    },
+    {
+      "id": "colours",
+      "en": "Colour modes",
+      "fr": "Modes de couleur"
+    },
+    {
+      "id": "icon",
+      "en": "New icon",
+      "fr": "Nouvelle icône"
+    },
+    {
+      "id": "create",
+      "en": "Create",
+      "fr": "Créer"
+    }
+  ]
+}

@@ -51,9 +51,12 @@ impl Discovery {
     }
 }
 
-/// Starts a search; a previous search is stopped.
+/// Starts a search; a previous search is stopped. `search` is the number
+/// the UI gave this search: every event carries it, so that a stopped
+/// search still winding down (it answers its stop flag within 100 ms, and
+/// may resolve a printer meanwhile) is told from the one that replaced it.
 #[tauri::command]
-pub fn printer_discover_start(app: AppHandle, state: State<'_, Discovery>) -> Result<(), String> {
+pub fn printer_discover_start(app: AppHandle, state: State<'_, Discovery>, search: u64) -> Result<(), String> {
     state.stop();
     let daemon = ServiceDaemon::new().map_err(|e| crate::t!("err.discovery", err = e))?;
     let stop = Arc::new(AtomicBool::new(false));
@@ -61,10 +64,10 @@ pub fn printer_discover_start(app: AppHandle, state: State<'_, Discovery>) -> Re
     std::thread::spawn(move || {
         run(&daemon, &stop, |f| {
             log(&format!("{} — {} ({}, {})", f.service, f.name, f.ip, f.sn.as_deref().unwrap_or("no serial number")));
-            let _ = app.emit("printer-found", f);
+            let _ = app.emit("printer-found", serde_json::json!({ "search": search, "printer": f }));
         });
         let _ = daemon.shutdown();
-        let _ = app.emit("printer-discover-done", ());
+        let _ = app.emit("printer-discover-done", serde_json::json!({ "search": search }));
     });
     Ok(())
 }

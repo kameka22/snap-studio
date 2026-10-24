@@ -112,7 +112,7 @@ pub struct Status {
     pub partial: bool,
 }
 
-fn client() -> &'static reqwest::Client {
+pub(crate) fn client() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| {
         reqwest::Client::builder()
@@ -124,13 +124,34 @@ fn client() -> &'static reqwest::Client {
     })
 }
 
-pub(crate) fn base(host: &str, port: u16) -> String {
-    let h = host.trim().trim_end_matches('/');
-    if h.starts_with("http://") || h.starts_with("https://") {
+/// A printer's `host:port`, the one rule for every address built from a
+/// saved printer: a scheme the user typed is dropped, a trailing slash too,
+/// and the saved port is added unless the host carries one already
+/// ("192.168.1.50:7125"). HTTP and WebSocket thus reach the same port.
+pub(crate) fn authority(host: &str, port: u16) -> String {
+    let h = host.trim();
+    let h = ["http://", "https://", "ws://", "wss://"].iter().fold(h, |h, s| h.strip_prefix(s).unwrap_or(h));
+    let h = h.trim_end_matches('/');
+    if h.contains(':') {
         h.to_string()
     } else {
-        format!("http://{}:{}", h, port)
+        format!("{h}:{port}")
     }
+}
+
+/// A host given as `https://` or `wss://` (a reverse proxy) keeps TLS, for
+/// HTTP and for the WebSocket alike.
+fn secure(host: &str) -> bool {
+    let h = host.trim();
+    h.starts_with("https://") || h.starts_with("wss://")
+}
+
+pub(crate) fn base(host: &str, port: u16) -> String {
+    format!("{}://{}", if secure(host) { "https" } else { "http" }, authority(host, port))
+}
+
+pub(crate) fn ws_url(host: &str, port: u16) -> String {
+    format!("{}://{}/websocket", if secure(host) { "wss" } else { "ws" }, authority(host, port))
 }
 
 pub(crate) async fn get_json(url: &str) -> Result<Value> {
@@ -139,6 +160,14 @@ pub(crate) async fn get_json(url: &str) -> Result<Value> {
         return Err(anyhow!("HTTP {}", r.status().as_u16()));
     }
     Ok(r.json::<Value>().await?)
+}
+
+pub(crate) async fn get_text(url: &str) -> Result<String> {
+    let r = client().get(url).send().await?;
+    if !r.status().is_success() {
+        return Err(anyhow!("HTTP {}", r.status().as_u16()));
+    }
+    Ok(r.text().await?)
 }
 
 fn f32_of(v: &Value) -> Option<f32> {
@@ -179,22 +208,30 @@ pub struct StartOptions {
 }
 
 impl StartOptions {
-    /// `print_task_config` keys, in the order Snapmaker Orca sends them.
-    fn entries(&self) -> [(&'static str, bool); 3] {
+    /// The options as Snapmaker Orca sends them: its keys, 1 or 0. The
+    /// firmware reads them as integers (`get_int`): `true` is refused.
+    pub fn orca_entries(&self) -> [(&'static str, u8); 3] {
         [
-            ("auto_bed_leveling", self.bed_leveling),
-            ("flow_calibrate", self.flow_calibration),
-            ("time_lapse_camera", self.timelapse),
+            ("bed_level", self.bed_leveling as u8),
+            ("flow_calibrate", self.flow_calibration as u8),
+            ("time_lapse_camera", self.timelapse as u8),
+        ]
+    }
+
+    /// The same options as `print_task_config` reports them, with the
+    /// `i18n` key of their label in the send sheet.
+    fn status_entries(&self) -> [(&'static str, bool, &'static str); 3] {
+        [
+            ("auto_bed_leveling", self.bed_leveling, "send.leveling"),
+            ("flow_calibrate", self.flow_calibration, "send.flow"),
+            ("time_lapse_camera", self.timelapse, "send.timelapse"),
         ]
     }
 }
 
-/// Preparation G-code sent before the launch, as Snapmaker Orca does: tool
-/// → head mapping, heads used, options.
-///
-/// Firmware ≥ 1.3.0: one `SET_PRINT_PREFERENCE` macro per option. Before: a
-/// single `SET_PRINT_PREFERENCES` (`legacy`).
-pub fn preprint_script(opts: &StartOptions, tools: &[u8], map: &[(u8, u8)], legacy: bool) -> String {
+/// Head mapping sent before the launch, as Snapmaker Orca does: tool → head
+/// for every used tool, then the heads used.
+pub fn map_script(tools: &[u8], map: &[(u8, u8)]) -> String {
     let mut lines: Vec<String> = Vec::new();
     // Every used tool gets its entry (the firmware resets none): the head
     // chosen as a substitute, otherwise the head of the same number.
@@ -210,19 +247,58 @@ pub fn preprint_script(opts: &StartOptions, tools: &[u8], map: &[(u8, u8)], lega
         let list: Vec<String> = used.iter().map(|t| t.to_string()).collect();
         lines.push(format!("SET_PRINT_USED_EXTRUDERS EXTRUDERS={}", list.join(",")));
     }
-    if legacy {
-        let kv: Vec<String> = opts
-            .entries()
-            .iter()
-            .map(|(k, v)| format!("{}={}", k.to_uppercase(), v))
-            .collect();
-        lines.push(format!("SET_PRINT_PREFERENCES {}", kv.join(" ")));
-    } else {
-        for (k, v) in opts.entries() {
-            lines.push(format!("SET_PRINT_PREFERENCE KEY={k} VALUE={v}"));
-        }
-    }
     lines.join("\n")
+}
+
+/// One `SET_PRINT_PREFERENCE` per option, as Snapmaker Orca sends them
+/// before a launch. Not every firmware knows it (the public 1.6.0 does not):
+/// sent for what it is worth, the options of the start request are what
+/// count.
+pub fn preference_script(opts: &StartOptions) -> String {
+    opts.orca_entries()
+        .iter()
+        .map(|(k, v)| format!("SET_PRINT_PREFERENCE KEY={k} VALUE={v}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The options in one `SET_PRINT_PREFERENCES`, for a start without
+/// `start_local_print`: `BED_LEVEL=1 FLOW_CALIBRATE=0 TIME_LAPSE_CAMERA=1`.
+pub fn legacy_preferences_script(opts: &StartOptions) -> String {
+    let kv: Vec<String> = opts
+        .orca_entries()
+        .iter()
+        .map(|(k, v)| format!("{}={v}", k.to_uppercase()))
+        .collect();
+    format!("SET_PRINT_PREFERENCES {}", kv.join(" "))
+}
+
+/// `[tool, head]` pairs of the used tools, the head mapping of the start
+/// request (the firmware resets its map when a print starts with options).
+pub fn map_table(tools: &[u8], map: &[(u8, u8)]) -> Vec<[u8; 2]> {
+    tools.iter().map(|t| [*t, head_of(*t, map)]).collect()
+}
+
+/// Parameters of `server.files.start_local_print`, shaped as Snapmaker
+/// Orca's: file type, path under `gcodes`, plate, options (1 or 0) and head
+/// mapping.
+pub fn start_request(path: &str, opts: &StartOptions, tools: &[u8], map: &[(u8, u8)]) -> Value {
+    let kind = path
+        .rsplit_once('.')
+        .map(|(_, e)| e.to_ascii_lowercase())
+        .filter(|e| !e.is_empty() && !e.contains('/'))
+        .unwrap_or_else(|| "gcode".into());
+    let mut options = serde_json::Map::new();
+    for (k, v) in opts.orca_entries() {
+        options.insert(k.into(), v.into());
+    }
+    options.insert("map_table".into(), serde_json::json!(map_table(tools, map)));
+    serde_json::json!({
+        "type": kind,
+        "path": path,
+        "print_plate": 1,
+        "options": options,
+    })
 }
 
 /// True when a substitution really moves a tool to another head.
@@ -287,13 +363,103 @@ pub async fn gcode_script_for(host: &str, port: u16, script: &str, timeout: Dura
     Err(anyhow!("HTTP {code}: {msg}"))
 }
 
-/// True when Klipper does not know the command (older firmware).
-pub fn is_unknown_command(err: &anyhow::Error) -> bool {
-    let m = err.to_string().to_ascii_lowercase();
-    m.contains("unknown command")
+/// Commands of `script` Klipper answered `Unknown command` to. Klipper does
+/// not fail on an unknown command: it only says so in its responses.
+pub fn unknown_commands(responses: &[String], script: &str) -> Vec<String> {
+    let ours: Vec<&str> = script.lines().filter_map(|l| l.split_whitespace().next()).collect();
+    let mut out: Vec<String> = Vec::new();
+    for r in responses {
+        let Some(i) = r.find("Unknown command") else { continue };
+        let name = r[i..]
+            .split('"')
+            .nth(1)
+            .map(|n| n.trim().to_string())
+            .unwrap_or_default();
+        let known = ours.iter().any(|c| c.eq_ignore_ascii_case(&name));
+        if known && !out.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+            out.push(name);
+        }
+    }
+    out
 }
 
-/// Pause, resume or cancel the running print.
+/// Runs a G-code script over the websocket, reading Klipper's responses: a
+/// command it does not know is a failure, not a silent success.
+pub async fn gcode_script_checked(host: &str, port: u16, script: &str) -> Result<()> {
+    let (_, responses) = ws_session(
+        host,
+        port,
+        "printer.gcode.script",
+        serde_json::json!({ "script": script }),
+        Duration::from_secs(30),
+    )
+    .await?;
+    let unknown = unknown_commands(&responses, script);
+    if !unknown.is_empty() {
+        return Err(anyhow!(crate::t!("err.unknown_command", cmd = unknown.join(", "))));
+    }
+    Ok(())
+}
+
+/// How a print was started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartRoute {
+    /// `server.files.start_local_print`, options in the request.
+    Orca,
+    /// `SET_PRINT_PREFERENCES`, then `printer.print.start`.
+    Legacy,
+}
+
+/// Starts a file of `gcodes` with its options, as Snapmaker Orca does:
+/// `server.files.start_local_print` with the options (1 or 0) and the head
+/// mapping. A printer without it (Moonraker refuses the method, or does not
+/// answer) gets the options in `SET_PRINT_PREFERENCES`, then a plain start.
+/// A printer that refuses the print itself (busy, nozzle mismatch…) is not
+/// asked again another way.
+pub async fn start_print(
+    host: &str,
+    port: u16,
+    path: &str,
+    opts: &StartOptions,
+    tools: &[u8],
+    map: &[(u8, u8)],
+) -> Result<StartRoute> {
+    let req = start_request(path, opts, tools, map);
+    let err = match ws_session(host, port, "server.files.start_local_print", req, Duration::from_secs(45)).await {
+        Ok((v, _)) => {
+            if v.get("state").and_then(|s| s.as_str()) == Some("success") {
+                return Ok(StartRoute::Orca);
+            }
+            let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("refused");
+            return Err(anyhow!("{msg}"));
+        }
+        Err(e) => e,
+    };
+    // Only a firmware without the method is asked the other way. A refusal
+    // (busy, nozzle mismatch: a JSON-RPC error) is the answer; so is a
+    // connection failure, which the other way would meet too.
+    let (missing, late) = match err.downcast_ref::<WsError>() {
+        Some(w) => (w.method_missing(), matches!(w, WsError::Timeout { .. })),
+        None => (false, false),
+    };
+    if late {
+        // An answer that came too late: the print may have started all the same.
+        let st = status(host, port).await;
+        if matches!(st.state.as_str(), "printing" | "paused") {
+            return Ok(StartRoute::Orca);
+        }
+    }
+    if !missing {
+        return Err(err);
+    }
+    eprintln!("[print] start_local_print unavailable ({err}): SET_PRINT_PREFERENCES then printer.print.start");
+    gcode_script_checked(host, port, &legacy_preferences_script(opts))
+        .await
+        .map_err(|e| anyhow!(crate::t!("err.prepare_refused", err = e)))?;
+    crate::printer_files::start(host, port, path).await?;
+    Ok(StartRoute::Legacy)
+}
+
 /// A bare POST to Moonraker (`/printer/emergency_stop`…): its `result`
 /// (Null when there is none).
 pub(crate) async fn post_path(host: &str, port: u16, path: &str) -> Result<Value> {
@@ -304,6 +470,7 @@ pub(crate) async fn post_path(host: &str, port: u16, path: &str) -> Result<Value
     Ok(r.json::<Value>().await.map(|v| v["result"].clone()).unwrap_or(Value::Null))
 }
 
+/// Pause, resume or cancel the running print.
 pub async fn print_action(host: &str, port: u16, action: &str) -> Result<()> {
     let action = match action {
         "pause" | "resume" | "cancel" => action,
@@ -329,15 +496,15 @@ pub async fn task_config(host: &str, port: u16) -> Option<Value> {
 /// Options the printer did not take into account (empty when all is well,
 /// or when it does not expose them).
 pub fn unapplied_options(cfg: &Value, opts: &StartOptions) -> Vec<&'static str> {
-    opts.entries()
+    opts.status_entries()
         .iter()
-        .filter(|(k, want)| match cfg.get(*k) {
+        .filter(|(k, want, _)| match cfg.get(*k) {
             Some(Value::Bool(b)) => b != want,
             Some(Value::Number(n)) => (n.as_f64().unwrap_or(0.0) != 0.0) != *want,
             Some(Value::String(s)) => matches!(s.to_ascii_lowercase().as_str(), "true" | "1") != *want,
             _ => false,
         })
-        .map(|(k, _)| *k)
+        .map(|(_, _, label)| *label)
         .collect()
 }
 
@@ -351,14 +518,23 @@ pub async fn upload(
     start: bool,
     progress: impl Fn(u64, u64) + Send + Sync + 'static,
 ) -> Result<()> {
-    let data = std::fs::read(path)?;
-    let total = data.len() as u64;
-    let chunks: Vec<Vec<u8>> = data.chunks(64 * 1024).map(|c| c.to_vec()).collect();
+    // Read as it is sent, 64 KiB at a time: a G-code of hundreds of
+    // megabytes is not held in memory (it was, twice over).
+    let total = std::fs::metadata(path)?.len();
+    let mut file = std::io::BufReader::with_capacity(256 * 1024, std::fs::File::open(path)?);
     let mut sent = 0u64;
-    let stream = futures_util::stream::iter(chunks.into_iter().map(move |c| {
-        sent += c.len() as u64;
-        progress(sent, total);
-        Ok::<Vec<u8>, std::io::Error>(c)
+    let stream = futures_util::stream::iter(std::iter::from_fn(move || {
+        let mut buf = vec![0u8; 64 * 1024];
+        match std::io::Read::read(&mut file, &mut buf) {
+            Ok(0) => None,
+            Ok(n) => {
+                buf.truncate(n);
+                sent += n as u64;
+                progress(sent, total);
+                Some(Ok::<Vec<u8>, std::io::Error>(buf))
+            }
+            Err(e) => Some(Err(e)),
+        }
     }));
     let part = reqwest::multipart::Part::stream_with_length(reqwest::Body::wrap_stream(stream), total)
         .file_name(remote_name.to_string())
@@ -387,37 +563,88 @@ pub async fn upload(
 /// Snapmaker's own methods (`camera.*`) are not relayed over HTTP by the U1's
 /// nginx: the websocket is the only way.
 pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Result<Value> {
+    ws_session(host, port, method, params, Duration::from_secs(8)).await.map(|(v, _)| v)
+}
+
+/// The same, with its own timeout, also returning the G-code responses
+/// Moonraker relayed meanwhile (`notify_gcode_response`).
+pub async fn ws_session(
+    host: &str,
+    port: u16,
+    method: &str,
+    params: Value,
+    timeout: Duration,
+) -> Result<(Value, Vec<String>)> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
-    let h = host
-        .trim()
-        .trim_end_matches('/')
-        .trim_start_matches("http://")
-        .trim_start_matches("https://");
-    let url = if h.contains(':') { format!("ws://{h}/websocket") } else { format!("ws://{h}:{port}/websocket") };
+    let url = ws_url(host, port);
     let run = async {
         let (mut ws, _) = tokio_tungstenite::connect_async(url.as_str()).await?;
         let req = serde_json::json!({ "jsonrpc": "2.0", "method": method, "params": params, "id": 1 });
         ws.send(Message::Text(req.to_string().into())).await?;
+        let mut responses: Vec<String> = Vec::new();
         while let Some(msg) = ws.next().await {
             let Message::Text(t) = msg? else { continue };
             let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
+            if v.get("method").and_then(|m| m.as_str()) == Some("notify_gcode_response") {
+                if let Some(lines) = v.get("params").and_then(|p| p.as_array()) {
+                    responses.extend(lines.iter().filter_map(|l| l.as_str()).map(String::from));
+                }
+                continue;
+            }
             if v.get("id").and_then(|i| i.as_i64()) != Some(1) {
                 continue; // status notifications, unrelated
             }
             let _ = ws.close(None).await;
             if let Some(e) = v.get("error") {
                 let msg = e.get("message").and_then(|m| m.as_str()).unwrap_or("erreur");
-                return Err(anyhow!("{method} : {msg}"));
+                return Err(WsError::Rpc {
+                    method: method.to_string(),
+                    code: e.get("code").and_then(|c| c.as_i64()).unwrap_or(0),
+                    message: msg.to_string(),
+                }
+                .into());
             }
-            return Ok(v.get("result").cloned().unwrap_or(Value::Null));
+            return Ok((v.get("result").cloned().unwrap_or(Value::Null), responses));
         }
         Err(anyhow!(crate::t!("err.ws_closed", method = method)))
     };
-    tokio::time::timeout(Duration::from_secs(8), run)
+    tokio::time::timeout(timeout, run)
         .await
-        .map_err(|_| anyhow!(crate::t!("err.ws_no_answer", method = method)))?
+        .map_err(|_| WsError::Timeout { method: method.to_string() })?
 }
+
+/// What a WebSocket request can fail on, when the caller must tell them
+/// apart (`start_print`): the printer answered with an error, or did not
+/// answer in time. Connection failures stay plain errors.
+#[derive(Debug)]
+pub enum WsError {
+    /// Answered with a JSON-RPC error. `code` -32601 is a method the
+    /// firmware does not have, as opposed to a request it refused.
+    Rpc { method: String, code: i64, message: String },
+    Timeout { method: String },
+}
+
+impl WsError {
+    /// The firmware does not know the method: another way may be tried.
+    pub fn method_missing(&self) -> bool {
+        match self {
+            WsError::Rpc { code, message, .. } => *code == -32601 || message.to_ascii_lowercase().contains("method not found"),
+            WsError::Timeout { .. } => false,
+        }
+    }
+}
+
+impl std::fmt::Display for WsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WsError::Rpc { method, message, .. } => write!(f, "{method} : {message}"),
+            WsError::Timeout { method } => f.write_str(&crate::t!("err.ws_no_answer", method = method)),
+        }
+    }
+}
+
+impl std::error::Error for WsError {}
 
 /// Wakes the U1's camera: it then publishes a continuously renewed image,
 /// and switches itself off unless restarted (about 10 s).
@@ -518,8 +745,10 @@ pub fn apply_status(s: &Value, st: &mut Status) {
             .map(String::from);
         st.elapsed_s = ps.get("print_duration").and_then(f32_of);
         st.filament_mm = ps.get("filament_used").and_then(f32_of);
-        if let Some(m) = ps.get("message").and_then(|x| x.as_str()).filter(|m| !m.is_empty()) {
-            st.message = Some(m.to_string());
+        // Given, even empty, it is the printer's word: a message it has
+        // cleared goes away too (the live feed starts from the last status).
+        if let Some(m) = ps.get("message").and_then(|x| x.as_str()) {
+            st.message = Some(m.to_string()).filter(|m| !m.is_empty());
         }
         if let Some(i) = ps.get("info") {
             let cur = i.get("current_layer").and_then(|x| x.as_u64());
@@ -720,37 +949,85 @@ mod tests {
 
     /// Print preparation, as Snapmaker Orca sends it.
     #[test]
-    fn preprint_script_matches_snapmaker_orca() {
-        let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: false };
-        let s = preprint_script(&o, &[0, 2], &[], false);
+    fn preparation_matches_snapmaker_orca() {
+        let s = map_script(&[0, 2], &[]);
         assert_eq!(
             s,
             "SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=0 MAP_EXTRUDER=0\n\
              SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=2 MAP_EXTRUDER=2\n\
-             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,2\n\
-             SET_PRINT_PREFERENCE KEY=auto_bed_leveling VALUE=true\n\
-             SET_PRINT_PREFERENCE KEY=flow_calibrate VALUE=false\n\
-             SET_PRINT_PREFERENCE KEY=time_lapse_camera VALUE=false"
+             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,2"
         );
-        let old = preprint_script(&StartOptions::default(), &[1], &[], true);
-        assert!(old.ends_with(
-            "SET_PRINT_PREFERENCES AUTO_BED_LEVELING=false FLOW_CALIBRATE=false TIME_LAPSE_CAMERA=false"
-        ));
+        let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: true };
+        // Integers, never `true`: the firmware reads them with `get_int`.
+        assert_eq!(
+            preference_script(&o),
+            "SET_PRINT_PREFERENCE KEY=bed_level VALUE=1\n\
+             SET_PRINT_PREFERENCE KEY=flow_calibrate VALUE=0\n\
+             SET_PRINT_PREFERENCE KEY=time_lapse_camera VALUE=1"
+        );
+        assert_eq!(legacy_preferences_script(&o), "SET_PRINT_PREFERENCES BED_LEVEL=1 FLOW_CALIBRATE=0 TIME_LAPSE_CAMERA=1");
+        assert_eq!(
+            legacy_preferences_script(&StartOptions::default()),
+            "SET_PRINT_PREFERENCES BED_LEVEL=0 FLOW_CALIBRATE=0 TIME_LAPSE_CAMERA=0"
+        );
+    }
+
+    /// `server.files.start_local_print`, shaped as Snapmaker Orca's.
+    #[test]
+    fn start_request_matches_snapmaker_orca() {
+        let o = StartOptions { bed_leveling: false, flow_calibration: true, timelapse: true };
+        let r = start_request("Cube-3f9a0c.gcode", &o, &[0, 2], &[(2, 3)]);
+        assert_eq!(
+            r,
+            serde_json::json!({
+                "type": "gcode",
+                "path": "Cube-3f9a0c.gcode",
+                "print_plate": 1,
+                "options": {
+                    "bed_level": 0,
+                    "flow_calibrate": 1,
+                    "time_lapse_camera": 1,
+                    "map_table": [[0, 0], [2, 3]],
+                },
+            })
+        );
+        // Values are numbers, not booleans (Moonraker passes `str(v)` on).
+        assert!(r["options"]["time_lapse_camera"].is_u64());
+        // A file in a folder, an upper-case extension, no extension.
+        assert_eq!(start_request("a.b/Part.GCODE", &o, &[1], &[])["type"], "gcode");
+        assert_eq!(start_request("dir.v2/part", &o, &[1], &[])["type"], "gcode");
+        assert_eq!(start_request("x.gcode", &o, &[1], &[])["options"]["map_table"], serde_json::json!([[1, 1]]));
+    }
+
+    #[test]
+    fn unknown_commands_are_failures() {
+        let script = preference_script(&StartOptions::default());
+        let replies = vec![
+            "// Unknown command:\"SET_PRINT_PREFERENCE\"".to_string(),
+            "// Unknown command:\"SET_PRINT_PREFERENCE\"".to_string(),
+            "// Unknown command:\"SOMETHING_ELSE\"".to_string(),
+            "ok".to_string(),
+        ];
+        assert_eq!(unknown_commands(&replies, &script), vec!["SET_PRINT_PREFERENCE"]);
+        assert!(unknown_commands(&["// Klipper state: Ready".to_string()], &script).is_empty());
+        assert!(unknown_commands(&[], &script).is_empty());
     }
 
     #[test]
     fn substituted_heads_are_mapped() {
-        let o = StartOptions::default();
-        let s = preprint_script(&o, &[0, 2], &[(2, 3)], false);
-        assert!(s.starts_with(
+        let s = map_script(&[0, 2], &[(2, 3)]);
+        assert_eq!(
+            s,
             "SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=0 MAP_EXTRUDER=0\n\
              SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=2 MAP_EXTRUDER=3\n\
-             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,3\n"
-        ));
+             SET_PRINT_USED_EXTRUDERS EXTRUDERS=0,3"
+        );
+        assert_eq!(map_table(&[0, 2], &[(2, 3)]), vec![[0, 0], [2, 3]]);
         // Swap: still one tool per head.
-        let s = preprint_script(&o, &[0, 1], &[(0, 1), (1, 0)], false);
+        let s = map_script(&[0, 1], &[(0, 1), (1, 0)]);
         assert!(s.contains("CONFIG_EXTRUDER=0 MAP_EXTRUDER=1") && s.contains("CONFIG_EXTRUDER=1 MAP_EXTRUDER=0"));
-        assert!(s.contains("EXTRUDERS=0,1\n"));
+        assert!(s.ends_with("EXTRUDERS=0,1"));
+        assert_eq!(map_table(&[0, 1], &[(0, 1), (1, 0)]), vec![[0, 1], [1, 0]]);
         assert!(check_map(&[0, 1], &[(0, 1), (1, 0)]).is_ok());
         assert!(check_map(&[0, 2], &[(2, 0)]).is_err(), "T0 and T2 on head 0");
         assert!(check_map(&[0], &[(0, 4)]).is_err(), "no head 4");
@@ -766,7 +1043,9 @@ mod tests {
     fn unapplied_options_are_reported() {
         let o = StartOptions { bed_leveling: true, flow_calibration: false, timelapse: true };
         let cfg = serde_json::json!({"auto_bed_leveling": true, "flow_calibrate": false, "time_lapse_camera": false});
-        assert_eq!(unapplied_options(&cfg, &o), vec!["time_lapse_camera"]);
+        assert_eq!(unapplied_options(&cfg, &o), vec!["send.timelapse"]);
+        let cfg = serde_json::json!({"auto_bed_leveling": 0, "flow_calibrate": "false", "time_lapse_camera": 1});
+        assert_eq!(unapplied_options(&cfg, &o), vec!["send.leveling"]);
         assert!(unapplied_options(&serde_json::json!({}), &o).is_empty(), "nothing exposed: nothing to report");
     }
 
@@ -796,6 +1075,26 @@ mod tests {
         assert!(!st.filaments[3].present, "T3 is reported empty");
         assert!(st.filaments[2].used, "T2 is used by the job");
         assert!(!st.filaments[0].used);
+    }
+
+    /// An unloaded slot, as a U1 reports it after "Unload": type, subtype
+    /// and vendor "NONE", filament_exist false, the colour left white.
+    #[test]
+    fn decode_unloaded_slot() {
+        let v: Value = serde_json::from_str(
+            r#"{"result":{"status":{"print_task_config":{
+              "filament_vendor":["Generic","Generic","NONE","Generic"],
+              "filament_type":["PLA","PLA","NONE","PETG"],
+              "filament_sub_type":["","","NONE",""],
+              "filament_color_rgba":["FFFFFFFF","000000FF","FFFFFFFF","000000FF"],
+              "filament_exist":[true,true,false,true]}}}}"#,
+        )
+        .unwrap();
+        let mut st = Status::default();
+        apply_objects(&v, &mut st);
+        let t2 = &st.filaments[2];
+        assert_eq!((t2.kind.as_str(), t2.sub_type.as_str(), t2.vendor.as_str(), t2.present), ("", "", "", false));
+        assert_eq!(st.filaments[3].vendor, "Generic");
     }
 
     /// Fallback when only the ARGB integer is given.
@@ -833,12 +1132,11 @@ mod tests {
     }
 }
 
+/// A text of `print_task_config`; the U1 reports an empty slot's type,
+/// subtype and vendor as "NONE": read as nothing.
 fn str_at(v: Option<&Value>, i: usize) -> String {
-    v.and_then(|a| a.get(i))
-        .and_then(|x| x.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string()
+    let s = v.and_then(|a| a.get(i)).and_then(|x| x.as_str()).unwrap_or("").trim();
+    if s.eq_ignore_ascii_case("none") { String::new() } else { s.to_string() }
 }
 
 /// Color of a slot: "RRGGBBAA" string or ARGB integer depending on firmware.
@@ -849,8 +1147,10 @@ fn slot_color(cfg: &Value, i: usize) -> Option<String> {
         .and_then(|x| x.as_str())
     {
         let h = s.trim().trim_start_matches('#');
-        if h.len() >= 6 {
-            return Some(format!("#{}", &h[0..6].to_ascii_lowercase()));
+        // `get`: a non-ASCII character at the cut (a firmware's string) must
+        // not panic, least of all in the jobs monitor.
+        if let Some(h6) = h.get(..6) {
+            return Some(format!("#{}", h6.to_ascii_lowercase()));
         }
     }
     let n = cfg.get("filament_color")?.get(i)?.as_u64()?;
@@ -899,5 +1199,66 @@ pub fn apply_filaments(cfg: Option<&Value>, st: &mut Status) {
             present,
             used: is_used(i),
         });
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::slot_color;
+    use serde_json::json;
+
+    #[test]
+    fn slot_colours_cut_safely() {
+        let cfg = json!({ "filament_color_rgba": ["#FF8000FF", "aaaaaé", "#é"], "filament_color": [0, 0xff00ff, 0x123456] });
+        assert_eq!(slot_color(&cfg, 0).as_deref(), Some("#ff8000"));
+        // Not six characters at the cut: the integer form stands in.
+        assert_eq!(slot_color(&cfg, 1).as_deref(), Some("#ff00ff"));
+        assert_eq!(slot_color(&cfg, 2).as_deref(), Some("#123456"));
+    }
+}
+
+#[cfg(test)]
+mod address_tests {
+    use super::{apply_status, authority, base, ws_url, Status, WsError};
+
+    #[test]
+    fn one_rule_for_every_address() {
+        assert_eq!(authority("192.168.1.50", 7125), "192.168.1.50:7125");
+        // A scheme and a trailing slash, as a user may type them: the saved port stands.
+        assert_eq!(base("http://192.168.1.50/", 7125), "http://192.168.1.50:7125");
+        // TLS stays when the host says so (a reverse proxy), for both.
+        assert_eq!(ws_url("https://u1.local/", 7125), "wss://u1.local:7125/websocket");
+        assert_eq!(base("https://u1.local/", 7125), "https://u1.local:7125");
+        assert_eq!(base("wss://u1.local:443", 7125), "https://u1.local:443");
+        // A port in the host wins over the saved one.
+        assert_eq!(base(" 192.168.1.50:80 ", 7125), "http://192.168.1.50:80");
+        assert_eq!(ws_url("ws://192.168.1.50:80", 7125), "ws://192.168.1.50:80/websocket");
+    }
+
+    #[test]
+    fn only_a_missing_method_is_tried_another_way() {
+        let method = "server.files.start_local_print";
+        let missing = WsError::Rpc { method: method.into(), code: -32601, message: "Method not found".into() };
+        let refused = WsError::Rpc { method: method.into(), code: -32000, message: "Printer is busy".into() };
+        let late = WsError::Timeout { method: method.into() };
+        assert!(missing.method_missing());
+        assert!(!refused.method_missing());
+        assert!(!late.method_missing());
+        assert_eq!(refused.to_string(), "server.files.start_local_print : Printer is busy");
+        // Through anyhow, the kind is still told.
+        let e: anyhow::Error = late.into();
+        assert!(matches!(e.downcast_ref::<WsError>(), Some(WsError::Timeout { .. })));
+    }
+
+    #[test]
+    fn a_cleared_message_goes_away() {
+        let mut st = Status { message: Some("old error".into()), ..Default::default() };
+        apply_status(&serde_json::json!({"print_stats": {"state": "standby", "message": ""}}), &mut st);
+        assert_eq!(st.message, None);
+        apply_status(&serde_json::json!({"print_stats": {"state": "error", "message": "Heater failed"}}), &mut st);
+        assert_eq!(st.message.as_deref(), Some("Heater failed"));
+        // Not given (a partial update): the last message stands.
+        apply_status(&serde_json::json!({"print_stats": {"state": "error"}}), &mut st);
+        assert_eq!(st.message.as_deref(), Some("Heater failed"));
     }
 }

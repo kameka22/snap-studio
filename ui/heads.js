@@ -135,6 +135,13 @@ function headsCount(pid) {
 
 /* ------------------------------------------------------------ models */
 
+/* A file added to the plate again may have been exported again with
+   other filaments: what was read of it is forgotten. */
+function headsForget(path) {
+  HD.models.delete(path);
+  hdModelNow.delete(path);
+}
+
 function headsModel(path) {
   if (!HD.models.has(path)) {
     HD.models.set(path, invoke("slice_model", { path })

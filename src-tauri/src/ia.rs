@@ -21,8 +21,10 @@
 //! A conversation may also start from nothing, to design an object: then there
 //! is no `source.3mf`, and `out/current.3mf` only exists after the first export.
 //!
-//! The working folder belongs to Claude; the app only writes there at creation,
-//! then just watches what comes out.
+//! The working folder belongs to Claude. The app writes what Claude needs
+//! (`CLAUDE.md`, the tools and skills, the previews) at creation and again
+//! at each opening (`refresh_workspace`), keeps the chat log and the
+//! attachments, and watches what comes out.
 
 use crate::mesh::{Mat, MeshData};
 use crate::write3mf::Part;
@@ -112,8 +114,15 @@ pub fn root() -> PathBuf {
     d
 }
 
+/// A conversation's folder. An id that is not a uuid (only a tampered
+/// call sends one) maps to a folder that never exists, so every command
+/// built on this path fails to find anything rather than reach elsewhere.
 pub fn dir(id: &str) -> PathBuf {
-    root().join(id)
+    if valid_id(id) {
+        root().join(id)
+    } else {
+        root().join("_invalid")
+    }
 }
 
 pub fn workspace(id: &str) -> PathBuf {

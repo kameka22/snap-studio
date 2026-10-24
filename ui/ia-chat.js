@@ -530,16 +530,15 @@ function chatHandle(ev, live) {
       else if (ev.is_error && ev.result) chatNote(String(ev.result), "error");
       break;
     case "exited":
-      if (CHAT.busy.has(CHAT.id)) chatNote(tr("chat.exited"), "muted");
+      if (CHAT.busy.has(CHAT.id)) {
+        chatNote(tr("chat.exited"), "muted");
+        // What the process said on stderr: the reason, when it failed to start.
+        if (ev.stderr) chatNote(String(ev.stderr), "muted pre");
+      }
       chatSetBusy(false);
       break;
     case "auth_failed":
       if (live) chatAuthFailed();
-      break;
-    case "error":
-      if (CHAT.id) IA.failed.add(CHAT.id);
-      chatSetBusy(false);
-      chatNote(ev.text, "error");
       break;
   }
 }
@@ -547,10 +546,11 @@ function chatHandle(ev, live) {
 listen("ia-chat", (e) => {
   const { id, events } = e.payload;
   for (const ev of events) {
-    if (id === CHAT.id) chatHandle(ev, true);
-    else if (ev.type === "result" || ev.type === "exited" || ev.type === "error") {
+    if (id === CHAT.id && CHAT.loading === id) CHAT.early.push(ev);
+    else if (id === CHAT.id) chatHandle(ev, true);
+    else if (ev.type === "result" || ev.type === "exited") {
       CHAT.busy.delete(id);
-      if ((ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") || ev.type === "error") IA.failed.add(id);
+      if (ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") IA.failed.add(id);
       iaStatusChanged();
     }
   }
@@ -607,11 +607,21 @@ async function chatOpen(c) {
   chatClearAttachments();
   chatModelFill(c);
   let past = [];
+  // Live events of this conversation wait while its past is read: the log
+  // is written before an event is sent, so one arriving now may already be
+  // in the past; rendered twice, a tool row or a message would double.
+  CHAT.loading = c.id;
+  CHAT.early = [];
   try {
     past = (await invoke("ia_chat_history", { id: c.id })) || [];
   } catch {}
   if (CHAT.id !== c.id) return;
   for (const ev of past) chatHandle(ev, false);
+  const seen = new Set(past.map((ev) => JSON.stringify(ev)));
+  const early = CHAT.early.filter((ev) => !seen.has(JSON.stringify(ev)));
+  CHAT.loading = null;
+  CHAT.early = [];
+  for (const ev of early) chatHandle(ev, true);
   chatList.scrollTop = chatList.scrollHeight;
   const busy = CHAT.busy.has(c.id);
   CHAT.busy.delete(c.id);
@@ -635,8 +645,13 @@ async function chatOpen(c) {
 }
 
 function chatLeave() {
+  const id = CHAT.id;
   CHAT.id = null;
   chatClearAttachments();
+  // An idle Claude is not kept running (nor its sandbox) while the
+  // conversation is not shown: the next message resumes it. One that is
+  // answering goes on, and its end is still reported to the list.
+  if (id && !CHAT.busy.has(id)) invoke("ia_chat_close", { id }).catch(() => {});
 }
 
 /* ------------------------------------------------------------ sending */
@@ -664,7 +679,10 @@ async function chatSend(text, attachments) {
       chatSetBusy(false);
       chatNote(String(e), "error");
     } else {
+      // Left meanwhile: the card in the list must still show the failure.
       CHAT.busy.delete(id);
+      IA.failed.add(id);
+      iaStatusChanged();
     }
   }
 }
@@ -848,5 +866,8 @@ chatList.addEventListener("click", (e) => {
 /* A new language: the conversation is drawn again from its past. */
 window.addEventListener("langchange", () => {
   const c = CHAT.id && IA.list.find((x) => x.id === CHAT.id);
-  if (c && !CHAT.busy.has(c.id)) chatOpen(c);
+  // Redrawn even while answering (notes, permission cards and labels
+  // change language); only a text being streamed is left alone, it
+  // would lose its partial text until the next piece.
+  if (c && !CHAT.streaming) chatOpen(c);
 });

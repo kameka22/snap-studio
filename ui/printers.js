@@ -25,16 +25,25 @@ function switchView(v) {
   document.querySelectorAll(".views > .view").forEach((s) => {
     s.classList.toggle("hidden", s.id !== "view-" + v);
   });
+  // Explore's tab strip stands in for the toolbar.
+  document.body.classList.toggle("no-toolbar", v === "library");
+  if (typeof p3dVisible === "function") p3dVisible(v === "printers");
   if (v === "printers") startLive();
   else {
     stopLive();
-    camStop();
+    // A pinned camera goes on, in its window, on every screen.
+    if (!CAM.pinned) camStop();
   }
+  // Full size belongs to the screen it was asked on.
+  CAM.full = false;
+  camPlace();
+  // Leaving Care & Tuning stops Control's reads and camera.
+  if (v !== "maint" && typeof ctLeave === "function") ctLeave();
   // Leaving a printer's files stops its video.
   if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
   if (v === "prints") pjRender();
   else if (typeof pjCamStop === "function") pjCamStop();
-  // The Library's native views must only live in its tab.
+  // Explore's native views must only live in its tab.
   libSetVisible(v === "library");
   if (v === "settings") {
     refreshCacheSize();
@@ -59,7 +68,7 @@ document.querySelectorAll(".sidebar .side-item[data-view]").forEach((b) =>
 /* Titles of the views that have nothing more specific to show. */
 function tbDefaults() {
   tbSet("prepare", tr("slice.plate"));
-  tbSet("library", tr("nav.library"));
+  tbSet("library", tr("nav.explore"));
   tbSet("printers", tr("nav.printers"));
   tbSet("settings", tr("nav.settings"));
 }
@@ -182,7 +191,7 @@ function current() {
 function prnRenderDetail() {
   const p = current();
   // The camera follows the printer shown: switching printer turns it off.
-  if (CAM.id && CAM.id !== p?.id) camStop();
+  if (CAM.id && CAM.id !== p?.id && !CAM.pinned) camStop();
   $("prn-empty").classList.toggle("hidden", !!p);
   $("prn-detail").classList.toggle("hidden", !p);
   $("prn-tools").classList.toggle("hidden", !p);
@@ -191,6 +200,7 @@ function prnRenderDetail() {
     return;
   }
   tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}`);
+  if (typeof p3dShow === "function") p3dShow(p);
   renderStatus(P.status.get(p.id));
 }
 
@@ -213,8 +223,10 @@ function setOffline(mode, st) {
   $("prn-offline-ico").classList.toggle("hidden", connecting);
   $("prn-offline-spin").classList.toggle("hidden", !connecting);
   setOfflineSeen(connecting ? null : P.seen.get(P.sel));
-  // No camera without a connection: stop it and disable its switch.
-  if (CAM.on) camStop();
+  // No camera without a connection: stop it and disable its switch (a
+  // pinned one stays, saying the printer does not answer).
+  if (CAM.on && CAM.id === P.sel && !CAM.pinned) camStop();
+  else if (CAM.on && CAM.id === P.sel) camOffline(true);
   $("cam-toggle").disabled = true;
   const err = (!connecting && st?.message) || "";
   $("prn-offline-err").textContent = err;
@@ -231,6 +243,7 @@ function renderStatus(st) {
     setOffline("connecting");
     $("prn-info").innerHTML = "";
     paintPrinter({ online: false, state: "offline", nozzles: [] });
+    if (typeof p3dStatus === "function") p3dStatus(null);
     updateFreshness();
     return;
   }
@@ -282,7 +295,10 @@ function renderStatus(st) {
   if (st.fan != null) chips.push(chip(tr("printers.fan"), Math.round(st.fan * 100) + " %"));
   $("prn-chips").innerHTML = chips.join("");
 
-  // Loaded filaments (U1) and temperatures
+  // Loaded filaments (U1) and temperatures. The live status is the spools'
+  // freshest source: the heads' own copy (heads.js, Control, the 3D view)
+  // follows it, or an unloaded spool would linger there.
+  if (st.online && Array.isArray(st.filaments) && P.sel) headsSetSlots(P.sel, st.filaments);
   renderFilaments(st);
   const rows = [];
   if (!(st.filaments || []).length) {
@@ -309,6 +325,8 @@ function renderStatus(st) {
   $("prn-info").innerHTML = info.join("");
 
   paintPrinter(st);
+  // The 3D view, when it can, replaces the hero (printer3d.js).
+  if (typeof p3dStatus === "function") p3dStatus(st);
   updateFreshness();
 }
 
@@ -378,7 +396,7 @@ function renderFilaments(st) {
     return `<div class="frow${on ? " on" : ""}">
       <span class="fbar"></span>
       <span class="fsw" style="${sw}"></span>
-      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span>${prof[f.index] ? `<span class="fprof">${esc(prof[f.index])}</span>` : ""}</span>
+      <span class="k"><b>T${f.index}</b><span class="sub">${bits.join(" · ")}</span>${f.present && prof[f.index] ? `<span class="fprof">${esc(prof[f.index])}</span>` : ""}</span>
       <span class="ftags">${tags.join("")}<span class="ftemp">${esc(temp)}</span></span>
     </div>`;
   });
@@ -506,15 +524,6 @@ async function refreshSelected() {
   }
 }
 
-async function refreshAll() {
-  if (P.busy) return;
-  P.busy = true;
-  await Promise.all(P.list.map(pollOne));
-  P.busy = false;
-  prnRenderList();
-  if (current()) renderStatus(P.status.get(P.sel));
-}
-
 /* Live feed: the printer pushes its changes over WebSocket (Moonraker
    JSON-RPC). Connections only live while this tab is shown. */
 function startLive() {
@@ -540,6 +549,8 @@ listen("printer-status", (e) => {
   if (live) P.seen.set(id, Date.now());
   prnRenderList();
   if (id === P.sel) renderStatus(status);
+  // The camera's printer gone: said over the camera, wherever it shows.
+  if (id === CAM.id && CAM.on && !status.online) camOffline(true);
 });
 
 /* Time of the last data: time only today, date and time otherwise
@@ -558,23 +569,25 @@ function setOfflineSeen(seen) {
 function updateFreshness() {
   const seen = P.seen.get(P.sel);
   const live = P.live.get(P.sel);
-  const box = $("prn-updated");
   const st = P.status.get(P.sel);
+  // The footer, and its copy in the 3D view's details (printer3d.js).
+  const say = (t) => {
+    $("prn-updated").textContent = t;
+    $("p3d-fresh").textContent = t;
+  };
   // Offline: the card carries the last-connection time, no footer.
   if (st && !st.online) {
-    box.textContent = "";
+    say("");
     setOfflineSeen(seen);
     return;
   }
   if (!seen) {
-    box.textContent = live ? tr("printers.live.connecting") : "";
+    say(live ? tr("printers.live.connecting") : "");
     return;
   }
   const age = Math.round((Date.now() - seen) / 1000);
   // Printer answering HTTP but live feed down: the data may be stale.
-  box.textContent = live
-    ? tr("printers.live.age", { s: age })
-    : tr("printers.live.offline", { time: fmtSeen(seen) });
+  say(live ? tr("printers.live.age", { s: age }) : tr("printers.live.offline", { time: fmtSeen(seen) }));
 }
 
 /* ------------------------------------------------------------ form */
@@ -584,7 +597,9 @@ function updateFreshness() {
 /* "On the network" list, shared by the add sheet and the welcome assistant:
    one search at a time, shown in the last list opened. Printers arrive as
    they answer, one per address. */
-const DISC = { items: new Map(), running: false, error: null, picked: null, view: null };
+/* `search` numbers each search: a stopped one may still report a printer
+   or its end while the next runs, and those are ignored. */
+const DISC = { items: new Map(), running: false, error: null, picked: null, view: null, search: 0 };
 
 function discoveryList(box, onPick) {
   DISC.view = { box, onPick };
@@ -604,10 +619,12 @@ async function discoverStart() {
   DISC.picked = null;
   DISC.error = null;
   DISC.running = true;
+  const search = ++DISC.search;
   discRender();
   try {
-    await invoke("printer_discover_start");
+    await invoke("printer_discover_start", { search });
   } catch (e) {
+    if (search !== DISC.search) return; // another search has started since
     DISC.running = false;
     DISC.error = String(e);
     discRender();
@@ -627,7 +644,8 @@ const discModel = (f) => f.model || (f.service === "snapmaker" ? "Snapmaker U1" 
 const discKnown = (f) => P.list.some((p) => p.host === f.ip);
 
 listen("printer-found", (e) => {
-  const f = e.payload;
+  const { search, printer: f } = e.payload;
+  if (search !== DISC.search) return; // a stopped search, still winding down
   const prev = DISC.items.get(f.ip);
   // A U1 sometimes announces itself twice (Snapmaker and Moonraker): the
   // richer Snapmaker record wins.
@@ -635,7 +653,8 @@ listen("printer-found", (e) => {
   DISC.items.set(f.ip, f);
   discRender();
 });
-listen("printer-discover-done", () => {
+listen("printer-discover-done", (e) => {
+  if (e.payload?.search !== DISC.search) return;
   DISC.running = false;
   discRender();
 });
@@ -709,13 +728,34 @@ function closeForm() {
   P.editing = null;
 }
 
+/* The port typed, 1 to 65535 (the field's `max` is not enforced while
+   typing, and Rust refuses anything else), or null. */
+function portOf(input) {
+  const n = Math.round(+input.value || 7125);
+  return n >= 1 && n <= 65535 ? n : null;
+}
+
 async function probeForm() {
   const host = $("pf-host").value.trim();
   if (!host) return;
   const box = $("pf-test");
+  const port = portOf($("pf-port"));
+  if (!port) {
+    box.className = "pf-test err";
+    box.textContent = tr("printers.form.port_invalid");
+    return;
+  }
   box.className = "pf-test";
   box.textContent = tr("printers.form.testing");
-  const r = await invoke("printer_probe", { host, port: +$("pf-port").value || 7125 });
+  // A slow answer for a host typed before must not fill in the fields now.
+  const seq = (P.probeSeq = (P.probeSeq || 0) + 1);
+  let r;
+  try {
+    r = await invoke("printer_probe", { host, port });
+  } catch (e) {
+    r = { ok: false, detail: String(e) };
+  }
+  if (seq !== P.probeSeq) return;
   box.className = "pf-test " + (r.ok ? "ok" : "err");
   box.textContent = r.detail;
   if (r.ok) {
@@ -742,10 +782,11 @@ async function saveForm() {
   try {
     P.list = await invoke("printer_save", { printer });
     const saved = P.list.find((x) => x.host === printer.host && x.port === printer.port);
+    const edited = !!P.editing; // closeForm forgets it
     closeForm();
     await prnLoad(printer.id || saved?.id);
     switchView("printers");
-    toast(tr(P.editing ? "printers.updated" : "printers.added"));
+    toast(tr(edited ? "printers.updated" : "printers.added"));
   } catch (e) {
     toast(tr("printers.form.save_failed", { err: e }), true);
   }
@@ -786,31 +827,44 @@ async function askRemove(target) {
    publishes a continuously renewed JPEG, read again in a loop; it switches
    itself off unless restarted, hence the restart every 10 s. One read in
    flight at a time: the next one starts on load. */
-const CAM = { id: null, on: false, n: 0, timer: 0, keep: 0 };
+/* The printer's camera: one stream at a time (CAM), its image in #cam-box,
+   which camPlace puts where it shows — the printer page (the 3D view's
+   corner or the Camera section), the pinned window over every screen, or
+   full size over the content area. Pinning is a preference, kept. */
+const CAM = { id: null, on: false, n: 0, timer: 0, keep: 0, fails: 0, offline: false, full: false,
+  pinned: localStorage.getItem("snapstudio.cam.pinned") === "1" };
 
 async function camStart() {
   const p = current();
   if (!p) return void ($("cam-toggle").checked = false);
   camStop();
-  Object.assign(CAM, { id: p.id, on: true });
+  // Two quick toggles: only the last start goes on (one keep-alive).
+  const gen = (CAM.gen = (CAM.gen || 0) + 1);
+  Object.assign(CAM, { id: p.id, on: true, fails: 0 });
   $("cam-toggle").checked = true;
   $("cam-note").textContent = tr("printers.cam.starting");
   $("cam-box").classList.remove("hidden");
+  camPlace();
   try {
     await invoke("camera_start", { printerId: p.id });
   } catch (e) {
-    if (CAM.id !== p.id) return;
+    if (gen !== CAM.gen) return;
     camStop();
     $("cam-note").textContent = String(e);
     return;
   }
-  if (!CAM.on || CAM.id !== p.id) return;
+  if (gen !== CAM.gen || !CAM.on) return;
   CAM.keep = setInterval(() => invoke("camera_start", { printerId: p.id }).catch(() => {}), 10000);
   camNext();
 }
 
 function camNext() {
   if (!CAM.on) return;
+  // The native view over a site shows the camera meanwhile: one stream.
+  if (CAM.overlay) {
+    CAM.timer = setTimeout(camNext, 500);
+    return;
+  }
   $("cam-img").src = schemeUrl("cam", `/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`);
 }
 
@@ -823,17 +877,109 @@ function camStop() {
   $("cam-note").textContent = "";
   $("cam-box").classList.add("hidden");
   $("cam-img").removeAttribute("src");
+  CAM.full = false;
+  camOffline(false);
+  camPlace();
+}
+
+/* Where the camera shows: full size, the pinned window (unless on its own
+   printer's page, where it already is), or the printer page. */
+function camPlace() {
+  const box = $("cam-box"), pip = $("cam-pip"), full = $("cam-full");
+  const ownPage = window.currentView === "printers" && P.sel === CAM.id;
+  const home = $("prn-detail").classList.contains("p3d-on") ? $("p3d") : document.querySelector("#prn-detail .group.cam");
+  const host = CAM.on && CAM.full ? full : CAM.on && CAM.pinned && !ownPage ? $("cam-pip-body") : home;
+  if (box.parentElement !== host) host.appendChild(box);
+  full.classList.toggle("hidden", host !== full);
+  pip.classList.toggle("hidden", host !== $("cam-pip-body"));
+  box.classList.toggle("full", host === full);
+  const p = P.list.find((x) => x.id === CAM.id);
+  $("cam-pip-name").textContent = p ? p.name || p.host : "";
+  $("cam-pin").classList.toggle("on", CAM.pinned);
+  const label = (el, key) => {
+    el.title = tr(key);
+    el.setAttribute("aria-label", tr(key));
+  };
+  label($("cam-pin"), CAM.pinned ? "printers.cam.unpin" : "printers.cam.pin");
+  label($("cam-full-btn"), CAM.full ? "printers.cam.full_exit" : "printers.cam.full");
+  if (typeof p3dQuick === "function" && typeof P3 !== "undefined" && P3.pid) p3dQuick();
+  camOverlay();
+}
+
+/* A site of Explore is a native view over the interface, which covers the
+   pinned window: Rust lays a small view of ours over it at the same place
+   (library.rs, camview.html), shown while a site is. Told where the pinned
+   window is, or that there is none. */
+function camOverlay() {
+  const pip = $("cam-pip");
+  const on = CAM.on && !pip.classList.contains("hidden");
+  const p = P.list.find((x) => x.id === CAM.id);
+  const setup = on
+    ? JSON.stringify({
+        id: CAM.id,
+        name: p ? p.name || p.host : "",
+        texts: { unpin: tr("printers.cam.unpin"), close: tr("printers.cam.close"), offline: tr("printers.cam.offline"), open: tr("printers.cam.open") },
+      })
+    : "";
+  const r = on ? pip.getBoundingClientRect() : null;
+  const key = on ? `${setup}|${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` : "";
+  if (key === CAM.overlayKey) return;
+  CAM.overlayKey = key;
+  invoke("cam_view_set", { rect: on ? { x: r.left, y: r.top, w: r.width, h: r.height } : null, setup }).catch(() => {});
+}
+window.addEventListener("resize", () => CAM.on && camOverlay());
+// Shown over a site or not: the interface's frames pause meanwhile.
+listen("cam-view", (e) => {
+  const shown = !!e.payload?.shown;
+  if (shown === !!CAM.overlay) return;
+  CAM.overlay = shown;
+  if (!shown && CAM.on) {
+    clearTimeout(CAM.timer);
+    camNext();
+  }
+});
+// Its buttons: the camera is the interface's.
+listen("cam-view-action", (e) => {
+  if (e.payload === "open") camOpenPrinter();
+  else if (e.payload === "unpin") camPin(false);
+  else if (e.payload === "close") camStop();
+});
+
+/* The printer does not answer: said plainly over the camera, never its
+   last image frozen. */
+function camOffline(on) {
+  CAM.offline = on;
+  $("cam-off").classList.toggle("hidden", !on);
+  $("cam-img").classList.toggle("hidden", on);
+}
+
+function camPin(on) {
+  CAM.pinned = on;
+  localStorage.setItem("snapstudio.cam.pinned", on ? "1" : "0");
+  // Unpinned away from its page: nothing shows it any more.
+  if (!on && CAM.on && !(window.currentView === "printers" && P.sel === CAM.id) && !CAM.full) camStop();
+  camPlace();
+}
+
+function camFull(on) {
+  CAM.full = on && CAM.on;
+  camPlace();
 }
 
 $("cam-img").addEventListener("load", () => {
   if (!CAM.on) return;
   $("cam-note").textContent = "";
+  CAM.fails = 0;
+  if (CAM.offline) camOffline(false);
   CAM.timer = setTimeout(camNext, 200);
 });
 $("cam-img").addEventListener("error", () => {
   if (!CAM.on) return;
   $("cam-note").textContent = tr("printers.cam.retry");
-  CAM.timer = setTimeout(camNext, 1000);
+  // A few misses in a row: the printer is gone (its page's status is not
+  // read on other screens). Tried again, less often.
+  if (++CAM.fails >= 3) camOffline(true);
+  CAM.timer = setTimeout(camNext, CAM.offline ? 3000 : 1000);
 });
 // The camera's switch: on, the live image; off, nothing is fetched.
 $("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart() : camStop()));
@@ -843,8 +989,63 @@ function camToggleSize() {
   const big = $("cam-box").classList.toggle("big");
   $("cam-size").title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
 }
-$("cam-box").addEventListener("dblclick", (e) => !e.target.closest(".cam-bar") && camToggleSize());
+$("cam-box").addEventListener("dblclick", (e) => !e.target.closest(".cam-bar") && !CAM.full && !CAM.pinned && camToggleSize());
 $("cam-size").addEventListener("click", camToggleSize);
+$("cam-full-btn").addEventListener("click", () => camFull(!CAM.full));
+$("cam-pin").addEventListener("click", () => camPin(!CAM.pinned));
+$("cam-pip-unpin").addEventListener("click", () => camPin(false));
+$("cam-pip-close").addEventListener("click", camStop);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && CAM.full && !document.querySelector(".modal:not(.hidden)")) {
+    e.stopPropagation();
+    camFull(false);
+  }
+}, true);
+// The pinned window's image leads back to its printer's page.
+$("cam-pip-body").addEventListener("click", (e) => {
+  if (!e.target.closest(".cam-bar")) camOpenPrinter();
+});
+function camOpenPrinter() {
+  if (!CAM.id) return;
+  P.sel = CAM.id;
+  prnRenderDetail();
+  switchView("printers");
+  prnRenderList();
+  refreshSelected();
+}
+
+/* The pinned window moves with its title bar and settles in the nearest
+   corner of the window, remembered. */
+function camCorner(c) {
+  const pip = $("cam-pip");
+  ["tl", "tr", "bl", "br"].forEach((k) => pip.classList.toggle("at-" + k, k === c));
+  pip.style.left = pip.style.top = "";
+}
+camCorner(localStorage.getItem("snapstudio.cam.corner") || "br");
+$("cam-pip-head").addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.target.closest("button")) return;
+  const pip = $("cam-pip"), r = pip.getBoundingClientRect();
+  const dx = e.clientX - r.left, dy = e.clientY - r.top;
+  pip.setPointerCapture(e.pointerId);
+  pip.classList.add("dragging");
+  const move = (ev) => {
+    pip.style.left = `${Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx))}px`;
+    pip.style.top = `${Math.max(0, Math.min(innerHeight - r.height, ev.clientY - dy))}px`;
+  };
+  const up = (ev) => {
+    pip.removeEventListener("pointermove", move);
+    pip.removeEventListener("pointerup", up);
+    // Measured while still dragged (its corner's anchors would stretch it).
+    const q = pip.getBoundingClientRect();
+    pip.classList.remove("dragging");
+    const c = (q.top + q.height / 2 < innerHeight / 2 ? "t" : "b") + (q.left + q.width / 2 < innerWidth / 2 ? "l" : "r");
+    localStorage.setItem("snapstudio.cam.corner", c);
+    camCorner(c);
+    camOverlay();
+  };
+  pip.addEventListener("pointermove", move);
+  pip.addEventListener("pointerup", up);
+});
 
 /* ------------------------------------------------------------ events */
 
@@ -852,6 +1053,9 @@ $("prn-add").addEventListener("click", () => openForm(null));
 $("prn-add2").addEventListener("click", () => openForm(null));
 $("prn-add3").addEventListener("click", () => openForm(null));
 $("prn-edit").addEventListener("click", () => openForm(current()));
+// The printer card's shortcut to Care & Tuning › Control, through its
+// opening (ctlOpen, as the quick panels' "All controls" will).
+$("prn-control").addEventListener("click", () => current() && ctlOpen(current().id));
 $("prn-del").addEventListener("click", () => askRemove());
 $("prn-refresh").addEventListener("click", () => { refreshSelected(); startLive(); });
 $("prn-offline-retry").addEventListener("click", () => { refreshSelected(); startLive(); });
@@ -859,7 +1063,9 @@ $("pf-cancel").addEventListener("click", closeForm);
 $("pf-probe").addEventListener("click", probeForm);
 $("pf-save").addEventListener("click", saveForm);
 $("pmodal").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") saveForm();
+  // Enter in a field saves; on a button (Cancel, Test, a found printer)
+  // it is that button's click, not a save.
+  if (e.key === "Enter" && !e.target.closest("button")) saveForm();
   if (e.key === "Escape") closeForm();
 });
 document.addEventListener("keydown", (e) => {
@@ -871,8 +1077,7 @@ window.addEventListener("langchange", () => {
   prnRenderList();
   prnRenderDetail();
   discRender();
-  if (P.editing !== undefined && !$("pmodal").classList.contains("hidden"))
-    $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
+  if (!$("pmodal").classList.contains("hidden")) $("pmodal-title").textContent = tr(P.editing ? "printers.edit_title" : "printers.add");
 });
 
 prnLoad();

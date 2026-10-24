@@ -26,7 +26,9 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// Keychain item of the sandbox token: Snap Studio's, apart from Claude's.
+#[cfg(target_os = "macos")]
 const SERVICE: &str = "fr.carlini.snapstudio.claude-sandbox";
+#[cfg(target_os = "macos")]
 const ACCOUNT: &str = "sandbox";
 
 /// Width of the `setup-token` terminal: a token is about 110 characters.
@@ -105,12 +107,19 @@ pub fn set_sandbox_token(token: &str) -> Result<()> {
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d)?;
         }
-        std::fs::write(&p, token)?;
+        // Created readable by its owner only, from the first byte: a file
+        // written then chmod'ed is readable by all in between.
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
+            use std::io::Write;
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&p)?;
+            f.write_all(token.as_bytes())?;
+            // An existing file keeps its old mode on open: set anyway.
             std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600))?;
         }
+        #[cfg(not(unix))]
+        std::fs::write(&p, token)?;
         Ok(())
     }
 }
@@ -185,7 +194,11 @@ fn argv(engine: &str, tools: &Tools, claude_args: &[&str]) -> Result<Vec<String>
 /// Runs a command with a deadline; returns its standard output, up to the
 /// line for which `enough` says so (the command is then stopped).
 fn run(argv: &[String], envs: &[(String, String)], deadline: Duration, enough: impl Fn(&str) -> bool) -> Result<String> {
-    let cwd = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
+    // An empty folder of our own, not the home: in container mode yolobox
+    // mounts the working directory into the sandbox, and a sign-in check
+    // has no business seeing the user's files (nor a stray CLAUDE.md).
+    let cwd = crate::ia::root().join(".auth-check");
+    std::fs::create_dir_all(&cwd)?;
     let mut cmd = Command::new(&argv[0]);
     cmd.args(&argv[1..])
         .current_dir(cwd)

@@ -37,9 +37,20 @@ const DEFAULTS = {
   aiModes: null,
 };
 
+/* A stored value, or {} when there is none or it is unreadable: a corrupt
+   entry must not stop the script, and the whole app with it. */
+function storedObject(key) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+
 const state = {
   ...DEFAULTS,
-  ...JSON.parse(localStorage.getItem("snapstudio") || "{}"),
+  ...storedObject("snapstudio"),
   files: [],
   meta: new Map(),
   analysis: new Map(),
@@ -133,6 +144,12 @@ function confirmDelete(title, message, okLabel = tr("common.delete")) {
   });
 }
 
+/* A print the printer started without some of its options: said in a
+   dialog to acknowledge, not in a passing toast. */
+function startWarning(message) {
+  return window.__TAURI__.dialog.message(message, { title: tr("send.options_unapplied.title"), kind: "error" }).catch(() => toast(message, true));
+}
+
 /* No browser context menu, except in text fields. */
 document.addEventListener("contextmenu", (e) => {
   if (!e.target.closest("input, textarea, [contenteditable]")) e.preventDefault();
@@ -158,7 +175,8 @@ function tbRender() {
   const t = TB[v] || { title: "", sub: "" };
   $("tb-title").textContent = t.title;
   $("tb-sub").textContent = t.sub;
-  document.querySelectorAll(".tb-actions").forEach((el) => el.classList.toggle("on", el.dataset.for === v));
+  // `data-for` may name several views ("library snapmaker": the same tabs).
+  document.querySelectorAll(".tb-actions").forEach((el) => el.classList.toggle("on", el.dataset.for.split(" ").includes(v)));
 }
 
 /* ------------------------------------------------------------- sidebar */
@@ -225,7 +243,12 @@ function sideSync() {
       if (j?.state === "printing") target = document.querySelector(`#side-prints [data-pj="live:${CSS.escape(j.printer_id)}"]`);
     }
   }
-  if (v === "library" && typeof LIB !== "undefined" && LIB.active === "favs") target = $("side-favs");
+  if (v === "library" && typeof LIB !== "undefined") {
+    if (LIB.active === "favs") target = $("side-favs");
+    // A site's tab lights its pinned entry (Snapmaker Space is always there).
+    const t = LIB.tabs.find((x) => x.id === LIB.active);
+    if (t) target = document.querySelector(`.sidebar .side-item[data-site="${CSS.escape(t.site)}"]`);
+  }
   if (!target) target = document.querySelector(`.sidebar .side-item[data-view="${v}"]`);
   document.querySelectorAll(".sidebar .side-item").forEach((el) => el.classList.toggle("on", el === target));
   // The open folder's count shows on its entry.
@@ -1111,7 +1134,9 @@ listen("tauri://drag-leave", () => document.body.classList.remove("dragover"));
 listen("tauri://drag-drop", (e) => {
   document.body.classList.remove("dragover");
   const p = e.payload?.paths?.[0];
-  if (p) openDir(p.replace(/\/[^/]+\.3mf$/i, ""));
+  // A file dropped opens its folder (a file path pushed to the recents
+  // would stay there as a dead entry); a folder opens itself.
+  if (p) openDir(p.replace(/[\\/][^\\/]+\.(3mf|stl|gcode|gco|g|obj|step|stp)$/i, ""));
 });
 
 /* rubber-band selection in the empty area */

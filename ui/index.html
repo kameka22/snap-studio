@@ -19,11 +19,16 @@
   <nav class="side-nav">
     <div class="side-block">
       <button class="side-item" data-view="library">
-        <span class="glyph" style="color: #FF9500"><svg viewBox="0 0 24 24"><path d="M4 4h5v16H4zm6 0h4v16h-4zm5.3.6 3.9-1 3.8 14.6-3.9 1z"/></svg></span>
-        <span class="lbl" data-i18n="nav.library">Library</span>
+        <span class="glyph" style="color: #FF9500"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m4.2 3.8-6 2.4-2.4 6 6-2.4zM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></svg></span>
+        <span class="lbl" data-i18n="nav.explore">Explore</span>
         <span class="count" id="count-library"></span>
       </button>
       <div class="side-group side-sub">
+        <button id="side-space" class="side-item" data-site="space">
+          <span class="glyph" style="color: #1F6FEB"><svg viewBox="-1.5 4.6 15.3 15.3"><path d="M4.86179 10.6289C3.67929 10.4313 2.92954 9.76981 3.04174 9.21311C3.20023 8.41243 4.48069 8.20452 6.2117 8.15297C7.65631 8.12232 9.09352 8.36032 10.4448 8.854L11.4261 6.64095C9.79357 5.939 8.03083 5.56263 6.24375 5.53442C2.71228 5.53442 0 7.34885 0 9.38493C0 11.598 2.71762 13.0224 5.34263 13.2629C7.47968 13.4588 8.79575 14.2234 8.7263 14.9502C8.6604 15.5911 7.55804 15.909 6.3417 15.964C4.56705 16.0451 2.79337 15.7852 1.12373 15.1994L0.144251 17.433C2.27184 18.3763 4.61947 18.7621 6.95076 18.5516C10.2935 18.2492 12.2934 16.1358 12.0441 14.4279C11.5579 11.0842 6.92405 10.9777 4.86179 10.6289Z"/></svg></span>
+          <span class="lbl" data-i18n="snap.space">Snapmaker Space</span>
+        </button>
+        <div id="side-pins"></div>
         <button id="side-favs" class="side-item">
           <span class="glyph" style="color: #FFCC00"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></span>
           <span class="lbl" data-i18n="library.favorites">Favorites</span>
@@ -34,7 +39,7 @@
     <div class="side-block">
       <button class="side-item" data-view="ia">
         <span class="glyph" style="color: #AF52DE"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg></span>
-        <span class="lbl" data-i18n="nav.ia">AI</span>
+        <span class="lbl" data-i18n="nav.create">Create</span>
         <span class="count" id="count-ia"></span>
       </button>
       <div id="side-ia" class="side-group side-sub"></div>
@@ -71,6 +76,17 @@
       </button>
     </div>
   </nav>
+  <div id="side-wn" class="side-wn">
+    <button id="wn-card" class="wn-card hidden" type="button">
+      <img src="assets/app-icon.png" alt="" />
+      <span class="t"><b id="wn-card-title"></b><span id="wn-card-sub"></span></span>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M8.6 5.4 10 4l8 8-8 8-1.4-1.4 6.6-6.6z"/></svg>
+    </button>
+    <button id="wn-line" class="side-item" type="button">
+      <span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M10 2.5c.7 4.3 2.7 6.4 7 7.2-4.3.8-6.3 2.9-7 7.3-.7-4.4-2.7-6.5-7-7.3 4.3-.8 6.3-2.9 7-7.2zM18.2 13.2c.4 2.1 1.3 3.1 3.3 3.5-2 .4-2.9 1.4-3.3 3.6-.4-2.2-1.3-3.2-3.3-3.6 2-.4 2.9-1.4 3.3-3.5z"/></svg></span>
+      <span class="lbl" data-i18n="whatsnew.title">What's new</span>
+    </button>
+  </div>
   <div class="side-footer">
     <button class="side-item" data-view="settings">
       <span class="glyph" style="color: #8E8E93"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg></span>
@@ -80,6 +96,8 @@
   </div>
 </aside>
 <main id="content" class="content">
+<!-- The printer camera at full size, over the content area (printers.js camPlace). -->
+<div id="cam-full" class="cam-full hidden"></div>
 <header class="toolbar" data-tauri-drag-region>
   <div class="tb-actions tb-lead" data-for="prints">
     <button id="pj-back" class="tb-btn hidden" title="All prints" data-i18n-title="prints.back"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
@@ -96,9 +114,6 @@
   </div>
   <div class="tb-actions tb-add" data-for="ia">
     <button id="ia-new" class="tb-btn labeled" title="Create an object" data-i18n-title="ia.new.button"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="ia.new_object">New Object</span></button>
-  </div>
-  <div class="tb-actions tb-add" data-for="library">
-    <button id="lib-add" class="tb-btn labeled" title="Open a site" data-i18n-title="library.open_site"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="library.open">Open…</span></button>
   </div>
   <div class="tb-actions tb-add" data-for="prepare">
     <button id="p-add" class="tb-btn labeled" title="Add files to the plate" data-i18n-title="prepare.add.title"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span data-i18n="common.add">Add</span></button>
@@ -122,9 +137,11 @@
   </div>
   <div class="tb-actions tb-tabs" data-for="maint">
     <div id="mt-tabs" class="seg" role="group" aria-label="Care &amp; Tuning" data-i18n-aria="maint.title">
+      <!-- Control first: the printer's actions, then its care and its bed. -->
+      <button class="seg-btn labeled" data-mtab="control"><span data-i18n="maint.tab.control">Control</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
       <button class="seg-btn labeled" data-mtab="care"><span data-i18n="maint.tab.care">Care</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
       <button class="seg-btn labeled" data-mtab="level"><span data-i18n="maint.tab.level">Bed Leveling</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
-      <!-- Calibration: #17's assistant; hidden until it lands. -->
+      <!-- Calibration: #17's assistants; hidden until they land. -->
       <button class="seg-btn labeled hidden" data-mtab="calib"><span data-i18n="maint.tab.calib">Calibration</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
     </div>
   </div>
@@ -151,15 +168,6 @@
     <div id="ia-dacts" class="tb-group hidden">
       <button id="ia-folder" class="tb-btn" title="Show the working folder" data-i18n-title="ia.show_workspace"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
       <button id="ia-delete" class="btn ia-delete-btn" title="Delete the conversation and its Claude session" data-i18n-title="ia.delete.button_title"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg><span data-i18n="ia.delete.button">Delete Conversation</span></button>
-    </div>
-  </div>
-  <div class="tb-actions" data-for="library">
-    <div id="lib-bar" class="tb-group hidden">
-      <button id="lib-back" class="tb-btn" title="Back" data-i18n-title="library.back"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
-      <button id="lib-fwd" class="tb-btn" title="Forward" data-i18n-title="library.forward"><svg viewBox="0 0 24 24"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z"/></svg></button>
-      <button id="lib-reload" class="tb-btn" title="Reload" data-i18n-title="library.reload"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
-      <div id="lib-url" class="tb-url" title=""></div>
-      <button id="lib-fav" class="tb-btn" title="Add to favorites" data-i18n-title="library.fav"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></button>
     </div>
   </div>
   <div class="tb-actions" data-for="prepare">
@@ -204,6 +212,8 @@
   <div class="tb-actions" data-for="printers">
     <div id="prn-tools" class="tb-group hidden">
       <span id="prn-pill" class="pill">—</span>
+      <button id="prn-control" class="tb-btn labeled" title="Control the printer: home, jog, heads, temperatures" data-i18n-title="ctl.open_title"><svg viewBox="0 0 24 24"><path d="M12 2l3 3.5h-2V9h-2V5.5H9zM12 22l-3-3.5h2V15h2v3.5h2zM2 12l3.5-3v2H9v2H5.5v2zM22 12l-3.5 3v-2H15v-2h3.5V9zM12 10.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6"/></svg><span data-i18n="maint.tab.control">Control</span></button>
+      <span id="prn-estop" class="prn-estop" data-ctl-pid=""></span>
       <button id="prn-refresh" class="tb-btn" title="Refresh" data-i18n-title="printers.refresh"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 0 6.7 9h-2.1A5 5 0 1 1 12 7v3l4.5-4L12 2z"/></svg></button>
       <button id="prn-edit" class="tb-btn" title="Edit" data-i18n-title="common.edit"><svg viewBox="0 0 24 24"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8zm14.7-7.6a.8.8 0 0 0 0-1.1l-1.2-1.2a.8.8 0 0 0-1.1 0l-1.4 1.4 2.3 2.3z"/></svg></button>
       <button id="prn-del" class="tb-btn danger" title="Delete" data-i18n-title="common.delete"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7z"/></svg></button>
@@ -309,6 +319,10 @@
           <button type="button" id="p-objects-fold" class="p-tw p-fold">▾</button>
           <span class="p-float-title" data-i18n="prepare.objects" title="Click: select · ⌘ click: add or remove · ⇧ click: every row up to this one · drag: onto the plate or beside it" data-i18n-title="prepare.list.hint">Objects</span>
           <span id="p-objects-n" class="p-float-n"></span>
+          <div id="p-assoc" class="seg" role="radiogroup" title="How colours get their heads" data-i18n-title="prepare.assoc.title">
+            <button type="button" class="seg-btn" role="radio" data-assoc="object" data-i18n="prepare.assoc.object">By object</button>
+            <button type="button" class="seg-btn" role="radio" data-assoc="colour" data-i18n="prepare.assoc.colour">By colour</button>
+          </div>
           <select id="p-printer" class="hidden"></select>
         </div>
         <div id="p-list" class="p-float-body"></div>
@@ -378,6 +392,44 @@
           </details>
         </div>
 
+        <div id="p3d" class="p3d hidden loading" data-ctl-pid="">
+          <div id="p3d-canvas" class="p3d-canvas"></div>
+          <div id="p3d-status" class="p-float p3d-status" role="status">
+            <div class="p3d-status-top"><span id="p3d-state" class="p3d-state"><i></i><b id="p3d-state-t"></b></span><span id="p3d-job" class="p3d-job"></span><span id="p3d-chamber" class="p3d-chamber"></span></div>
+            <div id="p3d-prog" class="p3d-prog hidden"><div class="p3d-track"><div id="p3d-bar" class="p3d-bar"></div></div><small id="p3d-prog-t"></small><small id="p3d-prog-more"></small></div>
+          </div>
+          <div id="p3d-card" class="p-float p3d-card">
+            <div class="p-float-head"><span class="p-float-title" data-i18n="heads.title">Heads and spools</span></div>
+            <div class="p-float-body">
+              <div id="p3d-heads" class="p3d-heads" role="list"></div>
+              <button id="p3d-bed" class="p3d-row p3d-bedrow" data-zone="bed"></button>
+              <button class="btn small p3d-config" data-heads-open data-i18n="heads.configure">Configure</button>
+            </div>
+          </div>
+          <div id="p3d-panel" class="p-float p3d-panel hidden">
+            <div class="p-float-head"><span id="p3d-panel-t" class="p-float-title"></span>
+              <button id="p3d-close" class="p3d-x" title="Close" aria-label="Close" data-i18n-title="p3d.close" data-i18n-aria="p3d.close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button>
+            </div>
+            <div id="p3d-panel-body" class="p-float-body"></div>
+          </div>
+          <div id="p3d-views" class="seg p3d-views" role="group" aria-label="View" data-i18n-aria="p3d.view">
+            <button class="seg-btn" data-side="left" data-i18n="p3d.side.left">Left side</button>
+            <button class="seg-btn on" data-side="front" data-i18n="p3d.side.front">Front</button>
+            <button class="seg-btn" data-side="right" data-i18n="p3d.side.right">Right side</button>
+            <button class="seg-btn" data-side="back" data-i18n="p3d.side.back">Back</button>
+          </div>
+          <div class="p3d-bottom">
+            <div id="p3d-hint" class="p3d-hint" data-i18n="p3d.hint">Hover a part to highlight it · click to open its controls · drag or ← → to turn · 1–4: a head</div>
+            <div class="p3d-quick" role="toolbar">
+              <button id="p3d-light" class="p3d-q" title="Chamber light" aria-label="Chamber light" data-i18n-title="ctl.light" data-i18n-aria="ctl.light"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2m-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg></button>
+              <button id="p3d-camera" class="p3d-q" title="Camera" aria-label="Camera" data-i18n-title="printers.camera" data-i18n-aria="printers.camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10a2 2 0 0 1 2 2v1.5l4-2.5v10l-4-2.5V16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/></svg></button>
+              <button id="p3d-help" class="p3d-q" title="Help" aria-label="Help" data-i18n-title="p3d.help" data-i18n-aria="p3d.help"><b aria-hidden="true">?</b></button>
+            </div>
+          </div>
+          <div id="p3d-info" class="p-float p3d-info"><div id="p3d-info-rows"></div><small id="p3d-fresh" class="p3d-fresh"></small></div>
+          <div id="p3d-tip" class="p3d-tip hidden"></div>
+          <div class="p3d-loader" aria-hidden="true"><span class="spinner"></span></div>
+        </div>
         <div class="hero" id="prn-hero">
           <div class="hero-visual">
             <svg id="pv" class="pv" viewBox="0 0 280 252" aria-hidden="true">
@@ -497,10 +549,15 @@
             <input type="checkbox" id="cam-toggle" class="sw small" role="switch" aria-label="Camera" data-i18n-aria="printers.camera" />
           </div>
           <div id="cam-box" class="cam-box hidden"><img id="cam-img" alt="Printer camera" data-i18n-alt="printers.camera_alt" />
-            <div class="cam-bar"><button id="cam-size" class="cam-btn" title="Enlarge" data-i18n-title="printers.cam.enlarge">
-              <svg class="grow" viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>
-              <svg class="shrink" viewBox="0 0 24 24"><path d="M8 4h2v6H4V8h4zm6 0h2v4h4v2h-6zM4 14h6v6H8v-4H4zm10 0h6v2h-4v4h-2z"/></svg>
-            </button></div></div>
+            <div id="cam-off" class="cam-off hidden" role="status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-3.4-3.4H6.5A4.5 4.5 0 0 1 5 10.2a6.9 6.9 0 0 1 1.2-2.6zM12 4a7 7 0 0 1 6.7 5A4.5 4.5 0 0 1 21 17.2l-1.5-1.5A2.5 2.5 0 0 0 18 11h-1l-.3-1A5 5 0 0 0 9.4 6.6L8 5.2A7 7 0 0 1 12 4"/></svg><span data-i18n="printers.cam.offline">Camera unavailable: the printer does not answer</span></div>
+            <div class="cam-bar">
+              <button id="cam-pin" class="cam-btn" title="Pin: keep the camera on every screen" aria-label="Pin: keep the camera on every screen" data-i18n-title="printers.cam.pin" data-i18n-aria="printers.cam.pin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6-2.5 1.2-3.3 3.3.5 4.5-1.4 1.4-4-4-4.6 4.6H4v-1.7L8.6 13.7l-4-4L6 8.3l4.5.5 3.3-3.3z"/></svg></button>
+              <button id="cam-size" class="cam-btn" title="Enlarge" aria-label="Enlarge" data-i18n-title="printers.cam.enlarge" data-i18n-aria="printers.cam.enlarge">
+              <svg class="grow" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>
+              <svg class="shrink" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h2v6H4V8h4zm6 0h2v4h4v2h-6zM4 14h6v6H8v-4H4zm10 0h6v2h-4v4h-2z"/></svg>
+            </button>
+              <button id="cam-full-btn" class="cam-btn" title="Full size" aria-label="Full size" data-i18n-title="printers.cam.full" data-i18n-aria="printers.cam.full"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h7v2H5v5H3zm11 0h7v7h-2V5h-5zM3 14h2v5h5v2H3zm16 0h2v7h-7v-2h5z"/></svg></button>
+            </div></div>
         </div>
         <div class="group" id="prn-filaments"></div>
         <div class="group" id="prn-temps"></div>
@@ -561,6 +618,7 @@
   <div class="prn">
     <section class="prn-main hv mt" id="mt-body"></section>
     <section class="prn-main hv bm hidden" id="bm-body"></section>
+    <section class="prn-main hv ctl hidden" id="ct-body"></section>
   </div>
 </section>
 <section id="view-heads" class="view hidden">
@@ -574,23 +632,44 @@
 </section>
 
 <section id="view-library" class="view hidden">
-  <div class="lib-tabs">
+  <div class="lib-tabs" data-tauri-drag-region>
     <button class="lib-tab pin on" data-tab="home" title="Home" data-i18n-title="library.home">
       <svg viewBox="0 0 24 24"><path d="m12 3 9 8h-3v9h-5v-6h-2v6H6v-9H3z"/></svg>
     </button>
-    <button class="lib-tab pin" data-tab="favs">
+    <button class="lib-tab pin" data-tab="favs" title="Favorites" data-i18n-title="library.favorites">
       <svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg>
-      <span data-i18n="library.favorites">Favorites</span>
+    </button>
+    <button id="lib-add" class="lib-tab pin add" title="Open a site" data-i18n-title="library.open_site">
+      <svg viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
     </button>
     <div id="lib-tablist" class="lib-tablist"></div>
+    <span id="lib-status" class="lib-status hidden"></span>
+    <div id="lib-actions" class="lib-actions hidden">
+      <button id="lib-fav" class="tb-btn" title="Add to favorites" data-i18n-title="library.fav"><svg viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg></button>
+      <button id="lib-ext" class="tb-btn" title="Open in the browser" data-i18n-title="library.open_browser"><svg viewBox="0 0 24 24"><path d="M14 4h6v6h-2V7.4l-7.3 7.3-1.4-1.4L16.6 6H14zM5 6h6v2H7v9h9v-4h2v6H5z"/></svg></button>
+    </div>
   </div>
 
   <div id="lib-frame" class="lib-frame">
     <div id="lib-home" class="lib-home">
-      <div class="lib-start">
-        <h1 data-i18n="library.start.title">Find models to print</h1>
-        <p data-i18n="library.start.text">Open a site, then star the models you want to print: they wait for you in Favorites.</p>
-        <div id="lib-sites" class="lib-sites"></div>
+      <div class="ex-home">
+        <div class="ex-section">
+          <h2 data-i18n="explore.snapmaker">Snapmaker ecosystem</h2>
+          <div id="ex-snap" class="ex-snap"></div>
+        </div>
+        <div class="ex-split">
+          <div class="ex-section">
+            <h2 data-i18n="explore.libraries">Libraries</h2>
+            <div id="ex-libs"></div>
+          </div>
+          <div id="ex-store" class="ex-section hidden">
+            <div class="ex-head">
+              <h2 data-i18n="snap.store.title">Featured on the Store</h2>
+              <button id="ex-store-more" class="btn small" data-i18n="snap.store.more">See the Store</button>
+            </div>
+            <div id="ex-products" class="snap-products"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div id="lib-favs" class="lib-home hidden">
@@ -605,6 +684,18 @@
     </div>
   </div>
 </section>
+<div id="lib-picker" class="modal hidden">
+  <div class="modal-box ex-picker" role="dialog" aria-labelledby="ex-picker-title">
+    <div class="ex-head">
+      <h3 id="ex-picker-title" data-i18n="explore.pick">Open a site</h3>
+      <button id="lib-picker-close" class="tb-btn" title="Close" data-i18n-title="common.close"><svg viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6 10.6 12 5 6.4z"/></svg></button>
+    </div>
+    <h2 data-i18n="explore.snapmaker">Snapmaker ecosystem</h2>
+    <div id="ex-pick-snap" class="ex-grid"></div>
+    <h2 data-i18n="explore.libraries">Libraries</h2>
+    <div id="ex-pick-libs" class="ex-grid"></div>
+  </div>
+</div>
 
 <section id="view-ia" class="view hidden">
   <div id="ia-blocked" class="ia-blocked hidden">
@@ -891,6 +982,15 @@
         </span>
         <input type="checkbox" id="set-spool-check" class="sw" role="switch" />
       </label>
+      <div class="grow-row">
+        <span class="k"><span data-i18n="settings.assoc">Colour to head assignment</span>
+          <span class="sub" data-i18n="settings.assoc.sub">The mode Prepare starts with; it can be changed above the object list at any time</span>
+        </span>
+        <select id="set-assoc">
+          <option value="object" data-i18n="prepare.assoc.object">By object</option>
+          <option value="colour" data-i18n="prepare.assoc.colour">By colour</option>
+        </select>
+      </div>
     </div>
       </div>
     </div>
@@ -1442,6 +1542,73 @@
   </div>
 </div>
 
+<!-- The pinned camera: a small window over every screen, under the sheets
+     and toasts (printers.js camPlace). -->
+<div id="cam-pip" class="cam-pip hidden" role="region" aria-label="Pinned camera" data-i18n-aria="printers.cam.pinned">
+  <div id="cam-pip-head" class="cam-pip-head">
+    <span id="cam-pip-name" class="cam-pip-name"></span>
+    <button id="cam-pip-unpin" class="cam-pip-btn" title="Unpin" aria-label="Unpin" data-i18n-title="printers.cam.unpin" data-i18n-aria="printers.cam.unpin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-6.3-6.3-.1.1.5 4.5-1.4 1.4-4-4-4.6 4.6H4v-1.7l4.6-4.6-4-4L6 8.3l1.9.2zM15 3l6 6-2.5 1.2-2.2 2.2-5.6-5.6 2.2-2.2z"/></svg></button>
+    <button id="cam-pip-close" class="cam-pip-btn" title="Close the camera" aria-label="Close the camera" data-i18n-title="printers.cam.close" data-i18n-aria="printers.cam.close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button>
+  </div>
+  <div id="cam-pip-body" class="cam-pip-body"></div>
+</div>
+
+<div id="cthelp" class="modal hidden">
+  <div class="modal-box ct-help-sheet">
+    <h3 data-i18n="ctl.help.title">The Heads' Buttons</h3>
+    <div id="cthelp-body"></div>
+    <div class="modal-actions">
+      <button id="cthelp-close" class="btn primary" data-cancel data-i18n="common.close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="ctlfil" class="modal hidden">
+  <div class="modal-box ctl-fil-sheet">
+    <h3 id="ctlfil-title"></h3>
+    <p class="det-sub" data-i18n="ctl.fil.note">The materials the printer knows, as on its screen.</p>
+    <div class="ctl-fil-preview"><i id="ctlfil-preview"></i><b id="ctlfil-preview-t"></b></div>
+    <div class="ctl-fil-grid">
+      <label><span data-i18n="ctl.fil.material">Material</span><select id="ctlfil-material"></select></label>
+      <label><span data-i18n="ctl.fil.vendor">Brand</span><select id="ctlfil-vendor"></select></label>
+      <label><span data-i18n="ctl.fil.sub">Type</span><select id="ctlfil-sub"></select></label>
+    </div>
+    <div class="set-section" data-i18n="ctl.fil.color">Colour</div>
+    <div id="ctlfil-colors" class="ctl-fil-colors" role="radiogroup" aria-label="Colour" data-i18n-aria="ctl.fil.color"></div>
+    <label class="ctl-fil-custom"><input type="color" id="ctlfil-color" /><span data-i18n="ctl.fil.custom">Other colour</span><small id="ctlfil-color-t"></small></label>
+    <div class="modal-actions">
+      <button id="ctlfil-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="ctlfil-ok" class="btn primary"></button>
+    </div>
+  </div>
+</div>
+
+<div id="wn-modal" class="modal wn-modal hidden">
+  <div id="wn-sheet" class="wn-sheet" role="dialog" aria-modal="true" aria-labelledby="wn-title" data-state="loading">
+    <div class="wn-bar">
+      <span class="wn-ttl" id="wn-title"><svg viewBox="0 0 24 24"><path d="M10 2.5c.7 4.3 2.7 6.4 7 7.2-4.3.8-6.3 2.9-7 7.3-.7-4.4-2.7-6.5-7-7.3 4.3-.8 6.3-2.9 7-7.2zM18.2 13.2c.4 2.1 1.3 3.1 3.3 3.5-2 .4-2.9 1.4-3.3 3.6-.4-2.2-1.3-3.2-3.3-3.6 2-.4 2.9-1.4 3.3-3.5z"/></svg><span data-i18n="whatsnew.title">What's new</span></span>
+      <span class="wn-url"><span><svg viewBox="0 0 24 24"><path d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2m-7-2a2 2 0 0 1 4 0v2h-4z"/></svg><span id="wn-address"></span></span></span>
+      <button id="wn-browser" class="wn-ib" type="button" title="Open in the Browser" data-i18n-title="whatsnew.browser" aria-label="Open in the Browser" data-i18n-aria="whatsnew.browser"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.4l-9.3 9.3-1.4-1.4L17.6 5H14zM5 5h6v2H5v12h12v-6h2v8H3V5z"/></svg></button>
+      <button id="wn-close" class="wn-ib close" type="button" data-cancel title="Close" data-i18n-title="common.close" aria-label="Close" data-i18n-aria="common.close"><svg viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6 10.6 12 5 6.4z"/></svg></button>
+    </div>
+    <div class="wn-body">
+      <iframe id="wn-frame" title="What's new" data-i18n-title="whatsnew.title" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe>
+      <div id="wn-loading" class="wn-state"><span class="spinner"></span></div>
+      <div id="wn-error" class="wn-state hidden">
+        <div class="wn-err">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>
+          <b data-i18n="whatsnew.error">The page could not be loaded</b>
+          <span data-i18n="whatsnew.error_sub">Check the internet connection, then try again.</span>
+          <div class="wn-err-actions">
+            <button id="wn-retry" class="btn primary" type="button" data-i18n="whatsnew.retry">Try Again</button>
+            <button id="wn-changelog" class="btn" type="button" data-i18n="whatsnew.changelog">Open the Changelog</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="bmsettings" class="modal hidden">
   <div class="modal-box bm-sheet">
     <h3 data-i18n="bm.settings">Bed Leveling Settings</h3>
@@ -1588,6 +1755,20 @@
   </div>
 </div>
 
+<div id="assocmodal" class="modal hidden">
+  <div class="modal-box" role="dialog" aria-labelledby="assoc-title">
+    <h3 id="assoc-title" data-i18n="prepare.assoc.modal.title">Two ways to assign heads</h3>
+    <p data-i18n="prepare.assoc.modal.object">By object: each object chooses a head for each of its colours, under its row.</p>
+    <p data-i18n="prepare.assoc.modal.colour">By colour: the plate's colours, as the 3MF names them, are assigned once for every object, above the list, as Snapmaker Orca does.</p>
+    <p data-i18n="prepare.assoc.modal.handoff">Switching keeps what agrees: a colour every object sends to the same head keeps it; one the objects disagree on waits for your choice, and the slice waits with it.</p>
+    <p class="det-sub" data-i18n="prepare.assoc.modal.default">The mode Prepare starts with is set in Settings › Prepare.</p>
+    <label class="q-check"><input id="assoc-noshow" type="checkbox" /> <span data-i18n="prepare.assoc.modal.noshow">Don't show this again</span></label>
+    <div class="modal-actions">
+      <button id="assoc-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="assoc-go" class="btn primary" data-i18n="prepare.assoc.modal.go">Switch</button>
+    </div>
+  </div>
+</div>
 <div id="authmodal" class="modal hidden">
   <div class="modal-box auth-box">
     <h3 data-i18n="auth.title">Claude account</h3>
@@ -1820,6 +2001,10 @@
 <script src="bedmesh-logic.js"></script>
 <script src="maint.js"></script>
 <script src="bedmesh.js"></script>
+<script src="control-logic.js"></script>
+<script src="control.js"></script>
+<script src="printer3d-logic.js"></script>
+<script src="printer3d.js"></script>
 <script src="pfiles-logic.js"></script>
 <script src="printer-files.js"></script>
 <script src="pfiles-share.js"></script>
@@ -1836,6 +2021,8 @@
 <script src="auth.js"></script>
 <script src="settings.js"></script>
 <script src="update.js"></script>
+<script src="whatsnew-logic.js"></script>
+<script src="whatsnew.js"></script>
 <script src="welcome.js"></script>
 </body>
 </html>
