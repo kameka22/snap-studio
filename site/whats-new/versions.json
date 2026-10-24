@@ -106,11 +106,6 @@
           "icon": "windows", "color": "#ffd60a",
           "title": { "en": "Windows", "fr": "Windows" },
           "text": { "en": "The slice sheet and the save messages show the file’s name, not its whole path.", "fr": "La feuille de découpe et les messages d’enregistrement affichent le nom du fichier, pas tout son chemin." }
-        },
-        {
-          "icon": "check", "color": "#8e8e93",
-          "title": { "en": "Quality", "fr": "Qualité" },
-          "text": { "en": "Tests run on every pull request: Rust, interface and translations.", "fr": "Les tests tournent sur chaque pull request : Rust, interface et traductions." }
         }
       ]
     },
