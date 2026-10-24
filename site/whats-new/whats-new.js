@@ -30,6 +30,7 @@ const ICONS = {
   tabs: "M3 5h18v4H3zm0 6h8v8H3zm10 0h8v8h-8z",
   camera: "M4 7h11a2 2 0 0 1 2 2v1.5l4-3v9l-4-3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2",
   stop: "M6 6h12v12H6z",
+  progress: "M2 8h20v2H2zm0 6h20v2H2zM2 10h2v4H2zm18 0h2v4h-2zM5 11h10v2H5z",
   printer: "M6 3h12v5H6zM4 9h16a2 2 0 0 1 2 2v6h-4v4H6v-4H2v-6a2 2 0 0 1 2-2m4 7v3h8v-3z",
   folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
   windows: "M3 5.5 10 4.5v7H3zm0 7h7v7l-7-1zm8-8.2L21 3v8.5H11zm0 8.2h10V21l-10-1.4z",
