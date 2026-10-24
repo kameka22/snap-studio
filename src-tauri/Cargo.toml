@@ -1,6 +1,6 @@
 [package]
 name = "snap-studio"
-version = "0.14.1"
+version = "0.14.2"
 edition = "2021"
 description = "Desktop workshop for the Snapmaker U1: files, plate, slicing, printing, AI"
 license = "GPL-3.0-or-later"

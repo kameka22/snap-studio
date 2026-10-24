@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.14.2] — 2026-10-24
+
 ### Added
 - **What's new**: a page on the site presents each version's highlights
   (screenshots, smaller improvements, previous versions), in English and
@@ -473,7 +475,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/kameka22/snap-studio/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/kameka22/snap-studio/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/kameka22/snap-studio/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kameka22/snap-studio/compare/v0.12.0...v0.13.0
