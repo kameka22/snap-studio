@@ -88,6 +88,99 @@ fn ensure_nav(app: &AppHandle) -> Result<()> {
     Ok(())
 }
 
+/// The pinned camera over a site (`camview.html`). The interface's pinned
+/// window is HTML, so a site's native view covers it; while a site is
+/// shown, this small native view of ours takes its place, on top — made
+/// again after each site's view, as the navigation. The interface asks
+/// for it (where, which printer) and is told when it shows, to stop its
+/// own frames meanwhile: one stream at a time.
+#[derive(Clone)]
+struct CamView {
+    rect: Rect,
+    /// The page's settings: printer, name, texts (a JSON object).
+    setup: String,
+}
+
+fn cam_req() -> &'static Mutex<Option<CamView>> {
+    static R: OnceLock<Mutex<Option<CamView>>> = OnceLock::new();
+    R.get_or_init(Default::default)
+}
+
+fn cam_label() -> &'static Mutex<String> {
+    static L: OnceLock<Mutex<String>> = OnceLock::new();
+    L.get_or_init(|| Mutex::new(String::new()))
+}
+
+/// A camera view's label: `lib-cam-<n>` (the `cam` protocol answers it).
+pub fn is_cam_view(label: &str) -> bool {
+    label.starts_with("lib-cam-")
+}
+
+/// The interface's pinned camera: where it is and what it shows, or None.
+pub fn set_cam(app: &AppHandle, rect: Option<Rect>, setup: String) {
+    let want = rect.map(|rect| CamView { rect, setup });
+    let changed = {
+        let mut r = cam_req().lock().unwrap();
+        let changed = r.as_ref().map(|c| &c.setup) != want.as_ref().map(|c| &c.setup);
+        *r = want.clone();
+        changed
+    };
+    if want.is_none() {
+        let old = std::mem::take(&mut *cam_label().lock().unwrap());
+        if let Some(wv) = app.get_webview(&old) {
+            let _ = wv.close();
+        }
+    } else if changed || app.get_webview(&cam_label().lock().unwrap().clone()).is_none() {
+        if let Err(e) = ensure_cam(app) {
+            eprintln!("[lib] camera view: {e}");
+        }
+    }
+    sync_cam(app);
+}
+
+fn ensure_cam(app: &AppHandle) -> Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(1);
+    let Some(req) = cam_req().lock().unwrap().clone() else { return Ok(()) };
+    let old = cam_label().lock().unwrap().clone();
+    let lbl = format!("lib-cam-{}", N.fetch_add(1, Ordering::Relaxed));
+    let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
+    let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App("camview.html".into()))
+        .initialization_script(&format!("window.__CAM__ = {};", req.setup))
+        .transparent(true);
+    let r = req.rect;
+    let dy = title_offset(&window);
+    let _view = window.add_child(builder, LogicalPosition::new(r.x, r.y + dy), LogicalSize::new(r.w, r.h))?;
+    #[cfg(target_os = "linux")]
+    gtk_layer::adopt(app, &_view);
+    *cam_label().lock().unwrap() = lbl;
+    if let Some(wv) = app.get_webview(&old) {
+        let _ = wv.close();
+    }
+    Ok(())
+}
+
+/// Shown while a site is (and the camera pinned), at the pinned window's
+/// place; the interface told whether it shows.
+fn sync_cam(app: &AppHandle) {
+    let req = cam_req().lock().unwrap().clone();
+    let site = visible_tab().lock().unwrap().is_some();
+    let lbl = cam_label().lock().unwrap().clone();
+    let shown = match (app.get_webview(&lbl), &req) {
+        (Some(wv), Some(c)) if site => {
+            place(&wv, c.rect);
+            let _ = wv.show();
+            true
+        }
+        (Some(wv), _) => {
+            let _ = wv.hide();
+            false
+        }
+        _ => false,
+    };
+    let _ = app.emit("cam-view", serde_json::json!({ "shown": shown }));
+}
+
 /// Back, forward or reload on the tab shown (the floating navigation).
 pub fn nav_command(app: &AppHandle, what: &str) -> Result<()> {
     let id = visible_tab().lock().unwrap().clone().ok_or_else(|| anyhow!("no tab shown"))?;
@@ -252,9 +345,15 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     // Linux: Tauri stacked the view under ours; it goes over the main view.
     #[cfg(target_os = "linux")]
     gtk_layer::adopt(app, &_view);
-    // The floating navigation, made again so that it sits above this view.
+    // The floating navigation and the pinned camera, made again so that
+    // they sit above this view.
     if let Err(e) = ensure_nav(app) {
         eprintln!("[lib] floating navigation: {e}");
+    }
+    if cam_req().lock().unwrap().is_some() {
+        if let Err(e) = ensure_cam(app) {
+            eprintln!("[lib] camera view: {e}");
+        }
     }
     show_only(app, Some(id));
     Ok(())
@@ -477,6 +576,10 @@ pub fn show_only(app: &AppHandle, id: Option<&str>) {
         if !lbl.starts_with("lib-") {
             continue;
         }
+        // The pinned camera: its own rule (sync_cam, below).
+        if is_cam_view(&lbl) {
+            continue;
+        }
         // The floating navigation goes with the site shown.
         if lbl.starts_with("lib-nav") {
             if wanted.is_some() && lbl == nav {
@@ -494,6 +597,7 @@ pub fn show_only(app: &AppHandle, id: Option<&str>) {
             let _ = wv.hide();
         }
     }
+    sync_cam(app);
 }
 
 /// Remembers the browsing area and puts the visible view back in it.

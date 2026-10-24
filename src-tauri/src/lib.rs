@@ -311,6 +311,22 @@ fn lib_nav(app: tauri::AppHandle, what: String) -> Result<(), String> {
     library::nav_command(&app, &what).map_err(|e| e.to_string())
 }
 
+/// The pinned camera over a site: where the interface's pinned window is
+/// and its page's settings (printer, name, texts), or None when it is not
+/// shown. Async: a web view is created off the main thread (see lib_open).
+#[tauri::command]
+async fn cam_view_set(app: tauri::AppHandle, rect: Option<library::Rect>, setup: String) {
+    library::set_cam(&app, rect, setup);
+}
+
+/// The camera view's buttons (open the printer, unpin, close): passed on
+/// to the interface, which owns the camera.
+#[tauri::command]
+fn cam_view_action(app: tauri::AppHandle, what: String) {
+    use tauri::Emitter;
+    let _ = app.emit("cam-view-action", what);
+}
+
 /// A site's icon, as a data URL (None: not found).
 #[tauri::command]
 async fn lib_favicon(id: String) -> Option<String> {
@@ -1893,7 +1909,8 @@ pub fn run() {
         .manage(update::Pending::default())
         .manage(discover::Discovery::default())
         .register_asynchronous_uri_scheme_protocol("cam", |ctx, request: Request<Vec<u8>>, responder| {
-            if !own_webview(&ctx) {
+            // Ours, and the pinned camera's view over a site (library.rs).
+            if !own_webview(&ctx) && !library::is_cam_view(ctx.webview_label()) {
                 return responder.respond(refused());
             }
             let uri = request.uri().to_string();
@@ -2037,6 +2054,8 @@ pub fn run() {
             lib_sites,
             snap_store_highlights,
             lib_nav,
+            cam_view_set,
+            cam_view_action,
             lib_favicon,
             lib_open,
             lib_close,

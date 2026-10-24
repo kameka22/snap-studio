@@ -120,6 +120,7 @@ Le moteur Snapmaker Orca, intégré : inutile d'installer Snapmaker Orca.
 - Chaque couleur de chaque objet envoyée vers sa tête, d'après les bobines
   lues sur l'imprimante.
 - **Vitesse** : un seul curseur de 50 % à 120 % du profil.
+- Une barre de progression qui suit le travail du moteur, étape par étape.
 - Un aperçu des trajectoires, puis l'envoi à l'imprimante ou un G-code
   enregistré.
 
@@ -195,8 +196,13 @@ Impressions en cours et file d'attente.
 
 La caméra de l'imprimante, en direct.
 
-- Depuis la page de l'imprimante.
-- Depuis chaque impression.
+- Depuis la page de l'imprimante et depuis chaque impression.
+- Trois tailles : une vignette, agrandie, ou en plein écran sur l'app
+  (Échap pour en sortir).
+- **Épinglée** : une petite fenêtre qui reste sur tous les écrans pendant
+  que vous préparez ou parcourez (sites d'Explorer compris), dans le coin de votre choix ; un clic sur
+  l'image ramène à l'imprimante.
+- Quand l'imprimante ne répond plus, elle le dit au lieu d'une image figée.
 
 <br clear="both">
 

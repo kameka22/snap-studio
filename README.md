@@ -108,6 +108,7 @@ The Snapmaker Orca engine, built in: you do not need Snapmaker Orca installed.
   U1's four heads and the model's colors below.
 - Each color of each object sent to its head, from the spools read on the printer.
 - **Speed**: one slider from 50 % to 120 % of the profile.
+- A progress bar that follows the engine's work, stage by stage.
 - A toolpath preview, then sent to the printer or saved as G-code.
 
 <details>
@@ -177,8 +178,13 @@ Running prints and a queue.
 
 The printer's camera, live.
 
-- From the printer's page.
-- From each print.
+- From the printer's page and from each print.
+- Three sizes: a thumbnail, enlarged, or full size over the app (Esc to
+  leave).
+- **Pinned**: a small window that stays on every screen while you prepare
+  or browse (Explore's sites included), in the corner of your choice; a click on the image goes back
+  to the printer.
+- When the printer stops answering, it says so instead of a frozen image.
 
 <br clear="both">
 

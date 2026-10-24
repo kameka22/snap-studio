@@ -119,7 +119,9 @@ html.embed .feat { scroll-margin-top: 20px; }
   list-style: none; display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 15px 0;
   border-bottom: 1px solid #24252b; align-items: start;
 }
-.small-grid li:nth-last-child(-n + 2) { border-bottom: 0; }
+/* No line under the last row, whatever the count: the last item, and the
+   one beside it when the count is even. */
+.small-grid li:last-child, .small-grid li:nth-last-child(2):nth-child(odd) { border-bottom: 0; }
 .small-grid li .i {
   width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
   background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c);

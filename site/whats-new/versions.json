@@ -4,7 +4,7 @@
     {
       "version": "0.14",
       "date": "2026-10-23",
-      "patches": ["0.14.1"],
+      "patches": ["0.14.1", "0.14.2"],
       "tagline": {
         "en": "The whole Snapmaker ecosystem one click away, and a plate that thinks in colours.",
         "fr": "Tout l’écosystème Snapmaker à portée de clic, et un plateau qui pense en couleurs."
@@ -73,6 +73,16 @@
       ],
       "small": [
         {
+          "icon": "camera", "color": "#ff375f",
+          "title": { "en": "Camera, full size and pinned", "fr": "Caméra plein écran et épinglée" },
+          "text": { "en": "The printer’s camera can fill the app, or stay pinned in a small window on every screen; a click on it goes back to the printer.", "fr": "La caméra de l’imprimante peut occuper toute l’app, ou rester épinglée dans une petite fenêtre sur tous les écrans ; un clic dessus ramène à l’imprimante." }
+        },
+        {
+          "icon": "progress", "color": "#64d2ff",
+          "title": { "en": "Slicing progress", "fr": "Progression de la découpe" },
+          "text": { "en": "The progress bar follows the engine stage by stage, up to 100 %, instead of staying near its start.", "fr": "La barre de progression suit le moteur étape par étape jusqu’à 100 %, au lieu de rester près du début." }
+        },
+        {
           "icon": "minus", "color": "#7d7aff",
           "title": { "en": "Object list", "fr": "Liste des objets" },
           "text": { "en": "A “−” takes an object off the plate; “Add 2 Objects” follows the selection.", "fr": "Un « − » retire un objet du plateau ; « Ajouter 2 objets » suit la sélection." }
@@ -106,11 +116,6 @@
           "icon": "windows", "color": "#ffd60a",
           "title": { "en": "Windows", "fr": "Windows" },
           "text": { "en": "The slice sheet and the save messages show the file’s name, not its whole path.", "fr": "La feuille de découpe et les messages d’enregistrement affichent le nom du fichier, pas tout son chemin." }
-        },
-        {
-          "icon": "check", "color": "#8e8e93",
-          "title": { "en": "Quality", "fr": "Qualité" },
-          "text": { "en": "Tests run on every pull request: Rust, interface and translations.", "fr": "Les tests tournent sur chaque pull request : Rust, interface et traductions." }
         }
       ]
     },
