@@ -18,6 +18,20 @@ with its packages for macOS, Windows and Linux. What comes next:
   update ("What's new in 0.14 — Explore and 3 more") until it is opened,
   then stays as a plain line; it opens the page in a sheet over the app,
   with "Open in the Browser" and a message to try again when offline.
+- **Printer camera, full size and pinned**: besides its enlarged size, the
+  camera can fill the whole content area (Esc to leave), or be pinned: a
+  small window that stays on every screen, moved by its title bar to any
+  corner (remembered), back to the printer's page with a click on the
+  image, unpinned or closed from its own buttons, hidden on that printer's
+  page where the camera already shows. One stream throughout; when the
+  printer stops answering, it says so instead of a frozen image.
+
+### Fixed
+- **Slice progress bar**: it now follows the slicing from 0 to 100 %, stage
+  by stage (walls, surfaces, infill, G-code…), never going back, and
+  reaches 100 % right before the preview. On macOS the engine never
+  reported its progress the way the app read it, so the bar stayed near
+  its start; the progress now comes from the engine's own log, read live.
 
 ## [0.14.1] — 2026-10-24
 

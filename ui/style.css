@@ -4141,13 +4141,37 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 
 /* Camera controls, as on a video player: shown on hover, the enlarge
    button on the right (a double-click still works). */
-.cam-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; padding: 18px 8px 6px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); opacity: 0; transition: opacity 150ms ease; pointer-events: none; }
+.cam-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; gap: 2px; padding: 18px 8px 6px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); opacity: 0; transition: opacity 150ms ease; pointer-events: none; }
 .cam-box:hover .cam-bar, .cam-bar:focus-within { opacity: 1; pointer-events: auto; }
 .cam-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: #fff; cursor: pointer; }
 .cam-btn:hover { background: rgba(255, 255, 255, 0.16); }
 .cam-btn svg { width: 20px; height: 20px; fill: currentColor; }
 .cam-btn .shrink, .cam-box.big .cam-btn .grow { display: none; }
 .cam-box.big .cam-btn .shrink { display: block; }
+.cam-btn.on { background: rgba(255, 255, 255, 0.22); }
+.cam-btn:focus-visible, .cam-pip-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+/* The printer does not answer: said over the camera, its last image hidden. */
+.cam-off { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: #111; color: rgba(255, 255, 255, 0.78); font-size: 12px; text-align: center; }
+.cam-off svg { width: 26px; height: 26px; fill: currentColor; opacity: 0.7; }
+/* Full size: over the content area (not the system window), the image whole. */
+.cam-full { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.92); }
+.cam-full .cam-box { width: 100%; height: 100%; max-width: none; aspect-ratio: auto; margin: 0; background: transparent; }
+.cam-full .cam-btn#cam-size, .cam-pip .cam-btn#cam-size, .cam-pip .cam-btn#cam-pin { display: none; }
+.cam-full .cam-bar { opacity: 1; pointer-events: auto; }
+/* Pinned: a small window over every screen, under the sheets (80) and the
+   toasts (90), in a corner of the window. */
+.cam-pip { position: fixed; z-index: 70; width: 320px; border-radius: 12px; overflow: hidden; background: #000; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.cam-pip.at-br { right: 16px; bottom: 16px; }
+.cam-pip.at-bl { left: calc(var(--sidebar-width) + 16px); bottom: 16px; }
+.cam-pip.at-tr { right: 16px; top: 64px; }
+.cam-pip.at-tl { left: calc(var(--sidebar-width) + 16px); top: 64px; }
+.cam-pip.dragging { right: auto; bottom: auto; cursor: grabbing; }
+.cam-pip-head { display: flex; align-items: center; gap: 4px; padding: 5px 6px 5px 10px; background: rgba(28, 28, 30, 0.96); color: #fff; font-size: 12px; cursor: grab; user-select: none; -webkit-user-select: none; }
+.cam-pip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.cam-pip-btn { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: rgba(255, 255, 255, 0.8); cursor: pointer; }
+.cam-pip-btn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.cam-pip-btn svg { width: 15px; height: 15px; fill: currentColor; }
+.cam-pip-body .cam-box { max-width: none; width: 100%; margin: 0; border-radius: 0; cursor: pointer; }
 
 /* ---------- AI list: search, filters, groups, badges ---------- */
 .ia-listbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 22px 0; }

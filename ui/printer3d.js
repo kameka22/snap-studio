@@ -113,9 +113,8 @@ function p3dStatus(st) {
 function p3dLayout(on) {
   $("p3d").classList.toggle("hidden", !on);
   $("prn-detail").classList.toggle("p3d-on", on);
-  const cam = $("cam-box");
-  const home = on ? $("p3d") : document.querySelector("#prn-detail .group.cam");
-  if (cam.parentElement !== home) home.appendChild(cam);
+  // The camera follows (or stays pinned, or full size).
+  camPlace();
   if (!on) p3dTip(null);
 }
 
