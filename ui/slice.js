@@ -528,9 +528,12 @@ function setSliceMessage(text, cls) {
 }
 
 /* Progress bar; `null` hides it. */
+/* The bar never goes back (a late event, a rounding): SL.pct holds the
+   furthest point; null hides it and starts over. */
 function setSliceProgress(pct) {
   $("s-progress").classList.toggle("hidden", pct == null);
-  if (pct != null) $("s-progress").firstElementChild.style.width = Math.max(2, pct) + "%";
+  SL.pct = pct == null ? 0 : Math.max(SL.pct || 0, Math.min(100, pct));
+  if (pct != null) $("s-progress").firstElementChild.style.width = Math.max(2, SL.pct) + "%";
 }
 
 function showSliceBusy(busy) {
@@ -585,6 +588,7 @@ async function startSlice() {
 
   showSliceBusy(true);
   setSliceMessage(tr("slice.preparing"), "busy");
+  setSliceProgress(null);
   setSliceProgress(0);
   SL.starting = true;
   SL.early = [];
@@ -630,9 +634,11 @@ async function onSliceProgress(e) {
     setSliceMessage(tr("slice.preparing_model"), "busy");
   } else if (p.phase === "slicing") {
     if (p.percent != null) {
+      // The engine's stage (its log, Rust's Tracker) and the job's share.
       stopElapsed();
       setSliceProgress(p.percent);
-      setSliceMessage(`${p.message || tr("slice.slicing")} ${Math.round(p.percent)} %`, "busy");
+      const stage = p.stage ? tr(`slice.stage.${p.stage}`) : tr("slice.slicing");
+      setSliceMessage(`${stage} ${Math.round(SL.pct)} %`, "busy");
     } else {
       tickElapsed(p.elapsed_s);
     }
