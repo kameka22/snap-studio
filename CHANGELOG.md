@@ -20,7 +20,7 @@ with its packages for macOS, Windows and Linux. What comes next:
   with "Open in the Browser" and a message to try again when offline.
 - **Printer camera, full size and pinned**: besides its enlarged size, the
   camera can fill the whole content area (Esc to leave), or be pinned: a
-  small window that stays on every screen, moved by its title bar to any
+  small window that stays on every screen (over Explore's sites too), moved by its title bar to any
   corner (remembered), back to the printer's page with a click on the
   image, unpinned or closed from its own buttons, hidden on that printer's
   page where the camera already shows. One stream throughout; when the

@@ -1291,6 +1291,7 @@
   "printers.cam.unpin": "Unpin",
   "printers.cam.pinned": "Pinned camera",
   "printers.cam.close": "Close the camera",
+  "printers.cam.open": "Open the printer",
   "printers.cam.full": "Full size",
   "printers.cam.full_exit": "Exit full size (Esc)",
   "printers.cam.offline": "Camera unavailable: the printer does not answer",

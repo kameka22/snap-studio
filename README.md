@@ -182,7 +182,7 @@ The printer's camera, live.
 - Three sizes: a thumbnail, enlarged, or full size over the app (Esc to
   leave).
 - **Pinned**: a small window that stays on every screen while you prepare
-  or browse, in the corner of your choice; a click on the image goes back
+  or browse (Explore's sites included), in the corner of your choice; a click on the image goes back
   to the printer.
 - When the printer stops answering, it says so instead of a frozen image.
 

@@ -860,6 +860,11 @@ async function camStart() {
 
 function camNext() {
   if (!CAM.on) return;
+  // The native view over a site shows the camera meanwhile: one stream.
+  if (CAM.overlay) {
+    CAM.timer = setTimeout(camNext, 500);
+    return;
+  }
   $("cam-img").src = schemeUrl("cam", `/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`);
 }
 
@@ -898,7 +903,47 @@ function camPlace() {
   label($("cam-pin"), CAM.pinned ? "printers.cam.unpin" : "printers.cam.pin");
   label($("cam-full-btn"), CAM.full ? "printers.cam.full_exit" : "printers.cam.full");
   if (typeof p3dQuick === "function" && typeof P3 !== "undefined" && P3.pid) p3dQuick();
+  camOverlay();
 }
+
+/* A site of Explore is a native view over the interface, which covers the
+   pinned window: Rust lays a small view of ours over it at the same place
+   (library.rs, camview.html), shown while a site is. Told where the pinned
+   window is, or that there is none. */
+function camOverlay() {
+  const pip = $("cam-pip");
+  const on = CAM.on && !pip.classList.contains("hidden");
+  const p = P.list.find((x) => x.id === CAM.id);
+  const setup = on
+    ? JSON.stringify({
+        id: CAM.id,
+        name: p ? p.name || p.host : "",
+        texts: { unpin: tr("printers.cam.unpin"), close: tr("printers.cam.close"), offline: tr("printers.cam.offline"), open: tr("printers.cam.open") },
+      })
+    : "";
+  const r = on ? pip.getBoundingClientRect() : null;
+  const key = on ? `${setup}|${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` : "";
+  if (key === CAM.overlayKey) return;
+  CAM.overlayKey = key;
+  invoke("cam_view_set", { rect: on ? { x: r.left, y: r.top, w: r.width, h: r.height } : null, setup }).catch(() => {});
+}
+window.addEventListener("resize", () => CAM.on && camOverlay());
+// Shown over a site or not: the interface's frames pause meanwhile.
+listen("cam-view", (e) => {
+  const shown = !!e.payload?.shown;
+  if (shown === !!CAM.overlay) return;
+  CAM.overlay = shown;
+  if (!shown && CAM.on) {
+    clearTimeout(CAM.timer);
+    camNext();
+  }
+});
+// Its buttons: the camera is the interface's.
+listen("cam-view-action", (e) => {
+  if (e.payload === "open") camOpenPrinter();
+  else if (e.payload === "unpin") camPin(false);
+  else if (e.payload === "close") camStop();
+});
 
 /* The printer does not answer: said plainly over the camera, never its
    last image frozen. */
@@ -958,13 +1003,16 @@ document.addEventListener("keydown", (e) => {
 }, true);
 // The pinned window's image leads back to its printer's page.
 $("cam-pip-body").addEventListener("click", (e) => {
-  if (e.target.closest(".cam-bar") || !CAM.id) return;
+  if (!e.target.closest(".cam-bar")) camOpenPrinter();
+});
+function camOpenPrinter() {
+  if (!CAM.id) return;
   P.sel = CAM.id;
   prnRenderDetail();
   switchView("printers");
   prnRenderList();
   refreshSelected();
-});
+}
 
 /* The pinned window moves with its title bar and settles in the nearest
    corner of the window, remembered. */
@@ -993,6 +1041,7 @@ $("cam-pip-head").addEventListener("pointerdown", (e) => {
     const c = (q.top + q.height / 2 < innerHeight / 2 ? "t" : "b") + (q.left + q.width / 2 < innerWidth / 2 ? "l" : "r");
     localStorage.setItem("snapstudio.cam.corner", c);
     camCorner(c);
+    camOverlay();
   };
   pip.addEventListener("pointermove", move);
   pip.addEventListener("pointerup", up);

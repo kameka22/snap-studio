@@ -200,7 +200,7 @@ La caméra de l'imprimante, en direct.
 - Trois tailles : une vignette, agrandie, ou en plein écran sur l'app
   (Échap pour en sortir).
 - **Épinglée** : une petite fenêtre qui reste sur tous les écrans pendant
-  que vous préparez ou parcourez, dans le coin de votre choix ; un clic sur
+  que vous préparez ou parcourez (sites d'Explorer compris), dans le coin de votre choix ; un clic sur
   l'image ramène à l'imprimante.
 - Quand l'imprimante ne répond plus, elle le dit au lieu d'une image figée.
 

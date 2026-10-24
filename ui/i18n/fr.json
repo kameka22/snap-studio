@@ -1294,6 +1294,7 @@
   "printers.cam.unpin": "Désépingler",
   "printers.cam.pinned": "Caméra épinglée",
   "printers.cam.close": "Fermer la caméra",
+  "printers.cam.open": "Ouvrir l'imprimante",
   "printers.cam.full": "Plein écran",
   "printers.cam.full_exit": "Quitter le plein écran (Échap)",
   "printers.cam.offline": "Caméra indisponible : l'imprimante ne répond pas",
