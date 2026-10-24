@@ -60,9 +60,22 @@ for (const v of site.versions) {
   assert.ok(!/^\d+\.\d+\.\d+$/.test(v.version), `versions.json: ${v.version} — patch versions fold into their minor`);
   for (const f of v.features || []) for (const k of ["title", "text", "chip", "tag"]) assert.ok(f[k].en && f[k].fr, `${v.version} ${f.id}: ${k} in en and fr`);
   for (const h of v.highlights || []) assert.ok(h.title.en && h.title.fr && h.text.en && h.text.fr, `${v.version}: a highlight in en and fr`);
-  if (v !== cur) assert.ok(v.highlights.length >= 3 && v.highlights.length <= 5, `${v.version}: 3 to 5 highlights`);
+  for (const sm of v.small || []) assert.ok(sm.title.en && sm.title.fr && sm.text.en && sm.text.fr, `${v.version}: a smaller improvement in en and fr`);
+  if (v !== cur && v.features) {
+    // A previous version with a full section: its header row needs a
+    // tagline and a summary, and it has no timeline entry.
+    assert.ok(v.tagline.en && v.tagline.fr && v.summary.en && v.summary.fr, `${v.version}: tagline and summary in en and fr`);
+    assert.ok(v.features.length >= 2 && v.features.length <= 5, `${v.version}: 2 to 5 features`);
+    assert.ok(!v.highlights, `${v.version}: a full section or a timeline entry, not both`);
+  } else if (v !== cur) assert.ok(v.highlights.length >= 3 && v.highlights.length <= 5, `${v.version}: 3 to 5 highlights`);
   for (const img of [v.image, ...(v.features || []).map((f) => f.image)].filter(Boolean))
     assert.ok(fs.existsSync(path.join(root, "site", "whats-new", img)), `${v.version}: ${img} exists`);
 }
+
+// Feature ids are the page's anchors: unique across the versions.
+const ids = site.versions.flatMap((v) => (v.features || []).map((f) => f.id));
+assert.equal(new Set(ids).size, ids.length, "versions.json: feature ids are unique");
+// Versions are newest first, the current one at the top.
+assert.equal(site.versions[0], cur, "versions.json: the current version comes first");
 
 console.log("whatsnew: ok");

@@ -5,7 +5,12 @@
    - ?embed=1: shown inside the app's viewer. The site's header and footer
      are hidden (see the head), links leaving the page are handed to the app,
      which opens them in the browser, and Esc closes the viewer.
-   - #v0.14 lands on a version; a previous version's entry opens. */
+   - #v0.14 lands on a version; a previous version's entry opens.
+
+   The current version is the full page at the top. A previous version that
+   has features of its own (0.13) gets the same full section right below it,
+   collapsed to a header row until opened (or landed on by its anchor); the
+   others are entries of the timeline. */
 const REPO_URL = "https://github.com/kameka22/snap-studio";
 const CHANGELOG_URL = `${REPO_URL}/blob/main/CHANGELOG.md`;
 const LANG_KEY = "snapstudio.site.lang";
@@ -29,6 +34,12 @@ const ICONS = {
   folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
   windows: "M3 5.5 10 4.5v7H3zm0 7h7v7l-7-1zm8-8.2L21 3v8.5H11zm0 8.2h10V21l-10-1.4z",
   check: "m9.5 16.2-4.2-4.2-1.4 1.4 5.6 5.6 11-11-1.4-1.4z",
+  control: "M12 2l3.5 3.5H13V9h-2V5.5H8.5zm0 20-3.5-3.5H11V15h2v3.5h2.5zM2 12l3.5-3.5V11H9v2H5.5v2.5zm20 0-3.5 3.5V13H15v-2h3.5V8.5zM12 10.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6",
+  cube: "M12 2l9 5v10l-9 5-9-5V7zm0 2.3L6.2 7.5 12 10.7l5.8-3.2zM5 9.2v6.6l6 3.3v-6.6zm14 0-6 3.3v6.6l6-3.3z",
+  spool: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14m0 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6",
+  send: "M3 20.5 21 12 3 3.5V10l12 2-12 2z",
+  shield: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5zm-1.2 13.6-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4z",
+  mirror: "M11 2h2v20h-2zM9 6v12H3zm6 0 6 12h-6z",
 };
 const CHEVRON = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 5.4 10 4l8 8-8 8-1.4-1.4 6.6-6.6z"/></svg>';
 
@@ -65,9 +76,7 @@ function initialLang() {
 /* ------------------------------------------------------------ rendering */
 
 function heroHtml(v) {
-  const chips = v.features
-    .map((f) => `<a href="#${esc(f.id)}"><b style="background:${esc(f.color)}"></b>${esc(L(f.chip))}</a>`)
-    .join("");
+  const chips = chipsHtml(v);
   return `<section class="wn-hero" id="v${esc(v.version)}">
     <div class="wn-icon"><img src="../assets/icon-512.png" alt="${esc(t("wn.icon_alt"))}" width="128" height="128"></div>
     <div class="wn-eyebrow"><i></i>${esc(t("wn.eyebrow", { date: fmtDate(v.date) }))}</div>
@@ -77,12 +86,27 @@ function heroHtml(v) {
   </section>`;
 }
 
+/* A screenshot's framing: object-position, and a zoom on that same point to
+   show one part of a shared screenshot. */
+function shotStyle(f) {
+  const css = [];
+  if (f.position) css.push(`object-position:${f.position}`);
+  if (f.zoom > 1) css.push(`transform:scale(${Number(f.zoom)})`, `transform-origin:${f.position || "50% 50%"}`);
+  return css.length ? ` style="${esc(css.join(";"))}"` : "";
+}
+
+function chipsHtml(v) {
+  return v.features
+    .map((f) => `<a href="#${esc(f.id)}"><b style="background:${esc(f.color)}"></b>${esc(L(f.chip))}</a>`)
+    .join("");
+}
+
 function featureHtml(f, i) {
   const media =
     f.stage === "icon"
       ? `<div class="icon-stage"><div class="glow"></div><img class="big" src="../assets/icon-512.png" alt="">
           <div class="dock"><i></i><i></i><img src="../assets/icon-512.png" alt=""><i></i><i></i></div></div>`
-      : `<div class="shot"><img src="${esc(f.image)}" alt="${esc(L(f.alt))}" loading="lazy"${f.position ? ` style="object-position:${esc(f.position)}"` : ""}></div>`;
+      : `<div class="shot"><img src="${esc(f.image)}" alt="${esc(L(f.alt))}" loading="lazy"${shotStyle(f)}></div>`;
   return `<article class="feat${i % 2 ? " flip" : ""}${f.stage === "icon" ? " icon" : ""}" id="${esc(f.id)}" style="--c:${esc(f.edge)};--c1:${esc(f.color)}">
     <div class="media">${media}</div>
     <div class="txt">
@@ -93,15 +117,50 @@ function featureHtml(f, i) {
   </article>`;
 }
 
-function smallHtml(v) {
+function smallHtml(v, h = "h2") {
   if (!v.small || !v.small.length) return "";
   const items = v.small
     .map((s) => `<li style="--c:${esc(s.color)}"><span class="i">${icon(s.icon)}</span><div><b>${esc(L(s.title))}</b><span>${esc(L(s.text))}</span></div></li>`)
     .join("");
   return `<section class="wn-small">
-    <div class="wn-h2"><h2>${esc(t("wn.small.title"))}</h2><span>${esc(t("wn.small.sub"))}</span></div>
+    <div class="wn-h2"><${h}>${esc(t("wn.small.title"))}</${h}><span>${esc(t("wn.small.sub"))}</span></div>
     <ul class="small-grid">${items}</ul>
   </section>`;
+}
+
+/* A previous version with a full section: a header row (version, tagline,
+   summary) that opens the section in place. */
+function laterHtml(v, open) {
+  const id = `v${v.version}`;
+  return `<section class="wn-later${open ? " open" : ""}" id="${esc(id)}">
+    <h2 class="later-h"><button type="button" class="later-head" aria-expanded="${open}" aria-controls="${esc(id)}-body">
+      <span class="lv">${esc(v.version)}</span>
+      <span class="lt"><span class="le">${esc(t("wn.later.eyebrow", { date: fmtDate(v.date) }))}</span><b>${esc(L(v.tagline))}</b><span class="ls">${esc(L(v.summary))}</span></span>
+      <span class="lcta"><span>${esc(t(open ? "wn.later.hide" : "wn.later.show"))}</span>${CHEVRON}</span>
+    </button></h2>
+    <div class="later-body" id="${esc(id)}-body" role="region" aria-label="${esc(`Snap Studio ${v.version}`)}"${open ? "" : " inert"}><div class="later-in">
+      <nav class="wn-jump">${chipsHtml(v)}</nav>
+      <div class="wn-feats">${v.features.map(featureHtml).join("")}</div>
+      ${smallHtml(v, "h3")}
+      <a class="later-notes" href="${REPO_URL}/releases/tag/v${esc(v.version)}.0">${esc(t("wn.prev.notes", { v: v.version }))}</a>
+    </div></div>
+  </section>`;
+}
+
+/* Opens or closes a full previous section; without animation when landing
+   on its anchor, so the scroll that follows finds it at its full height. */
+function setLater(sec, open, animate = true) {
+  if (!sec || sec.classList.contains("open") === open) return;
+  if (!animate) sec.classList.add("instant");
+  sec.classList.toggle("open", open);
+  const head = sec.querySelector(".later-head");
+  head.setAttribute("aria-expanded", String(open));
+  head.querySelector(".lcta > span").textContent = t(open ? "wn.later.hide" : "wn.later.show");
+  sec.querySelector(".later-body").inert = !open;
+  if (!animate) {
+    void sec.offsetHeight;
+    sec.classList.remove("instant");
+  }
 }
 
 function previousHtml(list, open) {
@@ -127,10 +186,11 @@ function previousHtml(list, open) {
 function render() {
   const main = document.getElementById("wn");
   const cur = data.versions.find((v) => v.version === data.current) || data.versions[0];
-  const prev = data.versions.filter((v) => v !== cur);
+  const later = data.versions.filter((v) => v !== cur && v.features && v.features.length);
+  const prev = data.versions.filter((v) => v !== cur && !later.includes(v));
   // Entries opened by the reader stay open across a language switch; the
-  // most recent one is open at first.
-  const was = [...main.querySelectorAll("details.ver[open]")].map((d) => d.id.slice(1));
+  // most recent one of the timeline is open at first, full sections closed.
+  const was = [...main.querySelectorAll("details.ver[open], .wn-later.open")].map((d) => d.id.slice(1));
   const open = new Set(main.querySelector("details.ver") ? was : prev.slice(0, 1).map((v) => v.version));
   const target = decodeURIComponent(location.hash.slice(1));
   if (target.startsWith("v")) open.add(target.slice(1));
@@ -138,6 +198,7 @@ function render() {
     heroHtml(cur) +
     `<section class="wn-feats">${cur.features.map(featureHtml).join("")}</section>` +
     smallHtml(cur) +
+    later.map((v) => laterHtml(v, open.has(v.version))).join("") +
     previousHtml(prev, open) +
     `<p class="wn-foot">${t("wn.foot").split("{link}").map(esc).join(`<a href="${CHANGELOG_URL}">CHANGELOG</a>`)}</p>`;
   main.removeAttribute("aria-busy");
@@ -157,6 +218,7 @@ function showHash() {
   const el = document.getElementById(id);
   if (!el) return;
   if (el.tagName === "DETAILS") el.open = true;
+  setLater(el.closest(".wn-later"), true, false);
   el.scrollIntoView({ block: "start" });
 }
 
@@ -196,6 +258,10 @@ if (EMBED) {
   });
 }
 
+document.getElementById("wn").addEventListener("click", (e) => {
+  const head = e.target.closest(".later-head");
+  if (head) setLater(head.closest(".wn-later"), head.getAttribute("aria-expanded") !== "true");
+});
 document.querySelectorAll(".lang [data-lang]").forEach((b) => b.addEventListener("click", () => applyLang(b.dataset.lang, true)));
 window.addEventListener("hashchange", showHash);
 applyLang(initialLang(), false);

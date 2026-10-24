@@ -117,25 +117,90 @@
     {
       "version": "0.13",
       "date": "2026-10-22",
+      "tagline": {
+        "en": "Your U1 at your fingertips: drive it without G-code, and see it in 3D.",
+        "fr": "Votre U1 sous la main : pilotez-le sans G-code, et voyez-le en 3D."
+      },
       "summary": { "en": "Printer control, the U1 in 3D", "fr": "Contrôle de l’imprimante, le U1 en 3D" },
-      "image": "../assets/printer.webp",
-      "alt": { "en": "The U1 in 3D on the printer’s page", "fr": "Le U1 en 3D sur la page de l’imprimante" },
-      "highlights": [
+      "features": [
         {
-          "title": { "en": "Care & Tuning › Control", "fr": "Entretien et réglages › Contrôle" },
-          "text": { "en": "the printer’s basic actions without G-code: home, jog pad, one card per head, fans, light, camera and the emergency stop.", "fr": "les actions de base de l’imprimante sans G-code : origine, déplacements, une carte par tête, ventilateurs, lumière, caméra et arrêt d’urgence." }
+          "id": "control",
+          "icon": "control",
+          "color": "#ff9f0a",
+          "edge": "linear-gradient(90deg, #ff9500, #ffcc00)",
+          "image": "../assets/control.webp",
+          "tag": { "en": "Care & Tuning", "fr": "Entretien et réglages" },
+          "chip": { "en": "Control", "fr": "Contrôle" },
+          "title": { "en": "Drive the printer without G-code", "fr": "Pilotez l’imprimante sans G-code" },
+          "text": {
+            "en": "Home, move the axes from 0.1 to 50 mm, heat, load and unload each head, the bed, fans, light and camera, and the emergency stop. During a print, only the emergency stop, the light and the camera stay at hand.",
+            "fr": "Origine, déplacements de 0,1 à 50 mm, chauffe, chargement et déchargement de chaque tête, plateau, ventilateurs, lumière, caméra et arrêt d’urgence. Pendant une impression, seuls l’arrêt d’urgence, la lumière et la caméra restent accessibles."
+          },
+          "alt": { "en": "Care & Tuning › Control", "fr": "Entretien et réglages › Contrôle" }
         },
         {
-          "title": { "en": "3D printer view", "fr": "Vue 3D de l’imprimante" },
-          "text": { "en": "the U1 in 3D on its page: click a spool, a head, the bed or the light for its quick controls.", "fr": "le U1 en 3D sur sa page : cliquez une bobine, une tête, le plateau ou la lumière pour ses commandes rapides." }
+          "id": "printer-3d",
+          "icon": "cube",
+          "color": "#0a84ff",
+          "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
+          "image": "../assets/printer.webp",
+          "tag": { "en": "Printer", "fr": "Imprimante" },
+          "chip": { "en": "The U1 in 3D", "fr": "Le U1 en 3D" },
+          "title": { "en": "Your U1, in 3D", "fr": "Votre U1, en 3D" },
+          "text": {
+            "en": "The printer’s page shows the U1 in 3D. Click a spool, a head, the bed or the light for its quick controls: the view turns to face what you picked.",
+            "fr": "La page de l’imprimante montre le U1 en 3D. Cliquez une bobine, une tête, le plateau ou la lumière pour ses commandes rapides : la vue se tourne vers ce que vous avez choisi."
+          },
+          "alt": { "en": "The U1 in 3D on the printer’s page", "fr": "Le U1 en 3D sur la page de l’imprimante" }
         },
         {
+          "id": "spools",
+          "icon": "spool",
+          "color": "#30d158",
+          "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
+          "image": "../assets/control.webp",
+          "position": "100% 30%",
+          "zoom": 1.55,
+          "tag": { "en": "Spools", "fr": "Bobines" },
+          "chip": { "en": "Material & colour", "fr": "Matériau et couleur" },
+          "title": { "en": "Every head knows its spool", "fr": "Chaque tête connaît sa bobine" },
+          "text": {
+            "en": "Declare a head’s material and colour from the printer’s own list, as on its screen. A spool without an RFID tag is asked for before loading, so the printer heats to the right temperature.",
+            "fr": "Déclarez le matériau et la couleur d’une tête depuis la liste de l’imprimante, comme sur son écran. Une bobine sans étiquette RFID vous est demandée avant le chargement, pour que l’imprimante chauffe à la bonne température."
+          },
+          "alt": { "en": "One card per head, in its spool’s colour", "fr": "Une carte par tête, à la couleur de sa bobine" }
+        }
+      ],
+      "small": [
+        {
+          "icon": "send", "color": "#ff375f",
           "title": { "en": "Send options", "fr": "Options d’envoi" },
-          "text": { "en": "timelapse, automatic bed leveling and flow calibration now really reach the U1.", "fr": "timelapse, nivellement automatique et calibration du débit arrivent maintenant vraiment au U1." }
+          "text": { "en": "Timelapse, automatic bed leveling and flow calibration now really reach the U1.", "fr": "Timelapse, nivellement automatique et calibration du débit arrivent maintenant vraiment au U1." }
         },
         {
+          "icon": "shield", "color": "#30d158",
           "title": { "en": "Safer site tabs", "fr": "Onglets plus sûrs" },
-          "text": { "en": "sites opened in tabs can no longer read local files through the app.", "fr": "les sites ouverts en onglets ne peuvent plus lire les fichiers locaux par l’app." }
+          "text": { "en": "Sites opened in the app’s tabs can no longer read your local files.", "fr": "Les sites ouverts dans les onglets de l’app ne peuvent plus lire vos fichiers locaux." }
+        },
+        {
+          "icon": "prepare", "color": "#7d7aff",
+          "title": { "en": "Prepare’s shortcuts", "fr": "Raccourcis de Préparer" },
+          "text": { "en": "Over the slice preview, Backspace no longer removes the objects just sliced.", "fr": "Sur l’aperçu de découpe, Retour arrière ne supprime plus les objets tout juste découpés." }
+        },
+        {
+          "icon": "mirror", "color": "#bf5af2",
+          "title": { "en": "Mirrored objects", "fr": "Objets en miroir" },
+          "text": { "en": "A mirrored object is sliced as it looks, no longer with scrambled triangles.", "fr": "Un objet en miroir est découpé tel qu’il apparaît, sans triangles mélangés." }
+        },
+        {
+          "icon": "tabs", "color": "#ff9f0a",
+          "title": { "en": "Sheets over a site", "fr": "Feuilles sur un site" },
+          "text": { "en": "A sheet opened while a Library site is shown no longer hides under it, blocking the app.", "fr": "Une feuille ouverte sur un site de la Bibliothèque ne se cache plus dessous en bloquant l’app." }
+        },
+        {
+          "icon": "check", "color": "#8e8e93",
+          "title": { "en": "Sturdier", "fr": "Plus robuste" },
+          "text": { "en": "A damaged stored setting no longer stops the app at launch, and an odd colour name no longer breaks slicing.", "fr": "Un réglage enregistré abîmé n’empêche plus l’app de démarrer, et un nom de couleur inattendu ne fait plus échouer la découpe." }
         }
       ]
     },
