@@ -1,8 +1,9 @@
 #!/bin/sh
 # Compile the Icon Composer source (src-tauri/icons/macos/AppIcon.icon) into
 # src-tauri/icons/macos/Assets.car, which macOS 26+ uses for the Dock and
-# Finder (CFBundleIconName in Info.plist). Needs Xcode 26 or later; run it
-# after changing the icon and commit the resulting Assets.car.
+# Finder (CFBundleIconName in Info.plist). Needs Xcode 26 or later; run by
+# scripts/build-icons.py after the layer is rebuilt from the original art.
+# Commit the resulting Assets.car.
 set -eu
 cd "$(dirname "$0")/../src-tauri/icons/macos"
 out=$(mktemp -d)
