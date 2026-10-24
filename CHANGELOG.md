@@ -17,9 +17,10 @@ with its packages for macOS, Windows and Linux. What comes next:
   not stick to each other (PLA and PETG, PLA and TPU, PETG and TPU…) among
   the heads the plate prints with — the tower may come off or collapse —
   with one-click fixes: no tower, or the tower's outer wall in one of the
-  materials. The Multi-material panel gains the tower's wall head and ooze
-  prevention (temperature drop of idle heads, preheat time, idle
-  temperature).
+  materials. The prime tower gets its own switch on the slice sheet (its
+  Multi-material row, now above Seam); the Multi-material panel gains the
+  tower's wall head and ooze prevention (temperature drop of idle heads,
+  preheat time, idle temperature).
 
 ## [0.14.2] — 2026-10-24
 

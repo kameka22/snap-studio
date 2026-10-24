@@ -77,7 +77,8 @@ const ADV_CATS = {
   mm: {
     title: "slice.adv.mm",
     groups: [
-      { t: "slice.adv.g.tower", keys: ["enable_prime_tower", "wipe_tower_filament", "prime_tower_width", "prime_volume", "prime_tower_brim_width"] },
+      // The tower's switch is on the sheet (#s-tower-sw), as Supports' and Brim's.
+      { t: "slice.adv.g.tower", keys: ["wipe_tower_filament", "prime_tower_width", "prime_volume", "prime_tower_brim_width"] },
       { t: "slice.adv.g.ooze", keys: ["ooze_prevention", "standby_temperature_delta", "preheat_time", "idle_temperature"] },
       { t: "slice.adv.g.flush", keys: ["flush_into_infill", "flush_into_objects", "flush_into_support"] },
       { t: "slice.adv.g.features", keys: ["wall_filament", "sparse_infill_filament", "solid_infill_filament"] },
@@ -89,10 +90,8 @@ const ADV_CATS = {
 const ADV_WHEN = {
   brim_ears_max_angle: () => advVal("brim_type") === "brim_ears",
   tree_support_brim_width: () => !advOn("tree_support_auto_brim"),
-  prime_tower_width: () => advOn("enable_prime_tower"),
-  prime_volume: () => advOn("enable_prime_tower"),
-  prime_tower_brim_width: () => advOn("enable_prime_tower"),
-  wipe_tower_filament: () => advOn("enable_prime_tower"),
+  // The tower's own settings stay shown with it off, as Supports' (its
+  // switch is on the sheet; the panel says they wait for it).
   // The other heads' temperature while one prints: with ooze prevention.
   standby_temperature_delta: () => advOn("ooze_prevention"),
   preheat_time: () => advOn("ooze_prevention"),
@@ -140,6 +139,7 @@ function advOverrides() {
   if (!$("s-brim").checked) for (const k of advCatKeysAll("brim")) delete o[k];
   if (!multiHead()) {
     for (const k of advCatKeysAll("mm")) delete o[k];
+    delete o.enable_prime_tower;
     delete o.support_filament;
     delete o.support_interface_filament;
   }
@@ -152,8 +152,10 @@ function advCatKeysAll(cat) {
   return ADV_CATS[cat].groups.flatMap((g) => (typeof g.keys === "function" ? ADV_TREE_ALL : g.keys));
 }
 const advCountOf = (cat) => advCatKeysAll(cat).filter((k) => k in SL.adv).length;
+/* The advanced differences, for the summary: not the tower's switch,
+   which is on the sheet. */
 function advCount() {
-  return Object.keys(advOverrides()).length;
+  return Object.keys(advOverrides()).filter((k) => k !== "enable_prime_tower").length;
 }
 
 /* Machine profile changed: its remembered differences come back. */
@@ -219,8 +221,13 @@ function advRenderRows() {
     support: $("s-supports").checked ? advLabel("support_type") : tr("slice.adv.off"),
     brim: $("s-brim").checked ? advLabel("brim_type", SL.adv.brim_type || "outer_only") : tr("slice.adv.off"),
     seam: advLabel("seam_position"),
-    mm: tr("slice.adv.mm_sum", { v: advLabel("enable_prime_tower") }),
+    mm: !advOn("enable_prime_tower")
+      ? tr("slice.adv.mm_no_tower")
+      : +advVal("wipe_tower_filament") > 0
+      ? tr("slice.adv.mm_tower_wall", { t: `T${+advVal("wipe_tower_filament") - 1}` })
+      : tr("slice.adv.mm_tower"),
   };
+  $("s-tower-sw").checked = advOn("enable_prime_tower");
   for (const cat of Object.keys(ADV_CATS)) {
     $("s-adv-sum-" + cat).textContent = sum[cat] || "";
     const n = advCountOf(cat);
@@ -299,7 +306,10 @@ function advRenderPanel() {
   if (!c) return;
   $("s-adv-title").textContent = tr(c.title);
   $("s-adv-reset").classList.toggle("hidden", advCountOf(ADV.cat) === 0);
-  const note = ADV.cat === "support" && !$("s-supports").checked ? tr("slice.adv.support_off") : ADV.cat === "brim" && !$("s-brim").checked ? tr("slice.adv.brim_off") : "";
+  const note = ADV.cat === "support" && !$("s-supports").checked ? tr("slice.adv.support_off")
+    : ADV.cat === "brim" && !$("s-brim").checked ? tr("slice.adv.brim_off")
+    : ADV.cat === "mm" && !advOn("enable_prime_tower") ? tr("slice.adv.tower_off")
+    : "";
   const groups = c.groups
     .filter((g) => !g.when || g.when())
     .map((g) => {
@@ -401,6 +411,9 @@ function advRenderTower() {
   // Locked while slicing, as the sheet's other settings (showSliceBusy).
   box.querySelectorAll("button").forEach((b) => (b.disabled = !!SL.job));
 }
+
+// The prime tower's switch, on the sheet.
+$("s-tower-sw").addEventListener("change", (e) => advSet("enable_prime_tower", e.target.checked ? "1" : "0"));
 
 $("s-tower")?.addEventListener("click", (e) => {
   const b = e.target.closest("[data-tower], [data-tower-wall]");
