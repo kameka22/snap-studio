@@ -43,6 +43,7 @@
     "macOS": {
       "signingIdentity": "-",
       "files": {
+        "Resources/Assets.car": "./icons/macos/Assets.car",
         "Resources/en.lproj/InfoPlist.strings": "./locales/en.lproj/InfoPlist.strings",
         "Resources/fr.lproj/InfoPlist.strings": "./locales/fr.lproj/InfoPlist.strings"
       }

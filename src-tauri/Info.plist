@@ -12,6 +12,11 @@
     <string>en</string>
     <string>fr</string>
   </array>
+  <!-- macOS 26 icon: Icon Composer source in icons/macos/AppIcon.icon,
+       compiled to icons/macos/Assets.car by scripts/build-macos-icon.sh.
+       Without it the Dock frames the legacy .icns in a light tile. -->
+  <key>CFBundleIconName</key>
+  <string>AppIcon</string>
   <!-- Printer discovery (mDNS): without these keys macOS silently blocks the
        search. Merged by Tauri into the bundle's Info.plist. -->
   <key>NSLocalNetworkUsageDescription</key>

@@ -12,8 +12,9 @@ with its packages for macOS, Windows and Linux. What comes next:
 ## [Unreleased]
 
 ### Fixed
-- **App icon in the macOS Dock**: the squircle now covers the whole Dock tile, so
-  macOS no longer shows a light border around it.
+- **App icon in the macOS Dock and Finder**: on macOS 26 the icon is now shipped in
+  Apple's new format, so the system no longer frames it in a light tile.
+
 
 ## [0.14.0] — 2026-10-23
 
