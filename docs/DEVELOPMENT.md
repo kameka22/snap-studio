@@ -9,8 +9,17 @@ languages and the code layout. To report a bug or propose a change, see
 ```sh
 cargo tauri dev                    # development
 cargo tauri build --bundles app    # local build
-npx @tauri-apps/cli icon src-tauri/app-icon.svg -o src-tauri/icons   # icons
+python3 scripts/build-icons.py     # icons (Pillow, numpy; Xcode 26+ for macOS)
 ```
+
+The app icon is built from one image, the original artwork
+`src-tauri/icons/source/snap-s-original.png` (1024 px, on Apple's icon grid):
+`scripts/build-icons.py` derives the macOS `.icns` (Apple's grid, transparent
+outside), the Windows and Linux icons (the squircle filling the canvas), the
+macOS 26 Icon Composer layer (`src-tauri/icons/macos/AppIcon.icon`) and its
+compiled `Assets.car` (`scripts/build-macos-icon.sh`). macOS 26 frames in a
+light tile any `.icns` whose shape is off Apple's grid, so the artwork is used
+as it is, never rescaled or recropped.
 
 ## Publishing a version
 

@@ -11,6 +11,12 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Fixed
+- **App icon in the macOS Dock and Finder**: on macOS 26 the system no longer
+  frames it in a light tile — the icon is rebuilt from the original artwork on
+  Apple's icon grid and also shipped in Apple's new format (Icon Composer);
+  sharper on every platform, as it is no longer upscaled from a small crop.
+
 ## [0.14.0] — 2026-10-23
 
 ### Changed
