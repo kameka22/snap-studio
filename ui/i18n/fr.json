@@ -2100,5 +2100,13 @@
   "err.ctl_material": "L'imprimante ne connaît pas cette matière ({kind})",
   "err.ctl_color": "Couleur invalide",
   "ctl.why.home_xy": "Faites d'abord l'origine X et Y : la U1 ne fait Z qu'ensuite",
-  "err.ctl_home_xy_first": "Faites d'abord l'origine X et Y : la U1 ne fait Z qu'ensuite"
+  "err.ctl_home_xy_first": "Faites d'abord l'origine X et Y : la U1 ne fait Z qu'ensuite",
+  "whatsnew.title": "Nouveautés",
+  "whatsnew.card": "Nouveautés de la {v}",
+  "whatsnew.more": {"one": "{first} et {n} autre", "other": "{first} et {n} autres"},
+  "whatsnew.browser": "Ouvrir dans le navigateur",
+  "whatsnew.error": "La page n'a pas pu être chargée",
+  "whatsnew.error_sub": "Vérifiez la connexion à internet, puis réessayez. Le journal des modifications liste aussi chaque changement.",
+  "whatsnew.retry": "Réessayer",
+  "whatsnew.changelog": "Ouvrir le CHANGELOG"
 }
