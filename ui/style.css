@@ -2939,6 +2939,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .info-btn:hover { color: var(--accent); background: none; }
 .info-btn svg { width: 16px; height: 16px; fill: currentColor; }
 .s-bedtemp { font-size: 12px; color: var(--warning); }
+/* The prime tower shared by materials that do not bond: above the Slice
+   button, with its fixes. */
+.sl-tower { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 8px; padding: 8px 12px; border-radius: 10px; font-size: 12px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--warning) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
+.sl-tower-t { flex: 1 1 300px; min-width: 0; }
+.sl-tower-t b { font-weight: 600; }
+.sl-tower-acts { display: flex; flex-wrap: wrap; gap: 6px; }
 .s-bedtemp:empty { display: none; }
 .s-bedtemp b { color: var(--text); font-weight: 600; }
 
