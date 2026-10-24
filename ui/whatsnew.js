@@ -43,20 +43,30 @@ function wnState(s) {
   $("wn-error").classList.toggle("hidden", s !== "error");
 }
 
+/* A new frame each time, never the same one reloaded: WebKit (macOS) can
+   leave a frame that was in a hidden sheet black once shown again. A new
+   one also loads the same address again (Retry). */
+function wnFrame(url) {
+  const old = $("wn-frame");
+  const frame = old.cloneNode(false);
+  frame.removeAttribute("src");
+  frame.addEventListener("load", wnFrameLoaded);
+  if (url) frame.src = url;
+  old.replaceWith(frame);
+  return frame;
+}
+
 function wnLoad() {
   clearTimeout(WN.timer);
-  const frame = $("wn-frame");
   if (!navigator.onLine) {
-    frame.src = "about:blank";
+    wnFrame("");
     wnState("error");
     return;
   }
   wnState("loading");
   const url = wnUrl(LANG, WN.installed);
   $("wn-address").textContent = wnShownAddress(url);
-  // Blank first: the same address again (Retry) must load again.
-  frame.src = "about:blank";
-  requestAnimationFrame(() => (frame.src = url));
+  wnFrame(url);
   // The page says when it is shown; silence means no network, or a page
   // that could not load.
   WN.timer = setTimeout(() => {
@@ -82,7 +92,7 @@ function wnClose() {
   // The page is let go: it takes memory, and comes back in the current
   // language next time.
   setTimeout(() => {
-    if ($("wn-modal").classList.contains("hidden")) $("wn-frame").src = "about:blank";
+    if ($("wn-modal").classList.contains("hidden")) wnFrame("");
   }, 200);
 }
 
@@ -119,13 +129,13 @@ window.addEventListener("message", (e) => {
 });
 /* Loaded but silent: an error page (no network, a page that is gone).
    The page tells it is shown right after its own load, a little later. */
-$("wn-frame").addEventListener("load", () => {
+function wnFrameLoaded() {
   if ($("wn-sheet").dataset.state !== "loading" || !/^https:/.test($("wn-frame").src)) return;
   clearTimeout(WN.timer);
   WN.timer = setTimeout(() => {
     if ($("wn-sheet").dataset.state === "loading") wnState("error");
   }, 4000);
-});
+}
 window.addEventListener("offline", () => {
   if ($("wn-sheet").dataset.state === "loading") wnState("error");
 });
