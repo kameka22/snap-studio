@@ -32,6 +32,21 @@ const ADV_ENGINE_DEFAULTS = {
   wipe_tower_filament: "0", ooze_prevention: "0", standby_temperature_delta: "-5", preheat_time: "30",
   // A filament key (sent to every filament, slice.rs): 0 on the U1's.
   idle_temperature: "0", print_sequence: "by layer",
+  // Quality, Infill, Walls, Surfaces, Other (#60).
+  initial_layer_print_height: "0.2", line_width: "0", initial_layer_line_width: "0", outer_wall_line_width: "0",
+  top_surface_line_width: "0", elefant_foot_compensation: "0", xy_hole_compensation: "0", xy_contour_compensation: "0",
+  resolution: "0.01", enable_arc_fitting: "0", enable_overhang_speed: "1", overhang_1_4_speed: "0", overhang_2_4_speed: "0",
+  overhang_3_4_speed: "0", overhang_4_4_speed: "0", detect_overhang_wall: "1", bridge_flow: "1", thick_bridges: "0",
+  sparse_infill_pattern: "crosshatch", infill_direction: "45", infill_wall_overlap: "15%", infill_anchor: "400%",
+  infill_anchor_max: "20", infill_combination: "0", minimum_sparse_infill_area: "15",
+  wall_generator: "arachne", wall_sequence: "inner wall/outer wall", wall_direction: "auto", precise_outer_wall: "1",
+  detect_thin_wall: "0", only_one_wall_top: "0", only_one_wall_first_layer: "0", extra_perimeters_on_overhangs: "0",
+  top_shell_layers: "4", bottom_shell_layers: "3", top_shell_thickness: "0.6", bottom_shell_thickness: "0",
+  ensure_vertical_shell_thickness: "ensure_all", top_surface_pattern: "monotonicline", bottom_surface_pattern: "monotonic",
+  internal_solid_infill_pattern: "monotonic", ironing_type: "no ironing", ironing_pattern: "rectilinear", ironing_flow: "10%",
+  ironing_spacing: "0.1", ironing_speed: "20", spiral_mode: "0", fuzzy_skin: "none", fuzzy_skin_thickness: "0.2",
+  fuzzy_skin_point_distance: "0.3", skirt_loops: "1", skirt_distance: "2", skirt_height: "1", draft_shield: "disabled",
+  reduce_crossing_wall: "0", reduce_infill_retraction: "0",
 };
 const advVal = (k) => (k in SL.adv ? SL.adv[k] : ADV.defaults[k]);
 const advOn = (k) => String(advVal(k)) === "1" || advVal(k) === true;
@@ -45,8 +60,17 @@ const isOrganic = () => isTree() && ["organic", "default"].includes(advVal("supp
    start at 1. */
 const ADV_FILAMENT = new Set(["support_filament", "support_interface_filament", "wall_filament", "sparse_infill_filament", "solid_infill_filament", "wipe_tower_filament"]);
 const ADV_HEAD_AUTO = new Set(["support_filament", "support_interface_filament", "wipe_tower_filament"]);
+/* Steps finer (or coarser) than a tenth of a millimetre. */
+const ADV_STEPS = {
+  line_width: 0.01, initial_layer_line_width: 0.01, outer_wall_line_width: 0.01, top_surface_line_width: 0.01,
+  elefant_foot_compensation: 0.01, xy_hole_compensation: 0.01, xy_contour_compensation: 0.01, resolution: 0.001,
+  initial_layer_print_height: 0.01, bridge_flow: 0.05, ironing_spacing: 0.01, fuzzy_skin_thickness: 0.05,
+  fuzzy_skin_point_distance: 0.05, top_shell_thickness: 0.1, bottom_shell_thickness: 0.1,
+  overhang_1_4_speed: 1, overhang_2_4_speed: 1, overhang_3_4_speed: 1, overhang_4_4_speed: 1, ironing_speed: 1,
+  infill_direction: 1, minimum_sparse_infill_area: 1, skirt_distance: 0.5, infill_anchor_max: 1,
+};
 /* Units the settings catalog leaves out. */
-const ADV_UNITS = { standby_temperature_delta: "°C", idle_temperature: "°C" };
+const ADV_UNITS = { standby_temperature_delta: "°C", idle_temperature: "°C", infill_anchor_max: "mm" };
 /* Values hidden from a list: handled elsewhere ("no_brim" is the switch) or
    needing tools the app does not have (painted brim). */
 const ADV_HIDE = { brim_type: ["no_brim", "painted"] };
@@ -80,6 +104,49 @@ const ADV_CATS = {
   },
   brim: { title: "slice.brim", groups: [{ t: "slice.brim", keys: ["brim_type", "brim_width", "brim_object_gap", "brim_ears_max_angle"] }] },
   seam: { title: "slice.adv.seam", groups: [{ t: "slice.adv.seam", keys: ["seam_position", "staggered_inner_seams", "seam_gap"] }] },
+  // The quick settings' detailed panels (the ⚙ of the Quality section and
+  // of the Infill and Walls tiles), and the Surfaces and Other rows.
+  quality: {
+    title: "slice.quality",
+    groups: [
+      { t: "slice.adv.g.first_layer", keys: ["initial_layer_print_height"] },
+      { t: "slice.adv.g.widths", keys: ["line_width", "initial_layer_line_width", "outer_wall_line_width", "top_surface_line_width"] },
+      { t: "slice.adv.g.precision", keys: ["elefant_foot_compensation", "xy_hole_compensation", "xy_contour_compensation", "resolution", "enable_arc_fitting"] },
+      { t: "slice.adv.g.overhangs", keys: ["detect_overhang_wall", "enable_overhang_speed", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_flow", "thick_bridges"] },
+    ],
+  },
+  infill: {
+    title: "slice.infill",
+    groups: [
+      { t: "slice.infill", keys: ["sparse_infill_pattern", "infill_direction", "infill_wall_overlap"] },
+      { t: "slice.adv.g.anchor", keys: ["infill_anchor", "infill_anchor_max"] },
+      { t: "slice.adv.g.infill_more", keys: ["infill_combination", "minimum_sparse_infill_area"] },
+    ],
+  },
+  walls: {
+    title: "slice.walls",
+    groups: [
+      { t: "slice.walls", keys: ["wall_generator", "wall_sequence", "wall_direction"] },
+      { t: "slice.adv.g.walls_more", keys: ["precise_outer_wall", "detect_thin_wall", "only_one_wall_top", "only_one_wall_first_layer", "extra_perimeters_on_overhangs"] },
+    ],
+  },
+  surfaces: {
+    title: "slice.adv.surfaces",
+    groups: [
+      { t: "slice.adv.g.shells", keys: ["top_shell_layers", "top_shell_thickness", "bottom_shell_layers", "bottom_shell_thickness", "ensure_vertical_shell_thickness"] },
+      { t: "slice.adv.g.patterns", keys: ["top_surface_pattern", "bottom_surface_pattern", "internal_solid_infill_pattern"] },
+      { t: "slice.adv.g.ironing", keys: ["ironing_type", "ironing_pattern", "ironing_flow", "ironing_spacing", "ironing_speed"] },
+    ],
+  },
+  other: {
+    title: "slice.adv.other",
+    groups: [
+      { t: "slice.adv.g.sequence", keys: ["print_sequence", "spiral_mode"] },
+      { t: "slice.adv.g.fuzzy", keys: ["fuzzy_skin", "fuzzy_skin_thickness", "fuzzy_skin_point_distance"] },
+      { t: "slice.adv.g.skirt", keys: ["skirt_loops", "skirt_distance", "skirt_height", "draft_shield"] },
+      { t: "slice.adv.g.travel", keys: ["reduce_crossing_wall", "reduce_infill_retraction"] },
+    ],
+  },
   mm: {
     title: "slice.adv.mm",
     groups: [
@@ -102,6 +169,8 @@ const ADV_WHEN = {
   standby_temperature_delta: () => advOn("ooze_prevention"),
   preheat_time: () => advOn("ooze_prevention"),
   idle_temperature: () => advOn("ooze_prevention"),
+  // Each with the setting it details (adv-logic.js).
+  ...Object.fromEntries(Object.keys(ADV_DEPENDS).map((k) => [k, () => advShown(k, advVal)])),
 };
 
 /* Category keys that apply right now (multi-material only with several
@@ -160,6 +229,10 @@ function advOverrides() {
     delete o.support_filament;
     delete o.support_interface_filament;
   }
+  // A setting hidden because the one it details is off (ADV_WHEN: ironing's
+  // details without ironing…) is neither sent nor counted; SL.adv keeps it
+  // for when that setting is on again.
+  for (const k in o) if (ADV_WHEN[k] && !ADV_WHEN[k]()) delete o[k];
   for (const k in o) o[k] = String(o[k]);
   return o;
 }
@@ -168,7 +241,7 @@ const ADV_TREE_ALL = ["tree_support_branch_angle", "tree_support_branch_angle_or
 function advCatKeysAll(cat) {
   return ADV_CATS[cat].groups.flatMap((g) => (typeof g.keys === "function" ? ADV_TREE_ALL : g.keys));
 }
-const advCountOf = (cat) => advCatKeysAll(cat).filter((k) => k in SL.adv).length;
+const advCountOf = (cat) => advCatKeysAll(cat).filter((k) => k in SL.adv && (!ADV_WHEN[k] || ADV_WHEN[k]())).length;
 /* The advanced differences, for the summary: not the tower's switch,
    which is on the sheet. */
 function advCount() {
@@ -225,7 +298,9 @@ function advLabel(k, v = advVal(k)) {
   const def = ADV.schema?.keys?.[k];
   if (v == null || v === "") return "";
   if (ADV_FILAMENT.has(k)) return +v > 0 ? `T${+v - 1}` : tr("slice.adv.default_head");
-  if (def?.enum) return advOptLabel(k, v);
+  // A list's option by its name; a number with suggested values (an
+  // anchor length) keeps its unit when it is not one of them.
+  if (def?.enum && (def.type === "enum" || v in def.enum)) return advOptLabel(k, v);
   if (def?.type === "bool") return tr(String(v) === "1" ? "common.yes" : "common.no");
   const unit = def?.unit || ADV_UNITS[k];
   return `${v}${unit && !String(v).endsWith("%") ? " " + unit : ""}`;
@@ -243,14 +318,27 @@ function advRenderRows() {
       : +advVal("wipe_tower_filament") > 0
       ? tr("slice.adv.mm_tower_wall", { t: `T${+advVal("wipe_tower_filament") - 1}` })
       : tr("slice.adv.mm_tower"),
+    surfaces: [
+      tr("slice.adv.sum.shells", { top: advVal("top_shell_layers") ?? "—", bottom: advVal("bottom_shell_layers") ?? "—" }),
+      advVal("ironing_type") && advVal("ironing_type") !== "no ironing" ? advLabel("ironing_type") : tr("slice.adv.sum.no_ironing"),
+    ].join(" · "),
+    other: [
+      advLabel("print_sequence"),
+      advOn("spiral_mode") && ADV.schema?.keys?.spiral_mode?.label,
+      advVal("fuzzy_skin") && advVal("fuzzy_skin") !== "none" && ADV.schema?.keys?.fuzzy_skin?.label,
+    ].filter(Boolean).join(" · "),
   };
   $("s-tower-sw").checked = advOn("enable_prime_tower");
   for (const cat of Object.keys(ADV_CATS)) {
-    $("s-adv-sum-" + cat).textContent = sum[cat] || "";
+    // Quality, Infill and Walls have no row of their own: no summary.
+    const s = $("s-adv-sum-" + cat);
+    if (s) s.textContent = sum[cat] || "";
     const n = advCountOf(cat);
     const btn = document.querySelector(`.sl-adv-btn[data-adv="${cat}"]`);
     btn.classList.toggle("mod", n > 0);
     btn.querySelector(".sl-adv-n").textContent = n || "";
+    // Ten such buttons on the sheet: each says which panel it opens.
+    btn.setAttribute("aria-label", `${tr("slice.adv.open")} — ${tr(ADV_CATS[cat].title)}${n ? ` (${n})` : ""}`);
   }
   spdRenderRow();
   slSummary();
@@ -314,11 +402,14 @@ function advField(k) {
   } else if (def.type === "bool") {
     input = `<input type="checkbox" class="sw" role="switch" data-k="${k}"${String(v) === "1" ? " checked" : ""} />`;
   } else {
-    const pct = def.type === "percent" || String(v ?? "").endsWith("%");
+    // A percentage, or a "mm or %" value given in % (a line width in mm
+    // stays in mm: "0.42" is not 0.42 %).
+    const pct = String(v ?? "").endsWith("%") || def.unit === "%";
     const num = v == null ? "" : String(v).replace(/%$/, "");
-    // Whole numbers and percentages by one, millimetres and the rest by a tenth.
-    const step = def.type === "int" || pct ? 1 : 0.1;
-    input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : def.unit || ADV_UNITS[k] || "")}</span>`;
+    // Whole numbers and percentages by one, millimetres and the rest by a
+    // tenth, unless the setting asks for finer (ADV_STEPS).
+    const step = ADV_STEPS[k] ?? (def.type === "int" || pct ? 1 : 0.1);
+    input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : (def.unit || ADV_UNITS[k] || "").replace(/\s+(?:ou|or)\s+%$/, ""))}</span>`;
   }
   return `<div class="grow-row adv-row${mod ? " mod" : ""}" title="${esc(def.tooltip || "")}">
     <span class="k">${esc(def.label)}${mod ? `<small class="sub">${esc(tr("slice.adv.profile_value", { v: advLabel(k, ADV.defaults[k]) || "—" }))}</small>` : ""}</span>
@@ -363,26 +454,25 @@ function advOptions(k) {
     .map((v) => [v, advOptLabel(k, v)]);
 }
 
-/* An option's words: the catalog's, unless the app has better ones (the
-   catalog leaves some untranslated). */
-function advOptLabel(k, v) {
-  const key = `slice.vp.label.${k}.${v}`;
-  const own = tr(key);
-  return own !== key ? own : ADV.schema?.keys?.[k]?.enum?.[v] ?? v;
-}
+/* An option's words, from the catalog. */
+const advOptLabel = (k, v) => ADV.schema?.keys?.[k]?.enum?.[v] ?? v;
 
 /* An option's picture and its one-line explanation. */
 const advIcon = (k, v) => SLICE_ICONS[k]?.[v] || SLICE_ICON_UNKNOWN;
 function advDesc(k, v) {
-  const key = `slice.vp.${k}.${v}`;
-  const d = tr(key);
-  return d !== key ? d : "";
+  // The patterns (infill, surfaces, ironing) share their explanations.
+  for (const key of [`slice.vp.${k}.${v}`, ...(ADV_PATTERNS.has(k) ? [`slice.vp.pattern.${v}`] : [])]) {
+    const d = tr(key);
+    if (d !== key) return d;
+  }
+  return "";
 }
+const ADV_PATTERNS = new Set(["sparse_infill_pattern", "top_surface_pattern", "bottom_surface_pattern", "internal_solid_infill_pattern", "ironing_pattern"]);
 
 /* The control a list gets (ADV_UI, otherwise vpMode). */
 function advUi(k) {
   const opts = advOptions(k);
-  return ADV_UI[k] || vpMode(opts.length, opts.filter(([v]) => SLICE_ICONS[k]?.[v]).length);
+  return ADV_UI[k] || vpMode(opts.length, opts.filter(([v]) => SLICE_ICONS[k]?.[v]).length, opts.map(([, l]) => l));
 }
 
 /* The fields as pickers: heads with their spools' colours and materials,

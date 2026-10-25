@@ -6,10 +6,12 @@
 
 /* The control for a list of `n` options of which `icons` have a picture:
    mostly pictured, inline pills up to 3 options, a grid of pictures
-   beyond; without pictures, a segmented control up to 4, a select beyond. */
-function vpMode(n, icons) {
+   beyond; without pictures, a segmented control up to 4 short options
+   (`labels`, VP_SEG_CHARS in all, so that it fits a row), a select beyond. */
+const VP_SEG_CHARS = 50;
+function vpMode(n, icons, labels = []) {
   if (n > 0 && icons * 2 >= n) return n <= 3 ? "pills" : "visual";
-  return n <= 4 ? "segmented" : "select";
+  return n <= 4 && labels.join("").length <= VP_SEG_CHARS ? "segmented" : "select";
 }
 
 /* Columns of the grid: 2 for 4 cards or fewer, 3 beyond. */
@@ -44,4 +46,4 @@ function vpEntries(options, value, known = []) {
   return out;
 }
 
-if (typeof module !== "undefined") module.exports = { vpMode, vpColumns, VP_STYLES, vpSupportKind, vpStyles, vpStyleAfterType, vpEntries };
+if (typeof module !== "undefined") module.exports = { VP_SEG_CHARS, vpMode, vpColumns, VP_STYLES, vpSupportKind, vpStyles, vpStyleAfterType, vpEntries };
