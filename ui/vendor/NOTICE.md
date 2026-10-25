@@ -24,10 +24,20 @@ Snapmaker Orca 2.4.0. License: AGPL-3.0; these files keep their terms
 `param_rectilinear.svg`, `param_rectilinear-grid.svg`, `param_honeycomb.svg`,
 `param_lightning.svg`, `param_hollow.svg`, `param_concentric.svg`,
 `param_rectilinear_interlaced.svg`, `param_grid.svg`, `param_support.svg`,
-`param_support_tree.svg`.
+`param_support_tree.svg`; and, in the generated `ui/slice-icons-patterns.js`,
+the infill and surface patterns: `param_alignedrectilinear.svg`,
+`param_zigzag.svg`, `param_crosszag.svg`, `param_lockedzag.svg`,
+`param_line.svg`, `param_triangles.svg`, `param_tri-hexagon.svg`,
+`param_cubic.svg`, `param_adaptivecubic.svg`, `param_quartercubic.svg`,
+`param_supportcubic.svg`, `param_3dhoneycomb.svg`,
+`param_lateral-honeycomb.svg`, `param_lateral-lattice.svg`,
+`param_crosshatch.svg`, `param_tpmsd.svg`, `param_tpmsfk.svg`,
+`param_gyroid.svg`, `param_hilbertcurve.svg`, `param_archimedeanchords.svg`,
+`param_octagramspiral.svg`, `param_monotonic.svg`, `param_monotonicline.svg`.
 
 Changed by `scripts/import-orca-icons.py`: colours replaced by CSS variables,
-width and height removed, numbers rounded to 2 decimals, round caps set on
+width and height removed, unused ids and the XML declaration removed,
+numbers rounded to 2 decimals, round caps set on
 the root, elements sharing a style grouped; the two support icons get a
 badge of ours.
 

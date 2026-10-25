@@ -21,6 +21,16 @@ with its packages for macOS, Windows and Linux. What comes next:
   Multi-material row, now above Seam); the Multi-material panel gains the
   tower's wall head and ooze prevention (temperature drop of idle heads,
   preheat time, idle temperature).
+- **More slice settings**: the slice sheet gets the quality and strength
+  settings that only came from the profile. A ⚙ next to Quality opens the
+  first layer, line widths, precision (elephant foot, X-Y compensations,
+  resolution, arcs) and overhangs and bridges; one on the Infill tile the
+  infill pattern (from pictures), direction, overlap and anchors; one on
+  the Walls tile the wall generator, order and direction and the thin and
+  single walls. Two new rows: Surfaces (top and bottom shells, surface
+  patterns from pictures, ironing) and Other (print sequence, spiral vase,
+  fuzzy skin, skirt, travel). Settings that detail another (ironing, fuzzy
+  skin, overhang speeds, skirt) show only with it.
 
 ### Changed
 - **Head pickers show the spools**: in the slice sheet's advanced settings

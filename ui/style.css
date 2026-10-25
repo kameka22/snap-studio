@@ -3434,6 +3434,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .nstep.disabled { opacity: 0.55; }
 .nstep.disabled .nstep-v { cursor: default; }
 
+/* The quick settings' detailed panels: a ⚙ beside the Quality section's
+   title, in the corner of the Infill and Walls tiles. */
+.set-section.sl-sec-adv { display: flex; align-items: center; justify-content: space-between; }
+.sl-tile { position: relative; }
+.sl-tile .sl-tile-adv { position: absolute; top: 6px; right: 6px; }
+
 /* Visual picker (visual.js): pictures of the slice settings' options.
    Stroke icons: --vp-s draws the frame, --vp-p the feature (the accent once
    chosen); never filled by the segments' rule. */

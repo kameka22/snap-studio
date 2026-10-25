@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const V = require("../ui/visual-logic.js");
 const I = require("../ui/slice-icons.js");
+require("../ui/slice-icons-patterns.js"); // adds the patterns to SLICE_ICONS
 
 // The control a list gets.
 assert.strictEqual(V.vpMode(3, 3), "pills");
@@ -15,6 +16,8 @@ assert.strictEqual(V.vpMode(4, 1), "segmented");
 assert.strictEqual(V.vpMode(2, 0), "segmented");
 assert.strictEqual(V.vpMode(5, 0), "select");
 assert.strictEqual(V.vpMode(0, 0), "segmented");
+assert.strictEqual(V.vpMode(4, 0, ["No ironing", "Top surfaces", "Topmost surface", "All solid layer", "x".repeat(10)]), "select", "too long for a row");
+assert.strictEqual(V.vpMode(2, 0, ["By layer", "By object"]), "segmented");
 assert.strictEqual(V.vpColumns(4), 2);
 assert.strictEqual(V.vpColumns(5), 3);
 
@@ -47,6 +50,13 @@ for (const k of ["support_type", "support_style", "support_interface_pattern", "
   shown += vals.length;
 }
 assert.strictEqual(shown, 32, "32 options shown");
+// The pattern lists (#60): every option has Orca's icon.
+for (const k of ["sparse_infill_pattern", "top_surface_pattern", "bottom_surface_pattern", "internal_solid_infill_pattern", "ironing_pattern"]) {
+  const vals = Object.keys(cat.keys[k].enum);
+  assert.ok(vals.length >= 2, k);
+  for (const v of vals) assert.ok(I.SLICE_ICONS[k]?.[v], `icon for ${k}=${v}`);
+}
+assert.strictEqual(Object.keys(I.SLICE_ICONS.sparse_infill_pattern).length, 26);
 for (const s of [...I.SLICE_ICON_SVG]) {
   assert.ok(/^<svg viewBox="[\d. ]+"[^>]*aria-hidden="true" focusable="false">/.test(s), s.slice(0, 60));
   assert.ok(!/\bid=|<defs|<image|<script|\swidth=|\sheight=/.test(s.replace(/<rect[^>]*>/g, "")), "no id, defs, size");
@@ -56,12 +66,25 @@ for (const s of [...I.SLICE_ICON_SVG]) {
 assert.ok(I.SLICE_ICON_UNKNOWN.includes("aria-hidden"));
 const size = fs.statSync(path.join(__dirname, "..", "ui", "slice-icons.js")).size;
 assert.ok(size <= 20 * 1024, `slice-icons.js ${size} bytes, budget 20 KB`);
+const psrc = fs.readFileSync(path.join(__dirname, "..", "ui", "slice-icons-patterns.js"), "utf8");
+assert.ok(psrc.length <= 40 * 1024, `slice-icons-patterns.js ${psrc.length} bytes, budget 40 KB`);
+for (const s of psrc.match(/'<svg[^']*'/g)) {
+  assert.ok(!/\bid=|<defs|<image|<script|url\(#|#[0-9a-f]{6}\b/i.test(s), "pattern icon clean");
+  assert.ok(/aria-hidden="true" focusable="false"/.test(s));
+}
 
-// The settings catalog's "Aligned back" is untranslated in French: the app has its own words.
+// The .po leaves "Aligned back" untranslated: the catalog generator fixes it.
+const catFr = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "ui", "assets", "orca-settings.fr.json"), "utf8"));
+assert.strictEqual(catFr.keys.seam_position.enum.aligned_back, "Alignée à l'arrière");
+// Lists another one copies its options from are complete.
+for (const k of ["bottom_surface_pattern", "internal_solid_infill_pattern"]) assert.deepStrictEqual(Object.keys(cat.keys[k].enum), Object.keys(cat.keys.top_surface_pattern.enum), k);
 const fr = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "ui", "i18n", "fr.json"), "utf8"));
-assert.strictEqual(fr["slice.vp.label.seam_position.aligned_back"], "Alignée à l'arrière");
 // An explanation per option shown, in each language.
 const en = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "ui", "i18n", "en.json"), "utf8"));
-for (const k in I.SLICE_ICONS) for (const v in I.SLICE_ICONS[k]) for (const c of [en, fr]) assert.ok(c[`slice.vp.${k}.${v}`], `slice.vp.${k}.${v}`);
+// (the patterns share theirs: slice.vp.pattern.<value>, slice-adv.js advDesc).
+const PATTERNS = ["sparse_infill_pattern", "top_surface_pattern", "bottom_surface_pattern", "internal_solid_infill_pattern", "ironing_pattern"];
+for (const k in I.SLICE_ICONS) for (const v in I.SLICE_ICONS[k]) for (const c of [en, fr]) {
+  assert.ok(c[`slice.vp.${k}.${v}`] || (PATTERNS.includes(k) && c[`slice.vp.pattern.${v}`]), `explanation for ${k}.${v}`);
+}
 
 console.log("visual: ok");

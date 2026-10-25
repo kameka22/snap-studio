@@ -1142,7 +1142,7 @@
           <select id="s-bed" class="hidden" tabindex="-1"></select>
           <div id="s-bedtemp" class="s-bedtemp"></div>
 
-          <div class="set-section" data-i18n="slice.quality">Quality</div>
+          <div class="set-section sl-sec-adv"><span data-i18n="slice.quality">Quality</span><button class="btn info-btn sl-adv-btn" data-adv="quality" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button></div>
           <div class="sl-layer">
             <div class="sl-layer-head"><span data-i18n="slice.layer_height">Layer height</span><b id="s-layer-val">—</b></div>
             <div id="s-layer-chips" class="sl-chips"></div>
@@ -1165,11 +1165,13 @@
           <div class="sl-adjust">
             <div class="sl-card sl-tile">
               <small data-i18n="slice.infill">Infill</small>
+              <button class="btn info-btn sl-adv-btn sl-tile-adv" data-adv="infill" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
               <b id="s-infill-val">—</b>
               <input type="range" id="s-infill" min="0" max="100" step="5" />
             </div>
             <div class="sl-card sl-tile">
               <small data-i18n="slice.walls">Walls</small>
+              <button class="btn info-btn sl-adv-btn sl-tile-adv" data-adv="walls" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
               <div class="sl-stepper">
                 <button class="btn" data-step="-1" title="Fewer walls" data-i18n-title="slice.walls_less">−</button>
                 <b id="s-walls-val">—</b>
@@ -1211,6 +1213,16 @@
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
               <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
               <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
+            <div class="sl-adv-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M3 5h18v3H3zm0 5.5h18v3H3zM3 16h18v3H3z" opacity=".35"/><path d="M3 5h18v3H3zm0 11h18v3H3z"/></svg></span>
+              <span class="k"><span data-i18n="slice.adv.surfaces">Surfaces</span><small id="s-adv-sum-surfaces" class="sub"></small></span>
+              <button class="btn info-btn sl-adv-btn" data-adv="surfaces" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
+            <div class="sl-adv-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4m7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4m7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4"/></svg></span>
+              <span class="k"><span data-i18n="slice.adv.other">Other</span><small id="s-adv-sum-other" class="sub"></small></span>
+              <button class="btn info-btn sl-adv-btn" data-adv="other" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
           </div>
           <div class="sl-line sl-save-line">
@@ -2011,12 +2023,14 @@
 <script src="segmented-logic.js"></script>
 <script src="segmented.js"></script>
 <script src="slice-icons.js"></script>
+<script src="slice-icons-patterns.js"></script>
 <script src="visual-logic.js"></script>
 <script src="visual.js"></script>
 <script src="stepper-logic.js"></script>
 <script src="stepper.js"></script>
 <script src="engine.js"></script>
 <script src="profiles.js"></script>
+<script src="adv-logic.js"></script>
 <script src="slice-adv.js"></script>
 <script src="speed.js"></script>
 <script src="slice-speed.js"></script>
