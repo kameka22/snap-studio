@@ -20,25 +20,37 @@ function setSelect(el, value) {
 const PK = { sections: [], value: null, onPick: null, foot: null, anchor: null };
 
 function openPicker(anchor, { sections, value, onPick, foot = null, placeholder = "Rechercher" }) {
-  Object.assign(PK, { sections, value, onPick, foot, anchor });
+  closePicker();
+  Object.assign(PK, { sections, value, onPick, foot, anchor, swatch: false, prep: false, back: null });
   const el = $("picker");
+  el.classList.remove("sw-pop");
+  el.setAttribute("role", "dialog");
+  $("picker-search").classList.remove("hidden");
   $("picker-search").value = "";
   $("picker-search").placeholder = placeholder;
   $("picker-foot").classList.toggle("hidden", !foot);
   if (foot) $("picker-foot").textContent = foot.label;
   el.classList.remove("hidden");
   pkRender();
-  // Below the element, or above it when there is no room.
-  const r = anchor.getBoundingClientRect();
-  const w = el.offsetWidth, h = el.offsetHeight;
-  el.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
-  el.style.top = (r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + "px";
+  pkPlace(anchor.getBoundingClientRect());
   requestAnimationFrame(() => $("picker-search").focus());
 }
 
-function closePicker() {
+/* Below the rectangle, or above it when there is no room; inside the window. */
+function pkPlace(r) {
+  const el = $("picker");
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
+  el.style.top = (r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + "px";
+}
+
+/* `refocus`: the focus goes back to what opened the panel (Esc, a pick). */
+function closePicker(refocus = false) {
+  const open = !$("picker").classList.contains("hidden");
   $("picker").classList.add("hidden");
   PK.onPick = null;
+  if (PK.anchor?.hasAttribute("aria-expanded")) PK.anchor.setAttribute("aria-expanded", "false");
+  if (open && refocus && PK.back?.isConnected) PK.back.focus();
 }
 
 function pkRender() {
@@ -69,9 +81,9 @@ $("picker-search").addEventListener("keydown", (e) => {
 });
 $("picker-list").addEventListener("click", (e) => {
   const b = e.target.closest("[data-v]");
-  if (!b) return;
+  if (!b || b.disabled) return;
   const pick = PK.onPick;
-  closePicker();
+  closePicker(PK.swatch);
   pick?.(b.dataset.v);
 });
 $("picker-foot").addEventListener("click", () => PK.foot?.onClick());
@@ -89,7 +101,7 @@ document.addEventListener(
   (e) => {
     if (e.key !== "Escape" || $("picker").classList.contains("hidden")) return;
     e.stopImmediatePropagation();
-    closePicker();
+    closePicker(true);
   },
   true
 );
@@ -100,6 +112,141 @@ function pkPresets(list, sub) {
     { label: tr("picker.system"), items: list.filter((p) => !p.user).map((p) => ({ value: p.name, label: p.name, sub: sub?.(p) })) },
     { label: tr("picker.yours"), items: list.filter((p) => p.user).map((p) => ({ value: p.name, label: p.name, sub: sub?.(p), badge: tr("picker.custom") })) },
   ];
+}
+
+/* ------------------------------------------------------------ head tokens */
+
+/* A head as a chip: its spool's colour, its number. `slot`: the spool read
+   ({ present, kind, color }); `color`, `empty` and `title` override what
+   it gives; `attrs` and `cls` are the caller's; `after` follows the number. */
+function headToken({ h, slot = null, on = false, tag = "button", cls = "", attrs = "", title = null, color, empty, after = "" }) {
+  if (color === undefined) color = slot?.present && slot.color ? slot.color : "";
+  if (empty === undefined) empty = !!slot && !slot.present;
+  if (title == null) title = `T${h}${slot ? (slot.present ? ` · ${[slot.kind, slot.color].filter(Boolean).join(" · ")}` : " · " + tr("printers.empty_tag")) : ""}`;
+  // Loaded but its colour not read: a neutral pattern, not a grey spool.
+  const unknown = !color && !empty && slot?.present;
+  const dot = color ? ` style="background:${esc(color)}"${swEdge(color) ? ' class="edge"' : ""}` : "";
+  return `<${tag} class="sl-token${on ? " on" : ""}${empty ? " is-empty" : ""}${unknown ? " no-colour" : ""}${cls}"${attrs}${title ? ` title="${esc(title)}"` : ""}><i${dot}></i>T${h}${after}</${tag}>`;
+}
+
+/* ------------------------------------------------------------ head swatches */
+
+/* An entry of a head picker (swatch-logic.js swEntries) as a token. */
+function swToken(e, on = false) {
+  // "Automatic": a dashed dot, its words beside or below it.
+  if (e.state === "auto") return `<span class="sl-token sw-auto${on ? " on" : ""}"><i></i>${e.warn ? "<em>⚠</em>" : ""}</span>`;
+  return headToken({
+    h: e.h, tag: "span", on, title: "", color: e.color,
+    empty: e.state === "empty" || e.state === "unavailable",
+    cls: e.state === "unknown" ? " no-colour" : "",
+    after: e.warn ? "<em>⚠</em>" : "",
+  });
+}
+
+/* Its words: material and colour, or why it has none. */
+function swText(e) {
+  if (e.state === "auto") return tr("swatch.auto");
+  if (e.state === "unavailable") return tr("swatch.unavailable");
+  const name = e.color && typeof colorName === "function" ? colorName(e.color) : "";
+  return [e.kind, name].filter(Boolean).join(" · ") || (e.state === "empty" ? tr("swatch.empty") : "—");
+}
+/* A word under a head: why it may not do. `warnTag`: the picker's word for a flagged head. */
+const swTag = (e, warnTag = "") =>
+  e.warn && warnTag ? warnTag : e.state === "empty" ? tr("swatch.empty") : e.state === "unknown" ? tr("swatch.unknown_colour") : "";
+const swName = (e) => (e.state === "auto" ? tr("swatch.auto") : `T${e.h} · ${swText(e)}`);
+
+/* The head popover, in the search picker's shell without its search: a
+   grid of heads, one Tab stop, arrows between them. `at`: the element it
+   opens under, or a point { x, y } (a context menu's); `foot`: an action
+   below the heads ({ label, onClick }); `note`: a line under them;
+   `warnTag`: the word under a flagged head. */
+function openSwatches(at, { entries, value, onPick, foot = null, note = "", label = "", warnTag = "" }) {
+  closePicker();
+  const anchor = at instanceof Element ? at : null;
+  Object.assign(PK, { sections: [], value, onPick, foot, anchor, swatch: true, prep: false, back: anchor || document.activeElement });
+  const el = $("picker");
+  el.classList.add("sw-pop");
+  el.setAttribute("role", "presentation");
+  $("picker-search").classList.add("hidden");
+  $("picker-foot").classList.toggle("hidden", !foot);
+  if (foot) $("picker-foot").textContent = foot.label;
+  const cur = entries.find((e) => e.value === value && !e.disabled) || entries.find((e) => !e.disabled);
+  $("picker-list").innerHTML = `<div class="sw-grid" role="listbox" aria-label="${esc(label || tr("swatch.choose_head"))}">${entries
+    .map((e) => {
+      const on = e.value === value;
+      const tag = swTag(e, warnTag);
+      return `<button type="button" class="sw-opt${on ? " on" : ""}" role="option" aria-selected="${on}" data-v="${esc(e.value)}" tabindex="${e === cur ? 0 : -1}"${e.disabled ? " disabled" : ""} title="${esc(swName(e))}">
+        ${swToken(e, on)}<small>${esc(swText(e))}</small>${tag ? `<span class="sw-tag">${esc(tag)}</span>` : ""}</button>`;
+    })
+    .join("")}</div>${note ? `<div class="sw-note">${esc(note)}</div>` : ""}`;
+  el.classList.remove("hidden");
+  pkPlace(anchor ? anchor.getBoundingClientRect() : { left: at.x, top: at.y, bottom: at.y });
+  anchor?.setAttribute("aria-expanded", "true");
+  requestAnimationFrame(() => $("picker-list").querySelector('.sw-opt[tabindex="0"]')?.focus());
+}
+
+// In the head popover: arrows, Home and End move (the foot's action last),
+// Tab leaves it.
+$("picker").addEventListener("keydown", (e) => {
+  if (!PK.swatch) return;
+  if (e.key === "Tab") return closePicker(true);
+  if (!(e.key in SW_KEYS)) return;
+  const items = [...$("picker").querySelectorAll(".sw-opt, #picker-foot:not(.hidden)")];
+  const i = items.indexOf(document.activeElement);
+  const j = swMove(items, i < 0 ? 0 : i, e.key);
+  if (j < 0) return;
+  e.preventDefault();
+  items.forEach((b, k) => (b.tabIndex = k === j ? 0 : -1));
+  items[j].focus();
+});
+
+/* A head picker over a hidden <select>, which stays the source of truth:
+   a field-like button shows the chosen head (its spool's colour and
+   material), and opens the head popover. `getChoices()`: the heads
+   (swHeads); `auto`: the "Automatic" entry ({ value, warn }, or a function
+   giving it); `base`: the value of head 0; `warnTag`: the word under a
+   flagged head. Values are written as they are, never converted. */
+function swatchSelect(sel, getChoices, { auto = null, base = 0, label = "", warnTag = "" } = {}) {
+  const key = sel.dataset.k || sel.id;
+  let btn = sel.nextElementSibling;
+  if (!btn?.classList.contains("sw-trigger")) {
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "field sw-trigger";
+    btn.dataset.sw = key;
+    btn.setAttribute("aria-haspopup", "listbox");
+    btn.setAttribute("aria-expanded", "false");
+    sel.after(btn);
+  }
+  sel.classList.add("hidden");
+  const entries = () => swEntries(getChoices(), { value: sel.value, auto: typeof auto === "function" ? auto() : auto, base });
+  const refresh = () => {
+    const list = entries();
+    const cur = list.find((e) => e.value === sel.value) || list[0];
+    btn.disabled = sel.disabled;
+    if (!cur) return (btn.innerHTML = "");
+    btn.innerHTML = `${swToken(cur)}<span class="sw-mat">${esc(swText(cur))}</span><span class="sw-caret">▾</span>`;
+    btn.setAttribute("aria-label", `${label || tr("swatch.choose_head")}: ${swName(cur)}`);
+  };
+  btn.onclick = () => {
+    if (PK.anchor === btn && !$("picker").classList.contains("hidden")) return closePicker(true);
+    openSwatches(btn, {
+      entries: entries(),
+      value: sel.value,
+      label,
+      warnTag,
+      onPick: (v) => {
+        setSelect(sel, v);
+        // The panel may have been drawn again: its new button takes the focus.
+        if (!btn.isConnected) requestAnimationFrame(() => document.querySelector(`.sw-trigger[data-sw="${CSS.escape(key)}"]`)?.focus());
+      },
+    });
+  };
+  sel.addEventListener("change", refresh);
+  // Locked while slicing like the select: the button follows.
+  new MutationObserver(refresh).observe(sel, { attributes: true, attributeFilter: ["disabled"] });
+  refresh();
+  return { refresh, close: () => PK.anchor === btn && closePicker() };
 }
 
 /* ------------------------------------------------------------ printers */
@@ -352,10 +499,8 @@ function slTokens() {
       const slot = SL.slots.find((s) => s.index === h);
       const empty = slot && !slot.present;
       const clash = slot?.present && fil?.kind && slot.kind && fil.kind.toUpperCase() !== slot.kind.toUpperCase();
-      const color = slot?.present && slot.color ? slot.color : "";
       const title = `T${h}${slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : ""}${clash ? " · " + tr("slice.material_clash") : ""}`;
-      return `<span class="sl-token ro${+sel.value === h ? " on" : ""}${empty ? " is-empty" : ""}"
-        title="${esc(title)}"><i style="${color ? `background:${esc(color)}` : ""}"></i>T${h}${clash ? "<em>⚠</em>" : ""}</span>`;
+      return headToken({ h, slot, tag: "span", cls: " ro", on: +sel.value === h, empty, title, after: clash ? "<em>⚠</em>" : "" });
     }).join("");
   });
 }

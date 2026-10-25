@@ -2130,5 +2130,14 @@
   "whatsnew.error": "The page could not be loaded",
   "whatsnew.error_sub": "Check the internet connection, then try again. The changelog lists every change too.",
   "whatsnew.retry": "Try Again",
-  "whatsnew.changelog": "Open the Changelog"
+  "whatsnew.changelog": "Open the Changelog",
+  "swatch.auto": "Automatic",
+  "swatch.empty": "empty",
+  "swatch.unknown_colour": "colour unknown",
+  "swatch.unavailable": "not on this printer",
+  "swatch.choose_head": "Choose a head",
+  "swatch.no_bond": "does not bond with another material of the plate",
+  "swatch.connect": "Connect the printer to see its spools.",
+  "prepare.printer": "Printer whose spools colour the list",
+  "swatch.tower_mixed": "the tower stays mixed"
 }
