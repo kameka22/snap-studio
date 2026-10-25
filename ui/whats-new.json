@@ -1,25 +1,25 @@
 {
-  "version": "0.14",
+  "version": "0.15",
   "highlights": [
     {
-      "id": "explore",
-      "en": "Explore",
-      "fr": "Explorer"
+      "id": "prime-tower",
+      "en": "Prime tower",
+      "fr": "Tour d’amorçage"
     },
     {
-      "id": "colours",
-      "en": "Colour modes",
-      "fr": "Modes de couleur"
+      "id": "slice-settings",
+      "en": "Slice settings",
+      "fr": "Réglages de découpe"
     },
     {
-      "id": "icon",
-      "en": "New icon",
-      "fr": "Nouvelle icône"
+      "id": "spool-colours",
+      "en": "Spool colours",
+      "fr": "Couleurs des bobines"
     },
     {
-      "id": "create",
-      "en": "Create",
-      "fr": "Créer"
+      "id": "camera-close",
+      "en": "Camera",
+      "fr": "Caméra"
     }
   ]
 }

@@ -1,6 +1,99 @@
 {
-  "current": "0.14",
+  "current": "0.15",
   "versions": [
+    {
+      "version": "0.15",
+      "tagline": {
+        "en": "The prime tower on the plate, and every slice setting at hand.",
+        "fr": "La tour d’amorçage sur le plateau, et tous les réglages de découpe sous la main."
+      },
+      "features": [
+        {
+          "id": "prime-tower",
+          "icon": "cube",
+          "color": "#7d7aff",
+          "edge": "linear-gradient(90deg, #5856d6, #0a84ff)",
+          "image": "../assets/prime-tower.webp",
+          "tag": { "en": "Prepare", "fr": "Préparer" },
+          "chip": { "en": "Prime tower", "fr": "Tour d’amorçage" },
+          "title": { "en": "See the prime tower before slicing", "fr": "La tour d’amorçage visible avant la découpe" },
+          "text": {
+            "en": "Turn the prime tower on in Prepare, off by default: it appears on the plate in a free corner, and you move and turn it like any part.",
+            "fr": "Activez la tour d’amorçage dans Préparer, désactivée par défaut : elle apparaît sur le plateau dans un coin libre, et se déplace et pivote comme une pièce."
+          },
+          "alt": { "en": "The prime tower on the plate in Prepare", "fr": "La tour d’amorçage sur le plateau dans Préparer" }
+        },
+        {
+          "id": "slice-settings",
+          "icon": "sliders",
+          "color": "#64d2ff",
+          "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
+          "image": "../assets/slice-settings.webp",
+          "position": "100% 75%",
+          "tag": { "en": "Slicing", "fr": "Découpe" },
+          "chip": { "en": "Slice settings", "fr": "Réglages de découpe" },
+          "title": { "en": "More settings, shown in pictures", "fr": "Plus de réglages, en images" },
+          "text": {
+            "en": "Quality, infill, walls and surfaces can now be tuned from the slice sheet, and styles such as supports or seams are picked from pictures.",
+            "fr": "Qualité, remplissage, parois et surfaces se règlent maintenant depuis la fenêtre de découpe, et les styles comme les supports ou la couture se choisissent en images."
+          },
+          "alt": { "en": "Surface patterns chosen from pictures", "fr": "Motifs de surface choisis en images" }
+        },
+        {
+          "id": "spool-colours",
+          "icon": "spool",
+          "color": "#30d158",
+          "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
+          "image": "../assets/spool-colours.webp",
+          "position": "70% 50%",
+          "tag": { "en": "Heads", "fr": "Têtes" },
+          "chip": { "en": "Spool colours", "fr": "Couleurs des bobines" },
+          "title": { "en": "Pick a head by its colour", "fr": "Choisissez une tête par sa couleur" },
+          "text": {
+            "en": "Wherever you choose a head, it shows its spool’s colour and material instead of a plain name.",
+            "fr": "Partout où vous choisissez une tête, elle montre la couleur et la matière de sa bobine plutôt qu’un simple nom."
+          },
+          "alt": { "en": "Heads shown with their spool’s colour", "fr": "Les têtes avec la couleur de leur bobine" }
+        },
+        {
+          "id": "camera-close",
+          "icon": "camera",
+          "color": "#ff375f",
+          "edge": "linear-gradient(90deg, #ff2d55, #ff9f0a)",
+          "image": "../assets/camera-close.webp",
+          "tag": { "en": "Camera", "fr": "Caméra" },
+          "chip": { "en": "Camera", "fr": "Caméra" },
+          "title": { "en": "A camera that steps aside", "fr": "Une caméra qui s’efface" },
+          "text": {
+            "en": "A close button turns the camera off, and a click beside the full-size picture puts it back where it was.",
+            "fr": "Un bouton de fermeture éteint la caméra, et un clic à côté de l’image en plein écran la remet à sa place."
+          },
+          "alt": { "en": "The printer’s camera in full size", "fr": "La caméra de l’imprimante en plein écran" }
+        }
+      ],
+      "small": [
+        {
+          "icon": "shield", "color": "#ff9f0a",
+          "title": { "en": "Prime tower and materials", "fr": "Tour d’amorçage et matières" },
+          "text": { "en": "A warning when the tower would mix materials that do not stick together, with a fix in one click.", "fr": "Un avertissement quand la tour mélangerait des matières qui n’adhèrent pas entre elles, avec une correction en un clic." }
+        },
+        {
+          "icon": "explore", "color": "#0a84ff",
+          "title": { "en": "Language with flags", "fr": "Langue avec drapeaux" },
+          "text": { "en": "Pick the app’s language by its flag, in Settings and on the welcome screen.", "fr": "Choisissez la langue de l’app par son drapeau, dans les Réglages et à l’accueil." }
+        },
+        {
+          "icon": "tabs", "color": "#bf5af2",
+          "title": { "en": "Clearer choices", "fr": "Des choix plus clairs" },
+          "text": { "en": "Short lists become buttons side by side, and the AI modes say what each one does.", "fr": "Les listes courtes deviennent des boutons côte à côte, et les modes de l’IA disent ce que fait chacun." }
+        },
+        {
+          "icon": "sliders", "color": "#64d2ff",
+          "title": { "en": "Easier numbers", "fr": "Des nombres plus simples" },
+          "text": { "en": "Number fields get larger arrows to step a value, or a double-click to type it.", "fr": "Les champs numériques ont de plus grandes flèches pour changer la valeur, ou un double-clic pour la saisir." }
+        }
+      ]
+    },
     {
       "version": "0.14",
       "date": "2026-10-23",
@@ -9,6 +102,7 @@
         "en": "The whole Snapmaker ecosystem one click away, and a plate that thinks in colours.",
         "fr": "Tout l’écosystème Snapmaker à portée de clic, et un plateau qui pense en couleurs."
       },
+      "summary": { "en": "Explore, colour modes, a new icon, Create", "fr": "Explorer, modes de couleur, nouvelle icône, Créer" },
       "features": [
         {
           "id": "explore",

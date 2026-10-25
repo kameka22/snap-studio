@@ -10,7 +10,8 @@
    The current version is the full page at the top. A previous version that
    has features of its own (0.13) gets the same full section right below it,
    collapsed to a header row until opened (or landed on by its anchor); the
-   others are entries of the timeline. */
+   others are entries of the timeline. A version not released yet has no
+   "date": its hero says it is coming; give it its date on release. */
 const REPO_URL = "https://github.com/kameka22/snap-studio";
 const CHANGELOG_URL = `${REPO_URL}/blob/main/CHANGELOG.md`;
 const LANG_KEY = "snapstudio.site.lang";
@@ -41,6 +42,7 @@ const ICONS = {
   send: "M3 20.5 21 12 3 3.5V10l12 2-12 2z",
   shield: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5zm-1.2 13.6-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4z",
   mirror: "M11 2h2v20h-2zM9 6v12H3zm6 0 6 12h-6z",
+  sliders: "M3 6h10v2H3zm14 0h4v2h-4zm-2-2h2v6h-2zM3 16h4v2H3zm8 0h10v2H11zm-2-2h2v6H9z",
 };
 const CHEVRON = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 5.4 10 4l8 8-8 8-1.4-1.4 6.6-6.6z"/></svg>';
 
@@ -80,7 +82,7 @@ function heroHtml(v) {
   const chips = chipsHtml(v);
   return `<section class="wn-hero" id="v${esc(v.version)}">
     <div class="wn-icon"><img src="../assets/icon-512.png" alt="${esc(t("wn.icon_alt"))}" width="128" height="128"></div>
-    <div class="wn-eyebrow"><i></i>${esc(t("wn.eyebrow", { date: fmtDate(v.date) }))}</div>
+    <div class="wn-eyebrow"><i></i>${esc(v.date ? t("wn.eyebrow", { date: fmtDate(v.date) }) : t("wn.eyebrow.next"))}</div>
     <h1>Snap Studio <em>${esc(v.version)}</em></h1>
     <p class="tag">${esc(L(v.tagline))}</p>
     <nav class="wn-jump">${chips}</nav>
