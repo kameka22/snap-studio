@@ -985,36 +985,14 @@ $("cam-img").addEventListener("error", () => {
 });
 // The camera's switch: on, the live image; off, nothing is fetched.
 $("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart() : camStop()));
-// Double-click: the image takes the full width of the printer pane.
 /* Enlarge the camera: its button (shown on hover). */
-function camToggleSize(big = !$("cam-box").classList.contains("big")) {
-  $("cam-box").classList.toggle("big", big);
+function camToggleSize() {
+  const big = $("cam-box").classList.toggle("big");
   $("cam-size").title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
 }
-/* A double-click: one size up each time — enlarged, then full size — and
-   from full size back to the normal size. Not in the pinned window, whose
-   click leads to the printer's page. */
-function camNextSize() {
-  if (CAM.full) {
-    camToggleSize(false);
-    camFull(false);
-  } else if ($("cam-box").classList.contains("big")) camFull(true);
-  else camToggleSize(true);
-}
-// Two clicks close in time and place: WebKit's dblclick gets lost on a
-// picture replaced several times a second.
-let camLastClick = null;
-$("cam-box").addEventListener("click", (e) => {
-  if (e.target.closest(".cam-bar") || CAM.pinned) return (camLastClick = null);
-  const now = performance.now(), last = camLastClick;
-  if (last && now - last.t < 400 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 8) {
-    camLastClick = null;
-    camNextSize();
-  } else camLastClick = { t: now, x: e.clientX, y: e.clientY };
-});
-// Its ✕, with the other buttons (the pinned window has its own in its header).
+// Its ✕, top right (the pinned window has its own in its header).
 $("cam-close").addEventListener("click", camStop);
-$("cam-size").addEventListener("click", () => camToggleSize());
+$("cam-size").addEventListener("click", camToggleSize);
 $("cam-full-btn").addEventListener("click", () => camFull(!CAM.full));
 $("cam-pin").addEventListener("click", () => camPin(!CAM.pinned));
 $("cam-pip-unpin").addEventListener("click", () => camPin(false));

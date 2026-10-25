@@ -4309,8 +4309,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .cam-box:hover .cam-bar, .cam-bar:focus-within { opacity: 1; pointer-events: auto; }
 /* The ✕, top right, in the same style. */
 .cam-bar.cam-bar-top { top: 0; bottom: auto; left: auto; padding: 6px 8px 18px 18px; background: radial-gradient(farthest-corner at top right, rgba(0, 0, 0, 0.5), transparent 70%); }
-/* A frame replaced every 200 ms is not a picture to drag. */
-.cam-box img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
 .cam-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: #fff; cursor: pointer; }
 .cam-btn:hover { background: rgba(255, 255, 255, 0.16); }
 .cam-btn svg { width: 20px; height: 20px; fill: currentColor; }
