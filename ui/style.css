@@ -4313,7 +4313,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .cam-btn .shrink, .cam-box.big .cam-btn .grow { display: none; }
 .cam-box.big .cam-btn .shrink { display: block; }
 .cam-btn.on { background: rgba(255, 255, 255, 0.22); }
-.cam-btn:focus-visible, .cam-pip-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+.cam-btn:focus-visible, .cam-pip-btn:focus-visible, .cam-close:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+/* The camera's ✕: always shown, at every size but in the pinned window,
+   whose header has its own. */
+.cam-close { position: absolute; top: 8px; right: 8px; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.55); color: #fff; cursor: pointer; }
+.cam-close:hover { background: rgba(0, 0, 0, 0.75); }
+.cam-close svg { width: 15px; height: 15px; fill: currentColor; }
+.cam-pip .cam-close { display: none; }
 /* The printer does not answer: said over the camera, its last image hidden. */
 .cam-off { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: #111; color: rgba(255, 255, 255, 0.78); font-size: 12px; text-align: center; }
 .cam-off svg { width: 26px; height: 26px; fill: currentColor; opacity: 0.7; }

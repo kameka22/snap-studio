@@ -31,6 +31,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   patterns from pictures, ironing) and Other (print sequence, spiral vase,
   fuzzy skin, skirt, travel). Settings that detail another (ironing, fuzzy
   skin, overhang speeds, skirt) show only with it.
+- **Camera close button**: the printer camera has a ✕ in its corner at
+  every size (on the printer page, enlarged, over the 3D view, full size;
+  the pinned window keeps its own), which turns it off. In full size, a
+  click beside the picture, in the margin or the dark bands around it,
+  gives it back to where it came from, as Esc does.
 
 ### Changed
 - **Head pickers show the spools**: in the slice sheet's advanced settings
