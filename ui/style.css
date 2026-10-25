@@ -4307,6 +4307,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    button on the right (a double-click still works). */
 .cam-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; gap: 2px; padding: 18px 8px 6px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); opacity: 0; transition: opacity 150ms ease; pointer-events: none; }
 .cam-box:hover .cam-bar, .cam-bar:focus-within { opacity: 1; pointer-events: auto; }
+/* The ✕, top right, in the same style. */
+.cam-bar.cam-bar-top { top: 0; bottom: auto; left: auto; padding: 6px 8px 18px 18px; background: radial-gradient(farthest-corner at top right, rgba(0, 0, 0, 0.5), transparent 70%); }
 .cam-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: #fff; cursor: pointer; }
 .cam-btn:hover { background: rgba(255, 255, 255, 0.16); }
 .cam-btn svg { width: 20px; height: 20px; fill: currentColor; }
@@ -4320,7 +4322,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Full size: over the content area (not the system window), the image whole. */
 .cam-full { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.92); }
 .cam-full .cam-box { width: 100%; height: 100%; max-width: none; aspect-ratio: auto; margin: 0; background: transparent; }
-.cam-full .cam-btn#cam-size, .cam-pip .cam-btn#cam-size, .cam-pip .cam-btn#cam-pin { display: none; }
+/* The pinned window's header has its own ✕. */
+.cam-full .cam-btn#cam-size, .cam-pip .cam-btn#cam-size, .cam-pip .cam-btn#cam-pin, .cam-pip .cam-bar-top { display: none; }
 .cam-full .cam-bar { opacity: 1; pointer-events: auto; }
 /* Pinned: a small window over every screen, under the sheets (80) and the
    toasts (90), in a corner of the window. */

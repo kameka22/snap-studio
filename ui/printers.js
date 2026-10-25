@@ -985,18 +985,30 @@ $("cam-img").addEventListener("error", () => {
 });
 // The camera's switch: on, the live image; off, nothing is fetched.
 $("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart() : camStop()));
-// Double-click: the image takes the full width of the printer pane.
-/* Enlarge the camera: its button (shown on hover) or a double-click. */
+/* Enlarge the camera: its button (shown on hover). */
 function camToggleSize() {
   const big = $("cam-box").classList.toggle("big");
   $("cam-size").title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
 }
-$("cam-box").addEventListener("dblclick", (e) => !e.target.closest(".cam-bar") && !CAM.full && !CAM.pinned && camToggleSize());
+// Its ✕, top right (the pinned window has its own in its header).
+$("cam-close").addEventListener("click", camStop);
 $("cam-size").addEventListener("click", camToggleSize);
 $("cam-full-btn").addEventListener("click", () => camFull(!CAM.full));
 $("cam-pin").addEventListener("click", () => camPin(!CAM.pinned));
 $("cam-pip-unpin").addEventListener("click", () => camPin(false));
 $("cam-pip-close").addEventListener("click", camStop);
+// Full size: a click beside the picture — the margin, or the bands left
+// around the image drawn to fit — gives it back, as Esc does. No frame yet
+// or offline: the whole box is the camera, only the margin does.
+$("cam-full").addEventListener("click", (e) => {
+  if (!CAM.full || e.target.closest(".cam-bar")) return;
+  if (e.target === $("cam-full")) return camFull(false);
+  const img = $("cam-img");
+  if (CAM.offline || img.classList.contains("hidden") || !img.naturalWidth) return;
+  const r = img.getBoundingClientRect();
+  const pic = camPictureRect(r.width, r.height, img.naturalWidth, img.naturalHeight);
+  if (!camInside(pic, e.clientX - r.left, e.clientY - r.top)) camFull(false);
+});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && CAM.full && !document.querySelector(".modal:not(.hidden)")) {
     e.stopPropagation();
