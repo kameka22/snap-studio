@@ -229,6 +229,10 @@ function advOverrides() {
     delete o.support_filament;
     delete o.support_interface_filament;
   }
+  // A setting hidden because the one it details is off (ADV_WHEN: ironing's
+  // details without ironing…) is neither sent nor counted; SL.adv keeps it
+  // for when that setting is on again.
+  for (const k in o) if (ADV_WHEN[k] && !ADV_WHEN[k]()) delete o[k];
   for (const k in o) o[k] = String(o[k]);
   return o;
 }
@@ -237,7 +241,7 @@ const ADV_TREE_ALL = ["tree_support_branch_angle", "tree_support_branch_angle_or
 function advCatKeysAll(cat) {
   return ADV_CATS[cat].groups.flatMap((g) => (typeof g.keys === "function" ? ADV_TREE_ALL : g.keys));
 }
-const advCountOf = (cat) => advCatKeysAll(cat).filter((k) => k in SL.adv).length;
+const advCountOf = (cat) => advCatKeysAll(cat).filter((k) => k in SL.adv && (!ADV_WHEN[k] || ADV_WHEN[k]())).length;
 /* The advanced differences, for the summary: not the tower's switch,
    which is on the sheet. */
 function advCount() {
@@ -294,7 +298,9 @@ function advLabel(k, v = advVal(k)) {
   const def = ADV.schema?.keys?.[k];
   if (v == null || v === "") return "";
   if (ADV_FILAMENT.has(k)) return +v > 0 ? `T${+v - 1}` : tr("slice.adv.default_head");
-  if (def?.enum) return advOptLabel(k, v);
+  // A list's option by its name; a number with suggested values (an
+  // anchor length) keeps its unit when it is not one of them.
+  if (def?.enum && (def.type === "enum" || v in def.enum)) return advOptLabel(k, v);
   if (def?.type === "bool") return tr(String(v) === "1" ? "common.yes" : "common.no");
   const unit = def?.unit || ADV_UNITS[k];
   return `${v}${unit && !String(v).endsWith("%") ? " " + unit : ""}`;
