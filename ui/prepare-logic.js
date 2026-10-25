@@ -34,9 +34,11 @@ function plGroups(objects, stateOf) {
 const plSliced = (objects, stateOf) => objects.filter((o) => stateOf(o) === "in");
 
 /* Slider bounds and steps of an inspector field. `step` is the slider's
-   own grain, `fine` the wheel / arrow step and `coarse` the same with ⇧. */
-function plRange(kind, bed, axis = 0) {
+   own grain, `fine` the wheel / arrow step and `coarse` the same with ⇧.
+   A setting ("purge": the prime tower's volume) brings its bounds, `lim`. */
+function plRange(kind, bed, axis = 0, lim = null) {
   if (kind === "pos") return { min: 0, max: axis ? bed.d : bed.w, step: 0.5, fine: 1, coarse: 10 };
+  if (kind === "purge") return { min: lim?.min ?? 15, max: lim?.max ?? 90, step: 1, fine: 1, coarse: 5 };
   if (kind === "rot") return { min: -180, max: 180, step: 1, fine: 1, coarse: 15 };
   return { min: 10, max: 400, step: 1, fine: 1, coarse: 10 };
 }
@@ -60,8 +62,8 @@ const plWrapDeg = (a) => {
    step lands on the 15 degree notches. A value already beyond the bounds
    (a scale typed at 2540 %, an object parked beside the bed) just takes
    the step: clamping it would throw it back to the bound in one notch. */
-function plNudge(kind, v, dir, coarse, bed, axis = 0) {
-  const r = plRange(kind, bed, axis);
+function plNudge(kind, v, dir, coarse, bed, axis = 0, lim = null) {
+  const r = plRange(kind, bed, axis, lim);
   const s = coarse ? r.coarse : r.fine;
   let x = coarse ? (dir > 0 ? Math.floor(v / s + 1e-9) + 1 : Math.ceil(v / s - 1e-9) - 1) * s : v + dir * s;
   x = Math.round(x * 100) / 100;

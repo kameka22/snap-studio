@@ -1326,6 +1326,12 @@ const PF = {
   "p-sx": { kind: "scale", get: (o) => o.scale[0] * 100, put: (o, v) => (o.scale = [Math.max(1, v) / 100, o.scale[1], o.scale[2]]) },
   "p-sy": { kind: "scale", get: (o) => o.scale[1] * 100, put: (o, v) => (o.scale = [o.scale[0], Math.max(1, v) / 100, o.scale[2]]) },
   "p-sz": { kind: "scale", get: (o) => o.scale[2] * 100, put: (o, v) => (o.scale = [o.scale[0], o.scale[1], Math.max(1, v) / 100]) },
+  // The prime tower's (prepare-tower.js): its corner, its turn, and its
+  // prime volume — a setting, the slice sheet's, not an undo step.
+  "p-tx": { kind: "pos", axis: 0, tower: true, get: (t) => t.x, put: (t, v) => prTowerMove(v - t.x, 0) },
+  "p-ty": { kind: "pos", axis: 1, tower: true, get: (t) => t.y, put: (t, v) => prTowerMove(0, v - t.y) },
+  "p-trot": { kind: "rot", tower: true, get: (t) => t.rot || 0, put: (t, v) => prTowerTurn(v) },
+  "p-tvol": { kind: "purge", tower: true, setting: true, get: () => prTowerNum("prime_volume", 45), put: (t, v) => prTowerSetVolume(v), lim: () => prTowerVolumeRange() },
 };
 const pfText = (f, v) => {
   const r = Math.round(v * 10) / 10;
@@ -1343,25 +1349,7 @@ function prRenderProps() {
   const o = sel[0];
   $("p-insp-name").textContent = o.name;
   $("p-insp-name").title = o.name;
-  for (const [id, f] of Object.entries(PF)) {
-    const v = f.get(o);
-    if (document.activeElement !== f.el) f.el.value = Math.round(v * 10) / 10;
-    // Not touched while sliding: the browser would drop the drag.
-    if (!f.sliding) {
-      const r = plRange(f.kind, PR.bed, f.axis);
-      f.range.min = r.min;
-      f.range.max = r.max;
-      f.range.step = r.step;
-      f.range.value = Math.min(r.max, Math.max(r.min, v));
-    }
-    f.out.textContent = pfText(f, v);
-    const typing = PRUI.typing.has(id) || !!f.temp;
-    f.row.classList.toggle("typing", typing);
-    f.mode.innerHTML = PRUI.typing.has(id) ? PR_ICON.slider : PR_ICON.keys;
-    f.mode.title = tr(PRUI.typing.has(id) ? "prepare.mode.slider" : "prepare.mode.text");
-    f.mode.setAttribute("aria-label", f.mode.title);
-    f.range.setAttribute("aria-label", f.row.querySelector(".k").textContent);
-  }
+  for (const [id, f] of Object.entries(PF)) if (!f.tower) prRenderField(id, f, f.get(o));
   // Scale: one slider (proportions kept) or three, X, Y, Z, free. Split
   // when asked for (remembered) and always for a scale not uniform.
   const split = plScaleSplit(o.scale, PRUI.split);
@@ -1380,6 +1368,27 @@ function prRenderProps() {
   $("p-dims").textContent = `${dims.join(" × ")} mm${o.plate > 1 ? " · " + tr("prepare.file_plate", { n: o.plate }) : ""}`;
 }
 
+/* One inspector field: its slider (bounds, value), its typed value, its
+   mode. */
+function prRenderField(id, f, v) {
+  if (document.activeElement !== f.el) f.el.value = Math.round(v * 10) / 10;
+  // Not touched while sliding: the browser would drop the drag.
+  if (!f.sliding) {
+    const r = plRange(f.kind, PR.bed, f.axis, f.lim?.());
+    f.range.min = r.min;
+    f.range.max = r.max;
+    f.range.step = r.step;
+    f.range.value = Math.min(r.max, Math.max(r.min, v));
+  }
+  f.out.textContent = pfText(f, v);
+  const typing = PRUI.typing.has(id) || !!f.temp;
+  f.row.classList.toggle("typing", typing);
+  f.mode.innerHTML = PRUI.typing.has(id) ? PR_ICON.slider : PR_ICON.keys;
+  f.mode.title = tr(PRUI.typing.has(id) ? "prepare.mode.slider" : "prepare.mode.text");
+  f.mode.setAttribute("aria-label", f.mode.title);
+  f.range.setAttribute("aria-label", f.row.querySelector(".k").textContent);
+}
+
 /* ⇧ held: no magnetic notches while sliding a rotation. */
 let prShift = false;
 addEventListener("keydown", (e) => (prShift = e.shiftKey), true);
@@ -1393,7 +1402,10 @@ function prBindField(id) {
   f.out = f.row.querySelector(".p-val");
   f.mode = f.row.querySelector(".p-mode");
   const { el, range } = f;
-  const target = () => PR.objects.find((x) => PR.sel.has(x.id));
+  // The selected object, or the prime tower for its fields.
+  const target = () => (f.tower ? (PR.towerSel && PR.tower.x != null ? PR.tower : null) : PR.objects.find((x) => PR.sel.has(x.id)));
+  // A setting is not an undo step: the plate's history holds placements.
+  const remember = (snapshot) => !f.setting && prRemember(snapshot);
   const apply = (v, commit) => {
     const o = target();
     if (!o || !isFinite(v)) return;
@@ -1407,11 +1419,14 @@ function prBindField(id) {
     }
   };
   // Typed value: live, one undo step per commit, Esc puts it back.
-  let before = null;
-  el.addEventListener("focus", () => (before = prSnap()));
+  let before = null, setting = null;
+  el.addEventListener("focus", () => {
+    before = prSnap();
+    if (f.setting && target()) setting = f.get(target());
+  });
   el.addEventListener("input", () => apply(parseFloat(String(el.value).replace(",", ".")), false));
   el.addEventListener("change", () => {
-    if (before) prRemember(before);
+    if (before) remember(before);
     before = prSnap();
     apply(parseFloat(String(el.value).replace(",", ".")), true);
   });
@@ -1420,7 +1435,9 @@ function prBindField(id) {
     if (e.key !== "Escape") return;
     e.preventDefault();
     e.stopPropagation();
-    if (before) {
+    if (f.setting) {
+      if (setting != null && target()) f.put(target(), setting);
+    } else if (before) {
       const ids = new Set(PR.sel);
       prUnsnap(before);
       PR.sel = new Set([...ids].filter((i) => PR.objects.some((o) => o.id === i)));
@@ -1457,7 +1474,7 @@ function prBindField(id) {
   });
   range.addEventListener("change", () => {
     f.sliding = false;
-    if (slide) prRemember(slide);
+    if (slide) remember(slide);
     slide = null;
     prSave();
     prRenderInspector();
@@ -1475,9 +1492,9 @@ function prBindField(id) {
     const o = target();
     if (!o) return;
     const now = Date.now();
-    if (now - at > 700) prRemember();
+    if (now - at > 700) remember();
     at = now;
-    f.put(o, plNudge(f.kind, f.get(o), dir, coarse, PR.bed, f.axis));
+    f.put(o, plNudge(f.kind, f.get(o), dir, coarse, PR.bed, f.axis, f.lim?.()));
     prSave();
     prRenderInspector();
     prSchedule();

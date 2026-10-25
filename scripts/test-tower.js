@@ -55,6 +55,18 @@ for (const [heads, w, d, x0] of [[2, 38.3, 38.4, -9.7], [3, 46.8, 45.0, -9.7], [
   assert.ok(e.d >= d - 0.5 && e.d <= d + 3, `rib depth, ${heads} heads: ${e.d} vs ${d}`);
   assert.ok(e.x0 <= x0 + 0.5 && e.x0 >= x0 - 2, `rib margin: ${e.x0} vs ${x0}`);
 }
+// Less purge (Prepare's prime volume slider, down to 15 mm³): a smaller
+// tower, the estimate still never smaller than the real one.
+for (const [heads, volume, w, d, real] of [
+  [2, 15, 30.6, 28.0, 4.1], [2, 20, 32.3, 31.4, 4.7], [2, 30, 35.7, 34.7, 6.5],
+  [4, 15, 40.8, 37.8, 11.3], [4, 20, 43.3, 41.4, 13.1], [4, 30, 47.3, 45.0, 18.5],
+]) {
+  const rib = T.ptEstimate({ heads, volume, width: 35, brim: 5, wall: "rib", ribExtra: 8, ribWidth: 8, spacing: 1.2 });
+  assert.ok(rib.w >= w - 0.5 && rib.w <= w + 3 && rib.d >= d - 0.5 && rib.d <= d + 3, `rib, ${heads} heads, ${volume} mm³: ${rib.w} × ${rib.d} vs ${w} × ${d}`);
+  const plain = T.ptEstimate({ heads, volume, width: 40, brim: 0, spacing: 1.2 });
+  assert.ok(plain.d >= real - 0.2 && plain.d <= real + 1.5, `plain, ${heads} heads, ${volume} mm³: ${plain.d} vs ${real}`);
+}
+assert.ok(u1(2).w > T.ptEstimate({ heads: 2, width: 35, volume: 15, brim: 5, wall: "rib", ribExtra: 8, ribWidth: 8, spacing: 1.2 }).w, "less purge, smaller");
 assert.strictEqual(T.ptEstimate({ heads: 2, height: 42.4 }).h, 42.4, "as tall as the tallest part");
 
 // The sliced box replaces it as it is.

@@ -2238,7 +2238,6 @@
   "slice.vp.pattern.monotonic": "Lignes posées dans un seul ordre : surface lisse et régulière",
   "slice.vp.pattern.monotonicline": "Monotone, en une seule ligne : le plus lisse",
   "prepare.tower": "Tour d’amorçage",
-  "prepare.tower.select": "Sélectionner",
   "prepare.tower.why.single": "Une seule tête imprime ce plateau",
   "prepare.tower.why.by_object": "Impression objet par objet : pas de tour",
   "prepare.tower.size": "Tour d’amorçage {size} mm",
@@ -2253,5 +2252,8 @@
   "slice.tower.place.overlap": "La tour d’amorçage chevauche une pièce : le moteur refuse un tel plateau.",
   "slice.tower.place.off_plate": "La tour d’amorçage sort du plateau : ramenez-la avant de trancher.",
   "prepare.tower.dims": "{size} mm",
-  "prepare.tower.dims_est": "{size} mm, estimée"
+  "prepare.tower.dims_est": "{size} mm, estimée",
+  "prepare.tower.size_title": "Taille",
+  "prepare.tower.volume": "Volume d’amorçage",
+  "prepare.tower.vol_low": "Moins de purge que le profil : risque de couleurs mélangées au changement de tête"
 }

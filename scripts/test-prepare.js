@@ -66,6 +66,14 @@ assert.strictEqual(L.plNudge("scale", 10, -1, true, bed), 10);
 assert.strictEqual(L.plNudge("scale", 100, 1, true, bed), 110);
 assert.strictEqual(L.plWrapDeg(270), -90);
 
+// The prime tower's volume: its own bounds, whole steps, 5 with ⇧.
+assert.deepStrictEqual([L.plRange("purge", bed, 0, { min: 15, max: 90 }).min, L.plRange("purge", bed, 0, { min: 15, max: 90 }).max], [15, 90]);
+assert.deepStrictEqual([L.plRange("purge").min, L.plRange("purge").max], [15, 90], "defaults without bounds");
+assert.strictEqual(L.plNudge("purge", 45, -1, false, bed, 0, { min: 15, max: 90 }), 44);
+assert.strictEqual(L.plNudge("purge", 45, 1, true, bed, 0, { min: 15, max: 90 }), 50);
+assert.strictEqual(L.plNudge("purge", 15, -1, false, bed, 0, { min: 15, max: 90 }), 15, "never below the minimum purge");
+assert.strictEqual(L.plNudge("purge", 88, 1, true, bed, 0, { min: 15, max: 90 }), 90);
+
 // Bringing a box back on the plate by the smallest move.
 assert.deepStrictEqual(L.plInside({ x0: 250, y0: 10, x1: 290, y1: 50 }, bed), [-20, 0]);
 assert.deepStrictEqual(L.plInside({ x0: -5, y0: -8, x1: 20, y1: 30 }, bed), [5, 8]);

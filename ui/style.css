@@ -2702,10 +2702,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .p-plateopts .k { display: flex; flex-direction: column; }
 .p-plateopts .sub { font-size: 11px; color: var(--text-secondary); }
 #p-tower-row.off .k label { color: var(--text-secondary); }
-#p-tower-pick { min-height: 20px; padding: 1px 8px; font-size: 11px; }
-#p-tower-pick.on { background: var(--accent); color: var(--accent-text); }
 .p-tower-warn { color: var(--warning-text, var(--warning)); }
-.p-tower-acts { display: flex; justify-content: flex-end; }
 /* Off the plate the slice waits: said in the danger colour. */
 .sl-tower.bad { background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 

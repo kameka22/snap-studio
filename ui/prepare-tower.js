@@ -40,14 +40,28 @@ async function prTowerFromFile(path) {
 
 /* ------------------------------------------------------------ settings */
 
-/* The tower's settings, as the slice will send them: the sheet's
-   differences, the profile's values (loaded by the sheet, or here for the
-   remembered profile), then the engine's defaults. */
-function prTowerSetting(k) {
-  if (typeof SL !== "undefined" && SL.adv && k in SL.adv) return SL.adv[k];
+/* The sheet's advanced differences for the remembered machine: its own
+   once it has loaded them, otherwise the ones remembered for it. */
+function prTowerAdv() {
+  if (typeof SL === "undefined") return {};
+  if ($("s-machine")?.value) return SL.adv || {};
+  const machine = SL.memory?.last;
+  return (machine && SL.memory[machine]?.adv) || {};
+}
+
+/* A profile's value: the sheet's, or the one read here, or the engine's. */
+function prTowerProfileValue(k) {
   if (typeof ADV !== "undefined" && ADV.defaults?.[k] != null) return ADV.defaults[k];
   if (PR.towerProfile?.values?.[k] != null) return PR.towerProfile.values[k];
   return typeof ADV_ENGINE_DEFAULTS !== "undefined" ? ADV_ENGINE_DEFAULTS[k] : undefined;
+}
+
+/* The tower's settings, as the slice will send them: the sheet's
+   differences, then the profile's values (loaded by the sheet, or here for
+   the remembered profile), then the engine's defaults. */
+function prTowerSetting(k) {
+  const adv = prTowerAdv();
+  return k in adv ? adv[k] : prTowerProfileValue(k);
 }
 const prTowerNum = (k, dflt) => {
   const v = parseFloat(String(prTowerSetting(k) ?? "").replace("%", ""));
@@ -213,6 +227,31 @@ function prTowerSliced(t, key) {
   prSchedule();
 }
 
+/* The prime volume from Prepare's slider: the slice sheet's setting, a
+   difference from the profile shown there (Multi-material panel). Before
+   the sheet has loaded this machine's settings, it goes to the ones
+   remembered for it, which the sheet loads. */
+function prTowerSetVolume(v) {
+  const k = "prime_volume", value = String(Math.round(v));
+  if ($("s-machine")?.value && ADV.defaults?.[k] != null) return advSet(k, value);
+  const machine = prTowerProfileName()?.machine;
+  if (!machine) return;
+  const adv = { ...(rememberFor(machine).adv || {}) };
+  if (value === String(prTowerProfileValue(k))) delete adv[k];
+  else adv[k] = value;
+  SL.memory[machine] = { ...rememberFor(machine), adv };
+  localStorage.setItem("snapstudio.slice", JSON.stringify(SL.memory));
+}
+
+/* Its bounds: the least the engine purges on the tower
+   (filament_minimal_purge_on_wipe_tower, 15 on the U1), up to twice the
+   profile's. */
+function prTowerVolumeRange() {
+  const min = Math.max(1, Math.round(prTowerNum("filament_minimal_purge_on_wipe_tower", 15)));
+  const profile = parseFloat(prTowerProfileValue("prime_volume")) || 45;
+  return { min, max: Math.max(90, Math.round(profile * 2)), profile };
+}
+
 /* Moves and turns, the turn around the box's middle. */
 function prTowerMove(dx, dy) {
   PR.tower.x = Math.round((PR.tower.x + dx) * 100) / 100;
@@ -335,29 +374,22 @@ function prTowerRenderSwitch() {
   why.classList.toggle("hidden", !why.textContent);
   sw.title = st.reason ? why.textContent : "";
   $("p-tower-row").classList.toggle("off", !!st.reason);
-  $("p-tower-pick").classList.toggle("hidden", !st.show);
-  $("p-tower-pick").classList.toggle("on", PR.towerSel);
-  $("p-tower-pick").setAttribute("aria-pressed", String(PR.towerSel));
 }
 
-/* The inspector for the tower: its corner, its turn, its size. */
-const PT_FIELDS = {
-  "p-tx": { get: () => PR.tower.x, put: (v) => prTowerMove(v - PR.tower.x, 0) },
-  "p-ty": { get: () => PR.tower.y, put: (v) => prTowerMove(0, v - PR.tower.y) },
-  "p-trot": { get: () => PR.tower.rot || 0, put: (v) => prTowerTurn(v) },
-};
+/* The inspector for the tower: its corner, its turn, its prime volume
+   (prepare.js PF, sliders or typed as the objects'), its size and what is
+   wrong with its place. */
 function prTowerRenderProps() {
-  const on = PR.towerSel && prTowerShown();
+  const on = PR.towerSel && prTowerShown() && PR.tower.x != null;
   $("p-tower-props").classList.toggle("hidden", !on);
   if (!on) return false;
   $("p-insp").classList.remove("hidden");
   $("p-props").classList.add("hidden");
   $("p-insp-name").textContent = $("p-insp-name").title = tr("prepare.tower");
-  for (const [id, f] of Object.entries(PT_FIELDS)) {
-    const el = $(id);
-    if (document.activeElement !== el) el.value = Math.round(f.get() * 10) / 10;
-    el._st?.render?.();
-  }
+  for (const [id, f] of Object.entries(PF)) if (f.tower) prRenderField(id, f, f.get(PR.tower));
+  // Less than the profile purges: colours may mix at head changes.
+  const vol = PF["p-tvol"].get(), lim = prTowerVolumeRange();
+  $("p-tvol-note").classList.toggle("hidden", !(vol < lim.profile));
   const box = prTowerBox(), chk = prTowerCheck(box);
   $("p-tower-dims").textContent = prTowerLabel(box, true);
   const warn = !chk ? "" : chk.state !== "in" ? tr("prepare.tower.off_plate") : chk.hits.length ? tr("prepare.tower.overlap") : "";
@@ -390,37 +422,11 @@ const prTowerBlocks = () => prTowerShown() && prTowerCheck()?.state !== "in" && 
 /* ------------------------------------------------------------ events */
 
 $("p-tower-sw").addEventListener("change", (e) => prTowerSetOn(e.target.checked));
-$("p-tower-pick").addEventListener("click", () => prTowerSelect(!PR.towerSel));
-$("p-tower-spot").addEventListener("click", prTowerToSpot);
 $("s-tower-place").addEventListener("click", (e) => {
   if (!e.target.closest("[data-tower-spot]")) return;
   prTowerToSpot();
   prTowerSheetWarning();
 });
-for (const [id, f] of Object.entries(PT_FIELDS)) {
-  const el = $(id);
-  let before = null;
-  el.addEventListener("focus", () => (before = prSnap()));
-  const apply = (commit) => {
-    const v = parseFloat(String(el.value).replace(",", "."));
-    if (!isFinite(v) || PR.tower.x == null) return;
-    if (commit && before == null) before = prSnap();
-    f.put(v);
-    if (commit) {
-      if (before) prRemember(before);
-      before = document.activeElement === el ? prSnap() : null;
-      prSave();
-      prRenderInspector();
-    } else prTowerRenderProps();
-    prSchedule();
-  };
-  el.addEventListener("input", () => apply(false));
-  el.addEventListener("change", () => apply(true));
-  el.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") el.blur();
-  });
-  numStepper(el);
-}
 onMenu("tower", (what) => {
   if (what === "spot") prTowerToSpot();
   if (what === "off") prTowerSetOn(false);

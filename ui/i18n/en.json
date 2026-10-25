@@ -2235,7 +2235,6 @@
   "slice.vp.pattern.monotonic": "Lines laid in one order: a smooth, even surface",
   "slice.vp.pattern.monotonicline": "Monotonic, in a single line: the smoothest",
   "prepare.tower": "Prime tower",
-  "prepare.tower.select": "Select",
   "prepare.tower.why.single": "Only one head prints this plate",
   "prepare.tower.why.by_object": "Printed object by object: no tower",
   "prepare.tower.size": "Prime tower {size} mm",
@@ -2250,5 +2249,8 @@
   "slice.tower.place.overlap": "The prime tower overlaps a part: the engine refuses such a plate.",
   "slice.tower.place.off_plate": "The prime tower is off the plate: move it back before slicing.",
   "prepare.tower.dims": "{size} mm",
-  "prepare.tower.dims_est": "{size} mm, estimated"
+  "prepare.tower.dims_est": "{size} mm, estimated",
+  "prepare.tower.size_title": "Size",
+  "prepare.tower.volume": "Prime volume",
+  "prepare.tower.vol_low": "Less purge than the profile: colours may mix at head changes"
 }
