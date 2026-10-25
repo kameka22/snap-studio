@@ -2139,5 +2139,11 @@
   "swatch.no_bond": "does not bond with another material of the plate",
   "swatch.connect": "Connect the printer to see its spools.",
   "prepare.printer": "Printer whose spools colour the list",
-  "swatch.tower_mixed": "the tower stays mixed"
+  "swatch.tower_mixed": "the tower stays mixed",
+  "ia.list.filters": "Filters",
+  "settings.thumb.short.auto": "Automatic",
+  "settings.thumb.short.plate": "Plate",
+  "settings.thumb.short.model": "Model",
+  "settings.thumb.short.render": "3D render",
+  "lang.search": "Search a language"
 }

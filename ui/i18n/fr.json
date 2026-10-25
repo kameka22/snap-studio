@@ -2142,5 +2142,11 @@
   "swatch.no_bond": "n'adhère pas à une autre matière du plateau",
   "swatch.connect": "Connectez l'imprimante pour voir ses bobines.",
   "prepare.printer": "Imprimante dont les bobines colorent la liste",
-  "swatch.tower_mixed": "la tour reste mélangée"
+  "swatch.tower_mixed": "la tour reste mélangée",
+  "ia.list.filters": "Filtres",
+  "settings.thumb.short.auto": "Automatique",
+  "settings.thumb.short.plate": "Plateau",
+  "settings.thumb.short.model": "Modèle",
+  "settings.thumb.short.render": "Rendu 3D",
+  "lang.search": "Rechercher une langue"
 }
