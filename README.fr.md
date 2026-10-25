@@ -82,7 +82,7 @@ Vos fichiers 3MF en un coup d'œil.
 
 ### 🧩 Préparer
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Préparer" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Préparer : un modèle sur le plateau, ses couleurs envoyées aux têtes, et la tour d'amorçage" />
 
 Le plateau U1 comme dans Orca — puis découper.
 
@@ -93,7 +93,7 @@ Le plateau U1 comme dans Orca — puis découper.
   remis d'un clic.
 - Chaque objet liste ses couleurs, peintes comprises, et envoie chacune vers
   la tête de votre choix, montrée avec la couleur et la matière de sa bobine.
-- **Tour d'amorçage** (tour de purge) : avec deux têtes ou plus, un
+- **Tour d'amorçage** : avec deux têtes ou plus, un
   interrupteur sous la liste des objets (désactivé sur chaque nouveau
   plateau, le même réglage que dans la fenêtre de découpe) montre la tour
   sur le plateau, une boîte grise placée dans un coin libre. Elle se déplace
@@ -155,7 +155,7 @@ modèle en dessous :
   accélérations × f²), avec un panneau ⚙ qui montre chaque valeur, profil →
   calculée ; à 100 %, le G-code est celui du profil ;
 - le détail de chaque profil tel que le moteur le reçoit ;
-- **multimatériau** : la tour de purge (son propre interrupteur, partagé
+- **multimatériau** : la tour d'amorçage (son propre interrupteur, partagé
   avec Préparer, où elle se place sur le plateau ; la tête de son mur
   extérieur), la prévention des coulures ; un avertissement quand la tour mélangerait des
   matières qui n'adhèrent pas (PLA et PETG, PLA et TPU…), avec des

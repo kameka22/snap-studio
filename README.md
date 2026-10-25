@@ -73,7 +73,7 @@ Your 3MF files at a glance.
 
 ### 🧩 Prepare
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Prepare" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Prepare: a model on the plate, its colors sent to the heads, and the prime tower" />
 
 The U1 plate as in Orca — then slice.
 
