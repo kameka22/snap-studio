@@ -3415,6 +3415,25 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .sl-token.sw-auto { padding: 3px 4px; }
 .sl-token.sw-auto i { background: none; border: 1.5px dashed color-mix(in srgb, var(--text) 40%, transparent); }
 
+/* Number steppers (stepper.js): ‹ value ›, the value typed after a
+   double-click; no native arrows anywhere. */
+input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.nstep { display: inline-flex; align-items: center; flex: none; height: 24px; border: 1px solid var(--field-border); border-radius: var(--radius-control); background: var(--field-bg); }
+.nstep:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: var(--focus-ring); }
+.nstep-b { display: grid; place-items: center; width: 22px; height: 100%; padding: 0; border: 0; background: none; color: var(--text-secondary); border-radius: var(--radius-control); }
+.nstep-b svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nstep-b:hover:not(:disabled) { color: var(--text); background: var(--control-bg-hover); }
+.nstep-b:active:not(:disabled) { background: color-mix(in srgb, var(--text) 12%, transparent); }
+.nstep-b:disabled { opacity: 0.35; }
+.nstep-b:focus-visible { outline: none; }
+.nstep-v { min-width: 44px; padding: 0 2px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; cursor: text; user-select: none; outline: none; }
+.nstep input.field.num, .sl-adv-body .adv-row .nstep .field.num { width: 64px; min-height: 22px; padding: 0 4px; border: 0; box-shadow: none; background: transparent; text-align: center; }
+.nstep:not(.editing) input { display: none; }
+.nstep.editing .nstep-v { display: none; }
+.nstep.disabled { opacity: 0.55; }
+.nstep.disabled .nstep-v { cursor: default; }
+
 /* Visual picker (visual.js): pictures of the slice settings' options.
    Stroke icons: --vp-s draws the frame, --vp-p the feature (the accent once
    chosen); never filled by the segments' rule. */

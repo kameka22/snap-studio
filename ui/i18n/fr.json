@@ -2187,5 +2187,8 @@
   "slice.vp.seam_position.aligned": "Alignée, sur un angle si possible",
   "slice.vp.seam_position.aligned_back": "Alignée, vers l'arrière",
   "slice.vp.seam_position.back": "À l'arrière de la pièce",
-  "slice.vp.seam_position.random": "Dispersée : pas de ligne visible, surface plus rugueuse"
+  "slice.vp.seam_position.random": "Dispersée : pas de ligne visible, surface plus rugueuse",
+  "nstep.less": "Diminuer",
+  "nstep.more": "Augmenter",
+  "nstep.edit": "Double-cliquez pour saisir une valeur"
 }

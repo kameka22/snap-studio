@@ -2184,5 +2184,8 @@
   "slice.vp.seam_position.aligned": "Lined up, on a corner where possible",
   "slice.vp.seam_position.aligned_back": "Lined up, toward the back",
   "slice.vp.seam_position.back": "At the back of the part",
-  "slice.vp.seam_position.random": "Scattered: no visible line, a rougher surface"
+  "slice.vp.seam_position.random": "Scattered: no visible line, a rougher surface",
+  "nstep.less": "Decrease",
+  "nstep.more": "Increase",
+  "nstep.edit": "Double-click to type a value"
 }

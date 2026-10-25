@@ -41,6 +41,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   (normal or tree), and going back to the other type resets an unsuited
   style to Default, as Orca does; a value from a project that the list does
   not offer is shown as it is rather than as the first choice.
+- **Number steppers**: the number fields of the slice sheet's advanced and
+  speed panels and the AI's size limit show ‹ value › instead of the small
+  native arrows: a click steps (held, it repeats), the arrow keys too, and a
+  double-click or Enter on the value lets you type one (Esc puts the old one
+  back). Percentages step by one.
 
 ## [0.14.2] — 2026-10-24
 

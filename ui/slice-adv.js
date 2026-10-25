@@ -316,7 +316,8 @@ function advField(k) {
   } else {
     const pct = def.type === "percent" || String(v ?? "").endsWith("%");
     const num = v == null ? "" : String(v).replace(/%$/, "");
-    const step = def.type === "int" ? 1 : 0.1;
+    // Whole numbers and percentages by one, millimetres and the rest by a tenth.
+    const step = def.type === "int" || pct ? 1 : 0.1;
     input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : def.unit || ADV_UNITS[k] || "")}</span>`;
   }
   return `<div class="grow-row adv-row${mod ? " mod" : ""}" title="${esc(def.tooltip || "")}">
@@ -348,6 +349,7 @@ function advRenderPanel() {
   if (PK.grid && $("s-adv-body").contains(PK.anchor)) closePicker();
   $("s-adv-body").innerHTML = (note ? `<div class="sl-adv-note">${esc(note)}</div>` : "") + groups;
   advEnhance();
+  steppersIn($("s-adv-body"));
 }
 
 /* A list's options, [value, label], in the catalog's order: hidden values
