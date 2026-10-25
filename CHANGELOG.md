@@ -11,6 +11,30 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Prime tower and materials that do not bond**: the slice sheet warns,
+  above the Slice button, when the prime tower would mix materials that do
+  not stick to each other (PLA and PETG, PLA and TPU, PETG and TPU…) among
+  the heads the plate prints with — the tower may come off or collapse —
+  with one-click fixes: no tower, or the tower's outer wall in one of the
+  materials. The prime tower gets its own switch on the slice sheet (its
+  Multi-material row, now above Seam); the Multi-material panel gains the
+  tower's wall head and ooze prevention (temperature drop of idle heads,
+  preheat time, idle temperature).
+
+### Changed
+- **Head pickers show the spools**: in the slice sheet's advanced settings
+  and in Prepare's "Colour…" palette, each head is shown with its spool's
+  colour and material instead of a text list; Prepare's printer picker and
+  the filament sheet's material use chips. Spool dots get an edge that shows
+  on the dark theme too, white and black spools included.
+- **Pills instead of short lists**: the language (with flags, in Settings
+  and on the welcome screen), the scroll wheel action, the preview source,
+  the colour → head mode and the timelapse speed are chosen with segmented
+  controls; the AI mode with cards that say what each one means. The AI
+  list's filters move into a Filters popover (with the number active), and
+  its sort into a menu, as in Files.
+
 ## [0.14.2] — 2026-10-24
 
 ### Added

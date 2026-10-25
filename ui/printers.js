@@ -22,6 +22,8 @@ window.currentView = "files";
 
 function switchView(v) {
   window.currentView = v;
+  // A popover belongs to the screen it was opened on.
+  if (typeof closePicker === "function") closePicker();
   document.querySelectorAll(".views > .view").forEach((s) => {
     s.classList.toggle("hidden", s.id !== "view-" + v);
   });

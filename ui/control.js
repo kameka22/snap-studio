@@ -588,6 +588,13 @@ function ctlFilFill() {
   const v = m.vendors.find((x) => x.name === p.vendor) || m.vendors[0];
   const opt = (val, label, on) => `<option value="${esc(val)}"${on ? " selected" : ""}>${esc(label)}</option>`;
   $("ctlfil-material").innerHTML = mats.map((x) => opt(x.kind, x.kind, x === m)).join("");
+  // A few materials: pills over the select, which stays the source of truth.
+  const pills = mats.length <= CTL_MAT_PILLS;
+  $("ctlfil-mats").classList.toggle("hidden", !pills);
+  $("ctlfil-material-l").classList.toggle("hidden", pills);
+  $("ctlfil-mats-seg").innerHTML = pills
+    ? mats.map((x) => `<button type="button" class="seg-btn${x === m ? " on" : ""}" role="radio" aria-checked="${x === m}" data-mat="${esc(x.kind)}" tabindex="${x === m ? 0 : -1}">${esc(x.kind)}</button>`).join("")
+    : "";
   $("ctlfil-vendor").innerHTML = m.vendors.map((x) => opt(x.name, x.name, x === v)).join("");
   $("ctlfil-sub").innerHTML = v.subs.map((s) => opt(s, s || tr("ctl.fil.generic"), s === p.sub_type)).join("");
   $("ctlfil-vendor").disabled = m.vendors.length < 2;
@@ -600,6 +607,22 @@ function ctlFilFill() {
   $("ctlfil-preview-t").textContent = [p.vendor, p.material, p.sub_type].filter(Boolean).join(" ");
 }
 
+/* Up to this many materials show as pills. */
+const CTL_MAT_PILLS = 8;
+$("ctlfil-mats-seg").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-mat]");
+  if (!b) return;
+  setSelect($("ctlfil-material"), b.dataset.mat);
+  $("ctlfil-mats-seg").querySelector(`[data-mat="${CSS.escape(b.dataset.mat)}"]`)?.focus();
+});
+// Arrows move and choose, as in a native radio group.
+$("ctlfil-mats-seg").addEventListener("keydown", (e) => {
+  const row = [...$("ctlfil-mats-seg").querySelectorAll("[data-mat]")];
+  const j = swMove(row, row.indexOf(document.activeElement), e.key);
+  if (j < 0) return;
+  e.preventDefault();
+  row[j].click();
+});
 $("ctlfil-material").addEventListener("change", (e) => {
   const m = ctlData(CF.pid).cfg.materials.find((x) => x.kind === e.target.value);
   Object.assign(CF.pick, { material: m.kind, vendor: m.vendors[0].name, sub_type: m.vendors[0].subs[0] });

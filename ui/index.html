@@ -324,6 +324,7 @@
             <button type="button" class="seg-btn" role="radio" data-assoc="colour" data-i18n="prepare.assoc.colour">By colour</button>
           </div>
           <select id="p-printer" class="hidden"></select>
+          <div id="p-printers" class="sl-pchips dense hidden" role="radiogroup" aria-label="Printer whose spools colour the list" data-i18n-aria="prepare.printer"></div>
         </div>
         <div id="p-list" class="p-float-body"></div>
       </div>
@@ -708,22 +709,34 @@
       <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.7 10.7l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4m0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/></svg>
       <input id="ia-q" type="search" placeholder="Search conversations" data-i18n-placeholder="ia.list.search" aria-label="Search conversations" data-i18n-aria="ia.list.search" autocomplete="off" spellcheck="false" />
     </label>
-    <select id="ia-f-kind" aria-label="Kind" data-i18n-aria="ia.list.kind">
-      <option value="all" data-i18n="ia.list.kind_all">All kinds</option>
-      <option value="create" data-i18n="ia.list.kind_create">Created</option>
-      <option value="edit" data-i18n="ia.list.kind_edit">Modified</option>
-    </select>
-    <select id="ia-f-state" aria-label="State" data-i18n-aria="ia.list.state">
-      <option value="all" data-i18n="ia.list.state_all">All states</option>
-      <option value="saved" data-i18n="ia.list.state_saved">Saved</option>
-      <option value="pending" data-i18n="ia.list.state_pending">Not saved</option>
-    </select>
-    <select id="ia-f-engine" aria-label="Where Claude runs" data-i18n-aria="ia.list.engine">
-      <option value="all" data-i18n="ia.list.engine_all">All modes</option>
-      <option value="local" data-i18n="ia.engine.local_short">On this Mac</option>
-      <option value="container" data-i18n="ia.engine.container_short">Sandbox</option>
-    </select>
-    <select id="ia-sort" aria-label="Sort" data-i18n-aria="ia.list.sort">
+    <div class="ia-fwrap">
+      <button type="button" id="ia-filters" class="btn ia-fbtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="ia-fpop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg><span data-i18n="ia.list.filters">Filters</span><b id="ia-fcount" class="ia-fcount hidden"></b></button>
+      <div id="ia-fpop" class="ia-fpop hidden" role="dialog" aria-label="Filters" data-i18n-aria="ia.list.filters">
+        <div class="ia-frow"><span data-i18n="ia.list.kind">Kind</span>
+          <select id="ia-f-kind" aria-label="Kind" data-i18n-aria="ia.list.kind">
+            <option value="all" data-i18n="ia.list.kind_all">All kinds</option>
+            <option value="create" data-i18n="ia.list.kind_create">Created</option>
+            <option value="edit" data-i18n="ia.list.kind_edit">Modified</option>
+          </select>
+        </div>
+        <div class="ia-frow"><span data-i18n="ia.list.state">State</span>
+          <select id="ia-f-state" aria-label="State" data-i18n-aria="ia.list.state">
+            <option value="all" data-i18n="ia.list.state_all">All states</option>
+            <option value="saved" data-i18n="ia.list.state_saved">Saved</option>
+            <option value="pending" data-i18n="ia.list.state_pending">Not saved</option>
+          </select>
+        </div>
+        <div class="ia-frow"><span data-i18n="ia.list.engine">Where Claude runs</span>
+          <select id="ia-f-engine" aria-label="Where Claude runs" data-i18n-aria="ia.list.engine">
+            <option value="all" data-i18n="ia.list.engine_all">All modes</option>
+            <option value="local" data-i18n="ia.engine.local_short">On this Mac</option>
+            <option value="container" data-i18n="ia.engine.container_short">Sandbox</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <button type="button" id="ia-sort-btn" class="btn ia-fbtn" aria-haspopup="menu" title="Sort" data-i18n-title="ia.list.sort"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l4 5H8v11H6V9H3zm10 16l-4-5h3V4h2v11h3z"/></svg><span id="ia-sort-t"></span></button>
+    <select id="ia-sort" class="hidden" aria-label="Sort" data-i18n-aria="ia.list.sort">
       <option value="activity" data-i18n="ia.list.sort_activity">Last activity</option>
       <option value="created" data-i18n="ia.list.sort_created">Creation date</option>
       <option value="title" data-i18n="ia.list.sort_title">Title</option>
@@ -1188,15 +1201,16 @@
               <input type="checkbox" id="s-brim" class="sw" role="switch" />
               <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
+            <div class="sl-adv-row" id="s-adv-mm-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
+              <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
+              <input type="checkbox" id="s-tower-sw" class="sw" role="switch" aria-label="Prime tower" data-i18n-aria="slice.adv.g.tower" />
+              <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
             <div class="sl-adv-row">
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
               <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
               <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
-            </div>
-            <div class="sl-adv-row" id="s-adv-mm-row">
-              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
-              <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
-              <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
           </div>
           <div class="sl-line sl-save-line">
@@ -1227,6 +1241,7 @@
     </div>
 
     <div class="sl-foot">
+      <div id="s-tower" class="sl-tower hidden" role="status"></div>
       <div id="s-progress" class="progress hidden"><i></i></div>
       <div id="s-msg" class="pf-test"></div>
       <div class="sl-foot-row">
@@ -1568,8 +1583,12 @@
     <h3 id="ctlfil-title"></h3>
     <p class="det-sub" data-i18n="ctl.fil.note">The materials the printer knows, as on its screen.</p>
     <div class="ctl-fil-preview"><i id="ctlfil-preview"></i><b id="ctlfil-preview-t"></b></div>
+    <div id="ctlfil-mats" class="ctl-fil-mats hidden">
+      <span id="ctlfil-mats-t" data-i18n="ctl.fil.material">Material</span>
+      <div id="ctlfil-mats-seg" class="seg" role="radiogroup" aria-labelledby="ctlfil-mats-t"></div>
+    </div>
     <div class="ctl-fil-grid">
-      <label><span data-i18n="ctl.fil.material">Material</span><select id="ctlfil-material"></select></label>
+      <label id="ctlfil-material-l"><span data-i18n="ctl.fil.material">Material</span><select id="ctlfil-material"></select></label>
       <label><span data-i18n="ctl.fil.vendor">Brand</span><select id="ctlfil-vendor"></select></label>
       <label><span data-i18n="ctl.fil.sub">Type</span><select id="ctlfil-sub"></select></label>
     </div>
@@ -1859,9 +1878,9 @@
               <span><b data-i18n="welcome.f3">Follow your prints</b><small data-i18n="welcome.f3.sub">Live status, loaded spools and your printers' cameras</small></span>
             </li>
           </ul>
-          <label class="w-lang"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m6.9 6h-2.9a15.7 15.7 0 0 0-1.4-3.6A8 8 0 0 1 18.9 8M12 4c.8 1.2 1.5 2.5 1.9 4h-3.8c.4-1.4 1.1-2.8 1.9-4M4.3 14a8.2 8.2 0 0 1 0-4h3.4a16.5 16.5 0 0 0 0 4zm.8 2h2.9c.3 1.3.8 2.5 1.4 3.6A8 8 0 0 1 5.1 16M8 8H5.1a8 8 0 0 1 4.3-3.6C8.8 5.5 8.4 6.7 8 8m4 12c-.8-1.2-1.5-2.5-1.9-4h3.8c-.4 1.4-1.1 2.8-1.9 4m2.3-6H9.7a14.7 14.7 0 0 1 0-4h4.6a14.7 14.7 0 0 1 0 4m.3 5.6c.6-1.1 1.1-2.3 1.4-3.6h2.9a8 8 0 0 1-4.3 3.6m1.7-5.6a16.5 16.5 0 0 0 0-4h3.4a8.2 8.2 0 0 1 0 4z"/></svg><span data-i18n="lang.label">Language</span>
+          <div class="w-lang"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m6.9 6h-2.9a15.7 15.7 0 0 0-1.4-3.6A8 8 0 0 1 18.9 8M12 4c.8 1.2 1.5 2.5 1.9 4h-3.8c.4-1.4 1.1-2.8 1.9-4M4.3 14a8.2 8.2 0 0 1 0-4h3.4a16.5 16.5 0 0 0 0 4zm.8 2h2.9c.3 1.3.8 2.5 1.4 3.6A8 8 0 0 1 5.1 16M8 8H5.1a8 8 0 0 1 4.3-3.6C8.8 5.5 8.4 6.7 8 8m4 12c-.8-1.2-1.5-2.5-1.9-4h3.8c-.4 1.4-1.1 2.8-1.9 4m2.3-6H9.7a14.7 14.7 0 0 1 0-4h4.6a14.7 14.7 0 0 1 0 4m.3 5.6c.6-1.1 1.1-2.3 1.4-3.6h2.9a8 8 0 0 1-4.3 3.6m1.7-5.6a16.5 16.5 0 0 0 0-4h3.4a8.2 8.2 0 0 1 0 4z"/></svg><span data-i18n="lang.label">Language</span>
             <select data-lang-picker></select>
-          </label>
+          </div>
         </section>
 
         <section class="w-step">
@@ -1987,7 +2006,10 @@
 <script src="printers.js"></script>
 <script src="viewer.js"></script>
 <script src="slice.js"></script>
+<script src="swatch-logic.js"></script>
 <script src="slice-ui.js"></script>
+<script src="segmented-logic.js"></script>
+<script src="segmented.js"></script>
 <script src="engine.js"></script>
 <script src="profiles.js"></script>
 <script src="slice-adv.js"></script>
