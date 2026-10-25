@@ -60,4 +60,20 @@ assert.strictEqual(S.swMove(it, 0, "Enter"), -1, "not a move");
 assert.strictEqual(S.swMove([{ disabled: true }], 0, "ArrowRight"), -1, "nothing to move to");
 assert.strictEqual(S.swMove([], 0, "Home"), -1);
 
+// In a grid of 3 columns: Up and Down move by a row, no wrapping; Left and
+// Right as in a row; one column behaves as before.
+{
+  const g = [{}, {}, {}, {}, { disabled: true }, {}, {}];
+  assert.strictEqual(S.swMove(g, 0, "ArrowDown", 3), 3);
+  assert.strictEqual(S.swMove(g, 1, "ArrowDown", 3), 1, "the one below disabled, none further: stays");
+  assert.strictEqual(S.swMove(g, 5, "ArrowUp", 3), 2);
+  assert.strictEqual(S.swMove(g, 2, "ArrowUp", 3), 2, "top row: stays");
+  assert.strictEqual(S.swMove(g, 6, "ArrowDown", 3), 6, "last row: stays");
+  assert.strictEqual(S.swMove(g, 3, "ArrowRight", 3), 5, "Right skips the disabled one");
+  assert.strictEqual(S.swMove(g, 6, "ArrowRight", 3), 0, "Right wraps");
+  assert.strictEqual(S.swMove(g, 6, "Home", 3), 0);
+  assert.strictEqual(S.swMove(g, 0, "End", 3), 6);
+  for (const k of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) assert.strictEqual(S.swMove(g, 2, k, 1), S.swMove(g, 2, k), k + ": one column as before");
+}
+
 console.log("swatch: ok");

@@ -21,7 +21,7 @@ const PK = { sections: [], value: null, onPick: null, foot: null, anchor: null }
 
 function openPicker(anchor, { sections, value, onPick, foot = null, placeholder = "Rechercher" }) {
   closePicker();
-  Object.assign(PK, { sections, value, onPick, foot, anchor, swatch: false, prep: false, back: null });
+  Object.assign(PK, { sections, value, onPick, foot, anchor, grid: false, prep: false, back: null });
   const el = $("picker");
   el.classList.remove("sw-pop");
   el.setAttribute("role", "dialog");
@@ -83,7 +83,7 @@ $("picker-list").addEventListener("click", (e) => {
   const b = e.target.closest("[data-v]");
   if (!b || b.disabled) return;
   const pick = PK.onPick;
-  closePicker(PK.swatch);
+  closePicker(PK.grid);
   pick?.(b.dataset.v);
 });
 $("picker-foot").addEventListener("click", () => PK.foot?.onClick());
@@ -155,45 +155,65 @@ const swTag = (e, warnTag = "") =>
   e.warn && warnTag ? warnTag : e.state === "empty" ? tr("swatch.empty") : e.state === "unknown" ? tr("swatch.unknown_colour") : "";
 const swName = (e) => (e.state === "auto" ? tr("swatch.auto") : `T${e.h} · ${swText(e)}`);
 
-/* The head popover, in the search picker's shell without its search: a
-   grid of heads, one Tab stop, arrows between them. `at`: the element it
-   opens under, or a point { x, y } (a context menu's); `foot`: an action
-   below the heads ({ label, onClick }); `note`: a line under them;
-   `warnTag`: the word under a flagged head. */
-function openSwatches(at, { entries, value, onPick, foot = null, note = "", label = "", warnTag = "" }) {
+/* A grid of choices in the search picker's shell, without its search:
+   one Tab stop, arrows between them (in 2D with `columns`), Enter picks,
+   Esc and Tab close, the focus goes back. `at`: the element it opens
+   under, or a point { x, y } (a context menu's); `items`: { value,
+   disabled }; `renderItem(item, on)`: the inside of its button, `optCls`
+   the button's class, `title(item)` its tooltip; `foot`: an action below
+   ({ label, onClick }); `note`: a line under the grid; `head`: a title
+   above it. Serves the head popover and the visual picker (visual.js). */
+function openGrid(at, { items, value, onPick, renderItem, optCls = "sw-opt", gridCls = "sw-grid", popCls = "sw-pop", title = () => "", columns = 1, foot = null, note = "", head = "", label = "" }) {
   closePicker();
   const anchor = at instanceof Element ? at : null;
-  Object.assign(PK, { sections: [], value, onPick, foot, anchor, swatch: true, prep: false, back: anchor || document.activeElement });
+  Object.assign(PK, { sections: [], value, onPick, foot, anchor, grid: true, columns, prep: false, back: anchor || document.activeElement });
   const el = $("picker");
-  el.classList.add("sw-pop");
+  el.classList.remove("sw-pop", "vp-pop");
+  el.classList.add(popCls);
   el.setAttribute("role", "presentation");
   $("picker-search").classList.add("hidden");
   $("picker-foot").classList.toggle("hidden", !foot);
   if (foot) $("picker-foot").textContent = foot.label;
-  const cur = entries.find((e) => e.value === value && !e.disabled) || entries.find((e) => !e.disabled);
-  $("picker-list").innerHTML = `<div class="sw-grid" role="listbox" aria-label="${esc(label || tr("swatch.choose_head"))}">${entries
+  const cur = items.find((e) => e.value === value && !e.disabled) || items.find((e) => !e.disabled);
+  $("picker-list").innerHTML = `${head ? `<div class="picker-section">${esc(head)}</div>` : ""}<div class="${gridCls}" role="listbox" aria-label="${esc(label)}"${columns > 1 ? ` style="--cols:${columns}"` : ""}>${items
     .map((e) => {
       const on = e.value === value;
-      const tag = swTag(e, warnTag);
-      return `<button type="button" class="sw-opt${on ? " on" : ""}" role="option" aria-selected="${on}" data-v="${esc(e.value)}" tabindex="${e === cur ? 0 : -1}"${e.disabled ? " disabled" : ""} title="${esc(swName(e))}">
-        ${swToken(e, on)}<small>${esc(swText(e))}</small>${tag ? `<span class="sw-tag">${esc(tag)}</span>` : ""}</button>`;
+      return `<button type="button" class="${optCls}${on ? " on" : ""}" role="option" aria-selected="${on}" data-v="${esc(e.value)}" tabindex="${e === cur ? 0 : -1}"${e.disabled ? " disabled" : ""} title="${esc(title(e))}">${renderItem(e, on)}</button>`;
     })
     .join("")}</div>${note ? `<div class="sw-note">${esc(note)}</div>` : ""}`;
   el.classList.remove("hidden");
   pkPlace(anchor ? anchor.getBoundingClientRect() : { left: at.x, top: at.y, bottom: at.y });
   anchor?.setAttribute("aria-expanded", "true");
-  requestAnimationFrame(() => $("picker-list").querySelector('.sw-opt[tabindex="0"]')?.focus());
+  requestAnimationFrame(() => $("picker-list").querySelector('[role="option"][tabindex="0"]')?.focus());
 }
 
-// In the head popover: arrows, Home and End move (the foot's action last),
-// Tab leaves it.
+/* The head popover: a grid of heads. `entries`: swEntries; `warnTag`: the
+   word under a flagged head. */
+function openSwatches(at, { entries, value, onPick, foot = null, note = "", label = "", warnTag = "" }) {
+  openGrid(at, {
+    items: entries,
+    value,
+    onPick,
+    foot,
+    note,
+    label: label || tr("swatch.choose_head"),
+    title: swName,
+    renderItem: (e, on) => {
+      const tag = swTag(e, warnTag);
+      return `${swToken(e, on)}<small>${esc(swText(e))}</small>${tag ? `<span class="sw-tag">${esc(tag)}</span>` : ""}`;
+    },
+  });
+}
+
+// In a grid: arrows, Home and End move (the foot's action last), Tab
+// leaves it.
 $("picker").addEventListener("keydown", (e) => {
-  if (!PK.swatch) return;
+  if (!PK.grid) return;
   if (e.key === "Tab") return closePicker(true);
   if (!(e.key in SW_KEYS)) return;
-  const items = [...$("picker").querySelectorAll(".sw-opt, #picker-foot:not(.hidden)")];
+  const items = [...$("picker").querySelectorAll('[role="option"], #picker-foot:not(.hidden)')];
   const i = items.indexOf(document.activeElement);
-  const j = swMove(items, i < 0 ? 0 : i, e.key);
+  const j = swMove(items, i < 0 ? 0 : i, e.key, PK.columns || 1);
   if (j < 0) return;
   e.preventDefault();
   items.forEach((b, k) => (b.tabIndex = k === j ? 0 : -1));

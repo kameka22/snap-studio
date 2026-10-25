@@ -2636,7 +2636,7 @@ function prColourPalette(o, x, y, anchor = null) {
   PK.prep = true;
 }
 /* The palette goes with what it was opened on. */
-const prPaletteClose = () => PK.prep && PK.swatch && closePicker();
+const prPaletteClose = () => PK.prep && PK.grid && closePicker();
 
 /* "Colour…" from a menu: the palette in "by colour" mode; in "by object"
    mode the object's colour/heads frame, unfolded in the list. */

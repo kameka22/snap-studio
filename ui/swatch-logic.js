@@ -60,15 +60,22 @@ function swEntries(heads, { value = null, auto = null, base = 0 } = {}) {
 }
 
 /* Roving focus among `items` ({ disabled }): the next one for `key` from
-   `i`, wrapping, skipping disabled ones; -1 when none can take it. */
+   `i`, skipping disabled ones; -1 when none can take it. Left and Right
+   (and, in a single column, Up and Down) move by one, wrapping; in a grid
+   of `cols` columns Up and Down move by a row, without wrapping (the focus
+   stays at an edge). */
 const SW_KEYS = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1, Home: "first", End: "last" };
-function swMove(items, i, key) {
+function swMove(items, i, key, cols = 1) {
   const k = SW_KEYS[key];
   const ok = items.map((x, j) => (x && !x.disabled ? j : -1)).filter((j) => j >= 0);
   if (k == null || !ok.length) return -1;
   if (k === "first") return ok[0];
   if (k === "last") return ok[ok.length - 1];
   const n = items.length;
+  if (cols > 1 && (key === "ArrowUp" || key === "ArrowDown")) {
+    for (let j = i + k * cols; j >= 0 && j < n; j += k * cols) if (ok.includes(j)) return j;
+    return ok.includes(i) ? i : -1;
+  }
   for (let s = 1; s <= n; s++) {
     const j = (((i + k * s) % n) + n) % n;
     if (ok.includes(j)) return j;

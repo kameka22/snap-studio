@@ -50,6 +50,12 @@ const ADV_UNITS = { standby_temperature_delta: "°C", idle_temperature: "°C" };
 /* Values hidden from a list: handled elsewhere ("no_brim" is the switch) or
    needing tools the app does not have (painted brim). */
 const ADV_HIDE = { brim_type: ["no_brim", "painted"] };
+/* Values a list offers by the others (visual-logic.js): the support styles
+   that suit the support type. */
+const ADV_OPTIONS = { support_style: () => vpStyles(advVal("support_type")) };
+/* A control forced for a list: "select", "segmented", "pills" or
+   "visual"; otherwise vpMode() decides from its options and pictures. */
+const ADV_UI = {};
 
 /* Sub-panels: groups of keys, with the conditions under which they apply. */
 const ADV_CATS = {
@@ -219,7 +225,7 @@ function advLabel(k, v = advVal(k)) {
   const def = ADV.schema?.keys?.[k];
   if (v == null || v === "") return "";
   if (ADV_FILAMENT.has(k)) return +v > 0 ? `T${+v - 1}` : tr("slice.adv.default_head");
-  if (def?.enum) return def.enum[v] ?? v;
+  if (def?.enum) return advOptLabel(k, v);
   if (def?.type === "bool") return tr(String(v) === "1" ? "common.yes" : "common.no");
   const unit = def?.unit || ADV_UNITS[k];
   return `${v}${unit && !String(v).endsWith("%") ? " " + unit : ""}`;
@@ -273,8 +279,9 @@ function advFit() {
 }
 
 function advClose() {
-  if (PK.swatch && $("s-adv-body").contains(PK.anchor)) closePicker();
+  if (PK.grid && $("s-adv-body").contains(PK.anchor)) closePicker();
   ADV.cat = null;
+  ADV.styleNote = "";
   ADV.ro?.disconnect();
   $("s-adv").classList.add("hidden");
   advRenderRows();
@@ -295,11 +302,15 @@ function advField(k) {
       .map((o) => `<option value="${o.value}"${String(v ?? opts[0].value) === o.value ? " selected" : ""}>${esc(o.label)}</option>`)
       .join("")}</select>`;
   } else if (def.type === "enum") {
-    const hide = ADV_HIDE[k] || [];
-    input = `<select class="field" data-k="${k}">${Object.entries(def.enum)
-      .filter(([val]) => !hide.includes(val))
-      .map(([val, lbl]) => `<option value="${esc(val)}"${String(v) === val ? " selected" : ""}>${esc(lbl)}</option>`)
-      .join("")}</select>`;
+    // A value the list does not offer stays shown as it is, chosen and not
+    // pickable: the select would show its first option instead.
+    const entries = vpEntries(advOptions(k), v, Object.keys(def.enum));
+    input = `<select class="field" data-k="${k}">${entries
+      .map((e) => {
+        const label = e.state === "ok" ? e.label : tr(e.state === "hidden" ? "vp.hidden" : "vp.unknown", { v: def.enum[e.value] ?? e.value });
+        return `<option value="${esc(e.value)}"${String(v) === e.value ? " selected" : ""}${e.state === "ok" ? "" : " disabled"}>${esc(label)}</option>`;
+      })
+      .join("")}</select>${k === "support_style" && ADV.styleNote ? `<small class="adv-note" role="status">${esc(ADV.styleNote)}</small>` : ""}`;
   } else if (def.type === "bool") {
     input = `<input type="checkbox" class="sw" role="switch" data-k="${k}"${String(v) === "1" ? " checked" : ""} />`;
   } else {
@@ -334,16 +345,72 @@ function advRenderPanel() {
     })
     .join("");
   // A head popover opened on a field about to be redrawn goes with it.
-  if (PK.swatch && $("s-adv-body").contains(PK.anchor)) closePicker();
+  if (PK.grid && $("s-adv-body").contains(PK.anchor)) closePicker();
   $("s-adv-body").innerHTML = (note ? `<div class="sl-adv-note">${esc(note)}</div>` : "") + groups;
   advEnhance();
 }
 
-/* The head fields as head pickers: their spools' colours and materials. */
+/* A list's options, [value, label], in the catalog's order: hidden values
+   left out, and those another setting rules out. */
+function advOptions(k) {
+  const def = ADV.schema?.keys?.[k];
+  const hide = ADV_HIDE[k] || [];
+  const only = ADV_OPTIONS[k]?.();
+  return Object.keys(def?.enum || {})
+    .filter((v) => !hide.includes(v) && (!only || only.includes(v)))
+    .map((v) => [v, advOptLabel(k, v)]);
+}
+
+/* An option's words: the catalog's, unless the app has better ones (the
+   catalog leaves some untranslated). */
+function advOptLabel(k, v) {
+  const key = `slice.vp.label.${k}.${v}`;
+  const own = tr(key);
+  return own !== key ? own : ADV.schema?.keys?.[k]?.enum?.[v] ?? v;
+}
+
+/* An option's picture and its one-line explanation. */
+const advIcon = (k, v) => SLICE_ICONS[k]?.[v] || SLICE_ICON_UNKNOWN;
+function advDesc(k, v) {
+  const key = `slice.vp.${k}.${v}`;
+  const d = tr(key);
+  return d !== key ? d : "";
+}
+
+/* The control a list gets (ADV_UI, otherwise vpMode). */
+function advUi(k) {
+  const opts = advOptions(k);
+  return ADV_UI[k] || vpMode(opts.length, opts.filter(([v]) => SLICE_ICONS[k]?.[v]).length);
+}
+
+/* The fields as pickers: heads with their spools' colours and materials,
+   lists with pictures or segments. */
 function advEnhance() {
   $("s-adv-body").querySelectorAll("select[data-k]").forEach((sel) => {
     const k = sel.dataset.k;
-    if (!ADV_FILAMENT.has(k)) return;
+    const def = ADV.schema?.keys?.[k];
+    if (!ADV_FILAMENT.has(k)) {
+      if (def?.type !== "enum") return;
+      const ui = advUi(k);
+      // The group's name: the field's, not the row's text with its
+      // "Profile value" line.
+      const name = () => def.label;
+      if (ui === "visual") {
+        const mod = k in SL.adv;
+        visualSelect(sel, {
+          icons: (v) => advIcon(k, v),
+          desc: (v) => advDesc(k, v),
+          label: def.label,
+          columns: vpColumns(advOptions(k).length),
+          note: () => (mod ? tr("slice.adv.profile_value", { v: advLabel(k, ADV.defaults[k]) || "—" }) : ""),
+        });
+      } else if (ui === "pills") {
+        segmented(sel, { cls: "visual", icons: (v) => `<span class="vp-ico">${advIcon(k, v)}</span>`, titleOf: (v) => advDesc(k, v), name });
+      } else if (ui === "segmented") {
+        segmented(sel, { titleOf: (v) => advDesc(k, v), name });
+      }
+      return;
+    }
     swatchSelect(sel, () => advHeadChoices(k), {
       auto: ADV_HEAD_AUTO.has(k) ? () => ({ value: "0", warn: advWarnHeads(k).auto }) : null,
       base: 1,
@@ -356,6 +423,19 @@ function advEnhance() {
 function advSet(k, v) {
   if (v === "" || v == null || String(v) === String(ADV.defaults[k])) delete SL.adv[k];
   else SL.adv[k] = String(v);
+  ADV.styleNote = "";
+  // A support type the style does not suit: the style goes back to
+  // Default, as in Orca's settings — the engine would take it so anyway.
+  if (k === "support_type") {
+    const style = advVal("support_style");
+    const next = vpStyleAfterType(advVal("support_type"), style);
+    if (next !== style) {
+      if (String(ADV.defaults.support_style) === next) delete SL.adv.support_style;
+      else SL.adv.support_style = next;
+      const kind = VP_STYLES.tree.includes(style) ? "tree" : "normal";
+      ADV.styleNote = tr("slice.vp.style_reset", { style: advOptLabel("support_style", style), kind: tr(`slice.vp.kind.${kind}`) });
+    }
+  }
   advRemember();
   advRenderPanel();
   advRenderRows();
@@ -483,7 +563,7 @@ $("s-adv-body").addEventListener("click", (e) => {
 });
 $("s-adv-back").addEventListener("click", advClose);
 // Anchored to a scrolling panel: the head popover closes rather than float.
-$("s-adv-body").addEventListener("scroll", () => PK.swatch && closePicker(), { passive: true });
+$("s-adv-body").addEventListener("scroll", () => PK.grid && closePicker(), { passive: true });
 $("s-adv-reset").addEventListener("click", () => {
   if (ADV.cat === "speed") return spdResetAll();
   for (const k of advCatKeysAll(ADV.cat)) delete SL.adv[k];

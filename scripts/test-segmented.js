@@ -29,4 +29,8 @@ assert.strictEqual(S.segActive({ kind: "create", state: "all", engine: "local" }
 assert.strictEqual(S.segActive({}), 0);
 assert.strictEqual(S.segActive(null), 0);
 
+// A value the list does not offer, kept as a chosen, disabled extra option
+// (slice-adv.js): its segment is the one on, not the first.
+assert.deepStrictEqual(S.segItems([{ value: "a", text: "A" }, { value: "b", text: "B" }, { value: "x", text: "Unknown value: x", disabled: true }], "x").map((x) => [x.on, x.disabled]), [[false, false], [false, false], [true, true]]);
+
 console.log("segmented: ok");
