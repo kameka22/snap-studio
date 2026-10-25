@@ -483,8 +483,10 @@ function slSummary() {
   $("s-summary").innerHTML = parts
     .map((p) => (typeof p === "object" ? `<span class="${esc(p.cls)}">${esc(p.text)}</span>` : `<span>${esc(p)}</span>`))
     .join("");
-  // What goes to the engine changed: the prime tower's materials too.
+  // What goes to the engine changed: the prime tower's materials too, and
+  // its place.
   if (typeof advRenderTower === "function") advRenderTower();
+  if (typeof prTowerSheetWarning === "function") prTowerSheetWarning();
 }
 
 /* Adjustments touched by hand: they survive a profile change. */
@@ -543,11 +545,15 @@ function showSliceBusy(busy) {
   $("s-cancel").classList.toggle("hidden", busy);
   $("s-stop").classList.toggle("hidden", !busy);
   document
-    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn), #s-tower button")
+    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn), #s-tower button, #s-tower-place button")
     .forEach((el) => (el.disabled = busy));
   if (busy) closePicker();
-  // Unlocked: the chips of empty heads must stay inactive.
-  else slTokens();
+  // Unlocked: the chips of empty heads must stay inactive, and the prime
+  // tower's switch while no tower can be printed.
+  else {
+    slTokens();
+    $("s-tower-sw").disabled = !!prTowerState().reason;
+  }
 }
 
 async function startSlice() {
@@ -575,6 +581,11 @@ async function startSlice() {
     return slot?.present && slot.color ? slot.color : null;
   });
 
+  // The prime tower off the plate: the engine would print it there.
+  if (prTowerBlocks()) {
+    setSliceMessage(tr("prepare.tower.off_plate"), "err");
+    return;
+  }
   // The profile's values the Speed adjustment works from must be this
   // profile's.
   await ADV.ready?.catch(() => {});
@@ -594,11 +605,13 @@ async function startSlice() {
   setSliceProgress(0);
   SL.starting = true;
   SL.early = [];
+  // The tower's real size comes with the preview: it is this plate's.
+  SL.towerKey = prTowerKey();
   try {
     const job = await invoke("slice_start", {
       request: {
         source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
-        overrides: { ...advOverrides(), ...spdOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
+        overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";
@@ -686,6 +699,7 @@ function stopElapsed() {
 
 function showPreview(job, p) {
   const req = SL.request || { filaments: [], colors: [] };
+  prTowerSliced(p.stats?.tower, SL.towerKey);
   SL.preview = { job, source: SL.source, gcode: p.gcode, stats: p.stats || {}, printer: req.printer, saved: null, replaces: SL.replaces };
   const toolColors = req.filaments.map((_, i) => hexToRgb(req.colors[i]));
   const toolNames = req.filaments.map((name) => name.replace(/\s*@.*$/, ""));

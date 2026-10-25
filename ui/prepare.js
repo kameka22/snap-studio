@@ -71,7 +71,7 @@ const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, e
 
 function prSave() {
   const objects = PR.objects.map(prStored);
-  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads }));
+  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, tower: prTowerStored() }));
   prStatus();
   prPruneMeshes();
 }
@@ -116,6 +116,8 @@ function prLoadState() {
       PR.objects = s.objects;
       PR.nextId = s.nextId || PR.objects.length + 1;
       PR.colourHeads = s.colourHeads && typeof s.colourHeads === "object" ? s.colourHeads : {};
+      // Read by prepare-tower.js (prTowerRestore).
+      PR.tower = s.tower;
     }
   } catch {}
   // The mode is the Settings default at each start, never the file's.
@@ -124,10 +126,18 @@ function prLoadState() {
 
 /* ------------------------------------------------------------ history */
 
-/* Undo / redo: successive plate states (placements and object list, never
-   the meshes), 100 levels. */
+/* Undo / redo: successive plate states (placements and object list, the
+   prime tower's place, never the meshes), 100 levels. */
 const HIST = { undo: [], redo: [] };
-const prSnap = () => JSON.stringify(PR.objects);
+const prSnap = () => JSON.stringify({ objects: PR.objects, tower: { x: PR.tower?.x ?? null, y: PR.tower?.y ?? null, rot: PR.tower?.rot || 0 } });
+
+/* A state back: its objects, and its tower's place (the tower's switch is
+   a setting, not undone). */
+function prUnsnap(snapshot) {
+  const s = JSON.parse(snapshot);
+  PR.objects = Array.isArray(s) ? s : s.objects;
+  if (s.tower && PR.tower) Object.assign(PR.tower, s.tower);
+}
 
 /* Call right before a change. */
 function prRemember(snapshot = prSnap()) {
@@ -140,7 +150,7 @@ function prRemember(snapshot = prSnap()) {
 function prRestore(from, to) {
   if (!from.length) return;
   to.push(prSnap());
-  PR.objects = JSON.parse(from.pop());
+  prUnsnap(from.pop());
   PR.sel = new Set([...PR.sel].filter((id) => PR.objects.some((o) => o.id === id)));
   prSave();
   prRenderInspector();
@@ -277,7 +287,8 @@ function polysOverlap(a, b) {
   return true;
 }
 
-/* Objects overlapping another on the plate, as Orca flags them. */
+/* Objects overlapping another on the plate, as Orca flags them, or the
+   prime tower ("tower" with them). */
 function prOverlaps() {
   const on = PR.objects.filter((o) => bedState(o) !== "out").map((o) => ({ o, poly: footprintPoly(o) }));
   const hit = new Set();
@@ -289,6 +300,8 @@ function prOverlaps() {
       }
     }
   }
+  const tower = typeof prTowerCheck === "function" ? prTowerCheck() : null;
+  if (tower?.hits.length) for (const id of ["tower", ...tower.hits]) hit.add(id);
   return hit;
 }
 
@@ -507,6 +520,8 @@ function prDraw() {
     gl.deleteVertexArray(vao);
     gl.deleteBuffer(buf);
   }
+  // The prime tower: translucent, after the parts.
+  prTowerDraw(gl, vp, accent);
   // Rotate tool: three rings (ribbons) around the selection, always visible;
   // the hovered or grabbed ring thickens and lightens.
   const f = PR.tool === "rotate" ? ringFrame() : null;
@@ -639,7 +654,10 @@ function prBedPoint(e) {
 
 /* Object hit by the ray: box, then triangles when the mesh is reasonable.
    Returns the object closest to the eye. */
-function prPick(e) {
+const prPick = (e) => prPickDist(e)?.o || null;
+
+/* The same, with its distance from the eye: { o, dist }, or null. */
+function prPickDist(e) {
   const ray = prRay(e);
   let best = null, bestT = Infinity;
   for (const o of PR.objects) {
@@ -682,7 +700,7 @@ function prPick(e) {
       best = o;
     }
   }
-  return best;
+  return best && { o: best, dist: bestT };
 }
 
 /* Möller–Trumbore over all triangles; the closest, or null. */
@@ -709,6 +727,7 @@ function rayTriangles(o, d, pos) {
 
 function prSelect(ids, toggle) {
   if (ids.length === 1) PR.anchor = ids[0];
+  if (ids.length || !toggle) PR.towerSel = false;
   if (toggle) {
     for (const id of ids) PR.sel.has(id) ? PR.sel.delete(id) : PR.sel.add(id);
   } else {
@@ -747,6 +766,7 @@ function prMarquee(d, e) {
   const sel = new Set([...d.keep, ...plMarquee(a, b, d.boxes)]);
   if (sel.size === PR.sel.size && [...sel].every((id) => PR.sel.has(id))) return;
   PR.sel = sel;
+  PR.towerSel = false;
   prRenderInspector();
   prSchedule();
 }
@@ -811,7 +831,28 @@ function prBindInteractions(canvas) {
       PR.drag = { ...base, mode: "pan" };
       return;
     }
-    const hit = prPick(e);
+    const near = prPickDist(e);
+    // The prime tower, when nearer than any part: moved, or turned with ⌥
+    // (around Z only), like a part.
+    const tower = prTowerHit(e);
+    if (tower != null && !(near?.dist < tower) && !(e.metaKey || e.ctrlKey) && PR.tool !== "face") {
+      prTowerSelect(true);
+      const start = prBedPoint(e);
+      const box = prTowerBox();
+      if (!start || !box) return;
+      const c = ptCorners(PR.tower, box);
+      PR.drag = {
+        ...base,
+        mode: e.altKey ? "tower-rot" : "tower",
+        start,
+        center: [(c[0][0] + c[2][0]) / 2, (c[0][1] + c[2][1]) / 2],
+        orig: { x: PR.tower.x, y: PR.tower.y, rot: PR.tower.rot || 0 },
+        box,
+        before: prSnap(),
+      };
+      return;
+    }
+    const hit = near?.o || null;
     // ⌘/Ctrl dragged from an empty spot: a rubber band, adding what it
     // touches to the selection (⇧ already moves the view, ⌥ rotates).
     if (!hit && (e.metaKey || e.ctrlKey) && e.button === 0) {
@@ -891,6 +932,24 @@ function prBindInteractions(canvas) {
       prSchedule();
       return;
     }
+    if (d.mode === "tower" || d.mode === "tower-rot") {
+      const p = prBedPoint(e);
+      if (!p || !d.moved) return;
+      if (!d.remembered) {
+        prRemember(d.before);
+        d.remembered = true;
+      }
+      Object.assign(PR.tower, d.orig);
+      if (d.mode === "tower") prTowerMove(p[0] - d.start[0], p[1] - d.start[1]);
+      else {
+        let delta = deg(Math.atan2(p[1] - d.center[1], p[0] - d.center[0]) - Math.atan2(d.start[1] - d.center[1], d.start[0] - d.center[0]));
+        if (e.shiftKey) delta = Math.round(delta / 15) * 15;
+        prTowerTurn(d.orig.rot + delta, d.box);
+      }
+      prTowerRenderProps();
+      prSchedule();
+      return;
+    }
     if (d.mode === "move" && d.moved) {
       $("p-objects").classList.add("dragging");
       prDropHover(e);
@@ -939,7 +998,7 @@ function prBindInteractions(canvas) {
     }
     if (d.mode === "orbit" && !d.moved && d.clear) prSelect([], false);
     $("p-angle").classList.add("hidden");
-    if ((d.mode === "move" || d.mode === "rotate" || d.mode === "ring") && d.moved) {
+    if (["move", "rotate", "ring", "tower", "tower-rot"].includes(d.mode) && d.moved) {
       prSave();
       prRenderInspector();
     } else if (d.mode === "move" && !d.moved && d.only != null && PR.sel.size > 1) {
@@ -967,8 +1026,10 @@ function prBindInteractions(canvas) {
     },
     { passive: false }
   );
-  // Hover: ring or facet highlighted.
+  // Hover: ring or facet highlighted; the prime tower's label.
+  canvas.addEventListener("mouseleave", () => prTowerHover(null));
   canvas.addEventListener("mousemove", (e) => {
+    prTowerHover(e);
     if (PR.drag) return;
     if (PR.tool === "rotate") {
       const k = ringHit(e)?.axis ?? null;
@@ -992,9 +1053,12 @@ const normDeg = (a) => {
   return Math.round(x * 100) / 100;
 };
 
-/* The context menu of the object under the pointer, if any. */
+/* The context menu of the object under the pointer, if any (or the
+   prime tower's). */
 function prObjectMenu(e) {
-  const hit = prPick(e);
+  const near = prPickDist(e), tower = prTowerHit(e);
+  if (tower != null && !(near?.dist < tower)) return prTowerMenu(e.clientX, e.clientY);
+  const hit = near?.o;
   if (!hit) return;
   prMenuFor(hit.id, e.clientX, e.clientY);
 }
@@ -1051,7 +1115,9 @@ function prStatus() {
   // "By colour" mode: a colour without a head, or an uncoloured object
   // without a picked one, blocks the slice.
   const blockers = prBlockers();
-  const blocked = blockers.colours.length + blockers.objects.length;
+  // The prime tower off the plate: the engine would print it there.
+  const towerOut = typeof prTowerBlocks === "function" && prTowerBlocks();
+  const blocked = blockers.colours.length + blockers.objects.length + (towerOut ? 1 : 0);
   const tools = plTools({
     n,
     sel: PR.sel.size,
@@ -1077,6 +1143,7 @@ function prStatus() {
     blockers.colours.length ? tr("prepare.tip.unmapped", { n: blockers.colours.length }) : "",
     blockers.objects.length ? tr("prepare.tip.uncoloured", { n: blockers.objects.length }) : "",
     g.partial ? tr("prepare.tip.partial", { n: g.partial }) : "",
+    towerOut ? tr("prepare.tower.off_plate") : "",
     g.off.length ? tr("prepare.tip.off", { n: g.off.length }) : "",
   ].filter(Boolean).join("\n");
 }
@@ -1129,6 +1196,9 @@ const pruiSave = () =>
 const prGroups = () => plGroups(PR.objects, bedState);
 
 function prRenderInspector() {
+  // The tower may have come (a second head, the switch): it takes a spot.
+  prTowerEnsurePlaced();
+  if (PR.towerSel && !prTowerShown()) PR.towerSel = false;
   const overlap = prOverlaps();
   const live = typeof headsActive === "function";
   const pid = live ? headsActive() : "";
@@ -1231,6 +1301,7 @@ function prRenderInspector() {
     b.setAttribute("aria-checked", String(b.dataset.assoc === PR.assoc));
   });
   prRenderPrinter();
+  prTowerRenderSwitch();
   prRenderProps();
   prStatus();
 }
@@ -1262,6 +1333,8 @@ const pfText = (f, v) => {
 };
 
 function prRenderProps() {
+  // The prime tower selected: its own fields.
+  if (prTowerRenderProps()) return;
   const sel = PR.objects.filter((o) => PR.sel.has(o.id));
   // The inspector only shows for one selected object.
   $("p-insp").classList.toggle("hidden", sel.length !== 1);
@@ -1349,7 +1422,7 @@ function prBindField(id) {
     e.stopPropagation();
     if (before) {
       const ids = new Set(PR.sel);
-      PR.objects = JSON.parse(before);
+      prUnsnap(before);
       PR.sel = new Set([...ids].filter((i) => PR.objects.some((o) => o.id === i)));
     }
     const o = target();
@@ -1777,6 +1850,7 @@ async function prepareAddFile(path, { remember = true } = {}) {
     cv: COLORS_VERSION,
   }));
   if (remember) prRemember();
+  const wasEmpty = PR.objects.length === 0;
   const first = added.filter((o) => o.plate === 1);
   const main = first.length ? first : added;
   const box = groupBox(main);
@@ -1792,6 +1866,9 @@ async function prepareAddFile(path, { remember = true } = {}) {
   for (const o of added) o.pos = [o.pos[0] + dx, o.pos[1] + dy];
   PR.objects.push(...added);
   PR.sel = new Set(main.map((o) => o.id));
+  PR.towerSel = false;
+  // A saved plate opened as it was: its prime tower too.
+  if (wasEmpty && !dx && !dy) await prTowerFromFile(path);
   prSave();
   prRenderInspector();
   if (PR.gl) await Promise.all(added.map(prLoadMesh));
@@ -1804,6 +1881,9 @@ async function prepareAddFile(path, { remember = true } = {}) {
 function freeSpot(bw, bd, except) {
   const { w, d } = PR.bed, m = 5;
   const taken = PR.objects.filter((o) => o.id !== except && bedState(o) !== "out").map((o) => groupBox([o]));
+  // The prime tower's place is taken too.
+  const tb = prTowerBox();
+  if (tb && PR.tower.x != null) taken.push(ptExtent(PR.tower, tb));
   const free = (x, y) =>
     x >= 0 && y >= 0 && x + bw <= w && y + bd <= d &&
     taken.every((b) => x + bw + m <= b.x0 || b.x1 + m <= x || y + bd + m <= b.y0 || b.y1 + m <= y);
@@ -2040,6 +2120,8 @@ async function prSavePlate() {
   try {
     await invoke("plate_save", {
       scene: PR.objects.map((o) => ({ path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, extruder_map: identity })),
+      // The prime tower goes with it, as Orca keeps it.
+      tower: PR.tower.on && PR.tower.x != null ? { on: true, x: PR.tower.x, y: PR.tower.y, rot: PR.tower.rot || 0 } : null,
       path: dest,
     });
     toast(tr("prepare.saved", { name: dest.split(/[\\/]/).pop() }));
@@ -2077,8 +2159,9 @@ function cellMask(o, rz, margin) {
 
 /* Auto-arrange: millimeter grid, objects from largest to smallest, each in
    the first free spot (bottom, then left), with a 90° attempt; 6 mm
-   between two objects. The group is then recentered. What does not fit is
-   set beside the plate. */
+   between two objects. The group is then recentered, unless it would
+   land on the prime tower: the tower never moves, the parts go around it.
+   What does not fit is set beside the plate. */
 function prArrange() {
   const list = PR.objects.filter((o) => bedState(o) !== "out");
   if (!list.length) return;
@@ -2086,6 +2169,17 @@ function prArrange() {
   const W = Math.floor(PR.bed.w), D = Math.floor(PR.bed.d);
   const grid = new Uint8Array(W * D);
   const margin = 3;
+  // The prime tower stays: an obstacle, its cells (and the margin) taken.
+  const tb = prTowerBox();
+  const tower = tb && PR.tower.x != null ? ptExtent(PR.tower, tb) : null;
+  if (tower) {
+    const poly = ptCorners(PR.tower, { x0: tb.x0 - margin, y0: tb.y0 - margin, w: tb.w + 2 * margin, d: tb.d + 2 * margin });
+    for (let y = Math.max(0, Math.floor(tower.y0 - margin)); y < Math.min(D, Math.ceil(tower.y1 + margin)); y++) {
+      for (let x = Math.max(0, Math.floor(tower.x0 - margin)); x < Math.min(W, Math.ceil(tower.x1 + margin)); x++) {
+        if (ptConvexOverlap(poly, [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]], 0)) grid[y * W + x] = 1;
+      }
+    }
+  }
   const plans = list
     .map((o) => {
       // An own rotation (X/Y) is kept as is; only Z varies.
@@ -2124,11 +2218,14 @@ function prArrange() {
     for (let i = 0; i < c.length; i += 2) grid[(best.cy + c[i + 1]) * W + best.cx + c[i]] = 1;
     placed.push({ o: plan.o, cx: best.cx, cy: best.cy, rz: best.t.rz, m: best.t.mask });
   }
-  // Group recentered on the plate.
+  // Group recentered on the plate, unless that would bring it onto the
+  // prime tower: it then stays where the grid put it, around the tower.
   if (placed.length) {
     const x0 = Math.min(...placed.map((p) => p.cx + p.m.x0)), x1 = Math.max(...placed.map((p) => p.cx + p.m.x1));
     const y0 = Math.min(...placed.map((p) => p.cy + p.m.y0)), y1 = Math.max(...placed.map((p) => p.cy + p.m.y1));
-    const dx = Math.floor((W - 1 - x1 - x0) / 2), dy = Math.floor((D - 1 - y1 - y0) / 2);
+    let dx = Math.floor((W - 1 - x1 - x0) / 2), dy = Math.floor((D - 1 - y1 - y0) / 2);
+    const m = margin;
+    if (tower && !(x1 + dx + m <= tower.x0 || tower.x1 + m <= x0 + dx || y1 + dy + m <= tower.y0 || tower.y1 + m <= y0 + dy)) dx = dy = 0;
     for (const p of placed) {
       p.o.rot = [p.o.rot[0], p.o.rot[1], p.rz];
       p.o.pos = [p.cx + dx, p.cy + dy];
@@ -2249,6 +2346,7 @@ function prResetRotation() {
 
 /* Called when the view shows: graphics context, bed, meshes. */
 async function prepareShow() {
+  prTowerLoadProfile();
   prStatus();
   prRefreshSpools();
   prEnsureLists();
@@ -2283,6 +2381,10 @@ function prepareScene() {
   }
   if (!on.length) {
     toast(tr("prepare.nothing"), true);
+    return null;
+  }
+  if (prTowerBlocks()) {
+    toast(tr("prepare.tower.off_plate"), true);
     return null;
   }
   const files = [...new Set(on.map((o) => o.path))];
@@ -2343,6 +2445,9 @@ function prEmpty() {
   // A new plate starts in the Settings default mode, with no colour mapped.
   PR.assoc = PRUI.assocDefault;
   PR.colourHeads = {};
+  // Nor a prime tower: a new project starts without one.
+  prTowerRestore(null);
+  PR.towerSel = false;
   prSave();
   prRenderInspector();
   prSchedule();
@@ -2509,10 +2614,23 @@ document.addEventListener("keydown", (e) => {
     prOrient(e.shiftKey);
   } else if (e.key === "Backspace" || e.key === "Delete") {
     e.preventDefault();
-    prRemoveSelection();
+    // The prime tower is not removed: its switch is the way.
+    if (PR.towerSel) toast(tr("prepare.tower.no_delete"));
+    else prRemoveSelection();
   } else if (e.key === "Escape") {
     if (PR.tool) prSetTool(PR.tool);
     else prSelect([], false);
+  } else if (e.key.startsWith("Arrow") && PR.towerSel) {
+    e.preventDefault();
+    const step = e.shiftKey ? 10 : 1;
+    const v = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key];
+    const now = Date.now();
+    if (now - nudgeAt > 700) prRemember();
+    nudgeAt = now;
+    prTowerMove(v[0], v[1]);
+    prSave();
+    prRenderInspector();
+    prSchedule();
   } else if (e.key.startsWith("Arrow") && PR.sel.size) {
     e.preventDefault();
     const step = e.shiftKey ? 10 : 1;

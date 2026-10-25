@@ -12,6 +12,14 @@ with its packages for macOS, Windows and Linux. What comes next:
 ## [Unreleased]
 
 ### Added
+- **The prime tower in Prepare**: a "Prime tower" switch under the object
+  list, the same setting as the slice sheet's, off on every new plate
+  whatever the profile says. With two heads or more, a grey box shows where
+  the tower will be printed: placed in a free corner, moved and turned like
+  a part (drag, ⌥ drag, arrows, its own X, Y and rotation), its size
+  estimated before slicing and the real one after. Auto-arrange works
+  around it; a tower on a part or off the plate is flagged, with a "Move to
+  a Free Spot" fix, and a saved 3MF keeps it where Orca does.
 - **Prime tower and materials that do not bond**: the slice sheet warns,
   above the Slice button, when the prime tower would mix materials that do
   not stick to each other (PLA and PETG, PLA and TPU, PETG and TPU…) among

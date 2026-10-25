@@ -47,8 +47,13 @@ const ADV_ENGINE_DEFAULTS = {
   ironing_spacing: "0.1", ironing_speed: "20", spiral_mode: "0", fuzzy_skin: "none", fuzzy_skin_thickness: "0.2",
   fuzzy_skin_point_distance: "0.3", skirt_loops: "1", skirt_distance: "2", skirt_height: "1", draft_shield: "disabled",
   reduce_crossing_wall: "0", reduce_infill_retraction: "0",
+  // The tower's shape, for its estimate in Prepare (prepare-tower.js).
+  wipe_tower_wall_type: "rectangle", wipe_tower_rib_width: "8", wipe_tower_extra_rib_length: "0",
+  wipe_tower_extra_spacing: "100%",
 };
-const advVal = (k) => (k in SL.adv ? SL.adv[k] : ADV.defaults[k]);
+/* The prime tower's switch is the plate's (prepare-tower.js), never the
+   profile's: a new plate starts without a tower. */
+const advVal = (k) => (k === "enable_prime_tower" ? (PR.tower.on ? "1" : "0") : k in SL.adv ? SL.adv[k] : ADV.defaults[k]);
 const advOn = (k) => String(advVal(k)) === "1" || advVal(k) === true;
 const multiHead = () => headCount() > 1;
 const isTree = () => String(advVal("support_type") || "").startsWith("tree");
@@ -222,10 +227,11 @@ async function advSchema() {
    apply (brim type with the brim off: the switch's "no_brim" must win). */
 function advOverrides() {
   const o = { ...(SL.adv || {}) };
+  // Sent either way: off unless the plate turns it on, whatever the profile.
+  o.enable_prime_tower = advVal("enable_prime_tower");
   if (!$("s-brim").checked) for (const k of advCatKeysAll("brim")) delete o[k];
   if (!multiHead()) {
     for (const k of advCatKeysAll("mm")) delete o[k];
-    delete o.enable_prime_tower;
     delete o.support_filament;
     delete o.support_interface_filament;
   }
@@ -251,6 +257,8 @@ function advCount() {
 /* Machine profile changed: its remembered differences come back. */
 function advLoad(saved) {
   SL.adv = { ...(saved || {}) };
+  // Once remembered per machine: now the plate's.
+  delete SL.adv.enable_prime_tower;
   advRefreshDefaults();
 }
 
@@ -328,7 +336,12 @@ function advRenderRows() {
       advVal("fuzzy_skin") && advVal("fuzzy_skin") !== "none" && ADV.schema?.keys?.fuzzy_skin?.label,
     ].filter(Boolean).join(" · "),
   };
+  // The plate's switch, disabled with its reason when no tower can be
+  // printed (as in Prepare).
+  const tower = prTowerState();
   $("s-tower-sw").checked = advOn("enable_prime_tower");
+  $("s-tower-sw").disabled = !!tower.reason || !!SL.job;
+  $("s-tower-sw").title = tower.reason ? tr(`prepare.tower.why.${tower.reason}`) : "";
   for (const cat of Object.keys(ADV_CATS)) {
     // Quality, Infill and Walls have no row of their own: no summary.
     const s = $("s-adv-sum-" + cat);
@@ -513,6 +526,7 @@ function advEnhance() {
 }
 
 function advSet(k, v) {
+  if (k === "enable_prime_tower") return prTowerSetOn(String(v) === "1");
   if (v === "" || v == null || String(v) === String(ADV.defaults[k])) delete SL.adv[k];
   else SL.adv[k] = String(v);
   ADV.styleNote = "";
@@ -536,8 +550,9 @@ function advSet(k, v) {
 }
 
 /* Heads the advanced settings send elements to — supports (when on),
-   walls, infill — as the engine gets them: { key: head }. */
-function advHeads() {
+   walls, infill, the tower's wall (`tower`: when it is printed) — as the
+   engine gets them: { key: head }. */
+function advHeads({ tower = true } = {}) {
   const o = advOverrides();
   const out = {};
   for (const k of ADV_FILAMENT) {
@@ -545,7 +560,7 @@ function advHeads() {
     if (!(v > 0)) continue;
     if (k.startsWith("support") && !$("s-supports").checked) continue;
     // The tower's outer wall: only with a tower.
-    if (k === "wipe_tower_filament" && !advTowerOn()) continue;
+    if (k === "wipe_tower_filament" && !(tower && advTowerOn())) continue;
     out[k] = v - 1;
   }
   return out;
@@ -564,9 +579,10 @@ function advHeadsSummary() {
 
 /* ------------------------------------------------------------ prime tower */
 
-/* A prime tower is printed: on, with several heads, layer by layer (the
-   engine prints none object by object). */
-const advTowerOn = () => multiHead() && advOn("enable_prime_tower") && advVal("print_sequence") !== "by object";
+/* A prime tower is printed: on, with two heads used or more, layer by
+   layer (the engine prints none object by object) — the tower Prepare
+   shows (prTowerState). */
+const advTowerOn = () => multiHead() && prTowerShown();
 
 /* The heads the plate prints with — its colors' heads, and those the
    advanced settings send supports, walls, infill or the tower's wall to —

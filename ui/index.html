@@ -312,6 +312,7 @@
       <div id="p-msg" class="v-msg hidden"></div>
       <div id="p-loading" class="p-loading hidden" role="status" aria-live="polite"><span class="spinner small"></span><span id="p-loading-text"></span></div>
       <div id="p-angle" class="p-angle hidden"></div>
+      <div id="p-tower-tip" class="p-angle hidden"></div>
       <div id="p-toolhint" class="p-toolhint hidden"></div>
       <div class="v-hint" data-i18n="prepare.hint">drag: move · ⌥ drag: rotate · ⌘ drag from an empty spot: select an area · ⇧ or right drag, ⇧ scroll: pan the view · arrows: 1 mm (⇧ 10 mm) · A: arrange · ⌘D: duplicate · ⌘Z: undo</div>
       <div id="p-objects" class="p-float p-objects prep-inspector">
@@ -327,6 +328,16 @@
           <div id="p-printers" class="sl-pchips dense hidden" role="radiogroup" aria-label="Printer whose spools colour the list" data-i18n-aria="prepare.printer"></div>
         </div>
         <div id="p-list" class="p-float-body"></div>
+        <!-- The plate's print options: one setting with the slice sheet's. -->
+        <div class="p-plateopts">
+          <div class="group">
+            <div class="grow-row" id="p-tower-row">
+              <span class="k"><label for="p-tower-sw" data-i18n="prepare.tower">Prime tower</label><small id="p-tower-why" class="sub hidden"></small></span>
+              <button type="button" id="p-tower-pick" class="btn small hidden" aria-pressed="false" data-i18n="prepare.tower.select">Select</button>
+              <input type="checkbox" id="p-tower-sw" class="sw" role="switch" />
+            </div>
+          </div>
+        </div>
       </div>
       <div id="p-insp" class="p-float p-insp prep-inspector hidden">
         <div class="p-float-head">
@@ -354,6 +365,20 @@
             <div class="grow-row p-field p-axis" data-field="p-sz"><span class="k">Z</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-sz" class="field num" type="number" step="1" /><span class="unit">%</span><button type="button" class="p-mode"></button></div>
           </div>
           <div id="p-dims" class="vp-sub"></div>
+        </div>
+        <div id="p-tower-props" class="hidden">
+          <div class="vp-section" data-i18n="prepare.tower.corner">Front-left corner</div>
+          <div class="group">
+            <div class="grow-row"><span class="k" data-i18n="prepare.pos_x">Position X</span><input id="p-tx" class="field num" type="number" step="1" /><span class="unit">mm</span></div>
+            <div class="grow-row"><span class="k" data-i18n="prepare.pos_y">Position Y</span><input id="p-ty" class="field num" type="number" step="1" /><span class="unit">mm</span></div>
+          </div>
+          <div class="vp-section" data-i18n="prepare.rotation">Rotation</div>
+          <div class="group">
+            <div class="grow-row"><span class="k" data-i18n="prepare.around_z">Around Z</span><input id="p-trot" class="field num" type="number" step="5" min="-180" max="180" /><span class="unit">°</span></div>
+          </div>
+          <div id="p-tower-dims" class="vp-sub"></div>
+          <div id="p-tower-warn" class="vp-sub p-tower-warn hidden" role="status"></div>
+          <div class="p-tower-acts"><button type="button" id="p-tower-spot" class="btn small" data-i18n="prepare.tower.spot">Move to a Free Spot</button></div>
         </div>
         </div>
       </div>
@@ -1254,6 +1279,7 @@
     </div>
 
     <div class="sl-foot">
+      <div id="s-tower-place" class="sl-tower hidden" role="status"></div>
       <div id="s-tower" class="sl-tower hidden" role="status"></div>
       <div id="s-progress" class="progress hidden"><i></i></div>
       <div id="s-msg" class="pf-test"></div>
@@ -2038,7 +2064,9 @@
 <script src="slice-speed.js"></script>
 <script src="prints.js"></script>
 <script src="prepare-logic.js"></script>
+<script src="tower-logic.js"></script>
 <script src="prepare.js"></script>
+<script src="prepare-tower.js"></script>
 <script src="heads.js"></script>
 <script src="spoolcheck.js"></script>
 <script src="bedmesh-logic.js"></script>

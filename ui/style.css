@@ -2697,6 +2697,17 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .p-toks .sl-token.on { color: var(--text); }
 .p-toks .sl-token i { width: 11px; height: 11px; }
 .p-obj.on .tag.warn { color: var(--accent-text); }
+/* Prepare: the plate's print options under the list (the prime tower). */
+.p-plateopts { flex: none; padding: 0 12px 12px; }
+.p-plateopts .k { display: flex; flex-direction: column; }
+.p-plateopts .sub { font-size: 11px; color: var(--text-secondary); }
+#p-tower-row.off .k label { color: var(--text-secondary); }
+#p-tower-pick { min-height: 20px; padding: 1px 8px; font-size: 11px; }
+#p-tower-pick.on { background: var(--accent); color: var(--accent-text); }
+.p-tower-warn { color: var(--warning-text, var(--warning)); }
+.p-tower-acts { display: flex; justify-content: flex-end; }
+/* Off the plate the slice waits: said in the danger colour. */
+.sl-tower.bad { background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 
 /* Prepare: tools */
 .tb-btn.on { background: var(--accent); border-color: transparent; color: var(--accent-text); }
