@@ -324,6 +324,7 @@
             <button type="button" class="seg-btn" role="radio" data-assoc="colour" data-i18n="prepare.assoc.colour">By colour</button>
           </div>
           <select id="p-printer" class="hidden"></select>
+          <div id="p-printers" class="sl-pchips dense hidden" role="radiogroup" aria-label="Printer whose spools colour the list" data-i18n-aria="prepare.printer"></div>
         </div>
         <div id="p-list" class="p-float-body"></div>
       </div>
@@ -1570,8 +1571,12 @@
     <h3 id="ctlfil-title"></h3>
     <p class="det-sub" data-i18n="ctl.fil.note">The materials the printer knows, as on its screen.</p>
     <div class="ctl-fil-preview"><i id="ctlfil-preview"></i><b id="ctlfil-preview-t"></b></div>
+    <div id="ctlfil-mats" class="ctl-fil-mats hidden">
+      <span id="ctlfil-mats-t" data-i18n="ctl.fil.material">Material</span>
+      <div id="ctlfil-mats-seg" class="seg" role="radiogroup" aria-labelledby="ctlfil-mats-t"></div>
+    </div>
     <div class="ctl-fil-grid">
-      <label><span data-i18n="ctl.fil.material">Material</span><select id="ctlfil-material"></select></label>
+      <label id="ctlfil-material-l"><span data-i18n="ctl.fil.material">Material</span><select id="ctlfil-material"></select></label>
       <label><span data-i18n="ctl.fil.vendor">Brand</span><select id="ctlfil-vendor"></select></label>
       <label><span data-i18n="ctl.fil.sub">Type</span><select id="ctlfil-sub"></select></label>
     </div>
@@ -1989,6 +1994,7 @@
 <script src="printers.js"></script>
 <script src="viewer.js"></script>
 <script src="slice.js"></script>
+<script src="swatch-logic.js"></script>
 <script src="slice-ui.js"></script>
 <script src="engine.js"></script>
 <script src="profiles.js"></script>

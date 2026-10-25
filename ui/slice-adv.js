@@ -107,23 +107,34 @@ function advCatKeys(cat) {
     .flatMap((g) => (typeof g.keys === "function" ? g.keys() : g.keys));
 }
 
-/* Heads offered to the per-feature filament fields: from the shared
-   "Heads and spools" state when heads.js is loaded, otherwise the heads
-   configured in this sheet (renderHeads). */
-function advHeadChoices() {
+/* Heads flagged in a head picker when the plate's materials do not all
+   bond (spTowerAdvice; #s-tower says why): for the walls, the heads whose
+   material does not bond with another of the plate's; for the tower's
+   wall, the choices that leave it mixed — a head the plate does not print
+   with, or Automatic — since a head it prints with is the fix. */
+function advWarnHeads(k) {
+  if (k !== "wipe_tower_filament" && k !== "wall_filament") return { heads: [], auto: false };
+  const used = advTowerHeads();
+  const a = spTowerAdvice({ heads: used, tower: advTowerOn(), wall: null });
+  if (!a) return { heads: [], auto: false };
+  if (k === "wall_filament") return { heads: [...new Set(a.pairs.flat())], auto: false };
+  const fix = new Set(a.families.flatMap((g) => g.heads));
+  return { heads: Array.from({ length: headCount() }, (_, h) => h).filter((h) => !fix.has(h)), auto: true };
+}
+
+/* Heads offered to the per-feature filament fields (swatch-logic.js
+   swHeads, values from 1): from the shared "Heads and spools" state when
+   heads.js is loaded, otherwise the heads configured in this sheet
+   (renderHeads). */
+function advHeadChoices(k) {
   const pid = typeof headsCount === "function" ? currentPrinter()?.id : null;
-  if (pid) {
-    const slots = headsSlots(pid);
-    return Array.from({ length: headsCount(pid) }, (_, i) => {
-      const slot = slots.find((x) => x.index === i);
-      const name = headsProfile(pid, i, SL.lists?.filaments || null).name;
-      return { value: String(i + 1), label: `T${i}${name ? " · " + name : ""}`, color: slot?.present ? slot.color : null };
-    });
-  }
-  return [...document.querySelectorAll("#s-heads select")].map((s, i) => {
-    const slot = SL.slots.find((x) => x.index === i);
-    return { value: String(i + 1), label: `T${i}${s.value ? " · " + s.value : ""}`, color: slot?.present ? slot.color : null };
-  });
+  const list = SL.lists?.filaments || null;
+  const names = pid
+    ? Array.from({ length: headsCount(pid) }, (_, i) => headsProfile(pid, i, list).name || "")
+    : [...document.querySelectorAll("#s-heads select")].map((s) => s.value);
+  const material = (h) => list?.find((f) => f.name === names[h])?.ftype || spMaterialFromName(names[h] || "");
+  const heads = swHeads({ count: names.length, slots: pid ? headsSlots(pid) : SL.slots, material, base: 1, warn: advWarnHeads(k).heads });
+  return heads.map((e) => ({ ...e, label: `T${e.h}${names[e.h] ? " · " + names[e.h] : ""}` }));
 }
 
 async function advSchema() {
@@ -262,6 +273,7 @@ function advFit() {
 }
 
 function advClose() {
+  if (PK.swatch && $("s-adv-body").contains(PK.anchor)) closePicker();
   ADV.cat = null;
   ADV.ro?.disconnect();
   $("s-adv").classList.add("hidden");
@@ -275,7 +287,10 @@ function advField(k) {
   const mod = k in SL.adv;
   let input;
   if (ADV_FILAMENT.has(k)) {
-    const opts = [...(ADV_HEAD_AUTO.has(k) ? [{ value: "0", label: tr("slice.adv.default_head") }] : []), ...advHeadChoices()];
+    // The select holds every value the head picker (advEnhance) may show,
+    // a head this printer lacks included: kept, never silently changed.
+    const opts = [...(ADV_HEAD_AUTO.has(k) ? [{ value: "0", label: tr("slice.adv.default_head") }] : []), ...advHeadChoices(k)];
+    if (v != null && v !== "" && !opts.some((o) => o.value === String(v))) opts.push({ value: String(v), label: `T${+v - 1}` });
     input = `<select class="field" data-k="${k}">${opts
       .map((o) => `<option value="${o.value}"${String(v ?? opts[0].value) === o.value ? " selected" : ""}>${esc(o.label)}</option>`)
       .join("")}</select>`;
@@ -318,7 +333,24 @@ function advRenderPanel() {
       return rows ? `<div class="set-section">${esc(tr(g.t))}</div><div class="group">${rows}</div>` : "";
     })
     .join("");
+  // A head popover opened on a field about to be redrawn goes with it.
+  if (PK.swatch && $("s-adv-body").contains(PK.anchor)) closePicker();
   $("s-adv-body").innerHTML = (note ? `<div class="sl-adv-note">${esc(note)}</div>` : "") + groups;
+  advEnhance();
+}
+
+/* The head fields as head pickers: their spools' colours and materials. */
+function advEnhance() {
+  $("s-adv-body").querySelectorAll("select[data-k]").forEach((sel) => {
+    const k = sel.dataset.k;
+    if (!ADV_FILAMENT.has(k)) return;
+    swatchSelect(sel, () => advHeadChoices(k), {
+      auto: ADV_HEAD_AUTO.has(k) ? () => ({ value: "0", warn: advWarnHeads(k).auto }) : null,
+      base: 1,
+      label: ADV.schema?.keys?.[k]?.label || "",
+      warnTag: tr(k === "wipe_tower_filament" ? "swatch.tower_mixed" : "swatch.no_bond"),
+    });
+  });
 }
 
 function advSet(k, v) {
@@ -450,6 +482,8 @@ $("s-adv-body").addEventListener("click", (e) => {
   if (b) advSet(b.dataset.reset, null);
 });
 $("s-adv-back").addEventListener("click", advClose);
+// Anchored to a scrolling panel: the head popover closes rather than float.
+$("s-adv-body").addEventListener("scroll", () => PK.swatch && closePicker(), { passive: true });
 $("s-adv-reset").addEventListener("click", () => {
   if (ADV.cat === "speed") return spdResetAll();
   for (const k of advCatKeysAll(ADV.cat)) delete SL.adv[k];

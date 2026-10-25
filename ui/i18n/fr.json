@@ -2133,5 +2133,14 @@
   "whatsnew.error": "La page n'a pas pu être chargée",
   "whatsnew.error_sub": "Vérifiez la connexion à internet, puis réessayez. Le journal des modifications liste aussi chaque changement.",
   "whatsnew.retry": "Réessayer",
-  "whatsnew.changelog": "Ouvrir le CHANGELOG"
+  "whatsnew.changelog": "Ouvrir le CHANGELOG",
+  "swatch.auto": "Automatique",
+  "swatch.empty": "vide",
+  "swatch.unknown_colour": "couleur inconnue",
+  "swatch.unavailable": "absente de cette imprimante",
+  "swatch.choose_head": "Choisir une tête",
+  "swatch.no_bond": "n'adhère pas à une autre matière du plateau",
+  "swatch.connect": "Connectez l'imprimante pour voir ses bobines.",
+  "prepare.printer": "Imprimante dont les bobines colorent la liste",
+  "swatch.tower_mixed": "la tour reste mélangée"
 }

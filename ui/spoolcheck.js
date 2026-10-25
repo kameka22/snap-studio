@@ -377,7 +377,12 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
             const other = expected.find((o) => o.tool !== e.tool && picks[o.tool] === hd);
             const fits = slot?.present && !spReasons(e, sl).length;
             const title = `T${hd} · ${label}${other ? " — " + tr("spool.swap", { what: what(other) }) : ""}`;
-            return `<button type="button" class="sl-token${hd === h ? " on" : ""}${slot?.present ? "" : " is-empty"}${other ? " busy" : ""}" data-tool="${e.tool}" data-head="${hd}"${slot?.present ? "" : " disabled"} tabindex="${hd === stop ? 0 : -1}" role="radio" aria-checked="${hd === h}" title="${esc(title)}"><i${sl.color ? ` style="background:${esc(sl.color)}"` : ""}></i>T${hd}${fits ? '<em class="ok">✓</em>' : ""}</button>`;
+            return headToken({
+              h: hd, slot, on: hd === h, color: sl.color || "", empty: !slot?.present, title,
+              cls: other ? " busy" : "",
+              attrs: ` type="button" data-tool="${e.tool}" data-head="${hd}"${slot?.present ? "" : " disabled"} tabindex="${hd === stop ? 0 : -1}" role="radio" aria-checked="${hd === h}"`,
+              after: fits ? '<em class="ok">✓</em>' : "",
+            });
           })
           .join("");
         // Only another material is worth a word: the G-code keeps the
@@ -429,12 +434,10 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
     // takes one. Moving alone never swaps colors.
     $("sp-list").onkeydown = (e) => {
       const b = e.target.closest(".sl-token[data-head]");
-      const keys = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1, Home: "first", End: "last" };
-      if (!b || !(e.key in keys)) return;
+      if (!b || !(e.key in SW_KEYS)) return;
       e.preventDefault();
-      const row = [...b.parentElement.querySelectorAll(".sl-token:not(:disabled)")];
-      const i = row.indexOf(b), k = keys[e.key];
-      const next = k === "first" ? row[0] : k === "last" ? row[row.length - 1] : row[(i + k + row.length) % row.length];
+      const row = [...b.parentElement.querySelectorAll(".sl-token")];
+      const next = row[swMove(row, row.indexOf(b), e.key)];
       if (!next) return;
       for (const x of row) x.tabIndex = x === next ? 0 : -1;
       next.focus();

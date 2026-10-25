@@ -1180,12 +1180,9 @@ function prRenderInspector() {
     const model = headsModelNow(o.path);
     return head + prColors(o).map((ext) => {
       const f = model?.filaments?.find((x) => x.index === ext);
-      const tokens = Array.from({ length: n }, (_, h) => {
-        const s = spool(h);
-        const c = s?.present && s.color ? s.color : "";
-        const title = `T${h}${s ? (s.present ? ` · ${[s.kind, s.color].filter(Boolean).join(" · ")}` : " · " + tr("printers.empty_tag")) : ""}`;
-        return `<button class="sl-token${heads[ext]?.h === h ? " on" : ""}${s && !s.present ? " is-empty" : ""}" data-obj="${o.id}" data-ext="${ext}" data-h="${h}" title="${esc(title)}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${h}</button>`;
-      }).join("");
+      const tokens = Array.from({ length: n }, (_, h) =>
+        headToken({ h, slot: spool(h), on: heads[ext]?.h === h, attrs: ` data-obj="${o.id}" data-ext="${ext}" data-h="${h}"` })
+      ).join("");
       const label = tr("slice.color_n", { n: ext });
       return `<div class="p-color" title="${esc([label, f?.kind, f?.color].filter(Boolean).join(" · "))}">
         <span class="p-sw" style="background:${esc(f?.color || "#999")}"></span>
@@ -1590,7 +1587,8 @@ $("p-list").addEventListener("click", (e) => {
   const pick = e.target.closest("[data-pick]");
   if (pick) {
     const r = pick.getBoundingClientRect();
-    prColourPalette(PR.objects.find((o) => o.id === +pick.dataset.pick), r.left, r.bottom);
+    if (PK.prep && PK.anchor === pick && !$("picker").classList.contains("hidden")) return closePicker(true);
+    prColourPalette(PR.objects.find((o) => o.id === +pick.dataset.pick), r.left, r.bottom, pick);
     return;
   }
   const fix = e.target.closest("[data-fix]");
@@ -2305,11 +2303,6 @@ $("p-clear").addEventListener("click", prClear);
 onMenu("prep", async (what) => {
   const byId = (id) => PR.objects.find((o) => o.id === +id);
   if (what === "colour") prColourAction(byId(PR.menuId), PR.menuAt?.x || 0, PR.menuAt?.y || 0);
-  if (what.startsWith("pick:")) {
-    const [, id, h] = what.split(":");
-    prSetPick(byId(id), +h);
-  }
-  if (what.startsWith("unpick:")) prSetPick(byId(what.slice(7)), null);
   if (what === "dup") prDuplicate();
   if (what === "split") prSplit();
   if (what === "center") prCenterSelection();
@@ -2623,18 +2616,27 @@ function prSetPick(o, h) {
   prSchedule();
 }
 
-/* The palette: a native menu of the heads, with the spool each holds. */
-function prColourPalette(o, x, y) {
+/* The palette: the head popover (slice-ui.js openSwatches), each head
+   with the spool it holds, at (x, y) or under `anchor`; "the plate's
+   colours" below once a head is picked. A single head is no choice: it is
+   taken at once. */
+function prColourPalette(o, x, y, anchor = null) {
   if (!o) return;
   const pid = headsActive(), slots = headsSlots(pid), n = headsCount(pid);
-  const items = Array.from({ length: n }, (_, h) => {
-    const s = slots.find((x) => x.index === h);
-    const what = s ? (s.present ? [s.kind, s.color].filter(Boolean).join(" · ") : tr("printers.empty_tag")) : "";
-    return { id: `prep:pick:${o.id}:${h}`, label: `T${h}${what ? " · " + what : ""}`, checked: o.pick === h };
+  const pal = plPalette(o.pick, n);
+  if (pal.single && !pal.plate) return prSetPick(o, 0);
+  openSwatches(anchor || { x, y }, {
+    entries: swHeads({ count: pal.heads.length, slots }),
+    value: o.pick == null ? null : String(o.pick),
+    label: tr("prepare.menu.colour"),
+    note: slots.length ? "" : tr("swatch.connect"),
+    foot: pal.plate ? { label: tr("prepare.colour.plate"), onClick: () => (closePicker(true), prSetPick(o, null)) } : null,
+    onPick: (v) => prSetPick(o, +v),
   });
-  if (o.pick != null) items.push({}, { id: `prep:unpick:${o.id}`, label: tr("prepare.colour.plate") });
-  nativeMenu(items, x, y);
+  PK.prep = true;
 }
+/* The palette goes with what it was opened on. */
+const prPaletteClose = () => PK.prep && PK.swatch && closePicker();
 
 /* "Colour…" from a menu: the palette in "by colour" mode; in "by object"
    mode the object's colour/heads frame, unfolded in the list. */
@@ -2660,12 +2662,7 @@ function prColourBanner(live, slots, n) {
       const cur = PR.colourHeads[ext];
       const unmapped = cur == null;
       const tokens = live
-        ? Array.from({ length: n }, (_, h) => {
-            const s = spool(h);
-            const c = s?.present && s.color ? s.color : "";
-            const title = `T${h}${s ? (s.present ? ` · ${[s.kind, s.color].filter(Boolean).join(" · ")}` : " · " + tr("printers.empty_tag")) : ""}`;
-            return `<button class="sl-token${cur === h ? " on" : ""}${s && !s.present ? " is-empty" : ""}" data-ch="${ext}" data-h="${h}" title="${esc(title)}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${h}</button>`;
-          }).join("")
+        ? Array.from({ length: n }, (_, h) => headToken({ h, slot: spool(h), on: cur === h, attrs: ` data-ch="${ext}" data-h="${h}"` })).join("")
         : "";
       const label = tr("slice.color_n", { n: ext });
       return `<div class="p-color${unmapped ? " unmapped" : ""}" title="${esc([label, kind, color].filter(Boolean).join(" · "))}">
@@ -2799,16 +2796,24 @@ function prHeadColors(gl, o, mesh) {
   if (loc >= 0 && !mesh.hasExt) gl.vertexAttrib1f(loc, colors.length === 1 ? colors[0] : 0);
 }
 
-/* Printer whose spools color the list, when there are several. */
+/* Printer whose spools color the list, when there are several: chips
+   (slice-ui.js printerChips) over the hidden select, which stays the
+   source of truth. */
 function prRenderPrinter() {
   const box = $("p-printer");
   if (!box || typeof headsActive !== "function") return;
   const printers = typeof P !== "undefined" ? P.list : [];
-  box.classList.toggle("hidden", printers.length < 2);
+  $("p-printers").classList.toggle("hidden", printers.length < 2);
   if (printers.length < 2) return;
   const pid = headsActive();
   box.innerHTML = printers.map((p) => `<option value="${esc(p.id)}"${p.id === pid ? " selected" : ""}>${esc(p.name || p.host)}</option>`).join("");
+  $("p-printers").innerHTML = printerChips(printers, pid);
 }
+$("p-printers").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-printer]");
+  if (b && !b.disabled) setSelect($("p-printer"), b.dataset.printer);
+});
+$("p-list").addEventListener("scroll", () => prPaletteClose(), { passive: true });
 $("p-printer")?.addEventListener("change", (e) => {
   headsSetActive(e.target.value, "prepare");
   prRefreshSpools();
@@ -2837,6 +2842,7 @@ function prRefreshSpools() {
 }
 window.addEventListener("headschange", () => {
   if (window.currentView !== "prepare") return;
+  prPaletteClose();
   prRenderInspector();
   prSchedule();
 });

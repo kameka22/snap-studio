@@ -3365,11 +3365,58 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   font-size: 11px;
   font-weight: 600;
 }
-.sl-token i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.12); background: var(--thumb-bg); }
+/* The dot's edge in the text's colour: seen on the light and the dark theme
+   alike; stronger for a spool close to white or black (swatch-logic.js swEdge). */
+.sl-token i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); background: var(--thumb-bg); }
+.sl-token i.edge { border-color: color-mix(in srgb, var(--text) 32%, transparent); }
 .sl-token.on { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
 .sl-token.is-empty { opacity: 0.4; }
 .sl-token.is-empty i { background: repeating-linear-gradient(45deg, var(--separator) 0 3px, transparent 3px 6px); }
 .sl-token em { font-style: normal; color: var(--warning); }
+/* Loaded, colour not read: a light checker, not a grey spool. */
+.sl-token.no-colour i { background: repeating-conic-gradient(color-mix(in srgb, var(--text) 16%, transparent) 0 25%, transparent 0 50%) 50% / 6px 6px; }
+/* "Automatic": the engine picks, no spool to show. */
+.sl-token.sw-auto { padding: 3px 4px; }
+.sl-token.sw-auto i { background: none; border: 1.5px dashed color-mix(in srgb, var(--text) 40%, transparent); }
+
+/* Head picker (slice-ui.js swatchSelect): a field showing the chosen head. */
+.sw-trigger { display: inline-flex; align-items: center; gap: 6px; width: auto; min-width: 150px; max-width: 240px; padding: 2px 8px 2px 3px; color: var(--text); text-align: left; }
+.sw-trigger .sl-token { border: 0; padding: 0 2px; background: none; box-shadow: none; color: var(--text); }
+.sw-trigger .sw-mat { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-secondary); }
+.sw-trigger .sw-caret { color: var(--text-tertiary); font-size: 10px; }
+.sw-trigger:focus-visible { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: var(--focus-ring); }
+.sw-trigger:disabled { opacity: 0.55; }
+
+/* The head popover: the search picker's shell, a grid of heads. */
+.picker.sw-pop { width: auto; max-width: 432px; }
+.sw-grid { display: flex; flex-wrap: wrap; gap: 2px; padding-top: 6px; }
+.sw-opt { width: 80px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px 6px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; min-width: 0; }
+.sw-opt:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.sw-opt.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.sw-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sw-opt:disabled { opacity: 0.55; }
+.sw-opt .sl-token { pointer-events: none; }
+.sw-opt small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text-secondary); }
+.sw-tag { font-size: 10px; color: var(--text-tertiary); }
+.sw-note { padding: 4px 6px 2px; font-size: 11px; color: var(--text-secondary); }
+
+/* Printer chips, small: Prepare's list header. The state is the icon's
+   colour; its words stay for screen readers. */
+.sl-pchips.dense { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+/* In the list's header: a line of its own, under the title and the mode. */
+#p-objects-head { flex-wrap: wrap; }
+#p-printers { flex: 1 0 100%; }
+.sl-pchips.dense .sl-pchip { gap: 5px; padding: 2px 8px 2px 3px; border-radius: 999px; border-width: 1px; text-transform: none; letter-spacing: 0; cursor: default; }
+.sl-pchips.dense .sl-pchip.on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
+.sl-pchips.dense .sl-pchip:hover:not(.on) { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border)); }
+.sl-pchips.dense .sl-pchip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sl-pchips.dense .sl-pchip-icon { width: 18px; height: 18px; border-radius: 50%; }
+.sl-pchips.dense .sl-pchip-icon svg { width: 11px; height: 11px; }
+.sl-pchips.dense .sl-pchip-icon.printing, .sl-pchips.dense .sl-pchip-icon.paused { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+.sl-pchips.dense .sl-pchip-icon.offline, .sl-pchips.dense .sl-pchip-icon.error { background: color-mix(in srgb, var(--text-secondary) 14%, transparent); color: var(--text-secondary); }
+.sl-pchips.dense .sl-pchip-text b { max-width: 96px; font-size: 11px; font-weight: 500; }
+.sl-pchips.dense .sl-pchip.on .sl-pchip-text b { font-weight: 600; }
+.sl-pchips.dense .sl-pchip-text small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Search picker */
 .picker {
@@ -3931,7 +3978,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ctl-fil-sheet { width: min(460px, 92vw); }
 .ctl-fil-preview { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; font-size: 13px; }
 .ctl-fil-preview i { width: 22px; height: 22px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
-.ctl-fil-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+/* As many columns as fields shown: Material leaves when it is pills. */
+.ctl-fil-grid { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
+.ctl-fil-mats { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12px; color: var(--text-secondary); }
+.ctl-fil-mats .seg { align-self: flex-start; flex-wrap: wrap; }
+.ctl-fil-mats .seg-btn { font-size: 12px; }
+.ctl-fil-mats .seg-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .ctl-fil-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); min-width: 0; }
 .ctl-fil-grid select { width: 100%; }
 .ctl-fil-colors { display: grid; grid-template-columns: repeat(auto-fill, 28px); gap: 9px; }

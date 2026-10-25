@@ -22,6 +22,13 @@ with its packages for macOS, Windows and Linux. What comes next:
   tower's wall head and ooze prevention (temperature drop of idle heads,
   preheat time, idle temperature).
 
+### Changed
+- **Head pickers show the spools**: in the slice sheet's advanced settings
+  and in Prepare's "Colour…" palette, each head is shown with its spool's
+  colour and material instead of a text list; Prepare's printer picker and
+  the filament sheet's material use chips. Spool dots get an edge that shows
+  on the dark theme too, white and black spools included.
+
 ## [0.14.2] — 2026-10-24
 
 ### Added
