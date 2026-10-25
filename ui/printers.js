@@ -986,15 +986,25 @@ $("cam-img").addEventListener("error", () => {
 // The camera's switch: on, the live image; off, nothing is fetched.
 $("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart() : camStop()));
 // Double-click: the image takes the full width of the printer pane.
-/* Enlarge the camera: its button (shown on hover) or a double-click. */
-function camToggleSize() {
-  const big = $("cam-box").classList.toggle("big");
+/* Enlarge the camera: its button (shown on hover). */
+function camToggleSize(big = !$("cam-box").classList.contains("big")) {
+  $("cam-box").classList.toggle("big", big);
   $("cam-size").title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
 }
-$("cam-box").addEventListener("dblclick", (e) => !e.target.closest(".cam-bar, .cam-close") && !CAM.full && !CAM.pinned && camToggleSize());
-// Its ✕, at every size (the pinned window has its own in its header).
+/* A double-click: one size up each time — enlarged, then full size — and
+   from full size back to the normal size. Not in the pinned window, whose
+   click leads to the printer's page. */
+function camNextSize() {
+  if (CAM.full) {
+    camToggleSize(false);
+    camFull(false);
+  } else if ($("cam-box").classList.contains("big")) camFull(true);
+  else camToggleSize(true);
+}
+$("cam-box").addEventListener("dblclick", (e) => !e.target.closest(".cam-bar") && !CAM.pinned && camNextSize());
+// Its ✕, with the other buttons (the pinned window has its own in its header).
 $("cam-close").addEventListener("click", camStop);
-$("cam-size").addEventListener("click", camToggleSize);
+$("cam-size").addEventListener("click", () => camToggleSize());
 $("cam-full-btn").addEventListener("click", () => camFull(!CAM.full));
 $("cam-pin").addEventListener("click", () => camPin(!CAM.pinned));
 $("cam-pip-unpin").addEventListener("click", () => camPin(false));
@@ -1003,7 +1013,7 @@ $("cam-pip-close").addEventListener("click", camStop);
 // around the image drawn to fit — gives it back, as Esc does. No frame yet
 // or offline: the whole box is the camera, only the margin does.
 $("cam-full").addEventListener("click", (e) => {
-  if (!CAM.full || e.target.closest(".cam-bar, .cam-close")) return;
+  if (!CAM.full || e.target.closest(".cam-bar")) return;
   if (e.target === $("cam-full")) return camFull(false);
   const img = $("cam-img");
   if (CAM.offline || img.classList.contains("hidden") || !img.naturalWidth) return;
