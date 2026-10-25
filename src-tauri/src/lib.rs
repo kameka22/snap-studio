@@ -536,10 +536,18 @@ async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) ->
 
 /// Saves the plate as 3MF.
 #[tauri::command]
-async fn plate_save(scene: Vec<plate::SceneItem>, path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, Path::new(&path)))
+async fn plate_save(scene: Vec<plate::SceneItem>, tower: Option<plate::TowerPlace>, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, tower, Path::new(&path)))
         .await
         .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+/// The prime tower a 3MF keeps (its first plate's), if any.
+#[tauri::command]
+async fn plate_tower(path: String) -> Result<Option<plate::FileTower>, String> {
+    tauri::async_runtime::spawn_blocking(move || plate::tower_of(Path::new(&path)))
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -2023,6 +2031,7 @@ pub fn run() {
             plate_pieces,
             plate_orient,
             plate_save,
+            plate_tower,
             print_send,
             pf_overview,
             pf_count,

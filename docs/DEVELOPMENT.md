@@ -89,6 +89,9 @@ ui/               HTML/CSS/JS interface, one file per view (no build step)
                   pure logic (Speed adjustment, spool check, printer files,
                   AI list, terminal view, protocol URLs), tested by
                   scripts/test-*.js
+  prepare-tower.js tower-logic.js   Prepare's prime tower: switch, box,
+                  placement, size estimate (tower-logic.js, tested by
+                  scripts/test-tower.js)
   i18n.js         translation, number and date formats, language switching
   whatsnew.js whatsnew-logic.js   What's new: sidebar card, the site's page
                   in a sheet; whats-new.json, its highlights (scripts/whats-new.py)

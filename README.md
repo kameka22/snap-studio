@@ -73,7 +73,7 @@ Your 3MF files at a glance.
 
 ### 🧩 Prepare
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Prepare" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Prepare: a model on the plate, its colors sent to the heads, and the prime tower" />
 
 The U1 plate as in Orca — then slice.
 
@@ -81,7 +81,12 @@ The U1 plate as in Orca — then slice.
   auto-orient, auto-arrange, undo.
 - Objects can be set aside off the plate (not sliced) and put back in a click.
 - Each object lists its colors, painted ones included, and sends each to the
-  head you pick.
+  head you pick, shown with its spool's color and material.
+- **Prime tower**: with two heads or more, a switch under the object list
+  (off on every new plate, the same setting as the slice sheet's) shows the
+  tower on the plate as a grey box, in a free corner. Move and turn it like
+  a part; its size is estimated, then the real one after slicing. A tower
+  on a part or off the plate is flagged, with a fix.
 
 <br clear="both">
 
@@ -108,6 +113,8 @@ The Snapmaker Orca engine, built in: you do not need Snapmaker Orca installed.
   U1's four heads and the model's colors below.
 - Each color of each object sent to its head, from the spools read on the printer.
 - **Speed**: one slider from 50 % to 120 % of the profile.
+- Quality, infill, walls, surfaces and more, with styles (supports, brim,
+  seam, patterns) chosen from pictures.
 - A progress bar that follows the engine's work, stage by stage.
 - A toolpath preview, then sent to the printer or saved as G-code.
 
@@ -120,13 +127,18 @@ adjustments on the right, the U1's four heads and the model's colors below:
 
 - the spools read from the printer, each color of each object sent to its
   head, the plate surface (textured PEI, smooth PEI…) and its temperature;
-- infill, walls, supports, brim, seam, Orca's advanced settings, and saving
-  them as a custom profile;
+- quality (first layer, line widths, precision, overhangs and bridges),
+  infill (pattern from pictures), walls, **Surfaces** (top and bottom
+  shells, ironing) and **Other** (print sequence, spiral vase, fuzzy skin,
+  skirt) behind a ⚙; supports, brim, seam and patterns picked from
+  pictures; number fields with ‹ › steppers (double-click to type); Orca's
+  advanced settings, and saving them as a custom profile;
 - **Speed**: one slider from 50 % to 120 % of the profile (speeds × f,
   accelerations × f²), with a ⚙ panel showing each value, profile →
   computed; at 100 % the G-code is the profile's;
 - each profile's details as the engine gets them;
-- **multi-material**: the prime tower (and its outer wall's head), ooze
+- **multi-material**: the prime tower (its own switch, shared with
+  Prepare, where it is placed on the plate; its outer wall's head), ooze
   prevention; a warning when the tower would mix materials that do not
   bond (PLA and PETG, PLA and TPU…), with one-click fixes.
 
@@ -182,8 +194,8 @@ Running prints and a queue.
 The printer's camera, live.
 
 - From the printer's page and from each print.
-- Three sizes: a thumbnail, enlarged, or full size over the app (Esc to
-  leave).
+- Three sizes: a thumbnail, enlarged, or full size over the app (Esc or a
+  click beside the picture to leave); a ✕ turns it off.
 - **Pinned**: a small window that stays on every screen while you prepare
   or browse (Explore's sites included), in the corner of your choice; a click on the image goes back
   to the printer.

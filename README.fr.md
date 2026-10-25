@@ -82,7 +82,7 @@ Vos fichiers 3MF en un coup d'œil.
 
 ### 🧩 Préparer
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Préparer" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Préparer : un modèle sur le plateau, ses couleurs envoyées aux têtes, et la tour d'amorçage" />
 
 Le plateau U1 comme dans Orca — puis découper.
 
@@ -92,7 +92,14 @@ Le plateau U1 comme dans Orca — puis découper.
 - Des objets peuvent être mis de côté hors du plateau (non découpés) et
   remis d'un clic.
 - Chaque objet liste ses couleurs, peintes comprises, et envoie chacune vers
-  la tête de votre choix.
+  la tête de votre choix, montrée avec la couleur et la matière de sa bobine.
+- **Tour d'amorçage** : avec deux têtes ou plus, un
+  interrupteur sous la liste des objets (désactivé sur chaque nouveau
+  plateau, le même réglage que dans la fenêtre de découpe) montre la tour
+  sur le plateau, une boîte grise placée dans un coin libre. Elle se déplace
+  et pivote comme une pièce ; sa taille est estimée, puis réelle après la
+  découpe. Une tour sur une pièce ou hors du plateau est signalée, avec une
+  correction.
 
 <br clear="both">
 
@@ -120,6 +127,8 @@ Le moteur Snapmaker Orca, intégré : inutile d'installer Snapmaker Orca.
 - Chaque couleur de chaque objet envoyée vers sa tête, d'après les bobines
   lues sur l'imprimante.
 - **Vitesse** : un seul curseur de 50 % à 120 % du profil.
+- Qualité, remplissage, parois, surfaces et plus, avec des styles (supports,
+  bordure, couture, motifs) choisis en images.
 - Une barre de progression qui suit le travail du moteur, étape par étape.
 - Un aperçu des trajectoires, puis l'envoi à l'imprimante ou un G-code
   enregistré.
@@ -135,14 +144,20 @@ modèle en dessous :
 - les bobines lues sur l'imprimante, chaque couleur de chaque objet envoyée
   vers sa tête, la surface du plateau (PEI texturé, PEI lisse…) et sa
   température ;
-- remplissage, parois, supports, bordure, couture, les réglages avancés
-  d'Orca, et leur enregistrement en profil perso ;
+- qualité (première couche, largeurs de ligne, précision, surplombs et
+  ponts), remplissage (motif en images), parois, **Surfaces** (couches du
+  dessus et du dessous, lissage) et **Autres** (séquence d'impression, vase
+  en spirale, surface floue, jupe) derrière un ⚙ ; supports, bordure,
+  couture et motifs choisis en images ; des champs numériques avec des
+  flèches ‹ › (double-clic pour saisir) ; les réglages avancés d'Orca, et
+  leur enregistrement en profil perso ;
 - **Vitesse** : un seul curseur de 50 % à 120 % du profil (vitesses × f,
   accélérations × f²), avec un panneau ⚙ qui montre chaque valeur, profil →
   calculée ; à 100 %, le G-code est celui du profil ;
 - le détail de chaque profil tel que le moteur le reçoit ;
-- **multimatériau** : la tour de purge (et la tête de son mur extérieur), la
-  prévention des coulures ; un avertissement quand la tour mélangerait des
+- **multimatériau** : la tour d'amorçage (son propre interrupteur, partagé
+  avec Préparer, où elle se place sur le plateau ; la tête de son mur
+  extérieur), la prévention des coulures ; un avertissement quand la tour mélangerait des
   matières qui n'adhèrent pas (PLA et PETG, PLA et TPU…), avec des
   corrections en un clic.
 
@@ -202,7 +217,7 @@ La caméra de l'imprimante, en direct.
 
 - Depuis la page de l'imprimante et depuis chaque impression.
 - Trois tailles : une vignette, agrandie, ou en plein écran sur l'app
-  (Échap pour en sortir).
+  (Échap ou un clic à côté de l'image pour en sortir) ; un ✕ l'éteint.
 - **Épinglée** : une petite fenêtre qui reste sur tous les écrans pendant
   que vous préparez ou parcourez (sites d'Explorer compris), dans le coin de votre choix ; un clic sur
   l'image ramène à l'imprimante.
