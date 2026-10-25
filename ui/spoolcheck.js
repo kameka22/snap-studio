@@ -216,8 +216,56 @@ function spDefaults(expected, slots) {
   return picks;
 }
 
+/* ------------------------------------------------------------ bonding */
+
+/* Whether two material families bond to each other, layer on layer: what
+   a prime tower shared by several heads needs (#35), and a plate under a
+   material (#16). Same family: they bond; the pairs below by experience
+   (Snapmaker's wiki, slicer guides); any other pair: not known, never
+   warned about. */
+const SP_BOND = [["ABS", "ASA"], ["PETG", "PCTG"], ["PETG", "PET"], ["PCTG", "PET"], ["TPU", "TPE"], ["PLA", "PVA"]];
+const SP_NO_BOND = [
+  ["PLA", "PETG"], ["PLA", "PCTG"], ["PLA", "PET"], ["PLA", "TPU"], ["PLA", "TPE"], ["PLA", "ABS"], ["PLA", "ASA"],
+  ["PETG", "TPU"], ["PETG", "TPE"], ["PCTG", "TPU"], ["PCTG", "TPE"], ["PET", "TPU"], ["PET", "TPE"],
+];
+const spPair = (list, a, b) => list.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+
+/* true: they bond; false: they do not; null: not known (or a material
+   not known). Families or material names ("PLA Matte"). */
+function spBonds(a, b) {
+  const fa = spMaterialFamily(a), fb = spMaterialFamily(b);
+  if (!fa || !fb) return null;
+  if (fa === fb || spPair(SP_BOND, fa, fb)) return true;
+  return spPair(SP_NO_BOND, fa, fb) ? false : null;
+}
+
+/* The prime tower and the plate's materials. `heads`: the heads the plate
+   prints with, { n, material }; `tower`: the tower is on (and possible: not
+   "by object"); `wall`: the head printing the tower's outer wall, from 0
+   (null: the engine picks). Null when there is nothing to say; otherwise
+   { state: "conflict" | "walled", pairs: [[n, n]] that do not bond,
+   families: [{ family, heads: [n] }] in the plate's order }. */
+function spTowerAdvice({ heads, tower, wall = null }) {
+  if (!tower) return null;
+  const used = (heads || []).filter((h) => spMaterialFamily(h.material));
+  if (used.length < 2) return null;
+  const pairs = [];
+  for (let i = 0; i < used.length; i++)
+    for (let j = i + 1; j < used.length; j++) if (spBonds(used[i].material, used[j].material) === false) pairs.push([used[i].n, used[j].n]);
+  if (!pairs.length) return null;
+  const families = [];
+  for (const h of used) {
+    const f = spMaterialFamily(h.material);
+    const g = families.find((x) => x.family === f);
+    if (g) g.heads.push(h.n);
+    else families.push({ family: f, heads: [h.n] });
+  }
+  // The outer wall in one of them: the inside still mixes, said, not urged.
+  return { state: wall != null && used.some((h) => h.n === wall) ? "walled" : "conflict", pairs, families };
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { SP_COLOR_TOL, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spDefaults };
+  module.exports = { SP_COLOR_TOL, spBonds, spTowerAdvice, spMaterialFamily, spMaterialFromName, spColorDelta, spExpected, spLoaded, spReasons, spMismatches, spRemap, spSuggest, spHeadOf, spDefaults };
 }
 
 /* ------------------------------------------------------------ the sheet */
@@ -329,7 +377,12 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
             const other = expected.find((o) => o.tool !== e.tool && picks[o.tool] === hd);
             const fits = slot?.present && !spReasons(e, sl).length;
             const title = `T${hd} · ${label}${other ? " — " + tr("spool.swap", { what: what(other) }) : ""}`;
-            return `<button type="button" class="sl-token${hd === h ? " on" : ""}${slot?.present ? "" : " is-empty"}${other ? " busy" : ""}" data-tool="${e.tool}" data-head="${hd}"${slot?.present ? "" : " disabled"} tabindex="${hd === stop ? 0 : -1}" role="radio" aria-checked="${hd === h}" title="${esc(title)}"><i${sl.color ? ` style="background:${esc(sl.color)}"` : ""}></i>T${hd}${fits ? '<em class="ok">✓</em>' : ""}</button>`;
+            return headToken({
+              h: hd, slot, on: hd === h, color: sl.color || "", empty: !slot?.present, title,
+              cls: other ? " busy" : "",
+              attrs: ` type="button" data-tool="${e.tool}" data-head="${hd}"${slot?.present ? "" : " disabled"} tabindex="${hd === stop ? 0 : -1}" role="radio" aria-checked="${hd === h}"`,
+              after: fits ? '<em class="ok">✓</em>' : "",
+            });
           })
           .join("");
         // Only another material is worth a word: the G-code keeps the
@@ -381,12 +434,10 @@ function spoolCheck({ pid, tools, profile, stats, slots, canEdit = false, print 
     // takes one. Moving alone never swaps colors.
     $("sp-list").onkeydown = (e) => {
       const b = e.target.closest(".sl-token[data-head]");
-      const keys = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1, Home: "first", End: "last" };
-      if (!b || !(e.key in keys)) return;
+      if (!b || !(e.key in SW_KEYS)) return;
       e.preventDefault();
-      const row = [...b.parentElement.querySelectorAll(".sl-token:not(:disabled)")];
-      const i = row.indexOf(b), k = keys[e.key];
-      const next = k === "first" ? row[0] : k === "last" ? row[row.length - 1] : row[(i + k + row.length) % row.length];
+      const row = [...b.parentElement.querySelectorAll(".sl-token")];
+      const next = row[swMove(row, row.indexOf(b), e.key)];
       if (!next) return;
       for (const x of row) x.tabIndex = x === next ? 0 : -1;
       next.focus();

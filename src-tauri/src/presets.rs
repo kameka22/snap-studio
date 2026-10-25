@@ -73,16 +73,34 @@ pub struct Details {
     pub custom: Vec<String>,
 }
 
+/// Overrides the engine reads from the filament presets, not the process
+/// one: a value there is ignored, each filament carrying its own (checked
+/// on a real slice, `engine_advanced_overrides`). `idle_temperature`: a
+/// head's nozzle temperature while another prints (ooze prevention).
+pub const FILAMENT_OVERRIDES: &[&str] = &["idle_temperature"];
+
 /// What Snap Studio adds to the process preset: the plate (the machine's by
-/// default), then the user's overrides.
+/// default), then the user's overrides (but the filaments' own keys).
 pub fn process_extra(index: &Index, machine: &str, overrides: &Map<String, Value>) -> Map<String, Value> {
     let (_, bed) = index.bed_types(machine);
     let mut out = Map::new();
     out.insert("curr_bed_type".into(), Value::String(bed));
     for (k, v) in overrides {
-        out.insert(k.clone(), v.clone());
+        if !FILAMENT_OVERRIDES.contains(&k.as_str()) {
+            out.insert(k.clone(), v.clone());
+        }
     }
     out
+}
+
+/// The user's overrides that go to every filament preset, as the engine
+/// reads them there (one value per filament: an array).
+pub fn filament_overrides(overrides: &Map<String, Value>) -> Map<String, Value> {
+    overrides
+        .iter()
+        .filter(|(k, _)| FILAMENT_OVERRIDES.contains(&k.as_str()))
+        .map(|(k, v)| (k.clone(), if v.is_array() { v.clone() } else { Value::Array(vec![v.clone()]) }))
+        .collect()
 }
 
 /// What Snap Studio adds to a filament preset: the spool's real color.
@@ -636,6 +654,9 @@ pub fn prepare(
         for (k, v) in filament_extra(colors.get(i).and_then(|c| c.as_deref())) {
             cfg.insert(k, v);
         }
+        for (k, v) in filament_overrides(overrides) {
+            cfg.insert(k, v);
+        }
         // Every filament declares a color: the engine counts the filaments by
         // `filament_colour` when it splits a painted model, and drops the
         // painting of those beyond — a head without a known spool color lost
@@ -747,6 +768,24 @@ mod tests {
     }
 
     /// The details shown are exactly what the engine receives.
+    /// A filament's own key goes to the filaments, as an array, never to
+    /// the process; the rest stays the process's.
+    #[test]
+    fn filament_keys_go_to_the_filaments() {
+        let mut over = Map::new();
+        over.insert("idle_temperature".into(), "150".into());
+        over.insert("ooze_prevention".into(), "1".into());
+        let f = filament_overrides(&over);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f["idle_temperature"], serde_json::json!(["150"]));
+        let mut arr = Map::new();
+        arr.insert("idle_temperature".into(), serde_json::json!(["120", "130"]));
+        assert_eq!(filament_overrides(&arr)["idle_temperature"], serde_json::json!(["120", "130"]), "an array stays as is");
+        let Some(idx) = repo_index().or_else(index) else { return };
+        let p = process_extra(&idx, "Snapmaker U1 (0.4 nozzle)", &over);
+        assert!(!p.contains_key("idle_temperature") && p["ooze_prevention"] == "1");
+    }
+
     #[test]
     fn details_match_what_the_engine_gets() {
         let Some(idx) = repo_index().or_else(index) else { return };

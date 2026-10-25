@@ -125,7 +125,10 @@ adjustments on the right, the U1's four heads and the model's colors below:
 - **Speed**: one slider from 50 % to 120 % of the profile (speeds × f,
   accelerations × f²), with a ⚙ panel showing each value, profile →
   computed; at 100 % the G-code is the profile's;
-- each profile's details as the engine gets them.
+- each profile's details as the engine gets them;
+- **multi-material**: the prime tower (and its outer wall's head), ooze
+  prevention; a warning when the tower would mix materials that do not
+  bond (PLA and PETG, PLA and TPU…), with one-click fixes.
 
 Then a toolpath preview with duration, filament and cost, sent to the
 printer — with its picture on the printer's screen — or saved as G-code.

@@ -483,6 +483,8 @@ function slSummary() {
   $("s-summary").innerHTML = parts
     .map((p) => (typeof p === "object" ? `<span class="${esc(p.cls)}">${esc(p.text)}</span>` : `<span>${esc(p)}</span>`))
     .join("");
+  // What goes to the engine changed: the prime tower's materials too.
+  if (typeof advRenderTower === "function") advRenderTower();
 }
 
 /* Adjustments touched by hand: they survive a profile change. */
@@ -541,7 +543,7 @@ function showSliceBusy(busy) {
   $("s-cancel").classList.toggle("hidden", busy);
   $("s-stop").classList.toggle("hidden", !busy);
   document
-    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn)")
+    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn), #s-tower button")
     .forEach((el) => (el.disabled = busy));
   if (busy) closePicker();
   // Unlocked: the chips of empty heads must stay inactive.

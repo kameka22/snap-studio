@@ -141,7 +141,6 @@ assert.deepStrictEqual([busy["p-orient"], busy["p-split"]], [{ show: true, on: f
 assert.strictEqual(L.plTools({ n: 1 })["p-slice"].on, false);
 assert.strictEqual(L.plTools({ n: 1 })["p-save"].on, true);
 
-console.log("prepare: ok");
 
 // Bulk buttons of the object list: "all" without a relevant selection or
 // with the whole side selected, "some" with a count otherwise; a mixed
@@ -192,3 +191,21 @@ console.log("prepare: ok");
   ];
   assert.deepEqual(L.plUncoloured(objs, (o) => o.st, (o) => o.extruders || []), [2]);
 }
+
+// "By colour" palette: every head, the picked one on; "the plate's colours"
+// only once a head is picked; a single head is no choice.
+{
+  const none = L.plPalette(null, 4);
+  assert.deepStrictEqual(none.heads.map((x) => x.h), [0, 1, 2, 3]);
+  assert.ok(none.heads.every((x) => !x.on));
+  assert.strictEqual(none.plate, false, "no plate row before a pick");
+  assert.strictEqual(none.single, false);
+  const two = L.plPalette(2, 4);
+  assert.deepStrictEqual(two.heads.filter((x) => x.on).map((x) => x.h), [2]);
+  assert.strictEqual(two.plate, true, "plate row once picked");
+  assert.strictEqual(L.plPalette(0, 4).plate, true, "head 0 is a pick");
+  assert.strictEqual(L.plPalette(null, 1).single, true);
+  assert.strictEqual(L.plPalette(null, 0).heads.length, 1, "at least one head");
+}
+
+console.log("prepare: ok");

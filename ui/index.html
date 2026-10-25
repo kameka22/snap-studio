@@ -324,6 +324,7 @@
             <button type="button" class="seg-btn" role="radio" data-assoc="colour" data-i18n="prepare.assoc.colour">By colour</button>
           </div>
           <select id="p-printer" class="hidden"></select>
+          <div id="p-printers" class="sl-pchips dense hidden" role="radiogroup" aria-label="Printer whose spools colour the list" data-i18n-aria="prepare.printer"></div>
         </div>
         <div id="p-list" class="p-float-body"></div>
       </div>
@@ -1188,15 +1189,16 @@
               <input type="checkbox" id="s-brim" class="sw" role="switch" />
               <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
+            <div class="sl-adv-row" id="s-adv-mm-row">
+              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
+              <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
+              <input type="checkbox" id="s-tower-sw" class="sw" role="switch" aria-label="Prime tower" data-i18n-aria="slice.adv.g.tower" />
+              <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+            </div>
             <div class="sl-adv-row">
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
               <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
               <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
-            </div>
-            <div class="sl-adv-row" id="s-adv-mm-row">
-              <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
-              <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
-              <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
           </div>
           <div class="sl-line sl-save-line">
@@ -1227,6 +1229,7 @@
     </div>
 
     <div class="sl-foot">
+      <div id="s-tower" class="sl-tower hidden" role="status"></div>
       <div id="s-progress" class="progress hidden"><i></i></div>
       <div id="s-msg" class="pf-test"></div>
       <div class="sl-foot-row">
@@ -1568,8 +1571,12 @@
     <h3 id="ctlfil-title"></h3>
     <p class="det-sub" data-i18n="ctl.fil.note">The materials the printer knows, as on its screen.</p>
     <div class="ctl-fil-preview"><i id="ctlfil-preview"></i><b id="ctlfil-preview-t"></b></div>
+    <div id="ctlfil-mats" class="ctl-fil-mats hidden">
+      <span id="ctlfil-mats-t" data-i18n="ctl.fil.material">Material</span>
+      <div id="ctlfil-mats-seg" class="seg" role="radiogroup" aria-labelledby="ctlfil-mats-t"></div>
+    </div>
     <div class="ctl-fil-grid">
-      <label><span data-i18n="ctl.fil.material">Material</span><select id="ctlfil-material"></select></label>
+      <label id="ctlfil-material-l"><span data-i18n="ctl.fil.material">Material</span><select id="ctlfil-material"></select></label>
       <label><span data-i18n="ctl.fil.vendor">Brand</span><select id="ctlfil-vendor"></select></label>
       <label><span data-i18n="ctl.fil.sub">Type</span><select id="ctlfil-sub"></select></label>
     </div>
@@ -1987,6 +1994,7 @@
 <script src="printers.js"></script>
 <script src="viewer.js"></script>
 <script src="slice.js"></script>
+<script src="swatch-logic.js"></script>
 <script src="slice-ui.js"></script>
 <script src="engine.js"></script>
 <script src="profiles.js"></script>

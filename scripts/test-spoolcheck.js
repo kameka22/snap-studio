@@ -99,4 +99,31 @@ assert.deepEqual(S.spDefaults([{ tool: 3, material: "PLA", color: "#b0309a" }], 
 // Own head empty, a fitting spool elsewhere: taken.
 assert.deepEqual(S.spDefaults([{ tool: 3, material: "PETG", color: "#000000" }], slots), { 3: 2 });
 
+// Bonding between materials (the prime tower, #35; the plate, #16).
+assert.equal(S.spBonds("PLA", "PLA"), true, "same family");
+assert.equal(S.spBonds("PLA Matte", "PLA+ Silk"), true, "variants of a family");
+assert.equal(S.spBonds("PLA", "PETG"), false);
+assert.equal(S.spBonds("PETG", "PLA"), false, "either way round");
+assert.equal(S.spBonds("PLA", "TPU 95A"), false);
+assert.equal(S.spBonds("PETG HF", "flex"), false, "an alias (FLEX → TPU)");
+assert.equal(S.spBonds("ABS", "ASA"), true, "close families bond");
+assert.equal(S.spBonds("PA", "PC"), null, "not known: never warned about");
+assert.equal(S.spBonds("", "PLA"), null);
+assert.equal(S.spBonds("?", "PLA"), null);
+
+// The prime tower's advice.
+const h = (n, material) => ({ n, material });
+assert.equal(S.spTowerAdvice({ tower: false, heads: [h(0, "PLA"), h(1, "PETG")] }), null, "no tower, nothing to say");
+assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PLA")] }), null, "one head");
+assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PLA"), h(1, "PLA Matte")] }), null, "they bond");
+assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PLA"), h(1, "")] }), null, "a material not known");
+assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PA"), h(1, "PC")] }), null, "a pair not known");
+let a = S.spTowerAdvice({ tower: true, heads: [h(0, "PLA"), h(2, "PETG"), h(3, "PLA Silk")] });
+assert.equal(a.state, "conflict");
+assert.deepEqual(a.pairs, [[0, 2], [2, 3]]);
+assert.deepEqual(a.families, [{ family: "PLA", heads: [0, 3] }, { family: "PETG", heads: [2] }], "in the plate's order");
+a = S.spTowerAdvice({ tower: true, wall: 0, heads: [h(0, "PLA"), h(2, "PETG")] });
+assert.equal(a.state, "walled", "the outer wall in one material: said, not urged");
+assert.equal(S.spTowerAdvice({ tower: true, wall: 1, heads: [h(0, "PLA"), h(2, "PETG")] }).state, "conflict", "a wall head the plate does not use");
+
 console.log("spoolcheck.js OK");
