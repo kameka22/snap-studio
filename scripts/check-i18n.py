@@ -24,7 +24,7 @@ SRC = ROOT / "src-tauri" / "src"
 DYNAMIC = (
     "ais.item.", "ais.mode.", "welcome.ai.chosen.", "color.", "engine.phase.", "feature.", "files.sort.", "pd.kind.", "printers.state.",
     "prints.state.", "slice.pstate.", "slice.stage.", "style.", "maint.t.", "maint.nozzle.", "maint.in.", "maint.late.", "bm.st.", "bm.done.", "bm.f.", "bm.level.", "bm.phase.", "bm.set.level_", "bm.side.", "ctl.st.", "ctl.lock.", "ctl.why.", "ctl.doing.", "ctl.confirm.", "ctl.help.",
-    "snap.site.", "explore.desc.",
+    "snap.site.", "explore.desc.", "slice.vp.",
 )
 
 # French that may legitimately stay in the code (names, data matching).

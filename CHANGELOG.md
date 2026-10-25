@@ -34,6 +34,18 @@ with its packages for macOS, Windows and Linux. What comes next:
   controls; the AI mode with cards that say what each one means. The AI
   list's filters move into a Filters popover (with the number active), and
   its sort into a menu, as in Files.
+- **Visual slice styles**: in the slice sheet's Advanced panels, support
+  type and style, support base and interface patterns, brim type and seam
+  position are chosen from pictures with a short explanation instead of
+  plain lists. Support styles only offer those that suit the support type
+  (normal or tree), and going back to the other type resets an unsuited
+  style to Default, as Orca does; a value from a project that the list does
+  not offer is shown as it is rather than as the first choice.
+- **Number steppers**: the number fields of the slice sheet's advanced and
+  speed panels and the AI's size limit show ‹ value › instead of the small
+  native arrows: a click steps (held, it repeats), the arrow keys too, and a
+  double-click or Enter on the value lets you type one (Esc puts the old one
+  back). Percentages step by one.
 
 ## [0.14.2] — 2026-10-24
 

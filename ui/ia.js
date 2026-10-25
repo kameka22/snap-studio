@@ -663,6 +663,7 @@ onMenu("iadest", async (arg) => {
 });
 
 /* Creation from scratch: the size limit starts from the printer's bed. */
+steppersIn($("ia-cfields"));
 const iaBed = () => (typeof PR !== "undefined" && PR.bed) || { w: 270, d: 270 };
 function iaBedFill() {
   const bed = iaBed();

@@ -117,6 +117,7 @@ function spdRenderPanel() {
     <div class="set-section">${esc(tr("slice.speed.g.also"))}</div>
     <div class="group">${opt("first", "slice.speed.opt.first")}${opt("travel", "slice.speed.opt.travel")}</div>`;
   spdMarks(document.querySelector('#s-adv-body [data-marks="panel"]'));
+  steppersIn($("s-adv-body"));
   // Slicing: locked, as the rest of the sheet.
   if ($("s-go").classList.contains("hidden")) {
     $("s-adv-body").querySelectorAll("input, button").forEach((el) => (el.disabled = true));
