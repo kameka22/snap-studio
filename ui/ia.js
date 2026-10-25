@@ -321,7 +321,48 @@ function iaSyncListbar() {
   $("ia-f-state").value = IA.filters.state;
   $("ia-f-engine").value = IA.filters.engine;
   $("ia-sort").value = IA.sort;
+  iaSyncFilters();
 }
+
+/* The Filters button: how many narrow the list; the Sort button: the order. */
+function iaSyncFilters() {
+  const n = segActive(IA.filters);
+  $("ia-fcount").textContent = n ? fmtNum(n) : "";
+  $("ia-fcount").classList.toggle("hidden", !n);
+  $("ia-filters").classList.toggle("on", n > 0);
+  const order = $("ia-sort").selectedOptions[0]?.text || "";
+  $("ia-sort-t").textContent = order;
+  $("ia-sort-btn").setAttribute("aria-label", `${tr("ia.list.sort")}: ${order}`);
+}
+
+/* The filters as pills, in a popover under their button. */
+for (const id of ["ia-f-kind", "ia-f-state", "ia-f-engine"]) segmented(id, { cls: "compact" });
+function iaFiltersOpen(on) {
+  $("ia-fpop").classList.toggle("hidden", !on);
+  $("ia-filters").setAttribute("aria-expanded", String(on));
+  if (on) requestAnimationFrame(() => $("ia-fpop").querySelector('.seg-btn[tabindex="0"]')?.focus());
+}
+$("ia-filters").addEventListener("click", () => iaFiltersOpen($("ia-fpop").classList.contains("hidden")));
+$("ia-fpop").addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  e.preventDefault();
+  e.stopPropagation();
+  iaFiltersOpen(false);
+  $("ia-filters").focus();
+});
+document.addEventListener("mousedown", (e) => {
+  if (!$("ia-fpop").classList.contains("hidden") && !e.target.closest(".ia-fwrap")) iaFiltersOpen(false);
+});
+// Tab out of it: it closes behind.
+$("ia-fpop").addEventListener("focusout", (e) => {
+  if (e.relatedTarget && !e.relatedTarget.closest(".ia-fwrap")) iaFiltersOpen(false);
+});
+
+/* The order: a native menu, checked, as the Files sort. */
+$("ia-sort-btn").addEventListener("click", (e) =>
+  menuUnder(e.currentTarget, [...$("ia-sort").options].map((o) => ({ id: "iasort:" + o.value, label: o.text, checked: o.value === IA.sort })))
+);
+onMenu("iasort", (v) => setSelect("ia-sort", v));
 iaSyncListbar();
 
 $("ia-q").addEventListener("input", (e) => {
@@ -351,12 +392,14 @@ for (const [id, key] of [["ia-f-kind", "kind"], ["ia-f-state", "state"], ["ia-f-
   $(id).addEventListener("change", (e) => {
     IA.filters[key] = e.target.value;
     localStorage.setItem("snapstudio.ia.filters", JSON.stringify(IA.filters));
+    iaSyncFilters();
     iaRenderList();
   });
 }
 $("ia-sort").addEventListener("change", (e) => {
   IA.sort = e.target.value;
   localStorage.setItem("snapstudio.ia.sort", IA.sort);
+  iaSyncFilters();
   iaRenderList();
 });
 $("ia-clearq").addEventListener("click", () => {
@@ -620,6 +663,7 @@ onMenu("iadest", async (arg) => {
 });
 
 /* Creation from scratch: the size limit starts from the printer's bed. */
+steppersIn($("ia-cfields"));
 const iaBed = () => (typeof PR !== "undefined" && PR.bed) || { w: 270, d: 270 };
 function iaBedFill() {
   const bed = iaBed();
@@ -1575,6 +1619,7 @@ $("ia-stage").addEventListener("dblclick", (e) => {
 window.addEventListener("langchange", () => {
   iaRender();
   iaBedApply();
+  iaSyncFilters();
   if (IA.open) {
     const c = IA.list.find((x) => x.id === IA.open);
     if (c) iaHint(c);

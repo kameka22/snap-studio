@@ -104,7 +104,11 @@ pub fn details(
             }
             presets::process_extra(&idx, machine, &o)
         }
-        Some(presets::Kind::Filament) => presets::filament_extra(color),
+        Some(presets::Kind::Filament) => {
+            let mut e = presets::filament_extra(color);
+            e.extend(presets::filament_overrides(overrides));
+            e
+        }
         _ => Map::new(),
     };
     idx.details(name, &extra).ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = name)))
@@ -117,8 +121,9 @@ pub fn save_process(name: &str, base: &str, simple: Option<Simple>, overrides: &
     let idx = index_for(&app)?;
     let mut values = simple.unwrap_or_default().to_overrides();
     for (k, v) in overrides {
-        // The plate is chosen per slice, not part of a process preset.
-        if k != "curr_bed_type" {
+        // The plate is chosen per slice, not part of a process preset; nor
+        // are the filaments' own keys.
+        if k != "curr_bed_type" && !presets::FILAMENT_OVERRIDES.contains(&k.as_str()) {
             values.insert(k.clone(), v.clone());
         }
     }
@@ -1963,9 +1968,15 @@ mod tests {
             ("seam_position", "back"), ("seam_gap", "12%"), ("staggered_inner_seams", "1"),
             ("support_type", "tree(auto)"), ("support_style", "tree_slim"), ("support_interface_top_layers", "3"),
             ("support_threshold_angle", "40"), ("tree_support_branch_angle", "35"),
+            // The lists chosen from pictures (#59).
+            ("support_base_pattern", "honeycomb"), ("support_interface_pattern", "concentric"),
             ("brim_type", "brim_ears"), ("brim_width", "7"), ("brim_object_gap", "0.2"),
             ("enable_prime_tower", "1"), ("prime_tower_width", "40"), ("flush_into_infill", "1"),
             ("wall_filament", "2"), ("support_filament", "2"),
+            // The prime tower's wall and ooze prevention (#35); the idle
+            // temperature goes to the filaments.
+            ("wipe_tower_filament", "1"), ("ooze_prevention", "1"), ("standby_temperature_delta", "-40"),
+            ("preheat_time", "45"), ("idle_temperature", "150"),
         ] {
             overrides.insert(k.into(), Value::String(v.into()));
         }
@@ -1998,8 +2009,10 @@ mod tests {
         for (k, v) in [
             ("seam_position", "back"), ("seam_gap", "12%"), ("enable_support", "1"), ("support_type", "tree(auto)"),
             ("support_style", "tree_slim"), ("support_interface_top_layers", "3"), ("brim_type", "brim_ears"),
+            ("support_base_pattern", "honeycomb"), ("support_interface_pattern", "concentric"),
             ("brim_width", "7"), ("enable_prime_tower", "1"), ("prime_tower_width", "40"), ("wall_filament", "2"),
-            ("support_filament", "2"),
+            ("support_filament", "2"), ("wipe_tower_filament", "1"), ("ooze_prevention", "1"),
+            ("standby_temperature_delta", "-40"), ("preheat_time", "45"), ("idle_temperature", "150,150,150,150"),
         ] {
             let line = format!("; {k} = {v}");
             assert!(gcode.contains(&line), "missing in G-code: {line}");

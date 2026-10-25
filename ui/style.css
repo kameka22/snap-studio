@@ -392,6 +392,42 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .seg-btn.danger { color: var(--danger); }
 .seg-btn:disabled { opacity: 0.4; pointer-events: none; }
 
+/* Segmented controls over a select (segmented.js). */
+.seg-for { flex: none; align-self: center; }
+.seg-for .seg-btn { gap: 5px; white-space: nowrap; }
+.seg-for .seg-btn svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
+.seg .seg-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.seg.compact .seg-btn { height: 20px; padding: 0 7px; font-size: 11.5px; }
+/* Flags: 3:2, inline SVG (emoji flags are letters on Windows). */
+.seg-flag { display: inline-block; flex: none; width: 18px; height: 12px; border-radius: 2px; overflow: hidden; box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--text) 30%, transparent); }
+.seg-btn .seg-flag svg, .seg-flag svg { display: block; width: 100%; height: 100%; }
+.seg-flag-code { display: grid; place-items: center; height: 100%; font-size: 8px; font-weight: 700; background: var(--control-bg-hover); color: var(--text-secondary); }
+.seg-flag-btn .seg-flag, .picker-item .seg-flag { margin-right: 2px; }
+/* Long choices: vertical radio cards, as the welcome's (.w-opt). */
+.seg.cards { flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; }
+.seg.cards .seg-btn.seg-card {
+  position: relative;
+  height: auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 12px 9px 34px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  background: var(--control-bg);
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+}
+.seg.cards .seg-card::before { content: ""; position: absolute; left: 12px; top: 11px; width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--control-border); background: var(--field-bg); }
+.seg.cards .seg-card.on { border-color: var(--accent); background: var(--control-bg); box-shadow: 0 0 0 1px var(--accent); }
+.seg.cards .seg-card.on::before { border: 4.5px solid var(--accent); background: #fff; }
+.seg.cards .seg-card span { font-size: 13px; font-weight: 600; }
+.seg.cards .seg-card small { font-size: 11.5px; color: var(--text-secondary); line-height: 1.35; }
+.seg.cards .seg-card:focus-visible { box-shadow: 0 0 0 1px var(--accent), var(--focus-ring); }
+.grow-row.stack { flex-wrap: wrap; }
+.grow-row.stack > .seg.cards { flex: 1 0 100%; }
+
 /* ---------- body ---------- */
 .files-body { flex: 1; display: flex; min-height: 0; }
 #stage { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; position: relative; padding: 6px 22px 28px; }
@@ -443,7 +479,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   letter-spacing: -0.01em;
   line-height: 1.3;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
@@ -1669,7 +1705,7 @@ input.sw.small:checked::after { transform: translateX(12px); }
 }
 .snap-product:hover { transform: translateY(-1px); box-shadow: var(--card-shadow-hover); }
 .snap-product img, .snap-product .snap-noimg { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: var(--control-bg-hover); }
-.snap-product .t { padding: 8px 10px 0; font-size: 12px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.snap-product .t { padding: 8px 10px 0; font-size: 12px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .snap-product .p { padding: 2px 10px 10px; font-size: 11px; color: var(--text-secondary); }
 
 /* Explore: the tab strip stands in for the toolbar (hidden in this view),
@@ -2939,6 +2975,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .info-btn:hover { color: var(--accent); background: none; }
 .info-btn svg { width: 16px; height: 16px; fill: currentColor; }
 .s-bedtemp { font-size: 12px; color: var(--warning); }
+/* The prime tower shared by materials that do not bond: above the Slice
+   button, with its fixes. */
+.sl-tower { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 8px; padding: 8px 12px; border-radius: 10px; font-size: 12px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--warning) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
+.sl-tower-t { flex: 1 1 300px; min-width: 0; }
+.sl-tower-t b { font-weight: 600; }
+.sl-tower-acts { display: flex; flex-wrap: wrap; gap: 6px; }
 .s-bedtemp:empty { display: none; }
 .s-bedtemp b { color: var(--text); font-weight: 600; }
 
@@ -3359,11 +3401,122 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   font-size: 11px;
   font-weight: 600;
 }
-.sl-token i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.12); background: var(--thumb-bg); }
+/* The dot's edge in the text's colour: seen on the light and the dark theme
+   alike; stronger for a spool close to white or black (swatch-logic.js swEdge). */
+.sl-token i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); background: var(--thumb-bg); }
+.sl-token i.edge { border-color: color-mix(in srgb, var(--text) 32%, transparent); }
 .sl-token.on { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
 .sl-token.is-empty { opacity: 0.4; }
 .sl-token.is-empty i { background: repeating-linear-gradient(45deg, var(--separator) 0 3px, transparent 3px 6px); }
 .sl-token em { font-style: normal; color: var(--warning); }
+/* Loaded, colour not read: a light checker, not a grey spool. */
+.sl-token.no-colour i { background: repeating-conic-gradient(color-mix(in srgb, var(--text) 16%, transparent) 0 25%, transparent 0 50%) 50% / 6px 6px; }
+/* "Automatic": the engine picks, no spool to show. */
+.sl-token.sw-auto { padding: 3px 4px; }
+.sl-token.sw-auto i { background: none; border: 1.5px dashed color-mix(in srgb, var(--text) 40%, transparent); }
+
+/* Number steppers (stepper.js): ‹ value ›, the value typed after a
+   double-click; no native arrows anywhere. */
+input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.nstep { display: inline-flex; align-items: center; flex: none; height: 24px; border: 1px solid var(--field-border); border-radius: var(--radius-control); background: var(--field-bg); }
+.nstep:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: var(--focus-ring); }
+.nstep-b { display: grid; place-items: center; width: 22px; height: 100%; padding: 0; border: 0; background: none; color: var(--text-secondary); border-radius: var(--radius-control); }
+.nstep-b svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nstep-b:hover:not(:disabled) { color: var(--text); background: var(--control-bg-hover); }
+.nstep-b:active:not(:disabled) { background: color-mix(in srgb, var(--text) 12%, transparent); }
+.nstep-b:disabled { opacity: 0.35; }
+.nstep-b:focus-visible { outline: none; }
+.nstep-v { min-width: 44px; padding: 0 2px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; cursor: text; user-select: none; outline: none; }
+.nstep input.field.num, .sl-adv-body .adv-row .nstep .field.num { width: 64px; min-height: 22px; padding: 0 4px; border: 0; box-shadow: none; background: transparent; text-align: center; }
+.nstep:not(.editing) input { display: none; }
+.nstep.editing .nstep-v { display: none; }
+.nstep.disabled { opacity: 0.55; }
+.nstep.disabled .nstep-v { cursor: default; }
+
+/* Visual picker (visual.js): pictures of the slice settings' options.
+   Stroke icons: --vp-s draws the frame, --vp-p the feature (the accent once
+   chosen); never filled by the segments' rule. */
+.vp-ico { display: inline-grid; place-items: center; flex: none; --vp-p: var(--text); --vp-s: var(--text-secondary); }
+.vp-ico svg, .seg.visual .seg-btn svg { width: 100%; height: 100%; fill: none; }
+.vp-trigger { display: inline-flex; align-items: center; gap: 7px; width: auto; min-width: 170px; max-width: 260px; padding: 2px 8px 2px 4px; color: var(--text); text-align: left; }
+.vp-trigger .vp-ico { width: 20px; height: 20px; }
+.vp-trigger .vp-lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.vp-trigger .sw-caret { color: var(--text-tertiary); font-size: 10px; }
+.vp-trigger:focus-visible { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: var(--focus-ring); }
+.vp-trigger:disabled { opacity: 0.55; }
+.picker.vp-pop { width: auto; max-width: min(520px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 16px)); }
+.vp-grid { display: grid; grid-template-columns: repeat(var(--cols, 3), 160px); gap: 6px; padding: 2px 2px 6px; }
+.vp-opt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 8px 8px;
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  min-width: 0;
+}
+.vp-opt .vp-ico { width: 40px; height: 40px; margin-bottom: 2px; }
+.vp-opt b { font-size: 12px; font-weight: 600; }
+.vp-opt small { font-size: 11px; line-height: 1.3; color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.vp-opt:hover:not(:disabled) { background: var(--control-bg-hover); }
+.vp-opt.on { border-color: var(--accent); }
+.vp-opt.on .vp-ico { --vp-p: var(--accent); }
+.vp-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vp-opt:disabled { opacity: 0.45; }
+.vp-check { position: absolute; top: 5px; right: 7px; font-style: normal; font-weight: 700; color: var(--accent); visibility: hidden; }
+.vp-opt.on .vp-check { visibility: visible; }
+/* Inline pills with pictures: the picture above its words. */
+.seg.visual .seg-btn { height: auto; flex-direction: column; gap: 2px; padding: 5px 10px 4px; }
+.seg.visual .seg-btn .vp-ico { width: 22px; height: 22px; }
+.seg.visual .seg-btn.on .vp-ico { --vp-p: var(--accent); }
+.sl-adv-body .adv-row:has(.adv-note) { flex-wrap: wrap; }
+.adv-note { flex-basis: 100%; text-align: right; font-size: 11px; color: var(--accent); }
+
+/* Head picker (slice-ui.js swatchSelect): a field showing the chosen head. */
+.sw-trigger { display: inline-flex; align-items: center; gap: 6px; width: auto; min-width: 150px; max-width: 240px; padding: 2px 8px 2px 3px; color: var(--text); text-align: left; }
+.sw-trigger .sl-token { border: 0; padding: 0 2px; background: none; box-shadow: none; color: var(--text); }
+.sw-trigger .sw-mat { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-secondary); }
+.sw-trigger .sw-caret { color: var(--text-tertiary); font-size: 10px; }
+.sw-trigger:focus-visible { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: var(--focus-ring); }
+.sw-trigger:disabled { opacity: 0.55; }
+
+/* The head popover: the search picker's shell, a grid of heads. */
+.picker.sw-pop { width: auto; max-width: 432px; }
+.sw-grid { display: flex; flex-wrap: wrap; gap: 2px; padding-top: 6px; }
+.sw-opt { width: 80px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px 6px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; min-width: 0; }
+.sw-opt:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.sw-opt.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.sw-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sw-opt:disabled { opacity: 0.55; }
+.sw-opt .sl-token { pointer-events: none; }
+.sw-opt small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text-secondary); }
+.sw-tag { font-size: 10px; color: var(--text-tertiary); }
+.sw-note { padding: 4px 6px 2px; font-size: 11px; color: var(--text-secondary); }
+
+/* Printer chips, small: Prepare's list header. The state is the icon's
+   colour; its words stay for screen readers. */
+.sl-pchips.dense { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+/* In the list's header: a line of its own, under the title and the mode. */
+#p-objects-head { flex-wrap: wrap; }
+#p-printers { flex: 1 0 100%; }
+.sl-pchips.dense .sl-pchip { gap: 5px; padding: 2px 8px 2px 3px; border-radius: 999px; border-width: 1px; text-transform: none; letter-spacing: 0; cursor: default; }
+.sl-pchips.dense .sl-pchip.on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
+.sl-pchips.dense .sl-pchip:hover:not(.on) { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border)); }
+.sl-pchips.dense .sl-pchip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sl-pchips.dense .sl-pchip-icon { width: 18px; height: 18px; border-radius: 50%; }
+.sl-pchips.dense .sl-pchip-icon svg { width: 11px; height: 11px; }
+.sl-pchips.dense .sl-pchip-icon.printing, .sl-pchips.dense .sl-pchip-icon.paused { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+.sl-pchips.dense .sl-pchip-icon.offline, .sl-pchips.dense .sl-pchip-icon.error { background: color-mix(in srgb, var(--text-secondary) 14%, transparent); color: var(--text-secondary); }
+.sl-pchips.dense .sl-pchip-text b { max-width: 96px; font-size: 11px; font-weight: 500; }
+.sl-pchips.dense .sl-pchip.on .sl-pchip-text b { font-weight: 600; }
+.sl-pchips.dense .sl-pchip-text small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Search picker */
 .picker {
@@ -3925,7 +4078,12 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ctl-fil-sheet { width: min(460px, 92vw); }
 .ctl-fil-preview { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; font-size: 13px; }
 .ctl-fil-preview i { width: 22px; height: 22px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); }
-.ctl-fil-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+/* As many columns as fields shown: Material leaves when it is pills. */
+.ctl-fil-grid { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
+.ctl-fil-mats { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12px; color: var(--text-secondary); }
+.ctl-fil-mats .seg { align-self: flex-start; flex-wrap: wrap; }
+.ctl-fil-mats .seg-btn { font-size: 12px; }
+.ctl-fil-mats .seg-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .ctl-fil-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); min-width: 0; }
 .ctl-fil-grid select { width: 100%; }
 .ctl-fil-colors { display: grid; grid-template-columns: repeat(auto-fill, 28px); gap: 9px; }
@@ -4189,7 +4347,28 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .ia-search svg { width: 14px; height: 14px; fill: var(--text-tertiary); flex: none; }
 .ia-search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 5px 0; color: var(--text); outline: none; }
 .ia-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.ia-listbar select { max-width: 170px; }
+/* Filters in a popover under their button; the order, a native menu. */
+.ia-fwrap { position: relative; }
+.ia-fbtn { gap: 5px; padding: 3px 10px; font-size: 12.5px; }
+.ia-fbtn svg { width: 13px; height: 13px; fill: currentColor; flex: none; }
+.ia-fbtn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--control-border)); }
+.ia-fcount { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--accent-text); font-size: 10px; font-weight: 700; }
+.ia-fpop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--separator);
+  background: var(--sheet-bg);
+  box-shadow: var(--sheet-shadow), 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.ia-frow { display: flex; flex-direction: column; gap: 5px; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.ia-frow .seg { align-self: flex-start; }
 .ia-list:focus { outline: none; }
 .ia-group {
   margin: 6px 2px -4px;

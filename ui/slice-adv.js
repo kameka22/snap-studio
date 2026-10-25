@@ -29,6 +29,9 @@ const ADV_ENGINE_DEFAULTS = {
   enable_prime_tower: "0", prime_tower_width: "60", prime_volume: "45", prime_tower_brim_width: "3",
   flush_into_infill: "0", flush_into_objects: "0", flush_into_support: "1",
   wall_filament: "1", sparse_infill_filament: "1", solid_infill_filament: "1",
+  wipe_tower_filament: "0", ooze_prevention: "0", standby_temperature_delta: "-5", preheat_time: "30",
+  // A filament key (sent to every filament, slice.rs): 0 on the U1's.
+  idle_temperature: "0", print_sequence: "by layer",
 };
 const advVal = (k) => (k in SL.adv ? SL.adv[k] : ADV.defaults[k]);
 const advOn = (k) => String(advVal(k)) === "1" || advVal(k) === true;
@@ -37,12 +40,22 @@ const isTree = () => String(advVal("support_type") || "").startsWith("tree");
 /* Orca: a tree support in "default" style is organic ("Default (Grid/Organic)"). */
 const isOrganic = () => isTree() && ["organic", "default"].includes(advVal("support_style"));
 
-/* Keys holding a head number, 1-based. Only the support ones accept 0
-   ("default": the engine picks); the per-feature ones start at 1. */
-const ADV_FILAMENT = new Set(["support_filament", "support_interface_filament", "wall_filament", "sparse_infill_filament", "solid_infill_filament"]);
+/* Keys holding a head number, 1-based. The support ones and the prime
+   tower's accept 0 ("default": the engine picks); the per-feature ones
+   start at 1. */
+const ADV_FILAMENT = new Set(["support_filament", "support_interface_filament", "wall_filament", "sparse_infill_filament", "solid_infill_filament", "wipe_tower_filament"]);
+const ADV_HEAD_AUTO = new Set(["support_filament", "support_interface_filament", "wipe_tower_filament"]);
+/* Units the settings catalog leaves out. */
+const ADV_UNITS = { standby_temperature_delta: "°C", idle_temperature: "°C" };
 /* Values hidden from a list: handled elsewhere ("no_brim" is the switch) or
    needing tools the app does not have (painted brim). */
 const ADV_HIDE = { brim_type: ["no_brim", "painted"] };
+/* Values a list offers by the others (visual-logic.js): the support styles
+   that suit the support type. */
+const ADV_OPTIONS = { support_style: () => vpStyles(advVal("support_type")) };
+/* A control forced for a list: "select", "segmented", "pills" or
+   "visual"; otherwise vpMode() decides from its options and pictures. */
+const ADV_UI = {};
 
 /* Sub-panels: groups of keys, with the conditions under which they apply. */
 const ADV_CATS = {
@@ -70,7 +83,9 @@ const ADV_CATS = {
   mm: {
     title: "slice.adv.mm",
     groups: [
-      { t: "slice.adv.g.tower", keys: ["enable_prime_tower", "prime_tower_width", "prime_volume", "prime_tower_brim_width"] },
+      // The tower's switch is on the sheet (#s-tower-sw), as Supports' and Brim's.
+      { t: "slice.adv.g.tower", keys: ["wipe_tower_filament", "prime_tower_width", "prime_volume", "prime_tower_brim_width"] },
+      { t: "slice.adv.g.ooze", keys: ["ooze_prevention", "standby_temperature_delta", "preheat_time", "idle_temperature"] },
       { t: "slice.adv.g.flush", keys: ["flush_into_infill", "flush_into_objects", "flush_into_support"] },
       { t: "slice.adv.g.features", keys: ["wall_filament", "sparse_infill_filament", "solid_infill_filament"] },
     ],
@@ -81,9 +96,12 @@ const ADV_CATS = {
 const ADV_WHEN = {
   brim_ears_max_angle: () => advVal("brim_type") === "brim_ears",
   tree_support_brim_width: () => !advOn("tree_support_auto_brim"),
-  prime_tower_width: () => advOn("enable_prime_tower"),
-  prime_volume: () => advOn("enable_prime_tower"),
-  prime_tower_brim_width: () => advOn("enable_prime_tower"),
+  // The tower's own settings stay shown with it off, as Supports' (its
+  // switch is on the sheet; the panel says they wait for it).
+  // The other heads' temperature while one prints: with ooze prevention.
+  standby_temperature_delta: () => advOn("ooze_prevention"),
+  preheat_time: () => advOn("ooze_prevention"),
+  idle_temperature: () => advOn("ooze_prevention"),
 };
 
 /* Category keys that apply right now (multi-material only with several
@@ -95,23 +113,34 @@ function advCatKeys(cat) {
     .flatMap((g) => (typeof g.keys === "function" ? g.keys() : g.keys));
 }
 
-/* Heads offered to the per-feature filament fields: from the shared
-   "Heads and spools" state when heads.js is loaded, otherwise the heads
-   configured in this sheet (renderHeads). */
-function advHeadChoices() {
+/* Heads flagged in a head picker when the plate's materials do not all
+   bond (spTowerAdvice; #s-tower says why): for the walls, the heads whose
+   material does not bond with another of the plate's; for the tower's
+   wall, the choices that leave it mixed — a head the plate does not print
+   with, or Automatic — since a head it prints with is the fix. */
+function advWarnHeads(k) {
+  if (k !== "wipe_tower_filament" && k !== "wall_filament") return { heads: [], auto: false };
+  const used = advTowerHeads();
+  const a = spTowerAdvice({ heads: used, tower: advTowerOn(), wall: null });
+  if (!a) return { heads: [], auto: false };
+  if (k === "wall_filament") return { heads: [...new Set(a.pairs.flat())], auto: false };
+  const fix = new Set(a.families.flatMap((g) => g.heads));
+  return { heads: Array.from({ length: headCount() }, (_, h) => h).filter((h) => !fix.has(h)), auto: true };
+}
+
+/* Heads offered to the per-feature filament fields (swatch-logic.js
+   swHeads, values from 1): from the shared "Heads and spools" state when
+   heads.js is loaded, otherwise the heads configured in this sheet
+   (renderHeads). */
+function advHeadChoices(k) {
   const pid = typeof headsCount === "function" ? currentPrinter()?.id : null;
-  if (pid) {
-    const slots = headsSlots(pid);
-    return Array.from({ length: headsCount(pid) }, (_, i) => {
-      const slot = slots.find((x) => x.index === i);
-      const name = headsProfile(pid, i, SL.lists?.filaments || null).name;
-      return { value: String(i + 1), label: `T${i}${name ? " · " + name : ""}`, color: slot?.present ? slot.color : null };
-    });
-  }
-  return [...document.querySelectorAll("#s-heads select")].map((s, i) => {
-    const slot = SL.slots.find((x) => x.index === i);
-    return { value: String(i + 1), label: `T${i}${s.value ? " · " + s.value : ""}`, color: slot?.present ? slot.color : null };
-  });
+  const list = SL.lists?.filaments || null;
+  const names = pid
+    ? Array.from({ length: headsCount(pid) }, (_, i) => headsProfile(pid, i, list).name || "")
+    : [...document.querySelectorAll("#s-heads select")].map((s) => s.value);
+  const material = (h) => list?.find((f) => f.name === names[h])?.ftype || spMaterialFromName(names[h] || "");
+  const heads = swHeads({ count: names.length, slots: pid ? headsSlots(pid) : SL.slots, material, base: 1, warn: advWarnHeads(k).heads });
+  return heads.map((e) => ({ ...e, label: `T${e.h}${names[e.h] ? " · " + names[e.h] : ""}` }));
 }
 
 async function advSchema() {
@@ -127,6 +156,7 @@ function advOverrides() {
   if (!$("s-brim").checked) for (const k of advCatKeysAll("brim")) delete o[k];
   if (!multiHead()) {
     for (const k of advCatKeysAll("mm")) delete o[k];
+    delete o.enable_prime_tower;
     delete o.support_filament;
     delete o.support_interface_filament;
   }
@@ -139,8 +169,10 @@ function advCatKeysAll(cat) {
   return ADV_CATS[cat].groups.flatMap((g) => (typeof g.keys === "function" ? ADV_TREE_ALL : g.keys));
 }
 const advCountOf = (cat) => advCatKeysAll(cat).filter((k) => k in SL.adv).length;
+/* The advanced differences, for the summary: not the tower's switch,
+   which is on the sheet. */
 function advCount() {
-  return Object.keys(advOverrides()).length;
+  return Object.keys(advOverrides()).filter((k) => k !== "enable_prime_tower").length;
 }
 
 /* Machine profile changed: its remembered differences come back. */
@@ -193,9 +225,10 @@ function advLabel(k, v = advVal(k)) {
   const def = ADV.schema?.keys?.[k];
   if (v == null || v === "") return "";
   if (ADV_FILAMENT.has(k)) return +v > 0 ? `T${+v - 1}` : tr("slice.adv.default_head");
-  if (def?.enum) return def.enum[v] ?? v;
+  if (def?.enum) return advOptLabel(k, v);
   if (def?.type === "bool") return tr(String(v) === "1" ? "common.yes" : "common.no");
-  return `${v}${def?.unit && !String(v).endsWith("%") ? " " + def.unit : ""}`;
+  const unit = def?.unit || ADV_UNITS[k];
+  return `${v}${unit && !String(v).endsWith("%") ? " " + unit : ""}`;
 }
 
 function advRenderRows() {
@@ -205,8 +238,13 @@ function advRenderRows() {
     support: $("s-supports").checked ? advLabel("support_type") : tr("slice.adv.off"),
     brim: $("s-brim").checked ? advLabel("brim_type", SL.adv.brim_type || "outer_only") : tr("slice.adv.off"),
     seam: advLabel("seam_position"),
-    mm: tr("slice.adv.mm_sum", { v: advLabel("enable_prime_tower") }),
+    mm: !advOn("enable_prime_tower")
+      ? tr("slice.adv.mm_no_tower")
+      : +advVal("wipe_tower_filament") > 0
+      ? tr("slice.adv.mm_tower_wall", { t: `T${+advVal("wipe_tower_filament") - 1}` })
+      : tr("slice.adv.mm_tower"),
   };
+  $("s-tower-sw").checked = advOn("enable_prime_tower");
   for (const cat of Object.keys(ADV_CATS)) {
     $("s-adv-sum-" + cat).textContent = sum[cat] || "";
     const n = advCountOf(cat);
@@ -241,7 +279,9 @@ function advFit() {
 }
 
 function advClose() {
+  if (PK.grid && $("s-adv-body").contains(PK.anchor)) closePicker();
   ADV.cat = null;
+  ADV.styleNote = "";
   ADV.ro?.disconnect();
   $("s-adv").classList.add("hidden");
   advRenderRows();
@@ -254,23 +294,31 @@ function advField(k) {
   const mod = k in SL.adv;
   let input;
   if (ADV_FILAMENT.has(k)) {
-    const opts = [...(k.startsWith("support_") ? [{ value: "0", label: tr("slice.adv.default_head") }] : []), ...advHeadChoices()];
+    // The select holds every value the head picker (advEnhance) may show,
+    // a head this printer lacks included: kept, never silently changed.
+    const opts = [...(ADV_HEAD_AUTO.has(k) ? [{ value: "0", label: tr("slice.adv.default_head") }] : []), ...advHeadChoices(k)];
+    if (v != null && v !== "" && !opts.some((o) => o.value === String(v))) opts.push({ value: String(v), label: `T${+v - 1}` });
     input = `<select class="field" data-k="${k}">${opts
       .map((o) => `<option value="${o.value}"${String(v ?? opts[0].value) === o.value ? " selected" : ""}>${esc(o.label)}</option>`)
       .join("")}</select>`;
   } else if (def.type === "enum") {
-    const hide = ADV_HIDE[k] || [];
-    input = `<select class="field" data-k="${k}">${Object.entries(def.enum)
-      .filter(([val]) => !hide.includes(val))
-      .map(([val, lbl]) => `<option value="${esc(val)}"${String(v) === val ? " selected" : ""}>${esc(lbl)}</option>`)
-      .join("")}</select>`;
+    // A value the list does not offer stays shown as it is, chosen and not
+    // pickable: the select would show its first option instead.
+    const entries = vpEntries(advOptions(k), v, Object.keys(def.enum));
+    input = `<select class="field" data-k="${k}">${entries
+      .map((e) => {
+        const label = e.state === "ok" ? e.label : tr(e.state === "hidden" ? "vp.hidden" : "vp.unknown", { v: def.enum[e.value] ?? e.value });
+        return `<option value="${esc(e.value)}"${String(v) === e.value ? " selected" : ""}${e.state === "ok" ? "" : " disabled"}>${esc(label)}</option>`;
+      })
+      .join("")}</select>${k === "support_style" && ADV.styleNote ? `<small class="adv-note" role="status">${esc(ADV.styleNote)}</small>` : ""}`;
   } else if (def.type === "bool") {
     input = `<input type="checkbox" class="sw" role="switch" data-k="${k}"${String(v) === "1" ? " checked" : ""} />`;
   } else {
     const pct = def.type === "percent" || String(v ?? "").endsWith("%");
     const num = v == null ? "" : String(v).replace(/%$/, "");
-    const step = def.type === "int" ? 1 : 0.1;
-    input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : def.unit || "")}</span>`;
+    // Whole numbers and percentages by one, millimetres and the rest by a tenth.
+    const step = def.type === "int" || pct ? 1 : 0.1;
+    input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : def.unit || ADV_UNITS[k] || "")}</span>`;
   }
   return `<div class="grow-row adv-row${mod ? " mod" : ""}" title="${esc(def.tooltip || "")}">
     <span class="k">${esc(def.label)}${mod ? `<small class="sub">${esc(tr("slice.adv.profile_value", { v: advLabel(k, ADV.defaults[k]) || "—" }))}</small>` : ""}</span>
@@ -285,7 +333,10 @@ function advRenderPanel() {
   if (!c) return;
   $("s-adv-title").textContent = tr(c.title);
   $("s-adv-reset").classList.toggle("hidden", advCountOf(ADV.cat) === 0);
-  const note = ADV.cat === "support" && !$("s-supports").checked ? tr("slice.adv.support_off") : ADV.cat === "brim" && !$("s-brim").checked ? tr("slice.adv.brim_off") : "";
+  const note = ADV.cat === "support" && !$("s-supports").checked ? tr("slice.adv.support_off")
+    : ADV.cat === "brim" && !$("s-brim").checked ? tr("slice.adv.brim_off")
+    : ADV.cat === "mm" && !advOn("enable_prime_tower") ? tr("slice.adv.tower_off")
+    : "";
   const groups = c.groups
     .filter((g) => !g.when || g.when())
     .map((g) => {
@@ -294,12 +345,99 @@ function advRenderPanel() {
       return rows ? `<div class="set-section">${esc(tr(g.t))}</div><div class="group">${rows}</div>` : "";
     })
     .join("");
+  // A head popover opened on a field about to be redrawn goes with it.
+  if (PK.grid && $("s-adv-body").contains(PK.anchor)) closePicker();
   $("s-adv-body").innerHTML = (note ? `<div class="sl-adv-note">${esc(note)}</div>` : "") + groups;
+  advEnhance();
+  steppersIn($("s-adv-body"));
+}
+
+/* A list's options, [value, label], in the catalog's order: hidden values
+   left out, and those another setting rules out. */
+function advOptions(k) {
+  const def = ADV.schema?.keys?.[k];
+  const hide = ADV_HIDE[k] || [];
+  const only = ADV_OPTIONS[k]?.();
+  return Object.keys(def?.enum || {})
+    .filter((v) => !hide.includes(v) && (!only || only.includes(v)))
+    .map((v) => [v, advOptLabel(k, v)]);
+}
+
+/* An option's words: the catalog's, unless the app has better ones (the
+   catalog leaves some untranslated). */
+function advOptLabel(k, v) {
+  const key = `slice.vp.label.${k}.${v}`;
+  const own = tr(key);
+  return own !== key ? own : ADV.schema?.keys?.[k]?.enum?.[v] ?? v;
+}
+
+/* An option's picture and its one-line explanation. */
+const advIcon = (k, v) => SLICE_ICONS[k]?.[v] || SLICE_ICON_UNKNOWN;
+function advDesc(k, v) {
+  const key = `slice.vp.${k}.${v}`;
+  const d = tr(key);
+  return d !== key ? d : "";
+}
+
+/* The control a list gets (ADV_UI, otherwise vpMode). */
+function advUi(k) {
+  const opts = advOptions(k);
+  return ADV_UI[k] || vpMode(opts.length, opts.filter(([v]) => SLICE_ICONS[k]?.[v]).length);
+}
+
+/* The fields as pickers: heads with their spools' colours and materials,
+   lists with pictures or segments. */
+function advEnhance() {
+  $("s-adv-body").querySelectorAll("select[data-k]").forEach((sel) => {
+    const k = sel.dataset.k;
+    const def = ADV.schema?.keys?.[k];
+    if (!ADV_FILAMENT.has(k)) {
+      if (def?.type !== "enum") return;
+      const ui = advUi(k);
+      // The group's name: the field's, not the row's text with its
+      // "Profile value" line.
+      const name = () => def.label;
+      if (ui === "visual") {
+        const mod = k in SL.adv;
+        visualSelect(sel, {
+          icons: (v) => advIcon(k, v),
+          desc: (v) => advDesc(k, v),
+          label: def.label,
+          columns: vpColumns(advOptions(k).length),
+          note: () => (mod ? tr("slice.adv.profile_value", { v: advLabel(k, ADV.defaults[k]) || "—" }) : ""),
+        });
+      } else if (ui === "pills") {
+        segmented(sel, { cls: "visual", icons: (v) => `<span class="vp-ico">${advIcon(k, v)}</span>`, titleOf: (v) => advDesc(k, v), name });
+      } else if (ui === "segmented") {
+        segmented(sel, { titleOf: (v) => advDesc(k, v), name });
+      }
+      return;
+    }
+    swatchSelect(sel, () => advHeadChoices(k), {
+      auto: ADV_HEAD_AUTO.has(k) ? () => ({ value: "0", warn: advWarnHeads(k).auto }) : null,
+      base: 1,
+      label: ADV.schema?.keys?.[k]?.label || "",
+      warnTag: tr(k === "wipe_tower_filament" ? "swatch.tower_mixed" : "swatch.no_bond"),
+    });
+  });
 }
 
 function advSet(k, v) {
   if (v === "" || v == null || String(v) === String(ADV.defaults[k])) delete SL.adv[k];
   else SL.adv[k] = String(v);
+  ADV.styleNote = "";
+  // A support type the style does not suit: the style goes back to
+  // Default, as in Orca's settings — the engine would take it so anyway.
+  if (k === "support_type") {
+    const style = advVal("support_style");
+    const next = vpStyleAfterType(advVal("support_type"), style);
+    if (next !== style) {
+      if (String(ADV.defaults.support_style) === next) delete SL.adv.support_style;
+      else SL.adv.support_style = next;
+      const kind = VP_STYLES.tree.includes(style) ? "tree" : "normal";
+      ADV.styleNote = tr("slice.vp.style_reset", { style: advOptLabel("support_style", style), kind: tr(`slice.vp.kind.${kind}`) });
+    }
+  }
   advRemember();
   advRenderPanel();
   advRenderRows();
@@ -316,6 +454,8 @@ function advHeads() {
     const v = +o[k];
     if (!(v > 0)) continue;
     if (k.startsWith("support") && !$("s-supports").checked) continue;
+    // The tower's outer wall: only with a tower.
+    if (k === "wipe_tower_filament" && !advTowerOn()) continue;
     out[k] = v - 1;
   }
   return out;
@@ -331,6 +471,71 @@ function advHeadsSummary() {
   ].filter(Boolean);
   return { supports: list("support_filament", "support_interface_filament"), others: others.join(" · ") };
 }
+
+/* ------------------------------------------------------------ prime tower */
+
+/* A prime tower is printed: on, with several heads, layer by layer (the
+   engine prints none object by object). */
+const advTowerOn = () => multiHead() && advOn("enable_prime_tower") && advVal("print_sequence") !== "by object";
+
+/* The heads the plate prints with — its colors' heads, and those the
+   advanced settings send supports, walls, infill or the tower's wall to —
+   with their filament's material (the profile's type, else its name). */
+function advTowerHeads() {
+  const names = [...document.querySelectorAll("#s-heads select")].map((s) => s.value);
+  const used = new Set([...slUsedSet(), ...Object.values(advHeads())].filter((n) => n < names.length));
+  return [...used].sort((a, b) => a - b).map((n) => {
+    const p = SL.lists?.filaments?.find((f) => f.name === names[n]);
+    return { n, material: p?.ftype || spMaterialFromName(names[n]) };
+  });
+}
+
+/* The tower shared by materials that do not bond (spoolcheck.js): it
+   comes off or collapses. Said above the Slice button, with the fixes the
+   engine allows (one tower per plate): no tower — the U1's tower only
+   primes the nozzle, ooze prevention covers the rest — or its outer wall
+   in one material, the wiki's advice (the inside still mixes). */
+function advRenderTower() {
+  const box = $("s-tower");
+  if (!box) return;
+  const wall = +advVal("wipe_tower_filament") > 0 ? +advVal("wipe_tower_filament") - 1 : null;
+  const a = spTowerAdvice({ heads: advTowerHeads(), tower: advTowerOn(), wall });
+  let html = "";
+  if (a) {
+    const heads = (g) => g.heads.map((n) => "T" + n).join(", ");
+    const list = a.families.map((g) => `<b>${esc(g.family)}</b> (${esc(heads(g))})`).join(" · ");
+    const off = `<button class="btn small" data-tower="off">${esc(tr("slice.tower.off"))}</button>`;
+    if (a.state === "walled") {
+      const g = a.families.find((x) => x.heads.includes(wall));
+      html = `<span class="sl-tower-t">${tr("slice.tower.walled", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
+        <span class="sl-tower-acts">${off}<button class="btn small" data-tower="undo">${esc(tr("slice.tower.undo"))}</button></span>`;
+    } else {
+      const walls = a.families
+        .map((g) => `<button class="btn small" data-tower-wall="${g.heads[0]}">${esc(tr("slice.tower.wall", { m: g.family, t: `T${g.heads[0]}` }))}</button>`)
+        .join("");
+      html = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${walls}</span>`;
+    }
+  }
+  // Rewritten only when it changes (the summary is refreshed often): a
+  // focused button keeps its focus, the screen reader is not repeated.
+  if (html === ADV.tower) return;
+  ADV.tower = html;
+  box.innerHTML = html;
+  box.classList.toggle("hidden", !html);
+  // Locked while slicing, as the sheet's other settings (showSliceBusy).
+  box.querySelectorAll("button").forEach((b) => (b.disabled = !!SL.job));
+}
+
+// The prime tower's switch, on the sheet.
+$("s-tower-sw").addEventListener("change", (e) => advSet("enable_prime_tower", e.target.checked ? "1" : "0"));
+
+$("s-tower")?.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tower], [data-tower-wall]");
+  if (!b) return;
+  if (b.dataset.tower === "off") advSet("enable_prime_tower", "0");
+  else if (b.dataset.tower === "undo") advSet("wipe_tower_filament", null);
+  else advSet("wipe_tower_filament", String(+b.dataset.towerWall + 1));
+});
 
 /* An emptied plate is a new print: the heads chosen for supports, walls
    or infill are forgotten, in every machine's memory — the spools will
@@ -359,6 +564,8 @@ $("s-adv-body").addEventListener("click", (e) => {
   if (b) advSet(b.dataset.reset, null);
 });
 $("s-adv-back").addEventListener("click", advClose);
+// Anchored to a scrolling panel: the head popover closes rather than float.
+$("s-adv-body").addEventListener("scroll", () => PK.grid && closePicker(), { passive: true });
 $("s-adv-reset").addEventListener("click", () => {
   if (ADV.cat === "speed") return spdResetAll();
   for (const k of advCatKeysAll(ADV.cat)) delete SL.adv[k];

@@ -238,6 +238,14 @@ function plUncoloured(objects, stateOf, ownColoursOf) {
 /* The plate's colours still without a head: they block the slice. */
 const plUnmapped = (colours, colourHeads) => colours.filter((c) => colourHeads[c] == null);
 
+/* "By colour" mode, an object's "Colour…" palette for `n` heads: each head,
+   the picked one on; "the plate's colours" only once a head is picked;
+   `single`: one head, nothing to choose between. */
+function plPalette(pick, n) {
+  const count = Math.max(1, n | 0);
+  return { heads: Array.from({ length: count }, (_, h) => ({ h, on: pick === h })), plate: pick != null, single: count === 1 };
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { plUncoloured, plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
+  module.exports = { plPalette, plUncoloured, plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
 }
