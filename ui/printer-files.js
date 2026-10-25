@@ -751,6 +751,7 @@ pflVideo.addEventListener("click", pflPlayPause);
 $("pfl-fs").addEventListener("click", pflFullscreen);
 pflVideo.addEventListener("dblclick", pflFullscreen);
 $("pfl-speed").addEventListener("change", (e) => (pflVideo.playbackRate = +e.target.value || 1));
+segmented("pfl-speed", { cls: "compact" });
 $("pfl-seek").addEventListener("input", (e) => {
   if (isFinite(pflVideo.duration)) pflVideo.currentTime = (e.target.value / 1000) * pflVideo.duration;
 });

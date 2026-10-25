@@ -62,7 +62,7 @@ function pkRender() {
     html.push(`<div class="picker-section">${esc(s.label)}</div>`);
     for (const it of items) {
       html.push(`<button class="picker-item${it.value === PK.value ? " on" : ""}" data-v="${esc(it.value)}">
-        ${it.color !== undefined ? `<i class="picker-dot" style="${it.color ? `background:${esc(it.color)}` : ""}"></i>` : ""}
+        ${it.color !== undefined ? `<i class="picker-dot" style="${it.color ? `background:${esc(it.color)}` : ""}"></i>` : ""}${it.flag ? `<i class="seg-flag">${segFlag(it.flag)}</i>` : ""}
         <span class="picker-text"><b>${esc(it.label)}</b>${it.sub ? `<small>${esc(it.sub)}</small>` : ""}</span>
         ${it.badge ? `<span class="picker-badge">${esc(it.badge)}</span>` : ""}
         ${it.value === PK.value ? '<span class="picker-check">✓</span>' : ""}
