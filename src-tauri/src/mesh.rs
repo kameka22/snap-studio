@@ -526,7 +526,9 @@ pub struct BuildItem {
 
 const ROOT_KEY: &str = "3D/3dmodel.model";
 
-/// Occurrences of the main model's `<build>`, in file order.
+/// Occurrences of the main model's `<build>`, in file order (the tests'
+/// view of it; the app goes through `root_items`).
+#[cfg(test)]
 pub fn build_items(zip: &mut Zip) -> Result<Vec<BuildItem>> {
     let mut ctx = Ctx { zip, parts: HashMap::new() };
     root_items(&mut ctx)
