@@ -1001,7 +1001,17 @@ function camNextSize() {
   } else if ($("cam-box").classList.contains("big")) camFull(true);
   else camToggleSize(true);
 }
-$("cam-box").addEventListener("dblclick", (e) => !e.target.closest(".cam-bar") && !CAM.pinned && camNextSize());
+// Two clicks close in time and place: WebKit's dblclick gets lost on a
+// picture replaced several times a second.
+let camLastClick = null;
+$("cam-box").addEventListener("click", (e) => {
+  if (e.target.closest(".cam-bar") || CAM.pinned) return (camLastClick = null);
+  const now = performance.now(), last = camLastClick;
+  if (last && now - last.t < 400 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 8) {
+    camLastClick = null;
+    camNextSize();
+  } else camLastClick = { t: now, x: e.clientX, y: e.clientY };
+});
 // Its ✕, with the other buttons (the pinned window has its own in its header).
 $("cam-close").addEventListener("click", camStop);
 $("cam-size").addEventListener("click", () => camToggleSize());
