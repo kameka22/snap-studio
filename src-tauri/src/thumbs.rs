@@ -68,10 +68,14 @@ fn read_cache(file: &Path) -> Option<Thumb> {
     if data.len() < 8 || &data[0..4] != MAGIC || data[4] != CACHE_VERSION {
         return None;
     }
-    Some(Thumb {
-        source: tag_src(data[5]),
-        png: data[8..].to_vec(),
-    })
+    let source = tag_src(data[5]);
+    let png = data[8..].to_vec();
+    // A thumbnail that is not a PNG (a cut-short write) is not served: it
+    // is generated again.
+    if source != ThumbSource::None && !png.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return None;
+    }
+    Some(Thumb { source, png })
 }
 
 fn write_cache(file: &Path, thumb: &Thumb) {
@@ -81,9 +85,14 @@ fn write_cache(file: &Path, thumb: &Thumb) {
     out.push(src_tag(thumb.source));
     out.extend_from_slice(&[0, 0]);
     out.extend_from_slice(&thumb.png);
-    let tmp = file.with_extension("tmp");
-    if std::fs::write(&tmp, &out).is_ok() {
-        let _ = std::fs::rename(&tmp, file);
+    // A temporary name of its own: two renders of the same file at once
+    // (two views asking) must not write the same `.tmp` and publish a
+    // truncated thumbnail.
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let tmp = file.with_extension(format!("tmp{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    if std::fs::write(&tmp, &out).is_ok() && std::fs::rename(&tmp, file).is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
 }
 
@@ -293,12 +302,13 @@ mod tests {
         let dir = std::env::var("PROBE_DIR").unwrap_or_else(|_| {
             format!("{}/Downloads", std::env::var("HOME").unwrap())
         });
+        // Local probe over real 3MFs; skip when Downloads (or PROBE_DIR) is absent (CI).
+        let Ok(rd) = std::fs::read_dir(&dir) else { return; };
         let out = std::path::PathBuf::from(
             std::env::var("PROBE_OUT").unwrap_or_else(|_| "/tmp/probe".into()),
         );
         std::fs::create_dir_all(&out).unwrap();
-        let mut files: Vec<_> = std::fs::read_dir(&dir)
-            .unwrap()
+        let mut files: Vec<_> = rd
             .flatten()
             .map(|e| e.path())
             .filter(|p| {

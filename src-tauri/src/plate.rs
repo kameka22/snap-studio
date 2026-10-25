@@ -191,12 +191,12 @@ pub fn items(path: &Path) -> Result<Vec<PlateItem>> {
         }]);
     }
     let mut zip = crate::model3mf::open(path)?;
-    let build = crate::mesh::build_items(&mut zip)?;
+    // All at once: the container is parsed a single time for every object.
+    let loaded = crate::mesh::load_items(&mut zip, FULL_BUDGET)?;
     let (names, plates) = crate::model3mf::object_settings(&mut zip);
-    let many = build.len() > 1;
-    let mut out = Vec::with_capacity(build.len());
-    for (i, b) in build.iter().enumerate() {
-        let it = crate::mesh::load_item(&mut zip, i, FULL_BUDGET)?;
+    let many = loaded.len() > 1;
+    let mut out = Vec::with_capacity(loaded.len());
+    for (i, (b, it)) in loaded.iter().enumerate() {
         let mut extruders = crate::mesh::colors_used(&it.mesh);
         if extruders.is_empty() {
             extruders.push(1);
@@ -255,10 +255,8 @@ pub fn filament_colored(zip: &mut crate::model3mf::Zip, m: &mut MeshData) {
 
 pub fn hex_rgb(s: &str) -> Option<[u8; 3]> {
     let h = s.trim_start_matches('#');
-    if h.len() < 6 {
-        return None;
-    }
-    let n = u32::from_str_radix(&h[..6], 16).ok()?;
+    // `get`: a non-ASCII character at the cut gives None, not a panic.
+    let n = u32::from_str_radix(h.get(..6)?, 16).ok()?;
     Some([(n >> 16) as u8, (n >> 8) as u8, n as u8])
 }
 
@@ -720,3 +718,16 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod hex_tests {
+    use super::hex_rgb;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(hex_rgb("#ff8000"), Some([255, 128, 0]));
+        assert_eq!(hex_rgb("ff8000ff"), Some([255, 128, 0]));
+        assert_eq!(hex_rgb("#aaaaaé"), None);
+        assert_eq!(hex_rgb("#abc"), None);
+    }
+}

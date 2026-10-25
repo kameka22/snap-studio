@@ -28,6 +28,14 @@ OUT = ROOT / "ui" / "assets"
 # Languages of the app; English is Orca's source language.
 LANGS = ["en", "fr"]
 
+# Texts the .po file leaves untranslated (an empty msgstr), for the settings
+# the app shows: without these the French catalog would show English.
+FIXES = {
+    "fr": {
+        "Aligned back": "Alignée à l'arrière",
+    },
+}
+
 STR = r'"(?:[^"\\]|\\.)*"'
 
 
@@ -70,7 +78,9 @@ def translator(lang):
     if lang == "en":
         return {}, lambda text: text
     po = next((ORCA / "localization" / "i18n" / lang).glob("*.po"))
-    table = load_po(po)
+    table = {**load_po(po)}
+    for text, fixed in FIXES.get(lang, {}).items():
+        table.setdefault(text, fixed)
     return table, lambda text: table.get(text, text) if text else text
 
 
@@ -80,6 +90,10 @@ def translator(lang):
 def load_defs(path, tr):
     src = path.read_text(encoding="utf-8")
     keys = {}
+    # `auto def_x = def = this->add("key", …)`: a definition another one
+    # copies its list from (`def->enum_values = def_x->enum_values`).
+    aliases = dict(re.findall(r'auto\s+(\w+)\s*=\s*def\s*=\s*this->add(?:_nullable)?\(\s*"([a-z0-9_]+)"', src))
+    copies = {}
     starts = list(re.finditer(r'def\s*=\s*this->add(?:_nullable)?\(\s*"([a-z0-9_]+)"\s*,\s*co([A-Za-z]+)', src))
     for i, m in enumerate(starts):
         block = src[m.end(): starts[i + 1].start() if i + 1 < len(starts) else len(src)]
@@ -92,6 +106,9 @@ def load_defs(path, tr):
         labels = [literals(v) for v in re.findall(r"def->enum_labels\.(?:push|emplace)_back\(\s*(?:L\()?\s*(" + STR + r")", block)]
         if values:
             info["enum"] = {v: tr(labels[j]) if j < len(labels) else v for j, v in enumerate(values)}
+        copied = re.search(r"def->enum_values\s*=\s*(\w+)->enum_values", block)
+        if copied and copied.group(1) in aliases:
+            copies[m.group(1)] = aliases[copied.group(1)]
         label = info.get("full_label") or info.get("label")
         entry = {"label": tr(label) if label else m.group(1)}
         if info.get("label") and info.get("full_label") and info["label"] != info["full_label"]:
@@ -107,6 +124,9 @@ def load_defs(path, tr):
         # A repeated definition (variants) keeps the most complete one.
         if m.group(1) not in keys or len(entry) > len(keys[m.group(1)]):
             keys[m.group(1)] = entry
+    for key, source in copies.items():
+        if "enum" in keys.get(source, {}) and "enum" not in keys[key]:
+            keys[key]["enum"] = dict(keys[source]["enum"])
     return keys
 
 

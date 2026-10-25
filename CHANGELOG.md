@@ -11,6 +11,279 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Prime tower and materials that do not bond**: the slice sheet warns,
+  above the Slice button, when the prime tower would mix materials that do
+  not stick to each other (PLA and PETG, PLA and TPU, PETG and TPU…) among
+  the heads the plate prints with — the tower may come off or collapse —
+  with one-click fixes: no tower, or the tower's outer wall in one of the
+  materials. The prime tower gets its own switch on the slice sheet (its
+  Multi-material row, now above Seam); the Multi-material panel gains the
+  tower's wall head and ooze prevention (temperature drop of idle heads,
+  preheat time, idle temperature).
+- **More slice settings**: the slice sheet gets the quality and strength
+  settings that only came from the profile. A ⚙ next to Quality opens the
+  first layer, line widths, precision (elephant foot, X-Y compensations,
+  resolution, arcs) and overhangs and bridges; one on the Infill tile the
+  infill pattern (from pictures), direction, overlap and anchors; one on
+  the Walls tile the wall generator, order and direction and the thin and
+  single walls. Two new rows: Surfaces (top and bottom shells, surface
+  patterns from pictures, ironing) and Other (print sequence, spiral vase,
+  fuzzy skin, skirt, travel). Settings that detail another (ironing, fuzzy
+  skin, overhang speeds, skirt) show only with it.
+- **Camera close button**: the printer camera has a ✕ in its top-right
+  corner, in the style of its other buttons, at every size (on the printer
+  page, enlarged, over the 3D view, full size; the pinned window keeps its
+  own), which turns it off. In full size, a click beside the picture, in
+  the margin or the dark bands around it, gives it back to where it came
+  from, as Esc does. The double-click that enlarged the camera is gone:
+  its buttons do it.
+
+### Changed
+- **Head pickers show the spools**: in the slice sheet's advanced settings
+  and in Prepare's "Colour…" palette, each head is shown with its spool's
+  colour and material instead of a text list; Prepare's printer picker and
+  the filament sheet's material use chips. Spool dots get an edge that shows
+  on the dark theme too, white and black spools included.
+- **Pills instead of short lists**: the language (with flags, in Settings
+  and on the welcome screen), the scroll wheel action, the preview source,
+  the colour → head mode and the timelapse speed are chosen with segmented
+  controls; the AI mode with cards that say what each one means. The AI
+  list's filters move into a Filters popover (with the number active), and
+  its sort into a menu, as in Files.
+- **Visual slice styles**: in the slice sheet's Advanced panels, support
+  type and style, support base and interface patterns, brim type and seam
+  position are chosen from pictures with a short explanation instead of
+  plain lists. Support styles only offer those that suit the support type
+  (normal or tree), and going back to the other type resets an unsuited
+  style to Default, as Orca does; a value from a project that the list does
+  not offer is shown as it is rather than as the first choice.
+- **Number steppers**: the number fields of the slice sheet's advanced and
+  speed panels and the AI's size limit show ‹ value › instead of the small
+  native arrows: a click steps (held, it repeats), the arrow keys too, and a
+  double-click or Enter on the value lets you type one (Esc puts the old one
+  back). Percentages step by one.
+
+## [0.14.2] — 2026-10-24
+
+### Added
+- **What's new**: a page on the site presents each version's highlights
+  (screenshots, smaller improvements, previous versions), in English and
+  French; 0.13 has its own full section below 0.14, folded until opened. A card above Settings in the sidebar announces it after an
+  update ("What's new in 0.14 — Explore and 3 more") until it is opened,
+  then stays as a plain line; it opens the page in a sheet over the app,
+  with "Open in the Browser" and a message to try again when offline.
+- **Printer camera, full size and pinned**: besides its enlarged size, the
+  camera can fill the whole content area (Esc to leave), or be pinned: a
+  small window that stays on every screen (over Explore's sites too), moved by its title bar to any
+  corner (remembered), back to the printer's page with a click on the
+  image, unpinned or closed from its own buttons, hidden on that printer's
+  page where the camera already shows. One stream throughout; when the
+  printer stops answering, it says so instead of a frozen image.
+
+### Fixed
+- **Slice progress bar**: it now follows the slicing from 0 to 100 %, stage
+  by stage (walls, surfaces, infill, G-code…), never going back, and
+  reaches 100 % right before the preview. On macOS the engine never
+  reported its progress the way the app read it, so the bar stayed near
+  its start; the progress now comes from the engine's own log, read live.
+
+## [0.14.1] — 2026-10-24
+
+### Fixed
+- **App icon in the macOS Dock and Finder**: on macOS 26 the system no longer
+  frames it in a light tile — the icon is rebuilt from the original artwork on
+  Apple's icon grid and also shipped in Apple's new format (Icon Composer);
+  sharper on every platform, as it is no longer upscaled from a small crop.
+
+## [0.14.0] — 2026-10-23
+
+### Changed
+- **App icon**: rainbow tubular **S** on a graphite squircle, sized for the macOS
+  Dock; applied to the app bundle, in-app chrome, and the site favicon
+  ([#23](https://github.com/kameka22/snap-studio/pull/23)).
+- **Explore screenshot** on the README and the site: the Explore home (Space,
+  Store, Wiki, Forum, Account, libraries and Store picks).
+
+### Added
+- **Explore** ([#23](https://github.com/kameka22/snap-studio/pull/23)):
+  the Library becomes Explore, with the Snapmaker ecosystem beside the
+  model libraries. Its home shows Snapmaker Space, Store, Wiki, Forum and
+  Account as cards with the sites' own icons, a few products featured
+  from the Store, then the libraries; each opens in a tab. The sidebar
+  entry always lands on the home; "Snapmaker Space" and "Favorites" sit
+  under it. A "+" in the tab strip opens the same cards in a sheet. A
+  model (.3mf, .stl) downloaded from any tab goes straight to the plate
+  in Prepare.
+
+- **Prepare › colour modes** ([#52](https://github.com/kameka22/snap-studio/pull/52)):
+  heads are assigned "by object" (each object chooses, under its row, as
+  before) or "by colour" (the plate's colours, as the 3MF names them, are
+  assigned once for every object in a banner above the list, as Snapmaker
+  Orca does). The switch sits in the object list's header; Settings ›
+  Prepare chooses the mode Prepare starts with. The first switch explains
+  the two modes once. Switching keeps the associations that agree: a
+  colour every object sends to the same head keeps it, one the objects
+  disagree on waits for a choice, and the slice waits with it. An object
+  the file gives no colour shows a warning in "by colour" mode until a
+  head is picked for it (a palette on the warning, then a chip to change
+  it). "Colour…" joins the object's menu, on the plate and on its row in
+  the list: the palette in "by colour" mode ("Change Colour…" once it has
+  one), the object's colour/heads frame in "by object" mode. The header
+  now reads "Objects (n)" with the total only.
+- **Prepare › object list** ([#51](https://github.com/kameka22/snap-studio/pull/51)):
+  the colour and heads frame only shows for objects on the plate (heads
+  do not apply off it); each on-plate object has a "−" to take it off,
+  mirroring the "+" of an off-plate one; "Add All" and "Take All Off"
+  follow the selection, becoming "Add 2 Objects" or "Take 1 Object Off"
+  when part of a side is selected, each side counting its own objects.
+
+### Changed
+- **Create**: the AI entry of the sidebar, and its view, now read
+  Create; Settings › AI keeps its name.
+- **Explore's tabs**: no toolbar and no address bar any more; the tab
+  strip takes the top of the view. Back, Forward and Reload float over
+  the page at its top-left, discreet until the pointer comes. The star
+  and "open in the browser" sit at the right of the tab strip; download
+  notices show in it.
+
+### Fixed
+- **Camera**: a camera that failed to start on the Prints record is
+  switched off again instead of retrying every second; two quick toggles
+  no longer leave two keep-alives running.
+- **Printer form**: the connection test checks the port first, shows its
+  error, and a slow answer for a host typed before no longer fills in
+  the fields; a model file dropped on the window opens its folder rather
+  than leaving a dead entry in the recent folders; a model exported
+  again is read again when added to the plate.
+- **Prepare**: a mesh that could not be read is tried again rather than
+  staying invisible; what Arrange cannot fit is parked in a free spot;
+  the face tool says when an object's hull could not be read.
+- **Printer files**: a print file's delete is retried when the printer
+  did not answer; a timelapse's removal is given five seconds to show;
+  sending a large G-code no longer holds it in memory twice.
+- **Engine**: on macOS the engine's executable is the one its bundle
+  names; without a downloaded engine only Snapmaker Orca is used, never
+  another slicer; a binary STL with a few trailing bytes opens.
+- **AI**: the terminal view no longer obeys escape sequences printed by
+  the model or a tool; a conversation being answered is redrawn on
+  language change; the checks of what the AI needs run at most every
+  30 s; the sign-in terminal reopened quickly is no longer closed by the
+  previous one; attachments keep distinct numbers after a deletion.
+- **Library**: logging out of a site no longer deletes the cookies of a
+  longer domain that ends the same.
+- **Slicing**: Stop works during the preparation too (it used to wait for
+  the engine); a saved G-code never overwrites an existing one, it is
+  numbered; a failed or stopped slice leaves no work folder behind, and
+  at most eight previews are kept; a 3MF is read once rather than once
+  per object when Prepare opens; two quick machine changes in the slice
+  sheet no longer mix their process lists; an error raised before the
+  slice sheet knew its job is shown instead of leaving it on "Preparing".
+- **Printers**: a print refused by the printer, or one that timed out,
+  is reported as such instead of being started a second way; an error
+  message cleared on the printer goes away from the Printers tab, and a
+  stopped Klipper stays shown as stopped; searching again ignores the
+  previous search's late answers; a host typed with a scheme or a
+  trailing slash gets the same address for status, files and the live
+  feed (`https://` keeps TLS).
+- **Files**: sharing a file then another one before the first was
+  fetched no longer shares the first under the second one's name;
+  renaming refuses a source outside the print files.
+- **AI**: opening a conversation that is answering no longer doubles
+  its last messages; the "session lost" hint stays on its conversation;
+  switching the AI off in Settings locks the open conversation; a send
+  that fails after leaving the conversation marks it as failed; an idle
+  conversation's Claude (and its sandbox) is stopped when the
+  conversation is left, and resumed by the next message; when Claude
+  stops by itself, what it wrote on its error output is shown; the
+  sign-in check no longer mounts the whole home folder into the sandbox;
+  an engine download that stalls fails after 30 s and can be cancelled
+  at any moment.
+- **Windows**: file names are cut at the backslash in the slice sheet,
+  the plate save and the saved toasts.
+
+### Changed
+- Tests run on every pull request (Rust unit tests, interface logic
+  scripts, translation catalogs).
+
+## [0.13.0] — 2026-10-22
+
+### Added
+- **Care & Tuning › Control** ([#17](https://github.com/kameka22/snap-studio/pull/17)):
+  the printer's basic actions without G-code — home, a jog pad (X, Y, Z,
+  0.1 to 50 mm), one card per head in its spool's colour (temperature
+  gauge and target, activate, load, unload, extrude, retract), the bed's
+  temperature, part and chamber fans, purifier, chamber light, a camera
+  view, all heaters off, motors off, firmware restart and the emergency
+  stop. Locked during a print (emergency stop, light and camera stay);
+  each move once its axis is homed (as Klipper; a U1 homes X and Y
+  together, Z after them, and picks a head or loads after homing X and Y
+  itself), Z never under 0.5 mm, temperatures
+  within each heater's maximum, one action at a time. Load and unload run
+  the U1 feeder's own procedures, as its screen does (homing X and Y when
+  needed, the filament's own temperature), and follow the head's filament
+  sensor: Load once the filament is in the feed port of an empty head,
+  Unload when the head holds filament. **Material & colour** declares a
+  head's spool as the printer's screen does, from the list the printer
+  itself holds (material, brand, type) and a colour; loading a spool
+  without an RFID tag asks it first, so the printer heats to the right
+  temperature (a tagged spool declares itself). Also opened from the
+  printer's page (**Control**).
+- **3D printer view** ([#34](https://github.com/kameka22/snap-studio/pull/34)):
+  the printer's page shows the U1 in 3D (three.js, bundled with the app),
+  over the whole page. Hover a part to highlight it; click a spool, a head,
+  the bed or the chamber light to open its quick controls in a panel over
+  the view (Control's compact components: temperature, load, unload,
+  light), with **All controls** leading to Care & Tuning › Control on that
+  head. Selecting a head turns the view to its spool's side, the bed or
+  the light to the front; clicking the background deselects and turns
+  back to the front.
+  The Heads and spools card (top left) has one row per head (spool and
+  its details, temperature, active, unloaded) plus the bed; a row selects
+  its head. The print's status sits top centre. Left / Front / Right / Back, drag or ← → to turn,
+  1–4 for a head, Esc to close. A quick bar for the light and the camera
+  (shown in a corner of the view), the printer's details bottom right, and
+  the emergency stop in the toolbar beside Control. Without WebGL the page
+  keeps its 2D picture.
+
+### Fixed
+- The send sheet's options (timelapse camera, automatic bed leveling, flow
+  calibration) now reach the U1: the print starts with them, as Snapmaker
+  Orca does (`server.files.start_local_print`), instead of a command the
+  firmware does not know. If the printer does not apply one, a dialog says
+  so once the print has started
+  ([#39](https://github.com/kameka22/snap-studio/pull/39)).
+- Prepare's keyboard shortcuts no longer act on the plate while the slice
+  preview covers it: Backspace there no longer removes the objects just
+  sliced, and A, Q or R no longer arrange, orient or rotate them. Clear,
+  Remove and undo now free the GPU memory of the meshes no object uses,
+  instead of keeping every mesh loaded for the whole session
+  ([#44](https://github.com/kameka22/snap-studio/pull/44)).
+- Sheets opened while a Library site is shown (the queue's next print, an
+  update, sign-in, share, rename, the welcome assistant) no longer sit
+  invisible under the site, the app blocked behind their backdrop. In the
+  printer form, Enter on a button (Cancel, Test, a found printer) is that
+  button's click instead of a save, and the message after an edit says
+  "updated" rather than "added". A corrupt stored setting no longer stops
+  the app at launch ([#45](https://github.com/kameka22/snap-studio/pull/45)).
+- Sites opened in the Library's tabs can no longer read local files
+  through the app's own protocols (`gcode://`, `thumb://`, `mesh://`,
+  `prn://`, `cam://`): only the app's window gets an answer. A malformed
+  colour (a non-ASCII character in a preset, a file or the printer's
+  report) no longer crashes slicing, file reading or the jobs monitor
+  ([#46](https://github.com/kameka22/snap-studio/pull/46)).
+- Mirrored objects are no longer sent to the slicer with scrambled
+  triangles: a `-0.0` coordinate shifted every later triangle of the
+  object in the 3MF. A preset whose parent is missing (a user preset from
+  another Orca version) is now reported by name when slicing, instead of
+  a partial configuration the engine failed on ([#47](https://github.com/kameka22/snap-studio/pull/47)).
+- The QR share server caps request and header lines at 8 KiB and serves
+  at most eight connections at once: a host on the network can no longer
+  grow the app's memory with a line that never ends. Closing a Claude
+  conversation now really ends its input, so Claude stops promptly, and a
+  container conversation's container gets time to stop before the kill
+  ([#48](https://github.com/kameka22/snap-studio/pull/48)).
+
 ## [0.12.0] — 2026-10-21
 
 ### Added
@@ -255,7 +528,11 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/kameka22/snap-studio/compare/v0.14.1...v0.14.2
+[0.14.1]: https://github.com/kameka22/snap-studio/compare/v0.14.0...v0.14.1
+[0.14.0]: https://github.com/kameka22/snap-studio/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/kameka22/snap-studio/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/kameka22/snap-studio/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kameka22/snap-studio/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/kameka22/snap-studio/compare/v0.9.0...v0.10.0

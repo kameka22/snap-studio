@@ -241,12 +241,10 @@ fn read_model_header(zip: &mut Zip, meta: &mut Meta) -> Result<()> {
 
 fn parse_color(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
-    if s.len() < 6 {
-        return None;
-    }
-    let r = u8::from_str_radix(&s[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&s[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+    // `get`: a non-ASCII character at a cut gives None, not a panic.
+    let r = u8::from_str_radix(s.get(0..2)?, 16).ok()?;
+    let g = u8::from_str_radix(s.get(2..4)?, 16).ok()?;
+    let b = u8::from_str_radix(s.get(4..6)?, 16).ok()?;
     Some([r, g, b])
 }
 
@@ -509,4 +507,16 @@ pub fn read_meta(zip: &mut Zip) -> Meta {
     read_slice_info(zip, &mut meta);
     read_model_settings(zip, &mut meta);
     meta
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::parse_color;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(parse_color("#ff8000"), Some([255, 128, 0]));
+        assert_eq!(parse_color("aé0000"), None);
+        assert_eq!(parse_color("aaaaaé"), None);
+    }
 }

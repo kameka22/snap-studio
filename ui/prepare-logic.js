@@ -172,6 +172,80 @@ function plTools({ n = 0, sel = 0, onBed = 0, sliceable = false, tool = null, or
   };
 }
 
+/* The bulk button of one side of the list (on or off the plate): "all"
+   when no object of that side is selected, or every one of them is;
+   "some", with the count, otherwise. Only this side's objects count: a
+   mixed selection gives each side its own number. */
+function plBulk(selected, side) {
+  const n = side.filter((o) => selected.has(o.id)).length;
+  return n > 0 && n < side.length ? { mode: "some", n } : { mode: "all", n: side.length };
+}
+
+/* ------------------------------------------------------------ colour modes */
+
+/* Colours of the objects on the plate (the sliced ones), in order of first
+   appearance: the global mapping of the "by colour" mode is about these;
+   a colour only off-plate objects carry comes back with them. */
+function plPlateColours(objects, stateOf, coloursOf) {
+  const out = [];
+  for (const o of objects) {
+    if (stateOf(o) === "out") continue;
+    for (const c of coloursOf(o)) if (!out.includes(c)) out.push(c);
+  }
+  return out;
+}
+
+/* Object → colour: a colour takes the head every on-plate object using it
+   points to; objects that disagree, or none using it, leave it unmapped
+   (null), to be chosen by hand before slicing. */
+function plMigrateToColour(objects, stateOf, headsOf, colours) {
+  const out = {};
+  for (const c of colours) {
+    let h = null, conflict = false;
+    for (const o of objects) {
+      if (stateOf(o) === "out") continue;
+      const m = headsOf(o)[c];
+      if (m == null) continue;
+      if (h == null) h = m;
+      else if (h !== m) conflict = true;
+    }
+    out[c] = conflict ? null : h;
+  }
+  return out;
+}
+
+/* Colour → object: each on-plate object takes the global head of each of
+   its colours as its own choice; an unmapped colour leaves the object's
+   choice as it was. The new `heads` of each object, by id. */
+function plMigrateToObject(objects, stateOf, coloursOf, colourHeads) {
+  const out = {};
+  for (const o of objects) {
+    if (stateOf(o) === "out") continue;
+    const heads = { ...(o.heads || {}) };
+    for (const c of coloursOf(o)) if (colourHeads[c] != null) heads[c] = colourHeads[c];
+    out[o.id] = heads;
+  }
+  return out;
+}
+
+/* "By colour" mode: the on-plate objects the 3MF gives no colour, and
+   that have no head picked by hand either: each blocks the slice until
+   one is chosen on its row. Their ids. */
+function plUncoloured(objects, stateOf, ownColoursOf) {
+  return objects.filter((o) => stateOf(o) !== "out" && !ownColoursOf(o).length && o.pick == null).map((o) => o.id);
+}
+
+/* The plate's colours still without a head: they block the slice. */
+const plUnmapped = (colours, colourHeads) => colours.filter((c) => colourHeads[c] == null);
+
+/* "By colour" mode, an object's "Colour…" palette for `n` heads: each head,
+   the picked one on; "the plate's colours" only once a head is picked;
+   `single`: one head, nothing to choose between. */
+function plPalette(pick, n) {
+  const count = Math.max(1, n | 0);
+  return { heads: Array.from({ length: count }, (_, h) => ({ h, on: pick === h })), plate: pick != null, single: count === 1 };
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
+  module.exports = { plPalette, plUncoloured, plPlateColours, plMigrateToColour, plMigrateToObject, plUnmapped, plBulk, plBedState, plGroups, plSliced, plRange, plSnapAngle, plWrapDeg, plNudge, plInside, plParkSpot, plRangeIds, plProject, plScreenBox, plMarquee, plUniform, plScaleSplit, plTools };
 }

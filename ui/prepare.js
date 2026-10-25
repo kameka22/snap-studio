@@ -13,6 +13,13 @@
 const PR = {
   objects: [],
   sel: new Set(),
+  /* How colours get their heads: "object" (each object chooses, under its
+     row) or "colour" (the plate's colours are assigned once for every
+     object, above the list, as Snapmaker Orca does). Starts from the
+     Settings default; never kept per file. */
+  assoc: "object",
+  /* "colour" mode: colour → head, null while unchosen (blocks the slice). */
+  colourHeads: {},
   nextId: 1,
   bed: { w: 270, d: 270, model: "Snapmaker U1" },
   gl: null,
@@ -58,14 +65,30 @@ void main() { frag = uColor; }`;
 /* ------------------------------------------------------------ state */
 
 /* An object as stored: placement and choices, never its mesh. */
-const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free }) => ({
-  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, cv, free,
+const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free }) => ({
+  id, name, path, item, piece, pos, rot, scale, size, plate, extruders, heads, pick, cv, free,
 });
 
 function prSave() {
   const objects = PR.objects.map(prStored);
-  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId }));
+  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads }));
   prStatus();
+  prPruneMeshes();
+}
+
+/* Frees the meshes no object uses any more (removed, cleared, undone):
+   their buffers would otherwise stay on the GPU for the session. An object
+   brought back by undo loads its mesh again. */
+function prPruneMeshes() {
+  const used = new Set(PR.objects.map(meshKey));
+  for (const [key, m] of PR.meshes) {
+    if (used.has(key)) continue;
+    if (m.vao && PR.gl) {
+      PR.gl.deleteVertexArray(m.vao);
+      for (const b of m.bufs || []) PR.gl.deleteBuffer(b);
+    }
+    PR.meshes.delete(key);
+  }
 }
 
 /* The objects of a slice (`ids`), kept with the print: a queued print can
@@ -92,8 +115,11 @@ function prLoadState() {
     if (s?.objects) {
       PR.objects = s.objects;
       PR.nextId = s.nextId || PR.objects.length + 1;
+      PR.colourHeads = s.colourHeads && typeof s.colourHeads === "object" ? s.colourHeads : {};
     }
   } catch {}
+  // The mode is the Settings default at each start, never the file's.
+  PR.assoc = PRUI.assocDefault;
 }
 
 /* ------------------------------------------------------------ history */
@@ -318,7 +344,10 @@ async function prLoadMesh(o) {
 
 async function prLoadMeshNow(o) {
   const key = meshKey(o);
-  if (PR.meshes.has(key)) return PR.meshes.get(key);
+  const had = PR.meshes.get(key);
+  // A read that failed is tried again after a moment: a passing error
+  // must not leave the object invisible (yet selectable) for the session.
+  if (had && !(had.failed && Date.now() - had.at > 5000)) return had;
   const entry = { loading: true };
   PR.meshes.set(key, entry);
   const q = `/b?p=${encodeURIComponent(o.path)}&i=${o.item}${o.piece != null ? "&c=" + o.piece : ""}&b=400000`;
@@ -329,21 +358,27 @@ async function prLoadMeshNow(o) {
     err = e;
   }
   if (!buf) {
-    PR.meshes.set(key, { failed: String(err?.message || err) });
+    PR.meshes.set(key, { failed: String(err?.message || err), at: Date.now() });
     toast(tr("prepare.bad_mesh", { name: o.name }), true);
     return null;
   }
+  // Pruned meanwhile (its object removed), or loaded again (undo): the
+  // entry now in the cache, if any, is the one to use.
+  if (PR.meshes.get(key) !== entry) return PR.meshes.get(key) || null;
   const data = decodeMesh(buf);
   const gl = PR.gl;
+  const bufs = [];
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
   const pb = gl.createBuffer();
+  bufs.push(pb);
   gl.bindBuffer(gl.ARRAY_BUFFER, pb);
   gl.bufferData(gl.ARRAY_BUFFER, data.pos, gl.STATIC_DRAW);
   const aPos = gl.getAttribLocation(PR.prog, "aPos");
   gl.enableVertexAttribArray(aPos);
   gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
   const cb = gl.createBuffer();
+  bufs.push(cb);
   gl.bindBuffer(gl.ARRAY_BUFFER, cb);
   gl.bufferData(gl.ARRAY_BUFFER, data.col, gl.STATIC_DRAW);
   const aCol = gl.getAttribLocation(PR.prog, "aCol");
@@ -352,13 +387,14 @@ async function prLoadMeshNow(o) {
   const aExt = gl.getAttribLocation(PR.prog, "aExt");
   if (data.ext && aExt >= 0) {
     const eb = gl.createBuffer();
+    bufs.push(eb);
     gl.bindBuffer(gl.ARRAY_BUFFER, eb);
     gl.bufferData(gl.ARRAY_BUFFER, data.ext, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(aExt);
     gl.vertexAttribPointer(aExt, 1, gl.UNSIGNED_BYTE, false, 0, 0);
   }
   gl.bindVertexArray(null);
-  Object.assign(entry, { loading: false, vao, count: data.n * 3, n: data.n, pos: data.pos, hasExt: !!data.ext });
+  Object.assign(entry, { loading: false, vao, bufs, count: data.n * 3, n: data.n, pos: data.pos, hasExt: !!data.ext });
   PR.meshes.set(key, entry);
   // Convex hull: exact resting, footprint, "lay on face".
   invoke("plate_hull", { path: o.path, item: o.item, piece: o.piece ?? null })
@@ -369,7 +405,12 @@ async function prLoadMeshNow(o) {
       prRenderInspector();
       prSchedule();
     })
-    .catch(() => {});
+    // No hull: the box stands in for resting, footprint and "lay on face"
+    // (the face tool says so when it finds nothing to work with).
+    .catch((e) => {
+      entry.hullErr = String(e?.message || e);
+      console.warn("hull:", o.name, entry.hullErr);
+    });
   return entry;
 }
 
@@ -758,6 +799,13 @@ function prBindInteractions(canvas) {
         prLayOnFace(fh);
         return;
       }
+      // Nothing to lay on: say why when an object's hull could not be read
+      // (once), rather than a click that does nothing.
+      const noHull = PR.objects.map((o) => PR.meshes.get(meshKey(o))).find((m) => m?.hullErr);
+      if (noHull && !PR.hullSaid) {
+        PR.hullSaid = true;
+        toast(tr("prepare.orient_failed", { err: noHull.hullErr }), true);
+      }
     }
     if (pan) {
       PR.drag = { ...base, mode: "pan" };
@@ -948,8 +996,19 @@ const normDeg = (a) => {
 function prObjectMenu(e) {
   const hit = prPick(e);
   if (!hit) return;
-  if (!PR.sel.has(hit.id)) prSelect([hit.id], false);
+  prMenuFor(hit.id, e.clientX, e.clientY);
+}
+
+/* The object's menu, from the plate or from its row in the list. "Colour…"
+   acts on this object (`PR.menuId`): the palette in "by colour" mode ("Change
+   Colour…" once it has one), its colour/heads frame in "by object" mode. */
+function prMenuFor(id, x, y) {
+  if (!PR.sel.has(id)) prSelect([id], false);
+  const o = PR.objects.find((ob) => ob.id === id);
+  PR.menuId = id;
+  PR.menuAt = { x, y };
   const many = PR.sel.size > 1;
+  const coloured = PR.assoc === "colour" && o && (o.pick != null || prOwnColours(o).length > 0);
   nativeMenu([
     { id: "prep:dup", label: many ? tr("prepare.menu.dup_many", { n: PR.sel.size }) : tr("prepare.menu.dup") },
     { id: "prep:split", label: tr("prepare.menu.split") },
@@ -957,11 +1016,12 @@ function prObjectMenu(e) {
     { id: "prep:resetrot", label: tr("prepare.menu.reset_rot") },
     { id: "prep:orient", label: tr("prepare.menu.orient") },
     { id: "prep:facetool", label: tr("prepare.menu.face") },
+    { id: "prep:colour", label: tr(coloured ? "prepare.menu.recolour" : "prepare.menu.colour") },
     {},
     { id: "prep:arrange", label: tr("prepare.menu.arrange") },
     {},
     { id: "prep:del", label: many ? tr("prepare.menu.del_many", { n: PR.sel.size }) : tr("prepare.menu.del") },
-  ], e.clientX, e.clientY);
+  ], x, y);
 }
 
 function prPan(dx, dy) {
@@ -988,11 +1048,15 @@ function prStatus() {
   // The toolbar shows only what can act on the plate as it is; Save,
   // Clear and Slice stay (on the right: the others come and go on their
   // left without moving them).
+  // "By colour" mode: a colour without a head, or an uncoloured object
+  // without a picked one, blocks the slice.
+  const blockers = prBlockers();
+  const blocked = blockers.colours.length + blockers.objects.length;
   const tools = plTools({
     n,
     sel: PR.sel.size,
     onBed: g.on.length,
-    sliceable: g.sliced > 0 || g.partial > 0,
+    sliceable: (g.sliced > 0 || g.partial > 0) && !blocked,
     tool: PR.tool,
     orienting: !!PR.orienting,
     splitting: !!PR.splitting,
@@ -1010,6 +1074,8 @@ function prStatus() {
   const slice = $("p-slice");
   slice.textContent = g.sliced ? tr("prepare.slice_n", { n: g.sliced }) : tr("prepare.slice");
   slice.title = [
+    blockers.colours.length ? tr("prepare.tip.unmapped", { n: blockers.colours.length }) : "",
+    blockers.objects.length ? tr("prepare.tip.uncoloured", { n: blockers.objects.length }) : "",
     g.partial ? tr("prepare.tip.partial", { n: g.partial }) : "",
     g.off.length ? tr("prepare.tip.off", { n: g.off.length }) : "",
   ].filter(Boolean).join("\n");
@@ -1020,6 +1086,7 @@ function prStatus() {
    one plate's: with several plates, one such list per plate. */
 const PR_ICON = {
   plus: '<svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>',
+  minus: '<svg viewBox="0 0 24 24"><path d="M5 11h14v2H5z"/></svg>',
   warn: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.5 23 21.5H1zM11 9.5v6h2v-6zm0 8v2h2v-2z"/></svg>',
   keys: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1m1 2v8h16V8zm1 1h2v2H5zm3 0h2v2H8zm3 0h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2zM7 13h10v2H7z"/></svg>',
   slider: '<svg viewBox="0 0 24 24"><path d="M3 11h5.2a3 3 0 0 1 5.6 0H21v2h-7.2a3 3 0 0 1-5.6 0H3z"/></svg>',
@@ -1040,12 +1107,23 @@ const PRUI = (() => {
     listFolded: !!s.listFolded,
     offFolded: !!s.offFolded,
     split: !!s.split,
+    /* Settings: the colour → head mode Prepare starts with. */
+    assocDefault: s.assocDefault === "colour" ? "colour" : "object",
+    /* The modal explaining the two modes was dismissed for good. */
+    assocExplained: !!s.assocExplained,
   };
 })();
 const pruiSave = () =>
   localStorage.setItem(
     PRUI_KEY,
-    JSON.stringify({ typing: [...PRUI.typing], listFolded: PRUI.listFolded, offFolded: PRUI.offFolded, split: PRUI.split })
+    JSON.stringify({
+      typing: [...PRUI.typing],
+      listFolded: PRUI.listFolded,
+      offFolded: PRUI.offFolded,
+      split: PRUI.split,
+      assocDefault: PRUI.assocDefault,
+      assocExplained: PRUI.assocExplained,
+    })
   );
 
 const prGroups = () => plGroups(PR.objects, bedState);
@@ -1063,29 +1141,48 @@ function prRenderInspector() {
       : st === "out" ? (o.plate > 1 ? `<span class="tag">${esc(tr("prepare.tag.plate", { n: o.plate }))}</span>` : "")
       : overlap.has(o.id) ? `<span class="tag warn">${esc(tr("prepare.tag.overlap"))}</span>`
       : "";
+    // "By colour" mode, an on-plate object the 3MF gives no colour: a
+    // warning until a head is picked for it (a palette), then a chip
+    // showing that head, to change it.
+    let pickUi = "";
+    if (PR.assoc === "colour" && st !== "out" && (o.pick != null || !prOwnColours(o).length)) {
+      if (o.pick == null) {
+        pickUi = `<button type="button" class="p-ico p-warn" data-pick="${o.id}" title="${esc(tr("prepare.colour.missing"))}">${PR_ICON.warn}</button>`;
+      } else {
+        const s = slots.find((x) => x.index === o.pick);
+        const c = s?.present && s.color ? s.color : "";
+        pickUi = `<button type="button" class="p-chip" data-pick="${o.id}" title="${esc(tr("prepare.colour.change", { h: o.pick }))}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${o.pick}</button>`;
+      }
+    }
+    // One action per row, on its own object: "+" puts an off-plate object
+    // on the plate, "−" takes an on-plate one off; an object sticking out
+    // keeps its warning instead.
     const act =
       st === "partial" ? `<button type="button" class="p-ico p-warn" data-fix="${o.id}" title="${esc(tr("prepare.fix.title"))}">${PR_ICON.warn}</button>`
       : st === "out" ? `<button type="button" class="p-ico" data-put="${o.id}" title="${esc(tr("prepare.put"))}">${PR_ICON.plus}</button>`
-      : "";
-    const open = !PR.fold.has(o.id);
-    const heads = live ? prHeads(o, pid, slots, n) : {};
+      : `<button type="button" class="p-ico" data-park="${o.id}" title="${esc(tr("prepare.park"))}">${PR_ICON.minus}</button>`;
+    // Heads only apply on the plate: an off-plate row has no colour/heads
+    // frame, hence nothing to fold.
+    const out = st === "out";
+    // No colour/heads frame off the plate, nor in "by colour" mode: the
+    // plate's banner holds the choices then.
+    const bare = out || PR.assoc === "colour";
+    const open = !bare && !PR.fold.has(o.id);
+    const heads = live && !bare ? prHeads(o, pid, slots, n) : {};
     const spool = (h) => slots.find((x) => x.index === h);
     const dots = [...new Set(Object.values(heads).map((x) => x.h))]
       .map((h) => spool(h)?.present && spool(h).color ? `<i style="background:${esc(spool(h).color)}"></i>` : "")
       .join("");
     const head = `<div class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}" role="button" tabindex="0">
-      <span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>
-      <span class="k">${esc(o.name)}</span>${tag}<span class="p-dots">${dots}</span>${act}</div>`;
+      ${bare ? `<span class="p-tw"></span>` : `<span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>`}
+      <span class="k">${esc(o.name)}</span>${tag}${pickUi}<span class="p-dots">${dots}</span>${act}</div>`;
     if (!open || !live) return head;
     const model = headsModelNow(o.path);
     return head + prColors(o).map((ext) => {
       const f = model?.filaments?.find((x) => x.index === ext);
-      const tokens = Array.from({ length: n }, (_, h) => {
-        const s = spool(h);
-        const c = s?.present && s.color ? s.color : "";
-        const title = `T${h}${s ? (s.present ? ` · ${[s.kind, s.color].filter(Boolean).join(" · ")}` : " · " + tr("printers.empty_tag")) : ""}`;
-        return `<button class="sl-token${heads[ext]?.h === h ? " on" : ""}${s && !s.present ? " is-empty" : ""}" data-obj="${o.id}" data-ext="${ext}" data-h="${h}" title="${esc(title)}"><i${c ? ` style="background:${esc(c)}"` : ""}></i>T${h}</button>`;
-      }).join("");
+      const tokens = Array.from({ length: n }, (_, h) =>
+        headToken({ h, slot: spool(h), on: heads[ext]?.h === h, attrs: ` data-obj="${o.id}" data-ext="${ext}" data-h="${h}"` })
+      ).join("");
       const label = tr("slice.color_n", { n: ext });
       return `<div class="p-color" title="${esc([label, f?.kind, f?.color].filter(Boolean).join(" · "))}">
         <span class="p-sw" style="background:${esc(f?.color || "#999")}"></span>
@@ -1096,11 +1193,15 @@ function prRenderInspector() {
   };
   const g = prGroups();
   const offOpen = !PRUI.offFolded;
-  $("p-list").innerHTML = `
+  // The bulk buttons follow the selection: "Add 2 Objects" / "Take 1 Off"
+  // when part of a side is selected, "Add All" / "Take All Off" otherwise.
+  const onBulk = plBulk(PR.sel, g.on), offBulk = plBulk(PR.sel, g.off);
+  const bulk = (b, all, some) => (b.mode === "some" ? tr(some, { n: b.n }) : tr(all));
+  $("p-list").innerHTML = `${PR.assoc === "colour" ? prColourBanner(live, slots, n) : ""}
     <div class="p-grp p-on">
       <div class="p-grp-head">
         <span class="k">${esc(tr("prepare.on_bed", { n: g.on.length }))}</span>
-        ${g.on.length ? `<button type="button" class="btn" data-parkall title="${esc(tr("prepare.park_all.title"))}">${esc(tr("prepare.park_all"))}</button>` : ""}
+        ${g.on.length ? `<button type="button" class="btn" data-parkall title="${esc(bulk(onBulk, "prepare.park_all.title", "prepare.park_n.title"))}">${esc(bulk(onBulk, "prepare.park_all", "prepare.park_n"))}</button>` : ""}
       </div>
       ${g.on.length ? `<div class="group">${g.on.map(row).join("")}</div>` : `<div class="vp-sub">${esc(tr("prepare.nothing"))}</div>`}
     </div>
@@ -1108,7 +1209,7 @@ function prRenderInspector() {
       <div class="p-grp-head">
         <span class="p-tw" data-offfold>${offOpen ? "▾" : "▸"}</span>
         <span class="k">${esc(tr("prepare.off_bed", { n: g.off.length }))}</span>
-        ${g.off.length ? `<button type="button" class="btn" data-putall>${esc(tr("prepare.put_all"))}</button>` : ""}
+        ${g.off.length ? `<button type="button" class="btn" data-putall title="${esc(bulk(offBulk, "prepare.put_all.title", "prepare.put_n.title"))}">${esc(bulk(offBulk, "prepare.put_all", "prepare.put_n"))}</button>` : ""}
       </div>
       ${g.off.length ? `<div class="vp-sub">${esc(tr("prepare.off_note", { n: g.off.length }))}</div>` : ""}
       ${g.off.length ? `<div class="group">${g.off.map(row).join("")}</div>` : ""}
@@ -1123,8 +1224,12 @@ function prRenderInspector() {
   const fold = $("p-objects-fold");
   fold.textContent = PRUI.listFolded ? "▸" : "▾";
   fold.title = tr(PRUI.listFolded ? "prepare.list.show" : "prepare.list.hide");
-  // Several selected: they are counted here, the inspector is for one.
-  $("p-objects-n").textContent = PR.sel.size > 1 ? tr("prepare.selected", { n: PR.sel.size }) : PR.objects.length ? fmtNum(PR.objects.length) : "";
+  // The total alone: the selection shows on the rows and the bulk buttons.
+  $("p-objects-n").textContent = PR.objects.length ? `(${fmtNum(PR.objects.length)})` : "";
+  document.querySelectorAll("#p-assoc [data-assoc]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.assoc === PR.assoc);
+    b.setAttribute("aria-checked", String(b.dataset.assoc === PR.assoc));
+  });
   prRenderPrinter();
   prRenderProps();
   prStatus();
@@ -1454,17 +1559,36 @@ $("p-list").addEventListener("click", (e) => {
     prRenderInspector();
     return;
   }
+  // Bulk buttons: the selected objects of that side when some are, else
+  // the whole side (a mixed selection gives each side its own objects).
+  const side = (list) => {
+    const b = plBulk(PR.sel, list);
+    return (b.mode === "some" ? list.filter((o) => PR.sel.has(o.id)) : list).map((o) => o.id);
+  };
   if (e.target.closest("[data-parkall]")) {
-    prParkAll();
+    prParkIds(side(prGroups().on));
     return;
   }
   if (e.target.closest("[data-putall]")) {
-    prPutOnBed(prGroups().off.map((o) => o.id));
+    prPutOnBed(side(prGroups().off));
     return;
   }
   const put = e.target.closest("[data-put]");
   if (put) {
     prPutOnBed([+put.dataset.put]);
+    return;
+  }
+  const park = e.target.closest("[data-park]");
+  if (park) {
+    prParkIds([+park.dataset.park]);
+    return;
+  }
+  // The warning or chip of an uncoloured object: the palette, under it.
+  const pick = e.target.closest("[data-pick]");
+  if (pick) {
+    const r = pick.getBoundingClientRect();
+    if (PK.prep && PK.anchor === pick && !$("picker").classList.contains("hidden")) return closePicker(true);
+    prColourPalette(PR.objects.find((o) => o.id === +pick.dataset.pick), r.left, r.bottom, pick);
     return;
   }
   const fix = e.target.closest("[data-fix]");
@@ -1475,11 +1599,19 @@ $("p-list").addEventListener("click", (e) => {
   }
   const tok = e.target.closest("[data-h]");
   if (tok) {
-    prSetHead(PR.objects.find((o) => o.id === +tok.dataset.obj), +tok.dataset.ext, +tok.dataset.h);
+    if (tok.dataset.ch != null) prSetColourHead(+tok.dataset.ch, +tok.dataset.h);
+    else prSetHead(PR.objects.find((o) => o.id === +tok.dataset.obj), +tok.dataset.ext, +tok.dataset.h);
     return;
   }
   const row = e.target.closest(".p-obj");
   if (row) prListPick(+row.dataset.id, e);
+});
+/* A row's menu: the same as the object's on the plate. */
+$("p-list").addEventListener("contextmenu", (e) => {
+  const row = e.target.closest(".p-obj");
+  if (!row) return;
+  e.preventDefault();
+  prMenuFor(+row.dataset.id, e.clientX, e.clientY);
 });
 $("p-list").addEventListener("keydown", (e) => {
   const row = e.target.closest?.(".p-obj");
@@ -1507,10 +1639,16 @@ function prListPick(id, e) {
 
 /* Every object of the plate taken off it, beside it: one undo step. */
 function prParkAll() {
-  const on = prGroups().on;
-  if (!on.length) return;
+  prParkIds(prGroups().on.map((o) => o.id));
+}
+
+/* Takes objects off the plate, beside it, as one undo step: those given
+   that are on it (fully or partly). */
+function prParkIds(ids) {
+  const list = PR.objects.filter((o) => ids.includes(o.id) && bedState(o) !== "out");
+  if (!list.length) return;
   prRemember();
-  prPark(on);
+  prPark(list);
   prSave();
   prRenderInspector();
   prSchedule();
@@ -1611,6 +1749,7 @@ function groupBox(list) {
    block to a free spot. The other plates follow, beside it. */
 async function prepareAddFile(path, { remember = true } = {}) {
   let items;
+  if (typeof headsForget === "function") headsForget(path);
   const name = path.split(/[\\/]/).pop();
   PRL.reading.push(name);
   prLoadingShow();
@@ -1891,9 +2030,10 @@ async function prOrient(all) {
 /* Saves the whole plate as 3MF (the model's parts and extruders kept). */
 async function prSavePlate() {
   if (!PR.objects.length) return;
-  const dir = state.dir || PR.objects[0].path.replace(/\/[^/]*$/, "");
+  const dir = state.dir || PR.objects[0].path.replace(/[\\/][^\\/]*$/, "");
+  const sep = dir.includes("\\") ? "\\" : "/"; // Windows paths too
   const dest = await window.__TAURI__.dialog
-    .save({ defaultPath: dir + "/" + tr("prepare.default_name"), filters: [{ name: "3MF", extensions: ["3mf"] }] })
+    .save({ defaultPath: dir + sep + tr("prepare.default_name"), filters: [{ name: "3MF", extensions: ["3mf"] }] })
     .catch(() => null);
   if (!dest) return;
   const identity = Array.from({ length: 16 }, (_, i) => i);
@@ -1902,7 +2042,7 @@ async function prSavePlate() {
       scene: PR.objects.map((o) => ({ path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, extruder_map: identity })),
       path: dest,
     });
-    toast(tr("prepare.saved", { name: dest.split("/").pop() }));
+    toast(tr("prepare.saved", { name: dest.split(/[\\/]/).pop() }));
     if (state.dir && dest.startsWith(state.dir)) refresh();
   } catch (e) {
     toast(tr("printers.form.save_failed", { err: e }), true);
@@ -1994,13 +2134,9 @@ function prArrange() {
       p.o.pos = [p.cx + dx, p.cy + dy];
     }
   }
-  // What does not fit waits on the right of the plate.
-  let y = 0;
-  for (const o of left) {
-    const b = groupBox([{ ...o, pos: [0, 0] }]);
-    o.pos = [PR.bed.w + 20 - b.x0, y - b.y0];
-    y += b.y1 - b.y0 + 10;
-  }
+  // What does not fit waits beside the plate, in the parking's free spots:
+  // never on top of an object already parked there.
+  prPark(left);
   prSave();
   prRenderInspector();
   prSchedule();
@@ -2120,6 +2256,7 @@ async function prepareShow() {
   const bed = await invoke("plate_bed", { machine: SL.memory.last || null }).catch(() => null);
   if (bed && (bed.w !== PR.bed.w || bed.d !== PR.bed.d || bed.model !== PR.bed.model)) {
     PR.bed = { w: bed.w, d: bed.d, model: bed.model };
+    disposeDrawable(PR.gl, PR.grid);
     PR.grid = buildGrid(PR.gl, PR.bed.w, PR.bed.d);
     disposeBed(PR.gl, PR.plate);
     PR.plate = buildBed(PR.gl, PR.bed.w, PR.bed.d, PR.bed.model, prSchedule);
@@ -2149,12 +2286,12 @@ function prepareScene() {
     return null;
   }
   const files = [...new Set(on.map((o) => o.path))];
-  const name = files.length === 1 ? files[0].split("/").pop().replace(/\.(3mf|stl)$/i, "") : tr("slice.plate").toLowerCase();
+  const name = files.length === 1 ? files[0].split(/[\\/]/).pop().replace(/\.(3mf|stl)$/i, "") : tr("slice.plate").toLowerCase();
   return {
     name,
     files,
     skipped: PR.objects.length - on.length,
-    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: o.heads || {} })),
+    items: on.map((o) => ({ id: o.id, path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, colors: prColors(o), heads: prSliceHeads(o) })),
   };
 }
 
@@ -2164,6 +2301,8 @@ $("p-add").addEventListener("click", prAddFiles);
 $("p-save").addEventListener("click", prSavePlate);
 $("p-clear").addEventListener("click", prClear);
 onMenu("prep", async (what) => {
+  const byId = (id) => PR.objects.find((o) => o.id === +id);
+  if (what === "colour") prColourAction(byId(PR.menuId), PR.menuAt?.x || 0, PR.menuAt?.y || 0);
   if (what === "dup") prDuplicate();
   if (what === "split") prSplit();
   if (what === "center") prCenterSelection();
@@ -2201,6 +2340,9 @@ function prEmpty() {
   prRemember();
   PR.objects = [];
   PR.sel.clear();
+  // A new plate starts in the Settings default mode, with no colour mapped.
+  PR.assoc = PRUI.assocDefault;
+  PR.colourHeads = {};
   prSave();
   prRenderInspector();
   prSchedule();
@@ -2295,6 +2437,31 @@ async function prepareModels(paths) {
 $("set-plate-ask").checked = occAsk();
 $("set-plate-ask").addEventListener("change", (e) => occSetAsk(e.target.checked));
 
+/* Colour → head mode: the switch above the list, its Settings default and
+   the sheet shown before the first switch. */
+$("p-assoc").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-assoc]");
+  if (b) prAssocSwitch(b.dataset.assoc);
+});
+$("set-assoc").value = PRUI.assocDefault;
+$("set-assoc").addEventListener("change", (e) => {
+  PRUI.assocDefault = e.target.value === "colour" ? "colour" : "object";
+  pruiSave();
+});
+$("assoc-go").addEventListener("click", () => {
+  if ($("assoc-noshow").checked) {
+    PRUI.assocExplained = true;
+    pruiSave();
+  }
+  closeSheet($("assocmodal"));
+  if (PR.assocPending) prAssocApply(PR.assocPending);
+  PR.assocPending = null;
+});
+$("assoc-cancel").addEventListener("click", () => {
+  PR.assocPending = null;
+  closeSheet($("assocmodal"));
+});
+
 /* Files: "Prepare" adds the selected models to the plate and shows it.
    G-code files are already sliced: they are left out. */
 async function prepareFiles(paths) {
@@ -2317,6 +2484,9 @@ let nudgeAt = 0;
 document.addEventListener("keydown", (e) => {
   if (window.currentView !== "prepare") return;
   if (document.querySelector(".modal:not(.hidden)")) return;
+  // The slice preview covers the plate without leaving the view: its keys
+  // (R reframes) must not reach the plate (R rotates, Backspace removes).
+  if (!$("viewer").classList.contains("hidden")) return;
   if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
   const mod = e.metaKey || e.ctrlKey;
   const k = e.key.toLowerCase();
@@ -2382,6 +2552,182 @@ function prHeads(o, pid = headsActive(), slots = headsSlots(pid), n = headsCount
   return out;
 }
 
+/* ------------------------------------------------------------ colour modes */
+
+/* The colours the 3MF gives an object (none: an uncoloured object, which
+   "by colour" mode asks a head for, on its row). */
+function prOwnColours(o) {
+  return o.extruders?.length ? o.extruders : [];
+}
+
+/* The colours an object brings to the plate's banner: none once a head
+   was picked for it, which prints the whole object. */
+function prBannerColours(o) {
+  return o.pick != null ? [] : prOwnColours(o);
+}
+
+/* The plate's colours, each with what the 3MF says of it (from the first
+   on-plate object carrying it): { ext, kind, color }. */
+function prPlateColours() {
+  return plPlateColours(PR.objects, bedState, prBannerColours).map((ext) => {
+    const o = PR.objects.find((x) => bedState(x) !== "out" && prBannerColours(x).includes(ext));
+    const f = o ? headsModelNow(o.path)?.filaments?.find((x) => x.index === ext) : null;
+    return { ext, kind: f?.kind, color: f?.color };
+  });
+}
+
+/* What blocks the slice in "by colour" mode: the plate's colours without
+   a head, and the uncoloured objects without a picked one. Declarations:
+   `prStatus` may run before this point of the file. */
+function prBlockers() {
+  if (PR.assoc !== "colour") return { colours: [], objects: [] };
+  return {
+    colours: plUnmapped(plPlateColours(PR.objects, bedState, prBannerColours), PR.colourHeads),
+    objects: plUncoloured(PR.objects, bedState, prOwnColours),
+  };
+}
+function prUnmapped() {
+  return prBlockers().colours;
+}
+
+/* An object's heads as the slice gets them: its own in "by object" mode;
+   in "by colour" mode the plate's, or the head picked for the object on
+   its row, which prints the whole object (a colour still unmapped keeps
+   the object's; the slice is blocked while one is). */
+function prSliceHeads(o) {
+  if (PR.assoc !== "colour") return o.heads || {};
+  const heads = { ...(o.heads || {}) };
+  for (const ext of prColors(o)) {
+    if (o.pick != null) heads[ext] = o.pick;
+    else if (PR.colourHeads[ext] != null) heads[ext] = PR.colourHeads[ext];
+  }
+  return heads;
+}
+
+/* The head picked for an object in "by colour" mode (null: the plate's
+   colours again). */
+function prSetPick(o, h) {
+  if (!o) return;
+  prRemember();
+  if (h == null) delete o.pick;
+  else o.pick = h;
+  prSave();
+  prRenderInspector();
+  prSchedule();
+}
+
+/* The palette: the head popover (slice-ui.js openSwatches), each head
+   with the spool it holds, at (x, y) or under `anchor`; "the plate's
+   colours" below once a head is picked. A single head is no choice: it is
+   taken at once. */
+function prColourPalette(o, x, y, anchor = null) {
+  if (!o) return;
+  const pid = headsActive(), slots = headsSlots(pid), n = headsCount(pid);
+  const pal = plPalette(o.pick, n);
+  if (pal.single && !pal.plate) return prSetPick(o, 0);
+  openSwatches(anchor || { x, y }, {
+    entries: swHeads({ count: pal.heads.length, slots }),
+    value: o.pick == null ? null : String(o.pick),
+    label: tr("prepare.menu.colour"),
+    note: slots.length ? "" : tr("swatch.connect"),
+    foot: pal.plate ? { label: tr("prepare.colour.plate"), onClick: () => (closePicker(true), prSetPick(o, null)) } : null,
+    onPick: (v) => prSetPick(o, +v),
+  });
+  PK.prep = true;
+}
+/* The palette goes with what it was opened on. */
+const prPaletteClose = () => PK.prep && PK.grid && closePicker();
+
+/* "Colour…" from a menu: the palette in "by colour" mode; in "by object"
+   mode the object's colour/heads frame, unfolded in the list. */
+function prColourAction(o, x, y) {
+  if (!o) return;
+  if (PR.assoc === "colour") return prColourPalette(o, x, y);
+  PR.fold.delete(o.id);
+  if (PRUI.listFolded) {
+    PRUI.listFolded = false;
+    pruiSave();
+  }
+  prSelect([o.id], false);
+}
+
+/* "By colour" mode: the banner above the list, one row per colour of the
+   plate with the same head tokens as an object's frame. */
+function prColourBanner(live, slots, n) {
+  const cols = prPlateColours();
+  if (!cols.length) return "";
+  const spool = (h) => slots.find((x) => x.index === h);
+  const rows = cols
+    .map(({ ext, kind, color }) => {
+      const cur = PR.colourHeads[ext];
+      const unmapped = cur == null;
+      const tokens = live
+        ? Array.from({ length: n }, (_, h) => headToken({ h, slot: spool(h), on: cur === h, attrs: ` data-ch="${ext}" data-h="${h}"` })).join("")
+        : "";
+      const label = tr("slice.color_n", { n: ext });
+      return `<div class="p-color${unmapped ? " unmapped" : ""}" title="${esc([label, kind, color].filter(Boolean).join(" · "))}">
+        <span class="p-sw" style="background:${esc(color || "#999")}"></span>
+        <span class="p-color-lbl">${esc(label)}${unmapped ? ` <span class="tag warn">${esc(tr("prepare.assoc.unmapped"))}</span>` : ""}</span>
+        <span class="p-toks">${tokens}</span>
+      </div>`;
+    })
+    .join("");
+  return `<div class="p-grp p-colours">
+      <div class="p-grp-head"><span class="k">${esc(tr("prepare.assoc.colours", { n: cols.length }))}</span></div>
+      <div class="group">${rows}</div>
+    </div>`;
+}
+
+/* A colour of the plate goes to head `h`, for every object. Not an undo
+   step: the history holds the objects, not the plate's mapping. */
+function prSetColourHead(ext, h) {
+  PR.colourHeads = { ...PR.colourHeads, [ext]: h };
+  prSave();
+  prRenderInspector();
+  prSchedule(); // the objects on the plate take the colour
+}
+
+/* Changing mode: explained once (a sheet, until dismissed for good),
+   then applied with its hand-off of the associations. */
+function prAssocSwitch(mode) {
+  if (mode === PR.assoc) return;
+  if (!PRUI.assocExplained) {
+    PR.assocPending = mode;
+    $("assoc-noshow").checked = false;
+    openSheet($("assocmodal"));
+    return;
+  }
+  prAssocApply(mode);
+}
+
+/* Object → colour: a colour every on-plate object sends to the same head
+   (chosen or deduced) keeps it, one they disagree on waits for a choice.
+   Colour → object: each on-plate object takes the plate's heads as its
+   own. One undo step for the objects' heads; the mode itself is not undone. */
+function prAssocApply(mode) {
+  if (mode === PR.assoc) return;
+  prRemember();
+  if (mode === "colour") {
+    // Only the objects that bring colours to the banner vote: an
+    // uncoloured one (its colour is a stand-in) or one with a picked head
+    // would otherwise weigh on colour 1.
+    const effective = (o) =>
+      prBannerColours(o).length ? Object.fromEntries(Object.entries(prHeads(o)).map(([ext, v]) => [ext, v.h])) : {};
+    PR.colourHeads = plMigrateToColour(PR.objects, bedState, effective, plPlateColours(PR.objects, bedState, prBannerColours));
+  } else {
+    const heads = plMigrateToObject(PR.objects, bedState, prBannerColours, PR.colourHeads);
+    for (const o of PR.objects) {
+      if (heads[o.id]) o.heads = heads[o.id];
+      // A head picked for the whole object becomes its choice for each colour.
+      if (o.pick != null && bedState(o) !== "out") o.heads = Object.fromEntries(prColors(o).map((ext) => [ext, o.pick]));
+    }
+  }
+  PR.assoc = mode;
+  prSave();
+  prRenderInspector();
+  prSchedule();
+}
+
 /* A color of one object goes to head `h`; choosing the default forgets the
    object's own choice. */
 function prSetHead(o, ext, h) {
@@ -2413,13 +2759,27 @@ async function prRefreshColors() {
   prSave();
 }
 
+/* The head showing each colour of an object on the plate, in the current
+   mode: "by object", the object's (chosen or deduced); "by colour", the
+   head picked for the object, else the plate's for that colour — an
+   unmapped colour has none, and keeps the file's colour as a cue. */
+function prShownHeads(o, pid, slots) {
+  if (PR.assoc !== "colour") return Object.fromEntries(Object.entries(prHeads(o, pid, slots)).map(([ext, v]) => [ext, v.h]));
+  const out = {};
+  for (const ext of prColors(o)) {
+    const h = o.pick != null ? o.pick : PR.colourHeads[ext];
+    if (h != null) out[ext] = h;
+  }
+  return out;
+}
+
 /* Spool color of each color of an object, for the shader. */
 function prHeadColors(gl, o, mesh) {
   const col = new Float32Array(17 * 3), on = new Float32Array(17);
   const pid = typeof headsActive === "function" ? headsActive() : "";
   if (pid) {
     const slots = headsSlots(pid);
-    for (const [ext, { h }] of Object.entries(prHeads(o, pid, slots))) {
+    for (const [ext, h] of Object.entries(prShownHeads(o, pid, slots))) {
       const s = slots.find((x) => x.index === h);
       const rgb = s?.present && s.color ? hexToRgb(s.color) : null;
       if (!rgb || ext > 16) continue;
@@ -2436,16 +2796,24 @@ function prHeadColors(gl, o, mesh) {
   if (loc >= 0 && !mesh.hasExt) gl.vertexAttrib1f(loc, colors.length === 1 ? colors[0] : 0);
 }
 
-/* Printer whose spools color the list, when there are several. */
+/* Printer whose spools color the list, when there are several: chips
+   (slice-ui.js printerChips) over the hidden select, which stays the
+   source of truth. */
 function prRenderPrinter() {
   const box = $("p-printer");
   if (!box || typeof headsActive !== "function") return;
   const printers = typeof P !== "undefined" ? P.list : [];
-  box.classList.toggle("hidden", printers.length < 2);
+  $("p-printers").classList.toggle("hidden", printers.length < 2);
   if (printers.length < 2) return;
   const pid = headsActive();
   box.innerHTML = printers.map((p) => `<option value="${esc(p.id)}"${p.id === pid ? " selected" : ""}>${esc(p.name || p.host)}</option>`).join("");
+  $("p-printers").innerHTML = printerChips(printers, pid);
 }
+$("p-printers").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-printer]");
+  if (b && !b.disabled) setSelect($("p-printer"), b.dataset.printer);
+});
+$("p-list").addEventListener("scroll", () => prPaletteClose(), { passive: true });
 $("p-printer")?.addEventListener("change", (e) => {
   headsSetActive(e.target.value, "prepare");
   prRefreshSpools();
@@ -2474,6 +2842,7 @@ function prRefreshSpools() {
 }
 window.addEventListener("headschange", () => {
   if (window.currentView !== "prepare") return;
+  prPaletteClose();
   prRenderInspector();
   prSchedule();
 });

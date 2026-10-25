@@ -22,13 +22,21 @@ pub struct Site {
     pub id: &'static str,
     pub name: &'static str,
     pub url: &'static str,
+    /// Which sidebar entry lists it: the Library (model sites) or the
+    /// Snapmaker hub (the maker's own spaces). Same views, same tabs.
+    pub hub: &'static str,
 }
 
 pub const SITES: &[Site] = &[
-    Site { id: "makerworld", name: "MakerWorld", url: "https://makerworld.com/" },
-    Site { id: "printables", name: "Printables", url: "https://www.printables.com/" },
-    Site { id: "thingiverse", name: "Thingiverse", url: "https://www.thingiverse.com/" },
-    Site { id: "cults3d", name: "Cults3D", url: "https://cults3d.com/fr" },
+    Site { id: "makerworld", name: "MakerWorld", url: "https://makerworld.com/", hub: "library" },
+    Site { id: "printables", name: "Printables", url: "https://www.printables.com/", hub: "library" },
+    Site { id: "thingiverse", name: "Thingiverse", url: "https://www.thingiverse.com/", hub: "library" },
+    Site { id: "cults3d", name: "Cults3D", url: "https://cults3d.com/fr", hub: "library" },
+    Site { id: "space", name: "Space", url: "https://space.snapmaker.com/", hub: "snapmaker" },
+    Site { id: "store", name: "Store", url: "https://shop.snapmaker.com/", hub: "snapmaker" },
+    Site { id: "wiki", name: "Wiki", url: "https://wiki.snapmaker.com/", hub: "snapmaker" },
+    Site { id: "forum", name: "Forum", url: "https://forum.snapmaker.com/", hub: "snapmaker" },
+    Site { id: "account", name: "Account", url: "https://account.snapmaker.com/", hub: "snapmaker" },
 ];
 
 pub fn sites() -> Vec<Site> {
@@ -37,6 +45,224 @@ pub fn sites() -> Vec<Site> {
 
 fn label(id: &str) -> String {
     format!("lib-{id}")
+}
+
+/// The floating navigation (`overlay.html`): a small transparent view of
+/// ours laid over the site's, at its top-left, with Back, Forward and
+/// Reload. Views cannot be reordered once added, so a fresh one (a new
+/// label) is made after each site's view, which puts it on top; the older
+/// one is closed. Shown with a site, hidden with it.
+const NAV_SIZE: (f64, f64) = (112.0, 40.0);
+
+fn nav_rect(r: Rect) -> Rect {
+    Rect { x: r.x + 10.0, y: r.y + 10.0, w: NAV_SIZE.0, h: NAV_SIZE.1 }
+}
+
+fn nav_label() -> &'static Mutex<String> {
+    static L: OnceLock<Mutex<String>> = OnceLock::new();
+    L.get_or_init(|| Mutex::new(String::new()))
+}
+
+/// The tab shown, for the floating navigation's buttons.
+fn visible_tab() -> &'static Mutex<Option<String>> {
+    static V: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    V.get_or_init(Default::default)
+}
+
+fn ensure_nav(app: &AppHandle) -> Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(1);
+    let old = nav_label().lock().unwrap().clone();
+    let lbl = format!("lib-nav-{}", N.fetch_add(1, Ordering::Relaxed));
+    let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
+    let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App("overlay.html".into())).transparent(true);
+    let r = nav_rect(*last_rect().lock().unwrap());
+    let dy = title_offset(&window);
+    let _view = window.add_child(builder, LogicalPosition::new(r.x, r.y + dy), LogicalSize::new(r.w, r.h))?;
+    #[cfg(target_os = "linux")]
+    gtk_layer::adopt(app, &_view);
+    *nav_label().lock().unwrap() = lbl;
+    if let Some(wv) = app.get_webview(&old) {
+        let _ = wv.close();
+    }
+    Ok(())
+}
+
+/// The pinned camera over a site (`camview.html`). The interface's pinned
+/// window is HTML, so a site's native view covers it; while a site is
+/// shown, this small native view of ours takes its place, on top — made
+/// again after each site's view, as the navigation. The interface asks
+/// for it (where, which printer) and is told when it shows, to stop its
+/// own frames meanwhile: one stream at a time.
+#[derive(Clone)]
+struct CamView {
+    rect: Rect,
+    /// The page's settings: printer, name, texts (a JSON object).
+    setup: String,
+}
+
+fn cam_req() -> &'static Mutex<Option<CamView>> {
+    static R: OnceLock<Mutex<Option<CamView>>> = OnceLock::new();
+    R.get_or_init(Default::default)
+}
+
+fn cam_label() -> &'static Mutex<String> {
+    static L: OnceLock<Mutex<String>> = OnceLock::new();
+    L.get_or_init(|| Mutex::new(String::new()))
+}
+
+/// A camera view's label: `lib-cam-<n>` (the `cam` protocol answers it).
+pub fn is_cam_view(label: &str) -> bool {
+    label.starts_with("lib-cam-")
+}
+
+/// The interface's pinned camera: where it is and what it shows, or None.
+pub fn set_cam(app: &AppHandle, rect: Option<Rect>, setup: String) {
+    let want = rect.map(|rect| CamView { rect, setup });
+    let changed = {
+        let mut r = cam_req().lock().unwrap();
+        let changed = r.as_ref().map(|c| &c.setup) != want.as_ref().map(|c| &c.setup);
+        *r = want.clone();
+        changed
+    };
+    if want.is_none() {
+        let old = std::mem::take(&mut *cam_label().lock().unwrap());
+        if let Some(wv) = app.get_webview(&old) {
+            let _ = wv.close();
+        }
+    } else if changed || app.get_webview(&cam_label().lock().unwrap().clone()).is_none() {
+        if let Err(e) = ensure_cam(app) {
+            eprintln!("[lib] camera view: {e}");
+        }
+    }
+    sync_cam(app);
+}
+
+fn ensure_cam(app: &AppHandle) -> Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(1);
+    let Some(req) = cam_req().lock().unwrap().clone() else { return Ok(()) };
+    let old = cam_label().lock().unwrap().clone();
+    let lbl = format!("lib-cam-{}", N.fetch_add(1, Ordering::Relaxed));
+    let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
+    let builder = tauri::WebviewBuilder::new(&lbl, WebviewUrl::App("camview.html".into()))
+        .initialization_script(&format!("window.__CAM__ = {};", req.setup))
+        .transparent(true);
+    let r = req.rect;
+    let dy = title_offset(&window);
+    let _view = window.add_child(builder, LogicalPosition::new(r.x, r.y + dy), LogicalSize::new(r.w, r.h))?;
+    #[cfg(target_os = "linux")]
+    gtk_layer::adopt(app, &_view);
+    *cam_label().lock().unwrap() = lbl;
+    if let Some(wv) = app.get_webview(&old) {
+        let _ = wv.close();
+    }
+    Ok(())
+}
+
+/// Shown while a site is (and the camera pinned), at the pinned window's
+/// place; the interface told whether it shows.
+fn sync_cam(app: &AppHandle) {
+    let req = cam_req().lock().unwrap().clone();
+    let site = visible_tab().lock().unwrap().is_some();
+    let lbl = cam_label().lock().unwrap().clone();
+    let shown = match (app.get_webview(&lbl), &req) {
+        (Some(wv), Some(c)) if site => {
+            place(&wv, c.rect);
+            let _ = wv.show();
+            true
+        }
+        (Some(wv), _) => {
+            let _ = wv.hide();
+            false
+        }
+        _ => false,
+    };
+    let _ = app.emit("cam-view", serde_json::json!({ "shown": shown }));
+}
+
+/// Back, forward or reload on the tab shown (the floating navigation).
+pub fn nav_command(app: &AppHandle, what: &str) -> Result<()> {
+    let id = visible_tab().lock().unwrap().clone().ok_or_else(|| anyhow!("no tab shown"))?;
+    command(app, &id, what)
+}
+
+/// A site's icon as a data URL, kept on disk: the home's cards show the
+/// real thing rather than an initial. The page's `<link rel="icon">`
+/// (apple-touch, svg or png first), else `/favicon.ico`; None when
+/// nothing answers.
+pub async fn favicon(id: &str) -> Option<String> {
+    let site = SITES.iter().find(|s| s.id == id)?;
+    let dir = dirs::cache_dir()?.join("fr.carlini.snapstudio").join("favicons");
+    let file = dir.join(id);
+    if let Ok(s) = std::fs::read_to_string(&file) {
+        if s.starts_with("data:") {
+            return Some(s);
+        }
+    }
+    let client = crate::printers::client();
+    let base = url::Url::parse(site.url).ok()?;
+    let timeout = std::time::Duration::from_secs(12);
+    let html = client.get(site.url).header("User-Agent", UA).timeout(timeout).send().await.ok()?.text().await.ok()?;
+    let mut candidates: Vec<String> = icon_links(&html).into_iter().filter_map(|h| base.join(&h).ok()).map(|u| u.to_string()).collect();
+    candidates.push(base.join("/favicon.ico").ok()?.to_string());
+    for u in candidates {
+        let Ok(r) = client.get(&u).header("User-Agent", UA).timeout(timeout).send().await else { continue };
+        if !r.status().is_success() {
+            continue;
+        }
+        let header = r.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").split(';').next().unwrap_or("").trim().to_string();
+        let Ok(bytes) = r.bytes().await else { continue };
+        if bytes.is_empty() || bytes.len() > 512 * 1024 {
+            continue;
+        }
+        let lu = u.to_ascii_lowercase();
+        let mime = if header.starts_with("image/") {
+            header
+        } else if lu.ends_with(".svg") {
+            "image/svg+xml".into()
+        } else if lu.ends_with(".png") {
+            "image/png".into()
+        } else {
+            "image/x-icon".into()
+        };
+        let data = format!("data:{mime};base64,{}", crate::util::b64_encode(&bytes));
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(&file, &data);
+        return Some(data);
+    }
+    None
+}
+
+/// `href` of a page's `<link rel="… icon …">` tags, the better-looking
+/// first: apple-touch, then svg, then png, then the rest.
+pub fn icon_links(html: &str) -> Vec<String> {
+    let lower = html.to_ascii_lowercase();
+    let mut out: Vec<(i32, String)> = Vec::new();
+    let mut from = 0;
+    while let Some(i) = lower[from..].find("<link") {
+        let start = from + i;
+        let Some(end) = lower[start..].find('>') else { break };
+        let (tag, ltag) = (&html[start..start + end], &lower[start..start + end]);
+        from = start + end;
+        let attr = |name: &str| -> Option<String> {
+            let k = format!("{name}=\"");
+            let p = ltag.find(&k)? + k.len();
+            let q = tag[p..].find('"')? + p;
+            Some(tag[p..q].to_string())
+        };
+        let Some(rel) = attr("rel") else { continue };
+        let rel = rel.to_ascii_lowercase();
+        if !rel.split_whitespace().any(|r| r == "icon" || r == "apple-touch-icon") {
+            continue;
+        }
+        let Some(href) = attr("href") else { continue };
+        let lh = href.to_ascii_lowercase();
+        let score = if rel.contains("apple") { 3 } else if lh.ends_with(".svg") { 2 } else if lh.ends_with(".png") { 1 } else { 0 };
+        out.push((score, href));
+    }
+    out.sort_by(|a, b| b.0.cmp(&a.0));
+    out.into_iter().map(|(_, h)| h).collect()
 }
 
 /// Rectangle of the browsing area, in interface points.
@@ -57,12 +283,6 @@ pub struct Rect {
 fn last_rect() -> &'static Mutex<Rect> {
     static R: OnceLock<Mutex<Rect>> = OnceLock::new();
     R.get_or_init(|| Mutex::new(Rect { x: 0.0, y: 0.0, w: 800.0, h: 600.0 }))
-}
-
-/// Open tabs, in opening order.
-fn tabs() -> &'static Mutex<Vec<String>> {
-    static T: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
-    T.get_or_init(|| Mutex::new(Vec::new()))
 }
 
 /// Opens a tab, or brings it back to the front if it already exists. `id`
@@ -125,7 +345,16 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
     // Linux: Tauri stacked the view under ours; it goes over the main view.
     #[cfg(target_os = "linux")]
     gtk_layer::adopt(app, &_view);
-    tabs().lock().unwrap().push(id.to_string());
+    // The floating navigation and the pinned camera, made again so that
+    // they sit above this view.
+    if let Err(e) = ensure_nav(app) {
+        eprintln!("[lib] floating navigation: {e}");
+    }
+    if cam_req().lock().unwrap().is_some() {
+        if let Err(e) = ensure_cam(app) {
+            eprintln!("[lib] camera view: {e}");
+        }
+    }
     show_only(app, Some(id));
     Ok(())
 }
@@ -339,10 +568,26 @@ mod gtk_layer {
 /// Shows a tab and hides the others; `None` hides them all.
 pub fn show_only(app: &AppHandle, id: Option<&str>) {
     let wanted = id.map(label);
+    *visible_tab().lock().unwrap() = id.map(String::from);
     // Copied out, the lock released: `place` waits for the main thread.
     let rect = *last_rect().lock().unwrap();
+    let nav = nav_label().lock().unwrap().clone();
     for (lbl, wv) in app.webviews() {
         if !lbl.starts_with("lib-") {
+            continue;
+        }
+        // The pinned camera: its own rule (sync_cam, below).
+        if is_cam_view(&lbl) {
+            continue;
+        }
+        // The floating navigation goes with the site shown.
+        if lbl.starts_with("lib-nav") {
+            if wanted.is_some() && lbl == nav {
+                place(&wv, nav_rect(rect));
+                let _ = wv.show();
+            } else {
+                let _ = wv.hide();
+            }
             continue;
         }
         if Some(&lbl) == wanted.as_ref() {
@@ -352,6 +597,7 @@ pub fn show_only(app: &AppHandle, id: Option<&str>) {
             let _ = wv.hide();
         }
     }
+    sync_cam(app);
 }
 
 /// Remembers the browsing area and puts the visible view back in it.
@@ -364,6 +610,10 @@ pub fn set_rect(app: &AppHandle, rect: Rect, viewport: f64, visible: Option<&str
         if let Some(wv) = app.get_webview(&label(id)) {
             place(&wv, rect);
         }
+        let nav = nav_label().lock().unwrap().clone();
+        if let Some(wv) = app.get_webview(&nav) {
+            place(&wv, nav_rect(rect));
+        }
     }
 }
 
@@ -371,7 +621,6 @@ pub fn close_tab(app: &AppHandle, id: &str) {
     if let Some(wv) = app.get_webview(&label(id)) {
         let _ = wv.close();
     }
-    tabs().lock().unwrap().retain(|t| t != id);
 }
 
 pub fn navigate(app: &AppHandle, id: &str, url: &str) -> Result<()> {
@@ -398,14 +647,24 @@ pub fn command(app: &AppHandle, id: &str, what: &str) -> Result<()> {
     Ok(())
 }
 
-/// Registrable domain: "www.printables.com" gives "printables.com".
+/// Registrable domain: "www.printables.com" gives "printables.com", and
+/// "shop.example.co.uk" gives "example.co.uk" (the usual two-level public
+/// suffixes).
 fn registrable(host: &str) -> String {
+    const TWO_LEVEL: [&str; 12] = ["co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "com.br", "co.za", "com.mx"];
     let parts: Vec<&str> = host.split('.').collect();
-    if parts.len() >= 2 {
-        parts[parts.len() - 2..].join(".")
+    let keep = if parts.len() >= 3 && TWO_LEVEL.contains(&parts[parts.len() - 2..].join(".").as_str()) { 3 } else { 2 };
+    if parts.len() >= keep {
+        parts[parts.len() - keep..].join(".")
     } else {
         host.to_string()
     }
+}
+
+/// True for the domain itself and its subdomains, never for a longer name
+/// that merely ends with it ("notprintables.com").
+fn under(domain: &str, base: &str) -> bool {
+    domain == base || domain.strip_suffix(base).is_some_and(|d| d.ends_with('.'))
 }
 
 /// Logs a site out by deleting only its login cookies, from one of its tabs.
@@ -429,7 +688,7 @@ pub fn logout(app: &AppHandle, tab: &str, site: &str) -> Result<usize> {
     let mut n = 0;
     for c in wv.cookies()? {
         let dom = c.domain().unwrap_or_default().trim_start_matches('.').to_string();
-        if dom.ends_with(&base) {
+        if under(&dom, &base) {
             if wv.delete_cookie(c).is_ok() {
                 n += 1;
             }
@@ -469,5 +728,39 @@ mod tests {
         std::fs::write(&first, b"x").unwrap();
         let second = unique_path(&dir, "piece.3mf");
         assert_eq!(second.file_name().unwrap(), "piece (2).3mf");
+    }
+}
+
+#[cfg(test)]
+mod domain_tests {
+    use super::{registrable, under};
+
+    #[test]
+    fn a_site_s_cookies_and_no_other_s() {
+        assert_eq!(registrable("www.printables.com"), "printables.com");
+        assert_eq!(registrable("shop.example.co.uk"), "example.co.uk");
+        assert_eq!(registrable("localhost"), "localhost");
+        assert!(under("printables.com", "printables.com"));
+        assert!(under("api.printables.com", "printables.com"));
+        assert!(!under("notprintables.com", "printables.com"));
+        assert!(!under("printables.community", "printables.com"));
+    }
+}
+
+#[cfg(test)]
+mod icon_tests {
+    use super::icon_links;
+
+    #[test]
+    fn the_page_s_icons_best_first() {
+        let html = r#"<html><head>
+            <link rel="stylesheet" href="/a.css">
+            <link rel="icon" href="/favicon.ico" sizes="32x32">
+            <LINK REL="Icon" TYPE="image/svg+xml" HREF="/icon.svg">
+            <link rel="apple-touch-icon" href="https://cdn.x/touch.png">
+            <link rel="shortcut icon" href="/old.ico">
+        </head></html>"#;
+        assert_eq!(icon_links(html), vec!["https://cdn.x/touch.png", "/icon.svg", "/favicon.ico", "/old.ico"]);
+        assert!(icon_links("<html><body>no links</body></html>").is_empty());
     }
 }

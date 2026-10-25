@@ -18,7 +18,9 @@ const HEADER: usize = 84;
 /// Normal + 3 vertices + attribute: 12 floats and 2 bytes.
 const RECORD: usize = 50;
 
-/// True if the file size matches the announced count exactly.
+/// True if the file size matches the announced count: exactly, or with a
+/// few trailing bytes (some exporters end with padding or a newline), never
+/// short of a record.
 ///
 /// The word "solid" at the start is not trusted: many exporters put it in the
 /// header of a binary file too.
@@ -27,9 +29,11 @@ fn looks_binary(data: &[u8]) -> bool {
         return false;
     }
     let n = u32::from_le_bytes([data[80], data[81], data[82], data[83]]) as usize;
-    n.checked_mul(RECORD)
-        .map(|body| HEADER + body == data.len())
-        .unwrap_or(false)
+    n > 0
+        && n
+            .checked_mul(RECORD)
+            .and_then(|body| data.len().checked_sub(HEADER + body))
+            .is_some_and(|extra| extra < RECORD)
 }
 
 fn f32_at(data: &[u8], off: usize) -> f32 {

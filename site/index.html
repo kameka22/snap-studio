@@ -7,7 +7,7 @@
   <meta name="description" content="Snap Studio is a free desktop app for the Snapmaker U1: browse your 3MF files, prepare the plate, slice with the Snapmaker Orca engine, and follow your prints live.">
   <meta property="og:title" content="Snap Studio">
   <meta property="og:description" content="Prepare your Snapmaker prints, simply.">
-  <meta property="og:image" content="assets/files.webp">
+  <meta property="og:image" content="assets/printer.webp">
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -17,6 +17,7 @@
     <nav class="nav">
       <a href="#features" data-i18n="nav.features">Features</a>
       <a href="#screens" data-i18n="nav.screens">Screenshots</a>
+      <a href="whats-new/" data-i18n="nav.whatsnew">What's new</a>
       <a href="#download" data-i18n="nav.download">Download</a>
       <div class="lang" role="group" aria-label="Language" data-i18n-aria="lang.label">
         <button type="button" data-lang="en" aria-pressed="true">EN</button>
@@ -36,7 +37,7 @@
         <a class="btn ghost" href="https://github.com/kameka22/snap-studio" data-i18n="hero.source">View on GitHub</a>
       </div>
       <p id="hero-dl-note" class="note"></p>
-      <img class="hero-shot" src="assets/files.webp" alt="Snap Studio — your 3MF files at a glance" data-i18n-alt="shots.files_alt" width="1400" height="912">
+      <img class="hero-shot" src="assets/printer.webp" alt="The printer&#x27;s page: the U1 in 3D and its spools" data-i18n-alt="shots.printer_alt" width="1400" height="817">
     </section>
 
     <section id="features" class="features">
@@ -45,7 +46,7 @@
         <article class="feature">
           <span class="ico" aria-hidden="true">🖨</span>
           <h3 data-i18n="f.u1.title">Made for the Snapmaker U1</h3>
-          <p data-i18n="f.u1.text">The U1 plate, profiles and four heads are built in. Printers are found on your network. Status and sending also work with any Klipper (Moonraker) printer.</p>
+          <p data-i18n="f.u1.text">The U1 plate, profiles and four heads are built in. Printers are found on your network and the U1 is shown in 3D: click a spool, a head, the bed or the light for its quick controls. Status and sending also work with any Klipper (Moonraker) printer.</p>
         </article>
         <article class="feature">
           <span class="ico" aria-hidden="true">✂️</span>
@@ -60,7 +61,7 @@
         <article class="feature">
           <span class="ico" aria-hidden="true">📡</span>
           <h3 data-i18n="f.live.title">Live printer monitoring</h3>
-          <p data-i18n="f.live.text">Progress, layers, temperatures of the four heads and the plate, the live camera, pause and cancel, and a print queue. A maintenance view tracks what needs servicing.</p>
+          <p data-i18n="f.live.text">Progress, layers, temperatures of the four heads and the plate, the live camera (pinned on every screen if you like), pause and cancel, and a print queue. Care &amp; Tuning gathers the printer's controls without G-code, its maintenance and bed leveling.</p>
         </article>
         <article class="feature">
           <span class="ico" aria-hidden="true">✦</span>
@@ -80,69 +81,75 @@
       <section class="gallery" id="gallery" aria-roledescription="carousel" data-i18n-roledesc="gal.role" aria-label="Snap Studio screenshots" data-i18n-aria="gal.label" tabindex="0">
         <div class="g-stage">
           <div class="g-track" aria-live="polite">
-          <figure class="g-slide is-active" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="1 / 11" data-index="0">
-            <button type="button" class="g-open" data-open="0" aria-label="Open fullscreen: Files: thumbnails of your 3MF files, duration, filament and plates" data-cap="shots.files" tabindex="0">
-              <img src="assets/files.webp" alt="Snap Studio — your 3MF files at a glance" data-i18n-alt="shots.files_alt" width="1400" height="912">
+          <figure class="g-slide is-active" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="1 / 12" data-index="0">
+            <button type="button" class="g-open" data-open="0" aria-label="Open fullscreen: Your printer in 3D: click a spool, a head, the bed or the light to control it" data-cap="shots.printer" tabindex="0">
+              <img src="assets/printer.webp" alt="The printer&#x27;s page: the U1 in 3D and its spools" data-i18n-alt="shots.printer_alt" width="1400" height="817">
+            </button>
+            <figcaption><span class="g-cap" data-i18n="shots.printer">Your printer in 3D: click a spool, a head, the bed or the light to control it</span></figcaption>
+          </figure>
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="2 / 12" data-index="1" aria-hidden="true">
+            <button type="button" class="g-open" data-open="1" aria-label="Open fullscreen: Control: move, heat, load and unload each head, fans and light, without G-code" data-cap="shots.control" tabindex="-1">
+              <img src="assets/control.webp" alt="Care &amp; Tuning › Control" data-i18n-alt="shots.control_alt" width="1400" height="817">
+            </button>
+            <figcaption><span class="g-cap" data-i18n="shots.control">Control: move, heat, load and unload each head, fans and light, without G-code</span></figcaption>
+          </figure>
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="3 / 12" data-index="2" aria-hidden="true">
+            <button type="button" class="g-open" data-open="2" aria-label="Open fullscreen: Files: thumbnails of your 3MF files, duration, filament and plates" data-cap="shots.files" tabindex="-1">
+              <img src="assets/files.webp" alt="Snap Studio — your 3MF files at a glance" data-i18n-alt="shots.files_alt" width="1400" height="912" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.files">Files: thumbnails of your 3MF files, duration, filament and plates</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="2 / 11" data-index="1" aria-hidden="true">
-            <button type="button" class="g-open" data-open="1" aria-label="Open fullscreen: Prepare: the U1 plate in 3D, with sliders and objects set aside" data-cap="shots.prepare" tabindex="-1">
-              <img src="assets/prepare.webp" alt="Prepare" data-i18n-alt="shots.prepare_alt" width="1400" height="912">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="4 / 12" data-index="3" aria-hidden="true">
+            <button type="button" class="g-open" data-open="3" aria-label="Open fullscreen: Prepare: the U1 plate in 3D, with sliders and objects set aside" data-cap="shots.prepare" tabindex="-1">
+              <img src="assets/prepare.webp" alt="Prepare" data-i18n-alt="shots.prepare_alt" width="1400" height="912" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.prepare">Prepare: the U1 plate in 3D, with sliders and objects set aside</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="3 / 11" data-index="2" aria-hidden="true">
-            <button type="button" class="g-open" data-open="2" aria-label="Open fullscreen: AI: Claude models a part, with a live 3D preview" data-cap="shots.ai-chat" tabindex="-1">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="5 / 12" data-index="4" aria-hidden="true">
+            <button type="button" class="g-open" data-open="4" aria-label="Open fullscreen: AI: Claude models a part, with a live 3D preview" data-cap="shots.ai-chat" tabindex="-1">
               <img src="assets/ai-chat.webp" alt="An AI conversation" data-i18n-alt="shots.ai-chat_alt" width="1400" height="912" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.ai-chat">AI: Claude models a part, with a live 3D preview</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="4 / 11" data-index="3" aria-hidden="true">
-            <button type="button" class="g-open" data-open="3" aria-label="Open fullscreen: Printers: live state and the spools in each head" data-cap="shots.printer" tabindex="-1">
-              <img src="assets/printer.webp" alt="Printer and its spools" data-i18n-alt="shots.printer_alt" width="1400" height="824" loading="lazy">
-            </button>
-            <figcaption><span class="g-cap" data-i18n="shots.printer">Printers: live state and the spools in each head</span></figcaption>
-          </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="5 / 11" data-index="4" aria-hidden="true">
-            <button type="button" class="g-open" data-open="4" aria-label="Open fullscreen: Camera: the printer&#x27;s camera, live" data-cap="shots.printer-camera" tabindex="-1">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="6 / 12" data-index="5" aria-hidden="true">
+            <button type="button" class="g-open" data-open="5" aria-label="Open fullscreen: Camera: the printer&#x27;s camera, live" data-cap="shots.printer-camera" tabindex="-1">
               <img src="assets/printer-camera.webp" alt="The printer&#x27;s camera" data-i18n-alt="shots.printer-camera_alt" width="1400" height="824" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.printer-camera">Camera: the printer&#x27;s camera, live</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="6 / 11" data-index="5" aria-hidden="true">
-            <button type="button" class="g-open" data-open="5" aria-label="Open fullscreen: Prints: progress, temperatures, pause and cancel" data-cap="shots.print-job" tabindex="-1">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="7 / 12" data-index="6" aria-hidden="true">
+            <button type="button" class="g-open" data-open="6" aria-label="Open fullscreen: Prints: progress, temperatures, pause and cancel" data-cap="shots.print-job" tabindex="-1">
               <img src="assets/print-job.webp" alt="A print in progress" data-i18n-alt="shots.print-job_alt" width="1400" height="824" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.print-job">Prints: progress, temperatures, pause and cancel</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="7 / 11" data-index="6" aria-hidden="true">
-            <button type="button" class="g-open" data-open="6" aria-label="Open fullscreen: A printer&#x27;s files: print files and timelapses, read live" data-cap="shots.printer-files" tabindex="-1">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="8 / 12" data-index="7" aria-hidden="true">
+            <button type="button" class="g-open" data-open="7" aria-label="Open fullscreen: A printer&#x27;s files: print files and timelapses, read live" data-cap="shots.printer-files" tabindex="-1">
               <img src="assets/printer-files.webp" alt="A printer&#x27;s files" data-i18n-alt="shots.printer-files_alt" width="1400" height="912" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.printer-files">A printer&#x27;s files: print files and timelapses, read live</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="8 / 11" data-index="7" aria-hidden="true">
-            <button type="button" class="g-open" data-open="7" aria-label="Open fullscreen: Library: MakerWorld, Printables, Thingiverse and Cults3D in tabs" data-cap="shots.library" tabindex="-1">
-              <img src="assets/library.webp" alt="Library" data-i18n-alt="shots.library_alt" width="1400" height="912" loading="lazy">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="9 / 12" data-index="8" aria-hidden="true">
+            <button type="button" class="g-open" data-open="8" aria-label="Open fullscreen: Explore home: Space, Store, Wiki, Forum, Account, libraries and Store picks" data-cap="shots.library" tabindex="-1">
+              <img src="assets/library.webp" alt="Explore home: Snapmaker Space, Store, Wiki, Forum, Account, model libraries and featured Store products" data-i18n-alt="shots.library_alt" width="1400" height="917" loading="lazy">
             </button>
-            <figcaption><span class="g-cap" data-i18n="shots.library">Library: MakerWorld, Printables, Thingiverse and Cults3D in tabs</span></figcaption>
+            <figcaption><span class="g-cap" data-i18n="shots.library">Explore home: Space, Store, Wiki, Forum, Account, libraries and Store picks</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="9 / 11" data-index="8" aria-hidden="true">
-            <button type="button" class="g-open" data-open="8" aria-label="Open fullscreen: Care &amp; Tuning: maintenance tasks, the heads&#x27; counters, the bed&#x27;s leveling" data-cap="shots.maintenance" tabindex="-1">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="10 / 12" data-index="9" aria-hidden="true">
+            <button type="button" class="g-open" data-open="9" aria-label="Open fullscreen: Care &amp; Tuning: maintenance tasks, the heads&#x27; counters, the bed&#x27;s leveling" data-cap="shots.maintenance" tabindex="-1">
               <img src="assets/maintenance.webp" alt="Care &amp; Tuning" data-i18n-alt="shots.maintenance_alt" width="1400" height="912" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.maintenance">Care &amp; Tuning: maintenance tasks, the heads&#x27; counters, the bed&#x27;s leveling</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="10 / 11" data-index="9" aria-hidden="true">
-            <button type="button" class="g-open" data-open="9" aria-label="Open fullscreen: Display: light or dark, ten themes and the accent color" data-cap="shots.display" tabindex="-1">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="11 / 12" data-index="10" aria-hidden="true">
+            <button type="button" class="g-open" data-open="10" aria-label="Open fullscreen: Display: light or dark, ten themes and the accent color" data-cap="shots.display" tabindex="-1">
               <img src="assets/display.webp" alt="Settings › Display" data-i18n-alt="shots.display_alt" width="1400" height="912" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.display">Display: light or dark, ten themes and the accent color</span></figcaption>
           </figure>
-          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="11 / 11" data-index="10" aria-hidden="true">
-            <button type="button" class="g-open" data-open="10" aria-label="Open fullscreen: Slicing: plate, quality, heads and spools read from the printer" data-cap="shots.slicing" tabindex="-1">
-              <img src="assets/slicing.webp" alt="The slice sheet" data-i18n-alt="shots.slicing_alt" width="1200" height="1105" loading="lazy">
+          <figure class="g-slide" role="group" aria-roledescription="slide" data-i18n-roledesc="gal.slide_role" aria-label="12 / 12" data-index="11" aria-hidden="true">
+            <button type="button" class="g-open" data-open="11" aria-label="Open fullscreen: Slicing: plate, quality, heads and spools read from the printer" data-cap="shots.slicing" tabindex="-1">
+              <img src="assets/slicing.webp" alt="The slice sheet" data-i18n-alt="shots.slicing_alt" width="1200" height="1151" loading="lazy">
             </button>
             <figcaption><span class="g-cap" data-i18n="shots.slicing">Slicing: plate, quality, heads and spools read from the printer</span></figcaption>
           </figure>
@@ -151,21 +158,22 @@
           <button type="button" class="g-nav g-next" aria-label="Next screenshot" data-i18n-aria="gal.next"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg></button>
         </div>
         <div class="g-bar">
-          <span class="g-count" aria-hidden="true"><b id="g-cur">1</b> / 11</span>
+          <span class="g-count" aria-hidden="true"><b id="g-cur">1</b> / 12</span>
           <button type="button" class="g-play" id="g-play" aria-pressed="false" aria-label="Pause the slideshow" data-i18n-aria="gal.pause"><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14M16 5v14"/></svg><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5l11 7-11 7z"/></svg></button>
         </div>
         <div class="g-thumbs" id="g-thumbs">
-        <button type="button" class="g-thumb is-active" data-go="0" aria-label="Files: thumbnails of your 3MF files, duration, filament and plates" data-cap="shots.files" aria-current="true"><img src="assets/thumbs/files.webp" alt="" width="160" height="104" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="1" aria-label="Prepare: the U1 plate in 3D, with sliders and objects set aside" data-cap="shots.prepare"><img src="assets/thumbs/prepare.webp" alt="" width="160" height="104" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="2" aria-label="AI: Claude models a part, with a live 3D preview" data-cap="shots.ai-chat"><img src="assets/thumbs/ai-chat.webp" alt="" width="160" height="104" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="3" aria-label="Printers: live state and the spools in each head" data-cap="shots.printer"><img src="assets/thumbs/printer.webp" alt="" width="160" height="94" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="4" aria-label="Camera: the printer&#x27;s camera, live" data-cap="shots.printer-camera"><img src="assets/thumbs/printer-camera.webp" alt="" width="160" height="94" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="5" aria-label="Prints: progress, temperatures, pause and cancel" data-cap="shots.print-job"><img src="assets/thumbs/print-job.webp" alt="" width="160" height="94" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="6" aria-label="A printer&#x27;s files: print files and timelapses, read live" data-cap="shots.printer-files"><img src="assets/thumbs/printer-files.webp" alt="" width="160" height="104" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="7" aria-label="Library: MakerWorld, Printables, Thingiverse and Cults3D in tabs" data-cap="shots.library"><img src="assets/thumbs/library.webp" alt="" width="160" height="104" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="8" aria-label="Care &amp; Tuning: maintenance tasks, the heads&#x27; counters, the bed&#x27;s leveling" data-cap="shots.maintenance"><img src="assets/thumbs/maintenance.webp" alt="" width="160" height="104" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="9" aria-label="Display: light or dark, ten themes and the accent color" data-cap="shots.display"><img src="assets/thumbs/display.webp" alt="" width="160" height="104" loading="lazy"></button>
-        <button type="button" class="g-thumb" data-go="10" aria-label="Slicing: plate, quality, heads and spools read from the printer" data-cap="shots.slicing"><img src="assets/thumbs/slicing.webp" alt="" width="160" height="94" loading="lazy"></button>
+        <button type="button" class="g-thumb is-active" data-go="0" aria-label="Your printer in 3D: click a spool, a head, the bed or the light to control it" data-cap="shots.printer" aria-current="true"><img src="assets/thumbs/printer.webp" alt="" width="160" height="94" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="1" aria-label="Control: move, heat, load and unload each head, fans and light, without G-code" data-cap="shots.control"><img src="assets/thumbs/control.webp" alt="" width="160" height="94" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="2" aria-label="Files: thumbnails of your 3MF files, duration, filament and plates" data-cap="shots.files"><img src="assets/thumbs/files.webp" alt="" width="160" height="104" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="3" aria-label="Prepare: the U1 plate in 3D, with sliders and objects set aside" data-cap="shots.prepare"><img src="assets/thumbs/prepare.webp" alt="" width="160" height="104" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="4" aria-label="AI: Claude models a part, with a live 3D preview" data-cap="shots.ai-chat"><img src="assets/thumbs/ai-chat.webp" alt="" width="160" height="104" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="5" aria-label="Camera: the printer&#x27;s camera, live" data-cap="shots.printer-camera"><img src="assets/thumbs/printer-camera.webp" alt="" width="160" height="94" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="6" aria-label="Prints: progress, temperatures, pause and cancel" data-cap="shots.print-job"><img src="assets/thumbs/print-job.webp" alt="" width="160" height="94" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="7" aria-label="A printer&#x27;s files: print files and timelapses, read live" data-cap="shots.printer-files"><img src="assets/thumbs/printer-files.webp" alt="" width="160" height="104" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="8" aria-label="Explore home: Space, Store, Wiki, Forum, Account, libraries and Store picks" data-cap="shots.library"><img src="assets/thumbs/library.webp" alt="" width="160" height="104" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="9" aria-label="Care &amp; Tuning: maintenance tasks, the heads&#x27; counters, the bed&#x27;s leveling" data-cap="shots.maintenance"><img src="assets/thumbs/maintenance.webp" alt="" width="160" height="104" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="10" aria-label="Display: light or dark, ten themes and the accent color" data-cap="shots.display"><img src="assets/thumbs/display.webp" alt="" width="160" height="104" loading="lazy"></button>
+        <button type="button" class="g-thumb" data-go="11" aria-label="Slicing: plate, quality, heads and spools read from the printer" data-cap="shots.slicing"><img src="assets/thumbs/slicing.webp" alt="" width="160" height="154" loading="lazy"></button>
           <span class="g-ind" aria-hidden="true"></span>
         </div>
       </section>
@@ -209,7 +217,7 @@
   <dialog id="lightbox" class="lightbox" aria-labelledby="lb-cap">
     <button type="button" class="lb-close" aria-label="Close" data-i18n-aria="gal.close"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <button type="button" class="g-nav lb-prev" aria-label="Previous screenshot" data-i18n-aria="gal.prev"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button>
-    <figure class="lb-fig"><img id="lb-img" src="assets/files.webp" alt=""><figcaption id="lb-cap"></figcaption></figure>
+    <figure class="lb-fig"><img id="lb-img" src="assets/printer.webp" alt=""><figcaption id="lb-cap"></figcaption></figure>
     <button type="button" class="g-nav lb-next" aria-label="Next screenshot" data-i18n-aria="gal.next"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg></button>
   </dialog>
 

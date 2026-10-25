@@ -791,7 +791,7 @@ function bmOpenSettings() {
   const p = bmPrinter(pid);
   $("bms-printer").textContent = tr("bm.set.for", { name: p?.name || p?.host || "" });
   // Choices as segments: the values offered, nothing to type.
-  const seg = (id, key, values, label) => ($(id).innerHTML = values.map((v) => `<button type="button" class="seg-btn labeled" role="radio" data-${key}="${v}">${esc(label(v))}</button>`).join(""));
+  const seg = (id, key, values, label) => ($(id).innerHTML = segHtml(values.map((v) => ({ value: v, label: label(v) })), { key, cls: "labeled" }));
   seg("bms-level", "level", Object.keys(BML_LEVELS), (k) => tr(`bm.level.${k}`));
   seg("bms-days", "days", BML_REMIND_DAYS, (n) => tr("bm.set.days_n", { n }));
   seg("bms-prints", "prints", BML_REMIND_PRINTS, (n) => (n ? fmtNum(n) : tr("bm.set.prints_off")));
@@ -848,6 +848,8 @@ $("bmsettings").addEventListener("click", (e) => {
   if (d.prints) return bmSettingsChanged("prints", { remindPrints: +d.prints });
   if (d.keep) return bmSettingsChanged("keep", { keep: +d.keep });
 });
+// Arrows move between a row's segments and choose, as in a radio group.
+for (const id of ["bms-level", "bms-days", "bms-prints", "bms-keep"]) segKeys($(id), (b) => b.click());
 $("bms-reset").addEventListener("click", () => bmSettingsChanged("reset", { ...BML_DEFAULTS, keep: bmSettingsOf(BM.pid).keep }));
 $("bms-done").addEventListener("click", () => closeSheet($("bmsettings")));
 $("bm-settings-btn").addEventListener("click", bmOpenSettings);
