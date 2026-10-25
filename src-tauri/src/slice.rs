@@ -437,6 +437,11 @@ fn engine_error(out: &str) -> String {
         .or_else(|| useful.last())
         .or_else(|| lines.last())
         .copied();
+    // Paths that cross (two objects, or an object and the prime tower):
+    // the engine only names the plate.
+    if pick.is_some_and(|l| l.contains("found slicing result conflict")) {
+        return crate::t!("err.slice_conflict");
+    }
     let silent = crate::t!("err.engine_silent");
     let raw = pick.unwrap_or(&silent).trim();
     // Remove the timestamp and thread, unreadable in the UI.
@@ -2034,6 +2039,97 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// The prime tower lands where Prepare put it: a two-head plate sliced
+    /// with `wipe_tower_x` / `wipe_tower_y` (front-left corner, one per
+    /// plate) and `wipe_tower_rotation_angle`, the tower read back from the
+    /// G-code's moves. Off, no tower is printed, whatever the profile says.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_prime_tower_position -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_prime_tower_position() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-tower");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        // Two 20 × 20 × 10 mm boxes, one per head.
+        let bx = |x0: f32, y0: f32, x1: f32, y1: f32| -> Vec<Tri> {
+            let (z0, z1) = (0.0, 10.0);
+            let p = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+                     [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let src = tmp.join("two.3mf");
+        crate::write3mf::write_scene(&src, &[
+            crate::write3mf::SceneObject { name: "a".into(), tris: bx(0.0, 0.0, 20.0, 20.0), transform: Mat::IDENTITY, extruder: None },
+            crate::write3mf::SceneObject { name: "b".into(), tris: bx(0.0, 0.0, 20.0, 20.0), transform: Mat::IDENTITY, extruder: None },
+        ]).unwrap();
+        let slice = |id: &str, tower: &[(&str, Value)]| {
+            let mut overrides = Map::new();
+            for (k, v) in tower {
+                overrides.insert((*k).into(), v.clone());
+            }
+            let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+            let sink = seen.clone();
+            let item = |i: usize, x: f32, head: u8| crate::plate::SceneItem {
+                path: src.to_string_lossy().to_string(), item: i, name: format!("o{i}"),
+                pos: [x, 135.0], rot: [0.0; 3], scale: [1.0; 3], extruder_map: vec![head], piece: None,
+            };
+            run_job(
+                binary(&app).unwrap(),
+                index_for(&app).unwrap(),
+                Request {
+                    machine: machine.clone(),
+                    process: process.clone(),
+                    filaments: vec![pla.clone(), pla.clone()],
+                    scene: vec![item(0, 120.0, 0), item(1, 150.0, 1)],
+                    overrides,
+                    name: Some(id.into()),
+                    ..Default::default()
+                },
+                id.into(),
+                &move |p| sink.lock().unwrap().push(p),
+            );
+            let last = seen.lock().unwrap().last().cloned().unwrap();
+            assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+            let stats = last.stats.clone().unwrap();
+            assert!(stats.tools.contains(&0) && stats.tools.contains(&1), "both heads extrude");
+            discard(id);
+            stats.tower
+        };
+        let s = |v: &str| Value::String(v.into());
+        let list = |v: &str| Value::Array(vec![Value::String(v.into())]);
+        // A plain wall and no brim: the box is the tower itself.
+        let at = |x: &str, y: &str, a: &str| {
+            vec![
+                ("enable_prime_tower", s("1")), ("prime_tower_width", s("40")), ("wipe_tower_wall_type", s("rectangle")),
+                ("prime_tower_brim_width", s("0")), ("wipe_tower_x", list(x)), ("wipe_tower_y", list(y)),
+                ("wipe_tower_rotation_angle", s(a)),
+            ]
+        };
+        let near = |a: f32, b: f32| (a - b).abs() < 0.2;
+        let t = slice("tower-a", &at("200", "30", "0")).expect("a tower");
+        println!("at (200, 30), 0°: {t:?}");
+        assert!(near(t.x, 200.0) && near(t.y, 30.0), "placed at its front-left corner: {t:?}");
+        assert!(near(t.x0, 0.0) && near(t.y0, 0.0) && near(t.w, 40.0), "{t:?}");
+        let t = slice("tower-b", &at("60", "150", "90")).expect("a tower");
+        println!("at (60, 150), 90°: {t:?}");
+        assert!(near(t.x0, 0.0) && near(t.y0, 0.0) && near(t.w, 40.0), "turned around that corner: {t:?}");
+        // The U1's own tower (rib walls, 5 mm brim): a square around the
+        // corner, ribs and brim beyond it.
+        let t = slice("tower-rib", &[("enable_prime_tower", s("1")), ("wipe_tower_x", list("150")), ("wipe_tower_y", list("200"))]).expect("a tower");
+        println!("U1 tower at (150, 200): {t:?}");
+        assert!(t.x0 < -5.0 && t.y0 < -5.0 && (t.w - t.d).abs() < 3.0, "{t:?}");
+        // Off: none, though the U1's profiles turn it on.
+        assert_eq!(slice("tower-off", &[("enable_prime_tower", s("0"))]), None);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// The Speed adjustment reaches the engine: the values the slice sheet
     /// sends at 75 % (lists per nozzle flow type, as in the U1 profiles) are
     /// in the G-code's config block and slow the print down; with no
@@ -2173,6 +2269,9 @@ mod tests {
                    [2026-09-19 10:26:01.463331] [0x00000001f60b6180] [error]   run 2334: process not compatible with printer.\n\
                    run found error, exit";
         assert_eq!(engine_error(raw), "run 2334: process not compatible with printer.");
+        // A tower on a part: said in words, not "plate 1: found slicing result conflict!".
+        let raw = "[2026-10-25 20:51:02.1] [0x1] [error]   plate 1: found slicing result conflict!\nrun found error, exit";
+        assert_eq!(engine_error(raw), crate::t!("err.slice_conflict"));
     }
 
     #[test]

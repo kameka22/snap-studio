@@ -313,6 +313,16 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
     Ok(())
 }
 
+/// Adds a file to a 3MF already written.
+pub fn append_entry(dst: &Path, name: &str, data: &[u8]) -> Result<()> {
+    let f = std::fs::OpenOptions::new().read(true).write(true).open(dst)?;
+    let mut z = zip::ZipWriter::new_append(f)?;
+    z.start_file(name, zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated))?;
+    z.write_all(data)?;
+    z.finish()?;
+    Ok(())
+}
+
 /// Writes a geometry 3MF holding the objects and their placements.
 #[cfg(test)]
 pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
