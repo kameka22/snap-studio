@@ -140,7 +140,11 @@ modèle en dessous :
 - **Vitesse** : un seul curseur de 50 % à 120 % du profil (vitesses × f,
   accélérations × f²), avec un panneau ⚙ qui montre chaque valeur, profil →
   calculée ; à 100 %, le G-code est celui du profil ;
-- le détail de chaque profil tel que le moteur le reçoit.
+- le détail de chaque profil tel que le moteur le reçoit ;
+- **multimatériau** : la tour de purge (et la tête de son mur extérieur), la
+  prévention des coulures ; un avertissement quand la tour mélangerait des
+  matières qui n'adhèrent pas (PLA et PETG, PLA et TPU…), avec des
+  corrections en un clic.
 
 Puis un aperçu des trajectoires avec durée, filament et coût, envoyé à
 l'imprimante — avec son image sur l'écran de l'imprimante — ou enregistré en
