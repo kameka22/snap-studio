@@ -362,11 +362,13 @@ function prTowerHover(e) {
 /* ------------------------------------------------------------ panels */
 
 /* The switch under the list: on or off, disabled with its reason when no
-   tower can be printed (the choice kept for when one can). */
+   tower can be printed (the choice kept for when one can). Not shown at
+   all while the plate prints with one head: there is nothing to choose. */
 function prTowerRenderSwitch() {
   const sw = $("p-tower-sw");
   if (!sw) return;
   const st = prTowerState();
+  $("p-plateopts").classList.toggle("hidden", st.reason === "single");
   sw.checked = PR.tower.on;
   sw.disabled = !!st.reason;
   const why = $("p-tower-why");
