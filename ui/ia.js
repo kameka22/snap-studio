@@ -77,8 +77,10 @@ async function iaRefresh() {
   }
 }
 
-/* Why a conversation is only read: its mode is not ready (anymore). */
-const iaLockFor = (c) => (AIS.report && !iaModes().includes(c.engine) ? iaLockReason(c) : null);
+/* Why a conversation is only read: its mode is not ready (anymore), or not
+   chosen. A container conversation keeps yolobox, whichever sandbox new
+   ones use. */
+const iaLockFor = (c) => (AIS.report && !aiEngineReady(c.engine) ? iaLockReason(c) : null);
 
 /* New checks, or a new choice in Settings. */
 window.addEventListener("aichange", () => {
@@ -140,7 +142,7 @@ function iaOrigin(c) {
   return c.dest_dir ? `${tr("ia.creation")} · ${baseName(c.dest_dir)}` : tr("ia.creation");
 }
 
-const iaEngineName = (c) => tr(c.engine === "container" ? "ia.engine.container_short" : "ia.engine.local_short");
+const iaEngineName = (c) => tr(c.engine === "container" ? "ia.engine.container_short" : c.engine === "sandbox" ? "ia.engine.sandbox_short" : "ia.engine.local_short");
 
 /* Missing or unreadable source: a real tile. The fallback is wired by a
    listener (below), never an inline onerror — the app's CSP (script-src
@@ -559,18 +561,19 @@ function iaRenderEngines() {
   const ready = iaModes();
   const cur = ready.includes(IA.engine) ? IA.engine : ready[0] || "";
   IA.engine = cur;
-  $("ia-engines").innerHTML = ["container", "local"]
+  // The Sandbox card runs in the chosen sandbox (built-in or yolobox).
+  $("ia-engines").innerHTML = [aiSandboxEngine(aiSandbox()), "local"]
     .map((m) => {
       const on = m === cur, ok = ready.includes(m);
       const sub = ok
-        ? tr(m === "container" ? "ia.new.run_container" : "ia.new.run_local")
+        ? tr(m === "local" ? "ia.new.run_local" : "ia.new.run_container")
         : !aiWanted().includes(m)
           ? tr("ia.new.run_off")
           : AIS.report
             ? tr("ia.new.run_missing")
             : tr("ais.checking");
       return `<button type="button" class="ia-engine${on ? " on" : ""}" data-engine="${m}" role="radio" aria-checked="${on}"${ok ? "" : " disabled"}>
-        <span class="ia-engine-icon">${IA_ENGINE_ICON[m]}</span>
+        <span class="ia-engine-icon">${IA_ENGINE_ICON[aiSide(m)]}</span>
         <span class="ia-engine-text"><b>${esc(tr("ais.mode." + m))}</b><small>${esc(sub)}</small></span>
       </button>`;
     })

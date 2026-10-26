@@ -1064,6 +1064,19 @@
           <option value="off" data-i18n="settings.ai.off">Do not use the AI</option>
         </select>
       </div>
+      <div class="grow-row" id="set-ai-sandbox-row">
+        <span class="k"><span data-i18n="settings.ai.sandbox">Sandbox type</span>
+          <span class="sub" id="set-ai-sandbox-sub"></span>
+        </span>
+        <select id="set-ai-sandbox">
+          <option value="builtin" data-i18n="settings.ai.sandbox.builtin">Built-in</option>
+          <option value="yolobox" data-i18n="settings.ai.sandbox.yolobox">Container (yolobox)</option>
+        </select>
+      </div>
+      <div class="grow-row set-ai-builtin hidden" id="set-ai-builtin">
+        <span class="k"><span class="sub" data-i18n="settings.ai.builtin_offer">The built-in sandbox needs neither Docker nor yolobox.</span></span>
+        <button type="button" id="set-ai-builtin-go" class="w-link" data-i18n="settings.ai.builtin_use">Use built-in</button>
+      </div>
     </div>
     <div class="set-section" data-i18n="settings.ai.components">Components</div>
     <div class="group set-ai">
@@ -1909,8 +1922,8 @@
       </div>
     </div>
 
-    <div class="set-section" data-i18n="auth.sandbox">Sandbox (container)</div>
-    <div class="group">
+    <div class="set-section" id="auth-box-title" data-i18n="auth.sandbox">Sandbox (container)</div>
+    <div class="group" id="auth-box-group">
       <div class="grow-row">
         <span class="k"><span id="auth-box-state">—</span>
           <span class="sub" id="auth-box-sub"></span>
@@ -2042,7 +2055,7 @@
               <div class="w-opts">
                 <label class="w-opt" data-mode="container"><input type="radio" name="w-ai-mode" value="container" />
                   <b><span data-i18n="welcome.ai.container">In a sandbox</span> <em data-i18n="welcome.ai.recommended">recommended</em></b>
-                  <small data-i18n="welcome.ai.container.sub">An isolated container: Claude only reaches the conversation's folder. Needs Docker or an equivalent.</small></label>
+                  <small id="w-ai-sandbox-sub" data-i18n="welcome.ai.container.sub">An isolated container: Claude only reaches the conversation's folder. Needs Docker or an equivalent.</small></label>
                 <label class="w-opt" data-mode="local"><input type="radio" name="w-ai-mode" value="local" />
                   <b data-i18n="welcome.ai.local">Directly on this computer</b>
                   <small data-i18n="welcome.ai.local.sub">Simpler to set up; Claude asks before each command. Needs Python and three modules.</small></label>
@@ -2150,6 +2163,7 @@
 <script src="vendor/marked.js"></script>
 <script src="vendor/purify.js"></script>
 <script src="vendor/xterm-addon-fit.js"></script>
+<script src="ai-logic.js"></script>
 <script src="ai-setup.js"></script>
 <script src="ia-list.js"></script>
 <script src="ia.js"></script>

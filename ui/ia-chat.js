@@ -534,6 +534,8 @@ function chatHandle(ev, live) {
         chatNote(tr("chat.exited"), "muted");
         // What the process said on stderr: the reason, when it failed to start.
         if (ev.stderr) chatNote(String(ev.stderr), "muted pre");
+        // A sandbox that could not start, in words (chat.rs).
+        if (ev.message) chatNote(String(ev.message), "error");
       }
       chatSetBusy(false);
       break;

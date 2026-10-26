@@ -81,6 +81,14 @@ function settingsShown() {
 
 function setAiRender() {
   $("set-ai-mode").value = aiChoice();
+  // Which sandbox: with a Sandbox side, and where the built-in one exists.
+  const side = aiWanted().some((m) => m !== "local");
+  $("set-ai-sandbox-row").classList.toggle("hidden", !side || AI_OS === "windows");
+  $("set-ai-sandbox").value = aiSandbox();
+  $("set-ai-sandbox-sub").textContent = tr(aiSandbox() === "yolobox" ? "settings.ai.sandbox.yolobox.sub" : "settings.ai.sandbox.builtin.sub");
+  // A yolobox user whose built-in sandbox is ready: offered, never switched.
+  $("set-ai-builtin").classList.toggle("hidden", !(side && aiSandbox() === "yolobox" && AI_OS !== "windows" && AIS.report?.ready.sandbox));
+  $("set-ai-mode")._seg?.render();
   aiRenderChecks($("set-ai-checks"), aiChoice());
 }
 
@@ -92,6 +100,8 @@ function setAiFlag() {
 }
 
 $("set-ai-mode").addEventListener("change", (e) => aiSetChoice(e.target.value));
+$("set-ai-sandbox").addEventListener("change", (e) => aiSetSandbox(e.target.value));
+$("set-ai-builtin-go").addEventListener("click", () => aiSetSandbox("builtin"));
 $("set-ai-recheck").addEventListener("click", () => {
   aiCheck(true);
   setAiRender();
@@ -288,7 +298,12 @@ segmented("opt-pref", {
   titleOf: (v) => $("opt-pref").querySelector(`option[value="${v}"]`)?.text || "",
 });
 segmented("set-assoc");
+segmented("set-ai-sandbox");
 segmented("set-slice-level");
 // Long choices: radio cards, each with what it means.
-segmented("set-ai-mode", { cls: "cards", subs: { container: "welcome.ai.container.sub", local: "welcome.ai.local.sub", both: "welcome.ai.both.sub" } });
+segmented("set-ai-mode", {
+  cls: "cards",
+  // The Sandbox card says which sandbox it is.
+  subs: { get container() { return aiSandboxSub(); }, local: "welcome.ai.local.sub", both: "welcome.ai.both.sub" },
+});
 $("set-ai-mode").closest(".grow-row").classList.add("stack");

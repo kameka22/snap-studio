@@ -33,8 +33,12 @@ const DEFAULTS = {
   wheelSpeed: 1,
   dir: null,
   recents: [],
-  /* How the AI is used: "container", "local", "both", "off"; null until asked. */
+  /* How the AI is used: "container" (the Sandbox side), "local", "both",
+     "off"; null until asked. */
   aiModes: null,
+  /* Which sandbox the Sandbox side uses: "builtin" (Claude Code's own) or
+     "yolobox"; null until decided once (ai-logic.js aiSandboxDefault). */
+  aiSandbox: null,
   /* The slice sheet's level, "basic" or "advanced"; null until first set
      (slice-adv.js, sliceLevelDefault). */
   sliceLevel: null,
@@ -66,10 +70,10 @@ const state = {
 };
 
 function save() {
-  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, sliceLevel } = state;
+  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, aiSandbox, sliceLevel } = state;
   localStorage.setItem(
     "snapstudio",
-    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, sliceLevel })
+    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, aiSandbox, sliceLevel })
   );
 }
 
