@@ -227,7 +227,7 @@ Impressions en cours et file d'attente.
 
 ### 📷 Caméra
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/printer-camera.png" alt="La caméra de l'imprimante" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/printer-camera.png" alt="La caméra de l'imprimante, épinglée dans un coin, avec son ✕" />
 
 La caméra de l'imprimante, en direct.
 

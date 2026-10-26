@@ -205,7 +205,7 @@ Running prints and a queue.
 
 ### 📷 Camera
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/printer-camera.png" alt="The printer's camera" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/printer-camera.png" alt="The printer's camera, pinned in a corner, with its ✕" />
 
 The printer's camera, live.
 

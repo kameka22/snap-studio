@@ -22,7 +22,7 @@
             "en": "Like Snapmaker Orca’s Full Spectrum: in Heads and spools, pick two loaded spools and a ratio from 4:1 to 1:4. The heads alternate layer by layer.",
             "fr": "Comme le Full Spectrum de Snapmaker Orca : dans Têtes et bobines, choisissez deux bobines chargées et un ratio de 4:1 à 1:4. Les têtes alternent couche par couche."
           },
-          "alt": { "en": "A virtual head mixing cyan and yellow into green", "fr": "Une tête virtuelle qui mélange cyan et jaune en vert" }
+          "alt": { "en": "A virtual head mixing white and black PLA, one layer of each", "fr": "Une tête virtuelle qui mélange du PLA blanc et noir, une couche de chaque" }
         },
         {
           "id": "per-material-towers",
@@ -196,7 +196,7 @@
           "icon": "explore",
           "color": "#ff9f0a",
           "edge": "linear-gradient(90deg, #ff9500, #ffcc00)",
-          "image": "../assets/library.webp",
+          "image": "../assets/library-0.14.webp",
           "tag": { "en": "Explore", "fr": "Explorer" },
           "chip": { "en": "Explore", "fr": "Explorer" },
           "title": { "en": "The whole Snapmaker world, in one place", "fr": "Tout l’univers Snapmaker, au même endroit" },
@@ -314,7 +314,7 @@
           "icon": "control",
           "color": "#ff9f0a",
           "edge": "linear-gradient(90deg, #ff9500, #ffcc00)",
-          "image": "../assets/control.webp",
+          "image": "../assets/control-0.13.webp",
           "tag": { "en": "Care & Tuning", "fr": "Entretien et réglages" },
           "chip": { "en": "Control", "fr": "Contrôle" },
           "title": { "en": "Drive the printer without G-code", "fr": "Pilotez l’imprimante sans G-code" },
@@ -329,7 +329,7 @@
           "icon": "cube",
           "color": "#0a84ff",
           "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
-          "image": "../assets/printer.webp",
+          "image": "../assets/printer-0.13.webp",
           "tag": { "en": "Printer", "fr": "Imprimante" },
           "chip": { "en": "The U1 in 3D", "fr": "Le U1 en 3D" },
           "title": { "en": "Your U1, in 3D", "fr": "Votre U1, en 3D" },
@@ -344,7 +344,7 @@
           "icon": "spool",
           "color": "#30d158",
           "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
-          "image": "../assets/control.webp",
+          "image": "../assets/control-0.13.webp",
           "position": "100% 30%",
           "zoom": 1.55,
           "tag": { "en": "Spools", "fr": "Bobines" },
@@ -394,7 +394,7 @@
       "version": "0.12",
       "date": "2026-10-21",
       "summary": { "en": "Prepare reworked, ten display themes, bed leveling", "fr": "Préparer repensé, dix thèmes d’affichage, nivellement du plateau" },
-      "image": "../assets/display.webp",
+      "image": "../assets/display-0.12.webp",
       "alt": { "en": "Settings › Display and its themes", "fr": "Réglages › Affichage et ses thèmes" },
       "highlights": [
         {
@@ -419,7 +419,7 @@
       "version": "0.11",
       "date": "2026-10-20",
       "summary": { "en": "A printer’s files, sharing by QR code, print speed", "fr": "Fichiers de l’imprimante, partage par QR code, vitesse d’impression" },
-      "image": "../assets/printer-files.webp",
+      "image": "../assets/printer-files-0.11.webp",
       "alt": { "en": "A printer’s files", "fr": "Les fichiers d’une imprimante" },
       "highlights": [
         {
@@ -463,7 +463,7 @@
       "version": "0.9",
       "date": "2026-10-18",
       "summary": { "en": "Maintenance per printer, choice of the Claude model", "fr": "Entretien par imprimante, choix du modèle Claude" },
-      "image": "../assets/maintenance.webp",
+      "image": "../assets/maintenance-0.9.webp",
       "alt": { "en": "A printer’s maintenance", "fr": "L’entretien d’une imprimante" },
       "highlights": [
         {
