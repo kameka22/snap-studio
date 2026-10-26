@@ -2710,6 +2710,15 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .p-plateopts .sub { font-size: 11px; color: var(--text-secondary); }
 #p-tower-row.off .k label { color: var(--text-secondary); }
 .p-tower-warn { color: var(--warning-text, var(--warning)); }
+/* One tower per material: the choice under the switch, a pillar's
+   inspector (its heads, one pillar per head), the tower's own rows hidden. */
+#p-tower-kind-row { flex-wrap: wrap; gap: 4px 10px; }
+#p-tower-kind { flex: none; }
+.p-tower-kind-why { flex-basis: 100%; }
+.p-pillar-heads { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+#p-tower-props:not(.pillar) .p-pillar-only, #p-tower-props:not(.pillar) .p-pillar-heads, #p-tower-props.pillar .p-tower-only { display: none; }
+#p-pillar-split-row .k { display: flex; flex-direction: column; }
+#p-pillar-split-row .sub { font-size: 11px; color: var(--text-secondary); }
 /* Off the plate the slice waits: said in the danger colour. */
 .sl-tower.bad { background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 
@@ -2996,6 +3005,10 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .sl-tower-t { flex: 1 1 300px; min-width: 0; }
 .sl-tower-t b { font-weight: 600; }
 .sl-tower-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+/* One tower per material: an information line, not a warning. */
+.sl-tower.info { background: var(--control-bg); border-color: var(--separator); }
+/* The single tower's settings, while the pillars print instead. */
+fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity: 0.5; }
 .s-bedtemp:empty { display: none; }
 .s-bedtemp b { color: var(--text); font-weight: 600; }
 

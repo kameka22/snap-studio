@@ -638,6 +638,8 @@ async function startSlice() {
     const job = await invoke("slice_start", {
       request: {
         source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors, virtual_heads,
+        // One tower per material: the pillars, generated at every slice.
+        pillars: prPillarsRequest(),
         overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });

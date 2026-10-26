@@ -78,4 +78,38 @@ assert.strictEqual(A.sliceLevelDefault({ U1: null, U2: "corrupt", U3: { adv: "x"
 assert.strictEqual(A.sliceLevelValid("basic") && A.sliceLevelValid("advanced"), true);
 assert.strictEqual(A.sliceLevelValid(null) || A.sliceLevelValid("full"), false);
 
+// The prime tower's line above Slice (advRenderTower, run as written with
+// stand-ins): the materials do not bond, a third way out — one tower per
+// material — next to "No tower" and the outer wall; once chosen, an
+// information line with the way back.
+{
+  const SP = require("../ui/spoolcheck.js");
+  const PL = require("../ui/pillar-logic.js");
+  const body = src.slice(src.indexOf("function advRenderTower()"), src.indexOf("\n}\n", src.indexOf("function advRenderTower()")) + 3);
+  const line = ({ pillars, offered, wall = "0" }) => {
+    const box = { innerHTML: "", classes: new Set(), classList: { toggle(c, on) { on ? box.classes.add(c) : box.classes.delete(c); } }, querySelectorAll: () => [] };
+    const heads = [{ n: 0, material: "PLA" }, { n: 1, material: "PLA" }, { n: 2, material: "PETG" }];
+    const ctx = {
+      $: () => box, ADV: {}, SL: {}, esc: (x) => String(x), tr: (k, v) => k + (v ? JSON.stringify(v) : ""),
+      advVal: () => wall, advTowerHeads: () => heads, advTowerOn: () => !pillars, multiHead: () => true,
+      spTowerAdvice: SP.spTowerAdvice, pmGroups: PL.pmGroups, prPillarHeads: () => heads, prPillarFamily: (g) => g.family || g.key,
+      prPillarOffered: () => offered, prPillarsShown: () => pillars,
+    };
+    vm.runInNewContext(body + ";advRenderTower();", ctx);
+    return box;
+  };
+  let b = line({ pillars: false, offered: true });
+  assert.ok(b.innerHTML.includes("slice.tower.conflict") && b.innerHTML.includes('data-tower="off"') && b.innerHTML.includes('data-tower-wall="0"'));
+  assert.ok(b.innerHTML.includes('data-tower="material"'), "the third button");
+  assert.ok(!b.classes.has("info") && !b.classes.has("hidden"));
+  b = line({ pillars: false, offered: true, wall: "1" });
+  assert.ok(b.innerHTML.includes("slice.tower.walled") && b.innerHTML.includes('data-tower="material"'), "with the outer wall too");
+  b = line({ pillars: false, offered: false });
+  assert.ok(!b.innerHTML.includes('data-tower="material"'), "not offered: no button");
+  b = line({ pillars: true, offered: true });
+  assert.ok(b.innerHTML.includes("slice.tower.per_material_on") && b.innerHTML.includes("PLA") && b.innerHTML.includes("T0, T1") && b.innerHTML.includes("PETG"));
+  assert.ok(b.innerHTML.includes('data-tower="single"') && !b.innerHTML.includes("slice.tower.conflict"), "the information line, the way back");
+  assert.ok(b.classes.has("info"));
+}
+
 console.log("adv: ok");

@@ -327,6 +327,8 @@ function advRenderRows() {
     // Off with a virtual head: advised (it changes heads at every layer).
     mm: !advOn("enable_prime_tower")
       ? tr(prTowerVirtualUsed() ? "prepare.tower.virtual_hint" : "slice.adv.mm_no_tower")
+      : prPillarsShown()
+      ? tr("slice.tower.per_material")
       : +advVal("wipe_tower_filament") > 0
       ? tr("slice.adv.mm_tower_wall", { t: `T${+advVal("wipe_tower_filament") - 1}` })
       : tr("slice.adv.mm_tower"),
@@ -452,7 +454,12 @@ function advRenderPanel() {
     .map((g) => {
       const keys = (typeof g.keys === "function" ? g.keys() : g.keys).filter((k) => !ADV_WHEN[k] || ADV_WHEN[k]());
       const rows = keys.map(advField).join("");
-      return rows ? `<div class="set-section">${esc(tr(g.t))}</div><div class="group">${rows}</div>` : "";
+      if (!rows) return "";
+      // One tower per material: the single tower's settings do nothing.
+      if (g.t === "slice.adv.g.tower" && prPillarsShown()) {
+        return `<div class="set-section">${esc(tr(g.t))}</div><div class="sl-adv-note info">${esc(tr("slice.tower.single_only"))}</div><fieldset class="group adv-off" disabled>${rows}</fieldset>`;
+      }
+      return `<div class="set-section">${esc(tr(g.t))}</div><div class="group">${rows}</div>`;
     })
     .join("");
   // A head popover opened on a field about to be redrawn goes with it.
@@ -612,22 +619,32 @@ function advRenderTower() {
   if (!box) return;
   const wall = +advVal("wipe_tower_filament") > 0 ? +advVal("wipe_tower_filament") - 1 : null;
   const a = spTowerAdvice({ heads: advTowerHeads(), tower: advTowerOn(), wall });
+  const heads = (g) => g.heads.map((n) => "T" + n).join(", ");
+  // One tower per material, Prepare's choice too (prepare-pillars.js).
+  const material = typeof prPillarOffered === "function" && prPillarOffered()
+    ? `<button class="btn small" data-tower="material">${esc(tr("slice.tower.per_material"))}</button>`
+    : "";
   let html = "";
-  if (a) {
-    const heads = (g) => g.heads.map((n) => "T" + n).join(", ");
+  if (multiHead() && prPillarsShown()) {
+    // No shared tower any more: said, with the way back.
+    const list = pmGroups(prPillarHeads()).map((g) => `<b>${esc(prPillarFamily(g))}</b> (${esc(heads(g))})`).join(" · ");
+    html = `<span class="sl-tower-t">${tr("slice.tower.per_material_on", { list })}</span>
+      <span class="sl-tower-acts"><button class="btn small" data-tower="single">${esc(tr("prepare.tower.kind.single"))}</button></span>`;
+  } else if (a) {
     const list = a.families.map((g) => `<b>${esc(g.family)}</b> (${esc(heads(g))})`).join(" · ");
     const off = `<button class="btn small" data-tower="off">${esc(tr("slice.tower.off"))}</button>`;
     if (a.state === "walled") {
       const g = a.families.find((x) => x.heads.includes(wall));
       html = `<span class="sl-tower-t">${tr("slice.tower.walled", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
-        <span class="sl-tower-acts">${off}<button class="btn small" data-tower="undo">${esc(tr("slice.tower.undo"))}</button></span>`;
+        <span class="sl-tower-acts">${off}${material}<button class="btn small" data-tower="undo">${esc(tr("slice.tower.undo"))}</button></span>`;
     } else {
       const walls = a.families
         .map((g) => `<button class="btn small" data-tower-wall="${g.heads[0]}">${esc(tr("slice.tower.wall", { m: g.family, t: `T${g.heads[0]}` }))}</button>`)
         .join("");
-      html = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${walls}</span>`;
+      html = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${material}${walls}</span>`;
     }
   }
+  box.classList.toggle("info", multiHead() && prPillarsShown());
   // Rewritten only when it changes (the summary is refreshed often): a
   // focused button keeps its focus, the screen reader is not repeated.
   if (html === ADV.tower) return;
@@ -645,6 +662,7 @@ $("s-tower")?.addEventListener("click", (e) => {
   const b = e.target.closest("[data-tower], [data-tower-wall]");
   if (!b) return;
   if (b.dataset.tower === "off") advSet("enable_prime_tower", "0");
+  else if (b.dataset.tower === "material" || b.dataset.tower === "single") prTowerSetKind(b.dataset.tower);
   else if (b.dataset.tower === "undo") advSet("wipe_tower_filament", null);
   else advSet("wipe_tower_filament", String(+b.dataset.towerWall + 1));
 });
