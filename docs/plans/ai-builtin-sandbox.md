@@ -99,7 +99,9 @@ function in `ui/ai-setup.js`:
 It runs at startup once the conversation list is loaded (and before the
 welcome step's AI questions), and the result is saved with `save()` (added
 to the persisted keys in `ui/app.js`), so a later change of `aiModes` never
-flips it. Someone who has yolobox therefore keeps yolobox, with the same
+flips it. Readiness plays no part: an install with no saved choice and no
+container conversation gets the built-in sandbox **even when yolobox and an
+engine are ready** (it never used them for the AI). Someone who has yolobox therefore keeps yolobox, with the same
 runtime detection, token and image as today; only a new install, or an
 install that never chose a sandbox and never held a container
 conversation, gets the built-in one.
@@ -115,7 +117,7 @@ it". Choosing it changes `aiSandbox` for **new** conversations only.
 |---|---|---|---|
 | Default sandbox | built-in | built-in | yolobox (as today) |
 | Built-in offered | ✓ | ✓ (bubblewrap, socat) | – (`unsupported`) |
-| yolobox offered | ✓ | ✓ | as today (see open questions) |
+| yolobox offered | ✓ | ✓ | as today (see the open question) |
 
 ### The built-in session
 
@@ -135,7 +137,11 @@ where settings live):
     "autoAllowBashIfSandboxed": true,
     "excludedCommands": [],
     "filesystem": { "allowRead": ["<Python paths under a blocked root, see below>"] },
-    "network": { "allowedDomains": [], "strictAllowlist": true }
+    "network": { "allowedDomains": [], "strictAllowlist": true },
+    "credentials": { "envVars": [
+      { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
+      { "name": "ANTHROPIC_AUTH_TOKEN", "mode": "deny" }
+    ] }
   },
   "permissions": {
     "blockReadsOutsideWorkingDirectories": true,
@@ -164,9 +170,11 @@ exact form on a real run.)
   canonicalized, `..` and symlinks resolved).
 - **Questions and plans** (`AskUserQuestion`, `ExitPlanMode`) still come as
   cards, as in local mode.
-- **WebFetch / WebSearch**: not allowed by a rule, so they come as a
-  permission card (the Claude process makes the request, outside the
-  sandbox). See open questions.
+- **WebFetch / WebSearch**: **asked each time**. No rule allows them, so
+  each call comes as a permission card in the chat, as in local mode (the
+  Claude process makes the request, outside the sandbox). `sandbox_answer`
+  leaves them alone, and the card offers no "always" choice for these two
+  tools in a `"sandbox"` conversation (no `updatedPermissions`).
 - **Python paths**: the read block hides the home, so a Python or modules
   installed there (`pip install --user` → `~/Library/Python/3.x` on macOS,
   `~/.local/lib/python3.x` on Linux; pyenv, conda, a venv) would not import
@@ -175,10 +183,34 @@ exact form on a real run.)
   existing `sys.path` entries; those under a blocked root become
   `allowRead` entries (read only, never `allowWrite`). Homebrew
   (`/opt/homebrew`, `/usr/local`) and system Pythons need none.
-- **Environment**: `auth::sandbox_env("sandbox")` is empty: the built-in
+- **Sign-in**: `auth::sandbox_env("sandbox")` is empty: the built-in
   sandbox uses this computer's sign-in, like local mode. No
-  `CLAUDE_CODE_OAUTH_TOKEN`, no sandbox token. `pty::inherited_markers`
-  cleanup applies as for local.
+  `CLAUDE_CODE_OAUTH_TOKEN`, no sandbox token.
+- **Reduced environment**: Claude is started with a cleared environment
+  (`env_clear()` in `chat::spawn` for `"sandbox"`) plus an allowlist, built
+  by a pure `chat::sandbox_env_allowlist(vars) -> Vec<(String, String)>`.
+  Sandboxed commands inherit Claude's environment, so this is what keeps a
+  stray token (`GITHUB_TOKEN`, cloud keys…) away from them.
+  `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is not an option: it turns auto-allow
+  off. Kept, when set:
+  - System: `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`,
+    `TZ`; `PATH` is always set to `pty::child_path()`.
+  - Claude Code's own settings: `CLAUDE_CONFIG_DIR` (the only `CLAUDE*`
+    kept, as in `pty::inherited_markers`), `XDG_CONFIG_HOME`,
+    `XDG_CACHE_HOME`, `XDG_DATA_HOME`, `XDG_RUNTIME_DIR` (Linux).
+  - Network to Anthropic: `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`,
+    `ALL_PROXY` (and lower case), `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`,
+    `SSL_CERT_DIR`.
+  - API sign-in, for those who use it instead of a subscription:
+    `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`.
+    Claude needs them for its own calls, but its commands must not see
+    them: each one is also listed in `sandbox.credentials.envVars` with
+    `"mode": "deny"` in `sandbox_settings`, so it is unset before every
+    sandboxed command. Bedrock and Vertex variables are not kept (not
+    supported by the setup checks either).
+  Everything else (`PYTHONPATH`, `VIRTUAL_ENV`, `DISPLAY`, tokens…) is
+  dropped. Python is found through `PATH`, and its paths are re-opened as
+  above.
 - **Resume**: sessions live in `~/.claude/projects` as for local mode;
   `ia::has_session` unchanged.
 - **Stop / close**: no container to stop; `chat::close` behaves as for local.
@@ -190,13 +222,11 @@ exact form on a real run.)
 | Claude Code ≥ 2.1.286, signed in | ✓ | ✓ | ✓ |
 | Python 3 + `trimesh`, `manifold3d`, `numpy` | ✓ | – | ✓ |
 | macOS: Seatbelt (`/usr/bin/sandbox-exec` present) | ✓ | – | – |
-| Linux: `bwrap`, `socat` (`which`) | ✓ | – | – |
-| Linux: bwrap can create a user namespace (`bwrap --ro-bind / / --dev /dev --unshare-all true`, 3 s) | ✓ | – | – |
-| Linux: seccomp filter | info | – | – |
+| Linux: `bwrap`, `socat` installed (`which`, nothing run) | ✓ | – | – |
 | Windows | `unsupported` | as today | ✓ |
 | yolobox, container engine, image | – | ✓ | – |
 
-New item keys: `seatbelt`, `bwrap`, `socat`, `userns`, `seccomp`; the Python
+New item keys: `seatbelt`, `bwrap`, `socat`; the Python
 and module items serve `["local", "sandbox"]`; `account` serves all three
 modes (`check_accounts`: the sandbox token only ever helps `"container"`).
 `readiness` computes `sandbox` like the others. yolobox and engine checks run
@@ -208,9 +238,14 @@ not pay 8 s of `docker info` timeouts: `check()` gets a `CheckScope` argument
 Install help (`ui/ai-setup.js`, en/fr): bubblewrap and socat per
 distribution (`sudo apt-get install bubblewrap socat`,
 `sudo dnf install bubblewrap socat`, `sudo pacman -S bubblewrap socat`);
-the Ubuntu 24.04+ AppArmor profile, as a link to the Claude Code docs
-section rather than a pasted `sudo tee` command; Python and modules as for
-local mode.
+Python and modules as for local mode. The checks only see whether bubblewrap
+and socat are installed, not whether bwrap can run (no functional test). So
+the Linux hint also says: "On Ubuntu 24.04 or later, AppArmor may stop
+bubblewrap: add its profile" / « Sous Ubuntu 24.04 ou plus récent, AppArmor
+peut bloquer bubblewrap : ajoutez-lui un profil », with a link to the Claude
+Code docs section (not a pasted `sudo tee` command). If bwrap cannot run
+anyway, Claude exits at startup (`failIfUnavailable`) and the chat shows
+`err.sandbox_unavailable`, which points to Settings → AI and the same hint.
 
 ### UI and texts
 
@@ -242,8 +277,8 @@ local mode.
 | What is confined | The whole Claude process and everything it runs | Shell commands only; file tools by permission rules, enforced by Claude Code itself |
 | Home directory | Never mounted: invisible | Readable by default: **`blockReadsOutsideWorkingDirectories` is required**; Python paths re-opened read-only |
 | Writes | The mounted workspace (and `~/.claude` shared by `--claude-config`) | The workspace and a temp directory; `.claude/` settings, skills, hooks and `.git/hooks` stay write-denied |
-| Network | The container's (open) | None for commands (strict, empty allowlist); Claude's own API calls and WebFetch outside |
-| Credentials | Its own token (Keychain) or a copy of the login | The host login; the commands' environment is inherited (see open questions) |
+| Network | The container's (open) | None for commands (strict, empty allowlist); Claude's own API calls outside; WebFetch / WebSearch asked each time |
+| Credentials | Its own token (Keychain) or a copy of the login | The host login; Claude, and so its commands, start with a reduced environment (allowlist) |
 | Failure mode | No container, no conversation | `failIfUnavailable`: Claude refuses to start, never runs unsandboxed |
 
 Both protect against accidents and a misled model (a stray `rm`, a script
@@ -262,7 +297,9 @@ Each step ends with tests and a short review.
    a prompt; `python3 tools/export.py …` works with Homebrew's Python and
    with a `pip --user` install (allowRead); an Edit outside the workspace
    arrives as `can_use_tool`; `AskUserQuestion` still arrives; bwrap removed
-   → Claude exits at startup with a readable error. Record the exact
+   → Claude exits at startup with a readable error; with the reduced
+   environment the Keychain / `~/.claude` sign-in still works and `env` in
+   a command shows only the allowlist; a WebFetch arrives as a card. Record the exact
    permission-rule path syntax and the exit message (fixture).
 2. **Rust**: `engine == "sandbox"` in `chat::command_line`,
    `chat::sandbox_settings`, `chat::sandbox_answer`, `auth::sandbox_env` /
@@ -287,6 +324,7 @@ Each step ends with tests and a short review.
     and valid JSON, `--permission-mode acceptEdits`, no
     `--dangerously-skip-permissions`, no `--claude-config`.
   - `sandbox_settings_are_strict`: `enabled`, `failIfUnavailable`,
+    `credentials.envVars` denying `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
     `allowUnsandboxedCommands: false`, empty `excludedCommands`,
     `strictAllowlist`, empty `allowedDomains`,
     `blockReadsOutsideWorkingDirectories`; no `~` or relative path anywhere;
@@ -294,18 +332,27 @@ Each step ends with tests and a short review.
     land in `allowRead` and never in `allowWrite`.
   - `sandbox_answer`: Edit/Write inside the workspace → none (normal flow);
     outside, via `..`, via a symlink → deny; other tools → none.
+  - `sandbox_env_is_reduced`: from a sample environment holding `PATH`,
+    `HOME`, `LANG`, `LC_ALL`, `HTTPS_PROXY`, `CLAUDE_CONFIG_DIR`,
+    `CLAUDECODE`, `GITHUB_TOKEN`, `AWS_SECRET_ACCESS_KEY`,
+    `ANTHROPIC_API_KEY`, `PYTHONPATH`: only the allowlisted ones come out,
+    `PATH` is `child_path()`; every kept `ANTHROPIC_*` variable is denied to
+    commands in `sandbox_settings`.
+  - `web_tools_ask_each_time`: a WebFetch / WebSearch request in a
+    `"sandbox"` conversation is not auto-answered and its card has no
+    "always".
   - `container_command_line` and `local_command_line` unchanged.
 - `auth.rs`: `sandbox_env("sandbox")` empty; `argv("sandbox", …)` is Claude
   itself.
-- `setup.rs`: `readiness` with the new mode (bwrap missing → sandbox not
+- `setup.rs`: `readiness` with the new mode (bwrap or socat missing → sandbox not
   ready, local still ready); Python output with paths parsed; home-path
   filter (only paths under a blocked root become `allowRead`); Windows →
   `sandbox` unsupported.
 - `scripts/test-ai-sandbox.js` (new, node, like the other `scripts/test-*.js`):
   `aiSandboxDefault` for every migration case (saved wins; `container` and
   `both` → yolobox; a container conversation → yolobox; Windows → yolobox;
-  fresh macOS/Linux → builtin; `off`/`local` with no container conversation
-  → builtin); `aiWanted` mapping; the filter counts both sandbox engines.
+  fresh macOS/Linux → builtin, also with yolobox ready; `off`/`local` with
+  no container conversation → builtin); `aiWanted` mapping; the filter counts both sandbox engines.
 - Opt-in real test (`#[ignore]`, `IA_REAL=1`): `real_builtin_multicolor`, the
   `real_container_multicolor` scenario through the built-in sandbox, plus
   the escape probes of step 1.
@@ -331,16 +378,3 @@ Each step ends with tests and a short review.
    (`wAiNoSandbox`), so no Windows install can be using yolobox today. The
    migration still maps Windows to yolobox (nothing changes there); offering
    yolobox on native Windows would be a separate change.
-2. **WebFetch / WebSearch** in a built-in conversation: a permission card
-   (proposed), always denied, or always allowed as in the container?
-3. **Environment of sandboxed commands**: they inherit Snap Studio's
-   environment. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` disables auto-allow, so
-   instead list known secret variables in `sandbox.credentials.envVars`
-   (`deny`), or start Claude with a reduced environment?
-4. **Install with no saved choice but yolobox ready** (an old install that
-   skipped the assistant, with Docker and yolobox, and no conversation yet):
-   built-in by the rules above. Keep, or add "yolobox ready at the first
-   check → yolobox"?
-5. **Linux checks**: is the bwrap user-namespace probe reliable enough
-   (AppArmor, Flatpak-like environments), or should the checklist only test
-   presence and let Claude's startup error speak?
