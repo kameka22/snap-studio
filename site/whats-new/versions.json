@@ -241,7 +241,7 @@
           "icon": "create",
           "color": "#bf5af2",
           "edge": "linear-gradient(90deg, #af52de, #ff2d92)",
-          "image": "../assets/ai-chat.webp",
+          "image": "../assets/ai-chat-0.14.webp",
           "tag": { "en": "Create", "fr": "Créer" },
           "chip": { "en": "Create", "fr": "Créer" },
           "title": { "en": "The AI is now called Create", "fr": "L’IA s’appelle maintenant Créer" },
