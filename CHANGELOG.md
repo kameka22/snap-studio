@@ -17,6 +17,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   in Settings → Prepare, shows them all. Hidden settings keep their values
   and still apply, and Basic says how many advanced ones are changed. Anyone
   who already changed one of the new settings starts in Advanced.
+- **Virtual heads (color mixing)**: in Heads and spools, mix two loaded
+  spools into a new color with one slider, as Snapmaker Orca's Full
+  Spectrum does (the heads alternate layer by layer). Virtual heads appear
+  in Prepare's head pickers, where each color now shows only its head; one
+  is deleted when one of its spools is unloaded, and what used it moves to
+  the other head.
 
 ## [0.15.0] — 2026-10-25
 
