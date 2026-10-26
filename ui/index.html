@@ -1358,6 +1358,14 @@
       <textarea id="ia-prompt" rows="6"></textarea>
       <kbd id="ia-kbd" class="ia-prompt-kbd"></kbd>
     </div>
+    <div id="ia-drop" class="ia-drop">
+      <div id="ia-attach" class="chat-attach hidden"></div>
+      <button id="ia-drop-add" type="button" class="ia-drop-add">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10z"/></svg>
+        <span data-i18n="ia.new.drop">Drop images here (sketches, photos), or click to choose</span>
+      </button>
+      <input id="ia-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+    </div>
     <div class="ia-ideas">
       <span class="ia-new-k" data-i18n="ia.new.ideas">Ideas</span>
       <span id="ia-ideas" class="ia-ideas-list"></span>

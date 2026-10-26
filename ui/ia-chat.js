@@ -26,6 +26,9 @@ const CHAT = {
   attach: [],
   /* Initial requests already sent, so a reopening does not send them twice. */
   autoSent: new Set(),
+  /* Conversation id → images dropped in the creation sheet, which leave
+     with its initial request. */
+  firstImages: new Map(),
   /* The turn of the conversation shown: "" | "answering" | "stopping". */
   phase: "",
 };
@@ -638,9 +641,11 @@ async function chatOpen(c) {
   chatSetLocked(!!IA.locked);
   if (!past.length) {
     chatList.appendChild(chatDiv("chat-empty", tr(iaIsCreation(c) ? "chat.empty_create" : "chat.empty")));
-    if (c.prompt && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
+    const images = CHAT.firstImages.get(c.id) || [];
+    if ((c.prompt || images.length) && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
       CHAT.autoSent.add(c.id);
-      chatSend(c.prompt, []);
+      CHAT.firstImages.delete(c.id);
+      chatSend(c.prompt || "", images);
     }
   }
   $("chat-input").focus();
@@ -752,26 +757,37 @@ function chatReadImage(file) {
   });
 }
 
-async function chatAddFiles(files) {
+/* Reads the images among `files` into `list`, up to CHAT_MAX_IMAGES: the
+   message being written, or the creation sheet's (ia.js). */
+async function chatReadImages(files, list) {
   for (const f of files) {
     if (!f.type.startsWith("image/")) continue;
-    if (CHAT.attach.length >= CHAT_MAX_IMAGES) {
+    if (list.length >= CHAT_MAX_IMAGES) {
       toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
       break;
     }
     try {
-      CHAT.attach.push(await chatReadImage(f));
+      list.push(await chatReadImage(f));
     } catch (e) {
       toast(e.message, true);
     }
   }
+}
+
+async function chatAddFiles(files) {
+  await chatReadImages(files, CHAT.attach);
   chatRenderAttachments();
 }
 
 function chatRenderAttachments() {
-  const box = $("chat-attach");
+  chatRenderThumbs($("chat-attach"), CHAT.attach, chatRenderAttachments);
+  chatGrow();
+}
+
+/* `list`'s images into `box`, each with its ✕; `again` redraws. */
+function chatRenderThumbs(box, list, again) {
   box.innerHTML = "";
-  CHAT.attach.forEach((a, i) => {
+  list.forEach((a, i) => {
     const t = chatDiv("chat-thumb");
     const img = document.createElement("img");
     img.src = a.url;
@@ -780,14 +796,13 @@ function chatRenderAttachments() {
     x.textContent = "✕";
     x.title = tr("common.delete");
     x.onclick = () => {
-      CHAT.attach.splice(i, 1);
-      chatRenderAttachments();
+      list.splice(i, 1);
+      again();
     };
     t.append(img, x);
     box.appendChild(t);
   });
-  box.classList.toggle("hidden", !CHAT.attach.length);
-  chatGrow();
+  box.classList.toggle("hidden", !list.length);
 }
 
 function chatClearAttachments() {

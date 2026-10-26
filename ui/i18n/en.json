@@ -590,6 +590,7 @@
   "ia.new.need_prompt": "Describe the object to create.",
   "ia.new.need_dest": "Choose where to save the object.",
   "ia.new.preparing": "Preparing the workspace…",
+  "ia.new.drop": "Drop images here (sketches, photos), or click to choose",
   "ia.new.ideas": "Ideas",
   "ia.new.whole_bed": "Whole Bed",
   "ia.new.run": "Runs in",

@@ -23,6 +23,8 @@ const IA = {
   source: null,
   /* "edit" from Files, "create" from the ＋ button. */
   mode: "edit",
+  /* Images dropped in the sheet: they leave with the initial request. */
+  attach: [],
   /* Conversation open on screen, or null on the list. */
   open: null,
   /* How the open conversation shows: "chat" (ia-chat.js) or "term", the raw
@@ -604,6 +606,8 @@ function iaSheet(mode) {
   $("ia-cfields").classList.toggle("hidden", !create);
   $("ia-new-icon").innerHTML = IA_GLYPH;
   $("ia-prompt").value = "";
+  IA.attach = [];
+  iaRenderAttach();
   $("ia-msg").textContent = "";
   $("ia-msg").className = "pf-test";
   iaSheetTexts();
@@ -686,6 +690,44 @@ function iaNew() {
 $("ia-bed-fill").addEventListener("click", iaBedFill);
 
 $("ia-prompt").addEventListener("input", iaPromptFit);
+
+/* Images for the initial request, as in the conversation: dropped anywhere
+   on the sheet, pasted in the request, or chosen. */
+function iaRenderAttach() {
+  chatRenderThumbs($("ia-attach"), IA.attach, iaRenderAttach);
+}
+async function iaAddFiles(files) {
+  await chatReadImages(files, IA.attach);
+  iaRenderAttach();
+}
+const iaHasImage = (e) => [...(e.dataTransfer?.items || [])].some((i) => i.type.startsWith("image/"));
+const iaBox = $("iamodal").querySelector(".modal-box");
+iaBox.addEventListener("dragover", (e) => {
+  if (!iaHasImage(e)) return;
+  e.preventDefault();
+  $("ia-drop").classList.add("over");
+});
+iaBox.addEventListener("dragleave", (e) => {
+  if (!iaBox.contains(e.relatedTarget)) $("ia-drop").classList.remove("over");
+});
+iaBox.addEventListener("drop", (e) => {
+  $("ia-drop").classList.remove("over");
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  e.preventDefault();
+  iaAddFiles(files);
+});
+$("ia-prompt").addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  e.preventDefault();
+  iaAddFiles(files);
+});
+$("ia-drop-add").addEventListener("click", () => $("ia-file").click());
+$("ia-file").addEventListener("change", (e) => {
+  iaAddFiles([...e.target.files]);
+  e.target.value = "";
+});
 $("ia-ideas").addEventListener("click", (e) => {
   const b = e.target.closest("[data-idea]");
   if (!b) return;
@@ -754,6 +796,8 @@ async function iaCreate() {
           engine: IA.engine,
           model,
         });
+    if (IA.attach.length) CHAT.firstImages.set(c.id, IA.attach);
+    IA.attach = [];
     closeSheet($("iamodal"));
     await iaRefresh();
     switchView("ia");

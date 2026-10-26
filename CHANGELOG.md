@@ -23,6 +23,10 @@ with its packages for macOS, Windows and Linux. What comes next:
   in Prepare's head pickers, where each color now shows only its head; one
   is deleted when one of its spools is unloaded, and what used it waits for
   a new head before slicing.
+- **Images when starting an AI conversation**: the new conversation sheet
+  takes images (sketches, photos), dropped, pasted or chosen, as the
+  conversation does; they leave with the first request and are kept with
+  the conversation's other images.
 
 ### Changed
 - **A lighter AI sandbox**: on macOS and Linux the AI's sandbox is now
@@ -39,6 +43,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 ### Fixed
 - Settings → AI: "Check Again" no longer stays on "Checking…" once the
   check is done.
+- Dropping an image on the window no longer adds it to the recent folders
+  as if it were one.
 
 ## [0.15.0] — 2026-10-25
 

@@ -1978,6 +1978,13 @@ body.no-toolbar .toolbar { display: none; }
 }
 .ia-prompt-box textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
 .ia-prompt-kbd { position: absolute; right: 10px; bottom: 8px; font: inherit; font-size: 11px; color: var(--text-tertiary); background: none; pointer-events: none; }
+.ia-drop { border: 1px dashed var(--control-border); border-radius: 12px; padding: 8px 10px; transition: border-color 120ms ease, background 120ms ease; }
+.ia-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.ia-drop .chat-attach { padding: 2px 0 8px; }
+.ia-drop-add { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; border: 0; background: none; color: var(--text-secondary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.ia-drop-add:hover { color: var(--text); }
+.ia-drop-add:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 6px; }
+.ia-drop-add svg { flex: none; width: 16px; height: 16px; fill: currentColor; }
 .ia-ideas { display: flex; align-items: baseline; gap: 8px; margin-top: -4px; }
 .ia-ideas-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .ia-idea {

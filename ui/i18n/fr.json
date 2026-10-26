@@ -593,6 +593,7 @@
   "ia.new.need_prompt": "Décrivez l'objet à créer.",
   "ia.new.need_dest": "Choisissez où enregistrer l'objet.",
   "ia.new.preparing": "Préparation de l'espace de travail…",
+  "ia.new.drop": "Déposez des images ici (croquis, photos), ou cliquez pour en choisir",
   "ia.new.ideas": "Idées",
   "ia.new.whole_bed": "Plateau entier",
   "ia.new.run": "Exécution",

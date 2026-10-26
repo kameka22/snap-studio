@@ -1141,9 +1141,11 @@ listen("tauri://drag-leave", () => document.body.classList.remove("dragover"));
 listen("tauri://drag-drop", (e) => {
   document.body.classList.remove("dragover");
   const p = e.payload?.paths?.[0];
+  // Images are for the AI's message or creation sheet (their own drop).
+  if (!p || /\.(png|jpe?g|gif|webp)$/i.test(p)) return;
   // A file dropped opens its folder (a file path pushed to the recents
   // would stay there as a dead entry); a folder opens itself.
-  if (p) openDir(p.replace(/[\\/][^\\/]+\.(3mf|stl|gcode|gco|g|obj|step|stp)$/i, ""));
+  openDir(p.replace(/[\\/][^\\/]+\.(3mf|stl|gcode|gco|g|obj|step|stp)$/i, ""));
 });
 
 /* rubber-band selection in the empty area */
