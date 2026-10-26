@@ -335,6 +335,14 @@
               <span class="k"><label for="p-tower-sw" data-i18n="prepare.tower">Prime tower</label><small id="p-tower-why" class="sub hidden"></small></span>
               <input type="checkbox" id="p-tower-sw" class="sw" role="switch" />
             </div>
+            <div class="grow-row hidden" id="p-tower-kind-row">
+              <span class="k" data-i18n="prepare.tower.kind">Tower</span>
+              <div id="p-tower-kind" class="seg" role="radiogroup" aria-label="Tower" data-i18n-aria="prepare.tower.kind">
+                <button type="button" class="seg-btn" role="radio" data-kind="single" data-i18n="prepare.tower.kind.single">One tower</button>
+                <button type="button" class="seg-btn" role="radio" data-kind="material" data-i18n="prepare.tower.kind.material">Per material</button>
+              </div>
+              <small id="p-tower-kind-why" class="sub p-tower-kind-why"></small>
+            </div>
           </div>
         </div>
       </div>
@@ -366,20 +374,29 @@
           <div id="p-dims" class="vp-sub"></div>
         </div>
         <div id="p-tower-props" class="hidden">
-          <div class="vp-section" data-i18n="prepare.tower.corner">Front-left corner</div>
+          <div id="p-pillar-heads" class="p-pillar-heads"></div>
+          <div id="p-tower-corner" class="vp-section">Front-left corner</div>
           <div class="group">
             <div class="grow-row p-field" data-field="p-tx"><span class="k" data-i18n="prepare.pos_x">Position X</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-tx" class="field num" type="number" step="1" /><span class="unit">mm</span><button type="button" class="p-mode"></button></div>
             <div class="grow-row p-field" data-field="p-ty"><span class="k" data-i18n="prepare.pos_y">Position Y</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-ty" class="field num" type="number" step="1" /><span class="unit">mm</span><button type="button" class="p-mode"></button></div>
           </div>
+          <div id="p-trot-sec">
           <div class="vp-section" data-i18n="prepare.rotation">Rotation</div>
           <div class="group">
             <div class="grow-row p-field" data-field="p-trot"><span class="k" data-i18n="prepare.around_z">Around Z</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-trot" class="field num" type="number" step="1" /><span class="unit">°</span><button type="button" class="p-mode"></button></div>
           </div>
-          <div class="vp-section" data-i18n="prepare.tower.size_title">Size</div>
-          <div class="group">
+          </div>
+          <div class="group p-pillar-only">
+            <div class="grow-row" id="p-pillar-split-row">
+              <span class="k"><label for="p-pillar-split" data-i18n="prepare.tower.split">One tower per head</label><small id="p-pillar-split-sub" class="sub"></small></span>
+              <input type="checkbox" id="p-pillar-split" class="sw" role="switch" />
+            </div>
+          </div>
+          <div class="vp-section p-tower-only" data-i18n="prepare.tower.size_title">Size</div>
+          <div class="group p-tower-only">
             <div class="grow-row p-field" data-field="p-tvol"><span class="k" data-i18n="prepare.tower.volume">Prime volume</span><input type="range" class="p-range" /><output class="p-val" title="Double-click to type" data-i18n-title="prepare.val_hint"></output><input id="p-tvol" class="field num" type="number" step="1" /><span class="unit">mm³</span><button type="button" class="p-mode"></button></div>
           </div>
-          <div id="p-tvol-note" class="vp-sub p-tower-warn hidden" data-i18n="prepare.tower.vol_low">Less purge than the profile: colours may mix at head changes</div>
+          <div id="p-tvol-note" class="vp-sub p-tower-warn p-tower-only hidden" data-i18n="prepare.tower.vol_low">Less purge than the profile: colours may mix at head changes</div>
           <div id="p-tower-dims" class="vp-sub"></div>
           <div id="p-tower-warn" class="vp-sub p-tower-warn hidden" role="status"></div>
         </div>
@@ -2151,8 +2168,10 @@
 <script src="prepare-logic.js"></script>
 <script src="virtual-logic.js"></script>
 <script src="tower-logic.js"></script>
+<script src="pillar-logic.js"></script>
 <script src="prepare.js"></script>
 <script src="prepare-tower.js"></script>
+<script src="prepare-pillars.js"></script>
 <script src="heads.js"></script>
 <script src="virtual.js"></script>
 <script src="spoolcheck.js"></script>

@@ -537,8 +537,8 @@ async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) ->
 
 /// Saves the plate as 3MF.
 #[tauri::command]
-async fn plate_save(scene: Vec<plate::SceneItem>, tower: Option<plate::TowerPlace>, path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, tower, Path::new(&path)))
+async fn plate_save(scene: Vec<plate::SceneItem>, tower: Option<plate::TowerPlace>, snap: Option<serde_json::Value>, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, tower, snap.as_ref(), Path::new(&path)))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())

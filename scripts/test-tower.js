@@ -149,4 +149,27 @@ assert.notStrictEqual(k, T.ptSizeKey([["a.3mf#0", [0, 0, 0], [1, 1, 1]]], { head
   assert.strictEqual(T.ptState({ heads: V.vhPhysical(new Set([103]), []).size, on: true }).reason, "single", "an orphan prints nothing");
 }
 
+// The plate's tower as stored (prepare-tower.js prTowerStored /
+// prTowerRestore, run as written): an old plate comes back with a single
+// tower and no pillars; one tower per material keeps its choice and places.
+{
+  const fs = require("fs"), vm = require("vm");
+  const src = fs.readFileSync(require("path").join(__dirname, "../ui/prepare-tower.js"), "utf8");
+  const body = src.slice(src.indexOf("const prTowerStored"), src.indexOf("// The plate read at start"));
+  const ctx = { PR: {}, ptOn: T.ptOn };
+  vm.runInNewContext(body + ";this.stored = prTowerStored; this.restore = prTowerRestore;", ctx);
+  // Plain objects out of the context (its own prototypes).
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  ctx.restore({ on: true, x: 15, y: 220, rot: 90, real: null });
+  assert.deepStrictEqual(plain(ctx.stored(ctx.PR.tower)), { on: true, x: 15, y: 220, rot: 90, real: null, kind: "single", row: { rot: 0 }, groups: {}, pillars: {} }, "an old plate");
+  ctx.restore(null);
+  assert.strictEqual(ctx.PR.tower.on, false);
+  assert.strictEqual(ctx.PR.tower.kind, "single");
+  const t = { on: true, x: null, y: null, rot: 0, real: null, kind: "material", row: { rot: 90 }, groups: { PLA: { split: true } }, pillars: { "PLA/T0": { x: 20, y: 30, moved: true } } };
+  ctx.restore(JSON.parse(JSON.stringify(t)));
+  assert.deepStrictEqual(plain(ctx.stored(ctx.PR.tower)), t, "kept as it was");
+  ctx.restore({ on: true, kind: "rings", groups: "x", pillars: null, row: 3 });
+  assert.deepStrictEqual(plain([ctx.PR.tower.kind, ctx.PR.tower.groups, ctx.PR.tower.pillars, ctx.PR.tower.row]), ["single", {}, {}, { rot: 0 }], "a corrupt one");
+}
+
 console.log("tower: ok");

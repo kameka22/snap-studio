@@ -127,12 +127,17 @@ function prLoadState() {
 /* ------------------------------------------------------------ history */
 
 /* Undo / redo: successive plate states (placements and object list, the
-   prime tower's place, never the meshes), 100 levels. */
+   prime tower's place, its pillars' places and their groups, never the
+   meshes), 100 levels. */
 const HIST = { undo: [], redo: [] };
-const prSnap = () => JSON.stringify({ objects: PR.objects, tower: { x: PR.tower?.x ?? null, y: PR.tower?.y ?? null, rot: PR.tower?.rot || 0 } });
+const prSnap = () =>
+  JSON.stringify({
+    objects: PR.objects,
+    tower: { x: PR.tower?.x ?? null, y: PR.tower?.y ?? null, rot: PR.tower?.rot || 0, row: PR.tower?.row || { rot: 0 }, groups: PR.tower?.groups || {}, pillars: PR.tower?.pillars || {} },
+  });
 
-/* A state back: its objects, and its tower's place (the tower's switch is
-   a setting, not undone). */
+/* A state back: its objects, and its towers' places (the tower's switch
+   and its kind are settings, not undone). */
 function prUnsnap(snapshot) {
   const s = JSON.parse(snapshot);
   PR.objects = Array.isArray(s) ? s : s.objects;
@@ -300,8 +305,7 @@ function prOverlaps() {
       }
     }
   }
-  const tower = typeof prTowerCheck === "function" ? prTowerCheck() : null;
-  if (tower?.hits.length) for (const id of ["tower", ...tower.hits]) hit.add(id);
+  for (const t of typeof prTowerChecks === "function" ? prTowerChecks() : []) if (t.check.hits.length) for (const id of ["tower", ...t.check.hits]) hit.add(id);
   return hit;
 }
 
@@ -407,7 +411,9 @@ async function prLoadMeshNow(o) {
     gl.vertexAttribPointer(aExt, 1, gl.UNSIGNED_BYTE, false, 0, 0);
   }
   gl.bindVertexArray(null);
-  Object.assign(entry, { loading: false, vao, bufs, count: data.n * 3, n: data.n, pos: data.pos, hasExt: !!data.ext });
+  // The extruder of each vertex and whether the mesh was simplified: each
+  // colour's top, for the pillars' heights (prepare-pillars.js).
+  Object.assign(entry, { loading: false, vao, bufs, count: data.n * 3, n: data.n, pos: data.pos, hasExt: !!data.ext, ext: data.ext, truncated: !!data.truncated });
   PR.meshes.set(key, entry);
   // Convex hull: exact resting, footprint, "lay on face".
   invoke("plate_hull", { path: o.path, item: o.item, piece: o.piece ?? null })
@@ -833,11 +839,17 @@ function prBindInteractions(canvas) {
     }
     const near = prPickDist(e);
     // The prime tower, when nearer than any part: moved, or turned with ⌥
-    // (around Z only), like a part.
-    const tower = prTowerHit(e);
-    if (tower != null && !(near?.dist < tower) && !(e.metaKey || e.ctrlKey) && PR.tool !== "face") {
-      prTowerSelect(true);
+    // (around Z only), like a part. A pillar: moved.
+    const pick = prTowerPick(e);
+    if (pick && !(near?.dist < pick.dist) && !(e.metaKey || e.ctrlKey) && PR.tool !== "face") {
+      prTowerSelect(true, pick.key);
       const start = prBedPoint(e);
+      if (typeof pick.key === "string") {
+        const c = PR.tower.pillars[pick.key];
+        if (!start || !c) return;
+        PR.drag = { ...base, mode: "pillar", key: pick.key, start, orig: { x: c.x, y: c.y, moved: !!c.moved }, before: prSnap() };
+        return;
+      }
       const box = prTowerBox();
       if (!start || !box) return;
       const c = ptCorners(PR.tower, box);
@@ -950,6 +962,19 @@ function prBindInteractions(canvas) {
       prSchedule();
       return;
     }
+    if (d.mode === "pillar") {
+      const p = prBedPoint(e);
+      if (!p || !d.moved) return;
+      if (!d.remembered) {
+        prRemember(d.before);
+        d.remembered = true;
+      }
+      Object.assign(PR.tower.pillars[d.key], d.orig);
+      prPillarMove(d.key, p[0] - d.start[0], p[1] - d.start[1]);
+      prTowerRenderProps();
+      prSchedule();
+      return;
+    }
     if (d.mode === "move" && d.moved) {
       $("p-objects").classList.add("dragging");
       prDropHover(e);
@@ -998,7 +1023,7 @@ function prBindInteractions(canvas) {
     }
     if (d.mode === "orbit" && !d.moved && d.clear) prSelect([], false);
     $("p-angle").classList.add("hidden");
-    if (["move", "rotate", "ring", "tower", "tower-rot"].includes(d.mode) && d.moved) {
+    if (["move", "rotate", "ring", "tower", "tower-rot", "pillar"].includes(d.mode) && d.moved) {
       prSave();
       prRenderInspector();
     } else if (d.mode === "move" && !d.moved && d.only != null && PR.sel.size > 1) {
@@ -1056,8 +1081,8 @@ const normDeg = (a) => {
 /* The context menu of the object under the pointer, if any (or the
    prime tower's). */
 function prObjectMenu(e) {
-  const near = prPickDist(e), tower = prTowerHit(e);
-  if (tower != null && !(near?.dist < tower)) return prTowerMenu(e.clientX, e.clientY);
+  const near = prPickDist(e), tower = prTowerPick(e);
+  if (tower && !(near?.dist < tower.dist)) return prTowerMenu(e.clientX, e.clientY, tower.key);
   const hit = near?.o;
   if (!hit) return;
   prMenuFor(hit.id, e.clientX, e.clientY);
@@ -1202,7 +1227,7 @@ const prGroups = () => plGroups(PR.objects, bedState);
 function prRenderInspector() {
   // The tower may have come (a second head, the switch): it takes a spot.
   prTowerEnsurePlaced();
-  if (PR.towerSel && !prTowerShown()) PR.towerSel = false;
+  if (!prTowerSelValid()) PR.towerSel = false;
   const overlap = prOverlaps();
   const live = typeof headsActive === "function";
   const pid = live ? headsActive() : "";
@@ -1337,10 +1362,16 @@ const PF = {
   "p-sy": { kind: "scale", get: (o) => o.scale[1] * 100, put: (o, v) => (o.scale = [o.scale[0], Math.max(1, v) / 100, o.scale[2]]) },
   "p-sz": { kind: "scale", get: (o) => o.scale[2] * 100, put: (o, v) => (o.scale = [o.scale[0], o.scale[1], Math.max(1, v) / 100]) },
   // The prime tower's (prepare-tower.js): its corner, its turn, and its
-  // prime volume — a setting, the slice sheet's, not an undo step.
+  // prime volume — a setting, the slice sheet's, not an undo step. A
+  // pillar's (prepare-pillars.js): its center, the row's turn.
   "p-tx": { kind: "pos", axis: 0, tower: true, get: (t) => t.x, put: (t, v) => prTowerMove(v - t.x, 0) },
   "p-ty": { kind: "pos", axis: 1, tower: true, get: (t) => t.y, put: (t, v) => prTowerMove(0, v - t.y) },
-  "p-trot": { kind: "rot", tower: true, get: (t) => t.rot || 0, put: (t, v) => prTowerTurn(v) },
+  "p-trot": {
+    kind: "rot",
+    tower: true,
+    get: (t) => (t === PR.tower ? t.rot || 0 : PR.tower.row?.rot || 0),
+    put: (t, v) => (t === PR.tower ? prTowerTurn(v) : prPillarRowTurn(v)),
+  },
   "p-tvol": { kind: "purge", tower: true, setting: true, get: () => prTowerNum("prime_volume", 45), put: (t, v) => prTowerSetVolume(v), lim: () => prTowerVolumeRange() },
 };
 const pfText = (f, v) => {
@@ -1413,7 +1444,7 @@ function prBindField(id) {
   f.mode = f.row.querySelector(".p-mode");
   const { el, range } = f;
   // The selected object, or the prime tower for its fields.
-  const target = () => (f.tower ? (PR.towerSel && PR.tower.x != null ? PR.tower : null) : PR.objects.find((x) => PR.sel.has(x.id)));
+  const target = () => (f.tower ? prTowerTarget() : PR.objects.find((x) => PR.sel.has(x.id)));
   // A setting is not an undo step: the plate's history holds placements.
   const remember = (snapshot) => !f.setting && prRemember(snapshot);
   const apply = (v, commit) => {
@@ -1915,9 +1946,10 @@ async function prepareAddFile(path, { remember = true } = {}) {
 function freeSpot(bw, bd, except) {
   const { w, d } = PR.bed, m = 5;
   const taken = PR.objects.filter((o) => o.id !== except && bedState(o) !== "out").map((o) => groupBox([o]));
-  // The prime tower's place is taken too.
+  // The prime tower's place is taken too, or its pillars'.
   const tb = prTowerBox();
   if (tb && PR.tower.x != null) taken.push(ptExtent(PR.tower, tb));
+  for (const t of prTowerChecks()) if (t.pillar) taken.push(ptExtent({ x: t.pillar.x, y: t.pillar.y, rot: 0 }, pmBox(t.pillar)));
   const free = (x, y) =>
     x >= 0 && y >= 0 && x + bw <= w && y + bd <= d &&
     taken.every((b) => x + bw + m <= b.x0 || b.x1 + m <= x || y + bd + m <= b.y0 || b.y1 + m <= y);
@@ -2154,8 +2186,12 @@ async function prSavePlate() {
   try {
     await invoke("plate_save", {
       scene: PR.objects.map((o) => ({ path: o.path, item: o.item, piece: o.piece ?? null, name: o.name, pos: o.pos, rot: o.rot, scale: o.scale, extruder_map: identity })),
-      // The prime tower goes with it, as Orca keeps it.
-      tower: PR.tower.on && PR.tower.x != null ? { on: true, x: PR.tower.x, y: PR.tower.y, rot: PR.tower.rot || 0 } : null,
+      // The prime tower goes with it, as Orca keeps it (its default place
+      // if Prepare never showed it: the pillars printed instead).
+      tower: PR.tower.on ? { on: true, x: PR.tower.x ?? 15, y: PR.tower.y ?? 220, rot: PR.tower.rot || 0 } : null,
+      // One tower per material: the choice and the pillars' places, never
+      // the pillars themselves.
+      snap: PR.tower.kind === "material" || Object.keys(PR.tower.pillars || {}).length ? prPillarsFileData() : null,
       path: dest,
     });
     toast(tr("prepare.saved", { name: dest.split(/[\\/]/).pop() }));
@@ -2203,11 +2239,15 @@ function prArrange() {
   const W = Math.floor(PR.bed.w), D = Math.floor(PR.bed.d);
   const grid = new Uint8Array(W * D);
   const margin = 3;
-  // The prime tower stays: an obstacle, its cells (and the margin) taken.
+  // The prime tower stays: an obstacle, its cells (and the margin) taken;
+  // its pillars too.
   const tb = prTowerBox();
-  const tower = tb && PR.tower.x != null ? ptExtent(PR.tower, tb) : null;
-  if (tower) {
-    const poly = ptCorners(PR.tower, { x0: tb.x0 - margin, y0: tb.y0 - margin, w: tb.w + 2 * margin, d: tb.d + 2 * margin });
+  const towers = [];
+  if (tb && PR.tower.x != null) towers.push([PR.tower, tb]);
+  for (const t of prTowerChecks()) if (t.pillar) towers.push([{ x: t.pillar.x, y: t.pillar.y, rot: 0 }, pmBox(t.pillar)]);
+  for (const [at, tb] of towers) {
+    const tower = ptExtent(at, tb);
+    const poly = ptCorners(at, { x0: tb.x0 - margin, y0: tb.y0 - margin, w: tb.w + 2 * margin, d: tb.d + 2 * margin });
     for (let y = Math.max(0, Math.floor(tower.y0 - margin)); y < Math.min(D, Math.ceil(tower.y1 + margin)); y++) {
       for (let x = Math.max(0, Math.floor(tower.x0 - margin)); x < Math.min(W, Math.ceil(tower.x1 + margin)); x++) {
         if (ptConvexOverlap(poly, [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]], 0)) grid[y * W + x] = 1;
@@ -2253,13 +2293,14 @@ function prArrange() {
     placed.push({ o: plan.o, cx: best.cx, cy: best.cy, rz: best.t.rz, m: best.t.mask });
   }
   // Group recentered on the plate, unless that would bring it onto the
-  // prime tower: it then stays where the grid put it, around the tower.
+  // prime tower or a pillar: it then stays where the grid put it, around.
   if (placed.length) {
     const x0 = Math.min(...placed.map((p) => p.cx + p.m.x0)), x1 = Math.max(...placed.map((p) => p.cx + p.m.x1));
     const y0 = Math.min(...placed.map((p) => p.cy + p.m.y0)), y1 = Math.max(...placed.map((p) => p.cy + p.m.y1));
     let dx = Math.floor((W - 1 - x1 - x0) / 2), dy = Math.floor((D - 1 - y1 - y0) / 2);
     const m = margin;
-    if (tower && !(x1 + dx + m <= tower.x0 || tower.x1 + m <= x0 + dx || y1 + dy + m <= tower.y0 || tower.y1 + m <= y0 + dy)) dx = dy = 0;
+    const hits = (t) => !(x1 + dx + m <= t.x0 || t.x1 + m <= x0 + dx || y1 + dy + m <= t.y0 || t.y1 + m <= y0 + dy);
+    if (towers.some(([at, tb]) => hits(ptExtent(at, tb)))) dx = dy = 0;
     for (const p of placed) {
       p.o.rot = [p.o.rot[0], p.o.rot[1], p.rz];
       p.o.pos = [p.cx + dx, p.cy + dy];

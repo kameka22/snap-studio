@@ -277,7 +277,19 @@ pub struct Request {
     /// virtual filament `n + k + 1`.
     #[serde(default)]
     pub virtual_heads: Vec<VirtualHead>,
+    /// One prime tower per material: the pillars to print, first in the
+    /// object list, with the engine's tower off (`PILLAR_OVERRIDES`).
+    #[serde(default)]
+    pub pillars: Vec<crate::plate::Pillar>,
 }
+
+/// What printing pillars needs from the engine: no tower of its own, the
+/// objects printed in the list's order (each head primes on its ring
+/// before the model), no support layer of its own between two object
+/// layers (it would change heads where no pillar layer is). They win over
+/// every other setting (the UI sends them too).
+pub const PILLAR_OVERRIDES: [(&str, &str); 3] =
+    [("enable_prime_tower", "0"), ("print_order", "as_obj_list"), ("independent_support_layer_height", "0")];
 
 /// A virtual head: two physical heads (from 0) the engine alternates layer
 /// by layer, `pct` the share of `b` (Snapmaker Orca's mixed filament), and
@@ -741,6 +753,11 @@ pub fn run_job(
         if !req.virtual_heads.is_empty() {
             overrides.insert("mixed_filament_definitions".into(), Value::String(mixed_definitions(&req.virtual_heads)));
         }
+        if !req.pillars.is_empty() && !req.scene.is_empty() {
+            for (k, v) in PILLAR_OVERRIDES {
+                overrides.insert(k.into(), Value::String(v.into()));
+            }
+        }
         let prep = match presets::prepare(
             &idx,
             &work,
@@ -782,7 +799,7 @@ pub fn run_job(
             .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
         let input = if !req.scene.is_empty() {
             let dst = work.join("plate.3mf");
-            match crate::plate::write_scene(&req.scene, idx.plate_size(&req.machine), &dst) {
+            match crate::plate::write_scene(&req.scene, &req.pillars, idx.plate_size(&req.machine), &dst) {
                 Ok(_) => dst,
                 Err(e) => return fail(e.to_string()),
             }
@@ -1900,7 +1917,7 @@ mod tests {
             piece: None,
         }];
         let plate = dir.join("plate.3mf");
-        crate::plate::write_scene(&scene, (270.0, 270.0), &plate).unwrap();
+        crate::plate::write_scene(&scene, &[], (270.0, 270.0), &plate).unwrap();
         let profile = dir.join("filament_0.json");
         std::fs::write(&profile, r##"{"filament_colour":["#00FF00"]}"##).unwrap();
         let other = dir.join("filament_1.json");
@@ -2252,6 +2269,177 @@ mod tests {
         assert!(seq.chunks(3).take(seq.len() / 3).all(|c| c == [0, 0, 2]), "T0, T0, T2: {seq:?}");
         assert_eq!(last.stats.unwrap().tools, vec![0, 2], "only physical tools");
         discard("mix");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// One prime tower per material through the app's path: the
+    /// feasibility test's plate (a 30 mm PLA cube in two halves on T0 / T1,
+    /// a 20 mm PETG cube on T2) with the pillars the UI makes for it (a
+    /// two-ring PLA pillar, a PETG tube), sliced, its G-code read back:
+    /// 1. every extrusion on a ring is by that ring's head;
+    /// 2. on every layer, each head starts on its pillar;
+    /// 3. each ring stops at its head's last layer on the model (± 1);
+    /// 4. no engine tower, nothing extruded outside the objects;
+    /// 5. after each tool change, the head primes above its pillar.
+    /// The overrides are the engine's even when the request says otherwise.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_material_pillars -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_material_pillars() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).unwrap_or(&l.processes[0]).name.clone();
+        let fil = |want: &str, fallback: &str| {
+            l.filaments.iter().find(|f| f.name == want).or_else(|| l.filaments.iter().find(|f| f.name.contains(fallback) && !f.name.contains("Support"))).expect(fallback).name.clone()
+        };
+        let (pla, petg) = (fil("Snapmaker PLA Basic @U1", "PLA"), fil("Snapmaker PETG HF", "PETG"));
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-pillars");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let bx = |x0: f32, y0: f32, x1: f32, y1: f32, h: f32| -> Vec<Tri> {
+            let p = [[x0, y0, 0.], [x1, y0, 0.], [x1, y1, 0.], [x0, y1, 0.], [x0, y0, h], [x1, y0, h], [x1, y1, h], [x0, y1, h]];
+            let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+            f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect()
+        };
+        let part = |name: &str, tris: Vec<Tri>, extruder: u8| crate::write3mf::Part { name: name.into(), tris, extruder, paint: vec![] };
+        let pla_src = tmp.join("pla.3mf");
+        crate::write3mf::write_multipart(&pla_src, "pla", &[part("a", bx(0., 0., 15., 30., 30.), 1), part("b", bx(15., 0., 30., 30., 30.), 2)], &Mat::IDENTITY).unwrap();
+        let petg_src = tmp.join("petg.3mf");
+        crate::write3mf::write_multipart(&petg_src, "petg", &[part("c", bx(0., 0., 20., 20., 20.), 1)], &Mat::IDENTITY).unwrap();
+        let item = |src: &Path, name: &str, pos: [f32; 2], map: Vec<u8>| crate::plate::SceneItem {
+            path: src.to_string_lossy().to_string(), item: 0, name: name.into(), pos, rot: [0.0; 3], scale: [1.0; 3], extruder_map: map, piece: None,
+        };
+        let scene = vec![item(&pla_src, "pla", [125.0, 135.0], vec![0, 1]), item(&petg_src, "petg", [170.0, 135.0], vec![2])];
+        // As pillar-logic.js makes them: the rings 16/12 and 12/8 mm, the tube
+        // 15/11 mm, on the layer grid (0.25 mm, then 0.2 mm), a 3 mm brim.
+        use crate::plate::{Pillar, Ring};
+        let pillars = vec![
+            Pillar { name: "Prime tower · PLA".into(), x: 60.0, y: 135.0, brim: 3.0, rings: vec![
+                Ring { head: 0, d_out: 16.0, d_in: 12.0, h: 30.05 }, Ring { head: 1, d_out: 12.0, d_in: 8.0, h: 30.05 },
+            ] },
+            Pillar { name: "Prime tower · PETG".into(), x: 220.0, y: 135.0, brim: 3.0, rings: vec![Ring { head: 2, d_out: 15.0, d_in: 11.0, h: 20.05 }] },
+        ];
+        let mut overrides = Map::new();
+        // What a sheet might hold: the pillars' overrides win.
+        overrides.insert("print_order".into(), Value::String("default".into()));
+        overrides.insert("enable_prime_tower".into(), Value::String("1".into()));
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request { machine, process, filaments: vec![pla.clone(), pla.clone(), petg, pla], scene, pillars: pillars.clone(), overrides, name: Some("pillars".into()), ..Default::default() },
+            "pillars".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let last = seen.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        let path = last.gcode.clone().unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        for (k, v) in PILLAR_OVERRIDES {
+            assert!(text.contains(&format!("; {k} = {v}\n")), "{k} = {v} reached the engine");
+        }
+        let g = crate::gcode::parse(std::fs::File::open(&path).unwrap()).unwrap();
+        // Which ring (pillar, head) a point is on, if any: within its annulus,
+        // half a line width of slack.
+        let on_ring = |x: f32, y: f32| -> Option<(usize, u8)> {
+            for (i, p) in pillars.iter().enumerate() {
+                let r = ((x - p.x).powi(2) + (y - p.y).powi(2)).sqrt();
+                for ring in &p.rings {
+                    if r >= ring.d_in / 2.0 - 0.25 && r <= ring.d_out / 2.0 + 0.25 {
+                        return Some((i, ring.head));
+                    }
+                }
+            }
+            None
+        };
+        let on_pillar = |x: f32, y: f32, slack: f32| pillars.iter().position(|p| ((x - p.x).powi(2) + (y - p.y).powi(2)).sqrt() <= p.rings[0].d_out / 2.0 + slack);
+        let ext: Vec<&crate::gcode::Seg> = g.segs.iter().filter(|s| !s.travel).collect();
+        // 1. Rings by their own head (the ring's own walls; the brim and the
+        // shared edge between two rings aside).
+        let mut wrong = 0;
+        let mut on_rings = 0;
+        for s in &ext {
+            if let (Some((pa, ha)), Some((pb, hb))) = (on_ring(s.a[0], s.a[1]), on_ring(s.b[0], s.b[1])) {
+                if pa == pb && ha == hb && s.layer > 0 {
+                    on_rings += 1;
+                    let shared = pillars[pa].rings.iter().any(|r| r.head != ha && {
+                        let rr = ((s.a[0] - pillars[pa].x).powi(2) + (s.a[1] - pillars[pa].y).powi(2)).sqrt();
+                        (rr - r.d_out / 2.0).abs() < 0.3 || (rr - r.d_in / 2.0).abs() < 0.3
+                    });
+                    if s.tool != ha && !shared {
+                        wrong += 1;
+                    }
+                }
+            }
+        }
+        println!("1. ring extrusions: {on_rings}, by another head: {wrong}");
+        assert!(on_rings > 1000, "the rings are printed");
+        assert_eq!(wrong, 0, "each ring by its own head");
+        // 2. Per layer and head, the first extrusion is on that head's pillar.
+        let mut first: std::collections::BTreeMap<(u16, u8), [f32; 3]> = Default::default();
+        for s in &ext {
+            first.entry((s.layer, s.tool)).or_insert(s.a);
+        }
+        let late: Vec<_> = first.iter().filter(|((layer, _), a)| *layer > 0 && on_pillar(a[0], a[1], 4.0).is_none()).map(|(k, _)| *k).collect();
+        println!("2. layer × head starts: {}, not on a pillar: {}", first.len(), late.len());
+        assert!(late.is_empty(), "each head starts on its pillar: {:?}", &late[..late.len().min(8)]);
+        // 3. Each ring's last layer, against its head's last layer on the model.
+        let last_layer = |pred: &dyn Fn(&crate::gcode::Seg) -> bool| ext.iter().filter(|s| pred(s)).map(|s| s.layer).max().unwrap_or(0) as i32;
+        for p in &pillars {
+            for r in &p.rings {
+                let ring = last_layer(&|s| s.tool == r.head && on_pillar(s.a[0], s.a[1], 4.0).is_some());
+                let model = last_layer(&|s| s.tool == r.head && on_pillar(s.a[0], s.a[1], 4.0).is_none());
+                println!("3. T{}: ring to layer {ring}, model to layer {model}", r.head);
+                assert!((ring - model).abs() <= 1, "T{} ring {ring} vs model {model}", r.head);
+            }
+        }
+        // 4. No engine tower, nothing outside the objects (pillars with their
+        // brims, the parts with a margin for theirs).
+        assert!(!text.contains(";TYPE:Prime tower"), "no engine tower");
+        assert!(last.stats.as_ref().unwrap().tower.is_none());
+        let parts = [(125.0f32 - 15.0, 135.0f32 - 15.0, 125.0f32 + 15.0, 135.0f32 + 15.0), (160.0, 125.0, 180.0, 145.0)];
+        let stray = ext.iter().filter(|s| s.layer > 0 && on_pillar(s.a[0], s.a[1], 4.5).is_none() && !parts.iter().any(|b| s.a[0] > b.0 - 8.0 && s.a[0] < b.2 + 8.0 && s.a[1] > b.1 - 8.0 && s.a[1] < b.3 + 8.0)).count();
+        println!("4. extrusions outside the objects: {stray}");
+        assert_eq!(stray, 0);
+        // 5. After each tool change, the standstill prime is above a pillar.
+        let (mut x, mut y, mut layer, mut changed) = (0.0f32, 0.0f32, -1i32, false);
+        let (mut primes, mut off) = (0, Vec::new());
+        for line in text.lines() {
+            let l = line.split(';').next().unwrap_or("").trim();
+            if line.starts_with(";LAYER_CHANGE") {
+                layer += 1;
+            } else if layer >= 0 && l.len() >= 2 && l.starts_with('T') && l[1..].parse::<u8>().is_ok() {
+                changed = true;
+            } else if l.starts_with("G0 ") || l.starts_with("G1 ") {
+                let mut e = None;
+                let mut moved = false;
+                for w in l.split_whitespace().skip(1) {
+                    let (k, v) = w.split_at(1);
+                    match (k, v.parse::<f32>()) {
+                        ("X", Ok(v)) => { x = v; moved = true; }
+                        ("Y", Ok(v)) => { y = v; moved = true; }
+                        ("E", Ok(v)) => e = Some(v),
+                        _ => {}
+                    }
+                }
+                if changed && !moved && e.is_some_and(|e| e >= 3.0) {
+                    primes += 1;
+                    if on_pillar(x, y, 4.0).is_none() {
+                        off.push((layer, x, y));
+                    }
+                    changed = false;
+                }
+            }
+        }
+        println!("5. primes after a tool change: {primes}, off the pillars: {}", off.len());
+        assert!(primes > 100, "the U1 primes after its tool changes");
+        assert!(off.is_empty(), "{:?}", &off[..off.len().min(8)]);
+        let st = last.stats.unwrap();
+        println!("time {:?} s, filament {:?} g, tools {:?}", g.meta.print_time_s, g.meta.filament_g, st.tools);
+        discard("pillars");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

@@ -9,17 +9,30 @@
    will be printed: placed in a free corner, moved and turned like a part,
    sent with the plate as `wipe_tower_x` / `wipe_tower_y` /
    `wipe_tower_rotation_angle`. Its size is estimated until a slice tells
-   the real one. */
+   the real one. On a plate whose materials do not bond, the user may
+   choose one tower per material instead (prepare-pillars.js): the same
+   switch, the same boxes, checks and menu, for each pillar. */
 
+/* What is selected of the towers: false, true (the engine's tower) or a
+   pillar's key. */
 PR.towerSel = false;
 
-/* The plate's tower as stored, in the plate and its undo steps. */
-const prTowerStored = (t = PR.tower) => ({ on: !!t.on, x: t.x, y: t.y, rot: t.rot || 0, real: t.real || null });
+/* The plate's tower as stored, in the plate and its undo steps: the
+   engine's tower, and the pillars (the kind chosen, the row's turn, each
+   group split or not, each pillar's place). */
+const prTowerStored = (t = PR.tower) => ({
+  on: !!t.on, x: t.x, y: t.y, rot: t.rot || 0, real: t.real || null,
+  kind: t.kind === "material" ? "material" : "single", row: { rot: t.row?.rot || 0 }, groups: t.groups || {}, pillars: t.pillars || {},
+});
 
-/* A stored tower back (plate, undo step, older plate without one: off). */
+/* A stored tower back (plate, undo step, older plate without one: off, a
+   single tower, no pillars). */
 function prTowerRestore(t) {
-  PR.tower = { on: false, x: null, y: null, rot: 0, real: null, ...(t && typeof t === "object" ? t : {}) };
+  PR.tower = { on: false, x: null, y: null, rot: 0, real: null, kind: "single", row: { rot: 0 }, groups: {}, pillars: {}, ...(t && typeof t === "object" ? t : {}) };
   PR.tower.on = ptOn({ tower: PR.tower });
+  if (PR.tower.kind !== "material") PR.tower.kind = "single";
+  for (const k of ["groups", "pillars"]) if (!PR.tower[k] || typeof PR.tower[k] !== "object") PR.tower[k] = {};
+  if (!PR.tower.row || typeof PR.tower.row !== "object") PR.tower.row = { rot: 0 };
 }
 
 // The plate read at start (prLoadState) holds its tower, or none.
@@ -31,11 +44,19 @@ prTowerRestore(PR.tower);
 async function prTowerFromFile(path) {
   const t = await invoke("plate_tower", { path }).catch(() => null);
   if (!t) return;
-  PR.tower.x = t.x;
-  PR.tower.y = t.y;
-  PR.tower.rot = normDeg(t.rot || 0);
-  PR.tower.real = null;
-  if (t.ours) PR.tower.on = !!t.on;
+  if (t.x != null && t.y != null) {
+    PR.tower.x = t.x;
+    PR.tower.y = t.y;
+    PR.tower.rot = normDeg(t.rot || 0);
+    PR.tower.real = null;
+    if (t.ours) PR.tower.on = !!t.on;
+  }
+  // Snap Studio's own data: one tower per material, its pillars' places.
+  const d = t.ours ? t.snap : null;
+  if (d && typeof d === "object") {
+    const { on, x, y, rot, real } = PR.tower;
+    prTowerRestore({ on, x, y, rot, real, kind: d.kind, row: d.row, groups: d.groups, pillars: d.pillars });
+  }
 }
 
 /* ------------------------------------------------------------ settings */
@@ -90,16 +111,23 @@ async function prTowerLoadProfile() {
   prTowerChanged();
 }
 
+/* The head of each colour of an object, as the slice will send it. */
+function prTowerObjectHeads(o) {
+  const live = typeof headsActive === "function";
+  const pid = live ? headsActive() : "";
+  if (PR.assoc === "colour") return prSliceHeads(o);
+  if (!live) return o.heads || {};
+  return Object.fromEntries(Object.entries(prHeads(o, pid, headsSlots(pid), headsCount(pid))).map(([e, v]) => [e, v.h]));
+}
+
 /* Heads the plate prints with: its sliced objects' colours, and the heads
    the advanced settings send supports, walls or infill to. */
 function prTowerHeads() {
   const live = typeof headsActive === "function";
   const pid = live ? headsActive() : "";
-  const slots = live ? headsSlots(pid) : [];
-  const n = live ? headsCount(pid) : 1;
   const used = new Set();
   for (const o of plSliced(PR.objects, bedState)) {
-    const heads = PR.assoc === "colour" ? prSliceHeads(o) : live ? Object.fromEntries(Object.entries(prHeads(o, pid, slots, n)).map(([e, v]) => [e, v.h])) : o.heads || {};
+    const heads = prTowerObjectHeads(o);
     for (const ext of prColors(o)) used.add(heads[ext] ?? 0);
   }
   if (typeof advHeads === "function") for (const h of Object.values(advHeads({ tower: false }))) used.add(h);
@@ -114,10 +142,11 @@ function prTowerVirtualUsed() {
   return list.length > 0 && plSliced(PR.objects, bedState).some((o) => Object.values(prSliceHeads(o)).some((h) => vhFind(list, h)));
 }
 
-/* Whether the engine prints a tower now, and why not. */
+/* Whether a tower is printed now (either kind), and why not. */
 const prTowerState = (heads = prTowerHeads().size) =>
   ptState({ heads, on: PR.tower.on, sequence: String(prTowerSetting("print_sequence") || "by layer") });
-const prTowerShown = () => PR.tower.on && prTowerState().show;
+/* The engine's own tower is printed (not the pillars). */
+const prTowerShown = () => !!PR.tower.on && prTowerKindNow() === "single";
 
 /* What the size depends on (tower-logic.js ptSizeKey). */
 function prTowerKey(heads = prTowerHeads().size) {
@@ -132,8 +161,8 @@ function prTowerKey(heads = prTowerHeads().size) {
 function prTowerBox() {
   // Off: nothing to work out (this runs on every frame and pointer move).
   if (!PR.tower.on) return null;
-  const heads = prTowerHeads().size;
-  if (!prTowerState(heads).show) return null;
+  const set = prTowerHeads(), heads = set.size;
+  if (prTowerKindNow(set) !== "single") return null;
   const real = PR.tower.real;
   if (real?.box && real.key === prTowerKey(heads)) return { ...real.box, est: false };
   const height = Math.max(0, ...plSliced(PR.objects, bedState).map((o) => shape(o).zmax - shape(o).zmin));
@@ -165,8 +194,10 @@ function prTowerSpot(box = prTowerBox()) {
   return box ? ptSpot(box, PR.bed, prTowerParts(), PR.tower.rot || 0) : null;
 }
 
-/* A tower shown for the first time takes a free corner. */
+/* A tower shown for the first time takes a free corner; pillars, a free
+   place each. */
 function prTowerEnsurePlaced() {
+  prPillarsEnsurePlaced();
   if (PR.tower.x != null || !prTowerShown()) return;
   const s = prTowerSpot();
   if (!s) return;
@@ -175,8 +206,14 @@ function prTowerEnsurePlaced() {
   prSave();
 }
 
-/* "Move it to a free spot": the automatic placement again, one undo step. */
+/* "Move it to a free spot": the automatic placement again, one undo step;
+   the pillars' whole row. */
 function prTowerToSpot() {
+  if (prPillarsShown()) {
+    prRemember();
+    if (!prPillarsPlaceAll()) toast(tr("prepare.tower.no_spot"), true);
+    return prTowerChanged(true);
+  }
   const s = prTowerSpot();
   if (!s) return;
   prRemember();
@@ -194,6 +231,14 @@ function prTowerCheck(box = prTowerBox()) {
   const parts = PR.objects.filter((o) => bedState(o) !== "out");
   const hits = parts.filter((o) => ptConvexOverlap(poly, footprintPoly(o)));
   return { poly, state: ptBedState(PR.tower, box, PR.bed), hits: hits.map((o) => o.id) };
+}
+
+/* Every tower's check on the plate: the engine's, each pillar's.
+   [{ key, check, pillar }] — `key` true or the pillar's key. */
+function prTowerChecks() {
+  if (prPillarsShown()) return prPillars().list.map((p) => ({ key: p.key, pillar: p, check: prPillarCheck(p) })).filter((c) => c.check);
+  const check = prTowerShown() ? prTowerCheck() : null;
+  return check ? [{ key: true, check }] : [];
 }
 
 /* The plate, a part or a setting changed: the tower follows (shown or
@@ -215,12 +260,14 @@ function prTowerSetOn(on) {
   if (PR.tower.on === !!on) return;
   PR.tower.on = !!on;
   if (on) prTowerLoadProfile();
-  if (!prTowerShown()) PR.towerSel = false;
+  if (!prTowerSelValid()) PR.towerSel = false;
   prTowerChanged(true);
 }
 
-/* The overrides a slice sends: the tower's place, with it only. */
+/* The overrides a slice sends: the tower's place, with it only; with the
+   pillars, the engine's tower off and the objects in the list's order. */
 function prTowerOverrides() {
+  if (prPillarsShown()) return pmOverrides();
   if (!prTowerShown() || PR.tower.x == null) return {};
   const n = (v) => String(Math.round(v * 1000) / 1000);
   return { wipe_tower_x: [n(PR.tower.x)], wipe_tower_y: [n(PR.tower.y)], wipe_tower_rotation_angle: n(PR.tower.rot || 0) };
@@ -260,11 +307,24 @@ function prTowerVolumeRange() {
   return { min, max: Math.max(90, Math.round(profile * 2)), profile };
 }
 
-/* Moves and turns, the turn around the box's middle. */
-function prTowerMove(dx, dy) {
+/* Moves (the selected pillar, or the tower) and turns, the turn around
+   the box's middle. */
+function prTowerMove(dx, dy, key = PR.towerSel) {
+  if (typeof key === "string") return prPillarMove(key, dx, dy);
   PR.tower.x = Math.round((PR.tower.x + dx) * 100) / 100;
   PR.tower.y = Math.round((PR.tower.y + dy) * 100) / 100;
 }
+
+/* What the inspector's position fields act on: the tower, or the selected
+   pillar's place; null when nothing shown is selected. */
+function prTowerTarget() {
+  if (PR.towerSel === true) return prTowerShown() && PR.tower.x != null ? PR.tower : null;
+  if (typeof PR.towerSel === "string") return prPillarsShown() ? PR.tower.pillars?.[PR.towerSel] || null : null;
+  return null;
+}
+
+/* The selection still stands for something shown. */
+const prTowerSelValid = () => !PR.towerSel || !!prTowerTarget();
 function prTowerTurn(rot, box = prTowerBox()) {
   if (!box) return;
   const t = ptTurn(PR.tower, box, normDeg(rot));
@@ -273,13 +333,29 @@ function prTowerTurn(rot, box = prTowerBox()) {
 
 /* ------------------------------------------------------------ picking */
 
-/* Distance along the pointer's ray to the tower's box, or null. */
-function prTowerHit(e, ray = prRay(e)) {
-  const box = prTowerBox();
-  if (!box || PR.tower.x == null) return null;
-  const a = (-(PR.tower.rot || 0) * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+/* Distance along the pointer's ray to the nearest tower's box (the
+   engine's tower, or a pillar), or null. */
+const prTowerHit = (e, ray = prRay(e)) => prTowerPick(e, ray)?.dist ?? null;
+
+/* The nearest tower under the pointer: { dist, key } (key true for the
+   engine's tower, else the pillar's), or null. */
+function prTowerPick(e, ray = prRay(e)) {
+  let best = null;
+  const near = (dist, key) => dist != null && (!best || dist < best.dist) && (best = { dist, key });
+  if (prPillarsShown()) {
+    for (const p of prPillars().list) if (Number.isFinite(p.x)) near(prBoxHit(ray, { x: p.x, y: p.y, rot: 0 }, pmBox(p)), p.key);
+  } else {
+    const box = prTowerBox();
+    if (box && PR.tower.x != null) near(prBoxHit(ray, PR.tower, box), true);
+  }
+  return best;
+}
+
+/* Distance along a ray to a box placed at `t` ({ x, y, rot }), or null. */
+function prBoxHit(ray, t, box) {
+  const a = (-(t.rot || 0) * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
   const local = (v, point) => {
-    const x = point ? v[0] - PR.tower.x : v[0], y = point ? v[1] - PR.tower.y : v[1];
+    const x = point ? v[0] - t.x : v[0], y = point ? v[1] - t.y : v[1];
     return [x * c - y * s, x * s + y * c, v[2]];
   };
   const o = local(ray.o, true), d = local(ray.d, false);
@@ -297,9 +373,11 @@ function prTowerHit(e, ray = prRay(e)) {
   return t0 <= t1 ? t0 : null;
 }
 
-/* The tower selected (alone), or not. */
-function prTowerSelect(on) {
-  PR.towerSel = !!on && prTowerShown();
+/* A tower selected (alone: `key` true for the engine's, else a pillar's),
+   or none. */
+function prTowerSelect(on, key = true) {
+  PR.towerSel = on ? key : false;
+  if (!prTowerSelValid()) PR.towerSel = false;
   if (PR.towerSel) PR.sel.clear();
   prRenderInspector();
   prSchedule();
@@ -309,17 +387,27 @@ function prTowerSelect(on) {
 
 const TOWER_GREY = [0.55, 0.56, 0.58];
 
-/* The box, translucent, with darker edges; selected, overlapping or off
-   the plate, it takes the parts' tints. */
+/* The boxes, translucent, with darker edges; selected, overlapping or off
+   the plate, they take the parts' tints. */
 function prTowerDraw(gl, vp, accent) {
+  if (prPillarsShown()) {
+    for (const p of prPillars().list) {
+      const chk = prPillarCheck(p);
+      if (chk) prTowerDrawBox(gl, vp, accent, chk, p.h, PR.towerSel === p.key);
+    }
+    return;
+  }
   const box = prTowerBox();
   const chk = prTowerCheck(box);
-  if (!chk) return;
-  const h = Math.max(box.h, 1);
+  if (chk) prTowerDrawBox(gl, vp, accent, chk, box.h, PR.towerSel === true);
+}
+
+function prTowerDrawBox(gl, vp, accent, chk, height, selected) {
+  const h = Math.max(height, 1);
   const lo = chk.poly.map(([x, y]) => [x, y, 0.05]), hi = chk.poly.map(([x, y]) => [x, y, h]);
   const tint =
     chk.state !== "in" ? [prTok("--danger", [1, 0.23, 0.19]), 0.5]
-    : PR.towerSel ? [accent, 0.4]
+    : selected ? [accent, 0.4]
     : chk.hits.length ? [prTok("--warning", [1, 0.58, 0]), 0.45]
     : null;
   const base = tint ? TOWER_GREY.map((v, i) => v + (tint[0][i] - v) * tint[1]) : TOWER_GREY;
@@ -341,8 +429,8 @@ function prTowerDraw(gl, vp, accent) {
     const j = (i + 1) % 4;
     edges.push(...lo[i], ...lo[j], ...hi[i], ...hi[j], ...lo[i], ...hi[i]);
   }
-  const edge = PR.towerSel ? accent : base.map((v) => v * 0.55);
-  drawSolid(gl, vp, edges, [...edge, PR.towerSel ? 1 : 0.9], gl.LINES);
+  const edge = selected ? accent : base.map((v) => v * 0.55);
+  drawSolid(gl, vp, edges, [...edge, selected ? 1 : 0.9], gl.LINES);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 }
 
@@ -358,11 +446,13 @@ function prTowerLabel(box = prTowerBox(), short = false) {
 /* The hover label, under the pointer. */
 function prTowerHover(e) {
   const tip = $("p-tower-tip");
-  const over = !PR.drag && e && prTowerHit(e) != null && !(prPickDist(e)?.dist < prTowerHit(e));
+  const pick = !PR.drag && e ? prTowerPick(e) : null;
+  const over = !!pick && !(prPickDist(e)?.dist < pick.dist);
   tip.classList.toggle("hidden", !over);
   if (!over) return;
   const rect = $("p-canvas").getBoundingClientRect();
-  tip.textContent = prTowerLabel();
+  const p = typeof pick.key === "string" ? prPillar(pick.key) : null;
+  tip.textContent = p ? prPillarLabel(p) : prTowerLabel();
   tip.style.left = e.clientX - rect.left + "px";
   tip.style.top = e.clientY - rect.top + "px";
 }
@@ -380,24 +470,40 @@ function prTowerRenderSwitch() {
   sw.checked = PR.tower.on;
   sw.disabled = !!st.reason;
   const why = $("p-tower-why");
+  const pillars = prPillarsShown();
   // Off with a virtual head: advised, never turned on for the user.
-  why.textContent = st.reason ? tr(`prepare.tower.why.${st.reason}`) : st.show ? prTowerLabel(undefined, true) : !PR.tower.on && prTowerVirtualUsed() ? tr("prepare.tower.virtual_hint") : "";
+  why.textContent = st.reason ? tr(`prepare.tower.why.${st.reason}`) : st.show && !pillars ? prTowerLabel(undefined, true) : !PR.tower.on && prTowerVirtualUsed() ? tr("prepare.tower.virtual_hint") : "";
   why.classList.toggle("hidden", !why.textContent);
   sw.title = st.reason ? why.textContent : "";
   $("p-tower-row").classList.toggle("off", !!st.reason);
+  // One tower or one per material: only when the materials do not bond.
+  const offered = prPillarOffered();
+  $("p-tower-kind-row").classList.toggle("hidden", !offered);
+  if (!offered) return;
+  document.querySelectorAll("#p-tower-kind [data-kind]").forEach((b) => {
+    const on = b.dataset.kind === (pillars ? "material" : "single");
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", String(on));
+  });
+  $("p-tower-kind-why").textContent = pillars ? tr("prepare.tower.per_material", { list: prPillarList() }) : tr("prepare.tower.per_material_why");
 }
 
 /* The inspector for the tower: its corner, its turn, its prime volume
    (prepare.js PF, sliders or typed as the objects'), its size and what is
    wrong with its place. */
 function prTowerRenderProps() {
-  const on = PR.towerSel && prTowerShown() && PR.tower.x != null;
-  $("p-tower-props").classList.toggle("hidden", !on);
-  if (!on) return false;
+  const t = prTowerTarget();
+  $("p-tower-props").classList.toggle("hidden", !t);
+  if (!t) return false;
   $("p-insp").classList.remove("hidden");
   $("p-props").classList.add("hidden");
+  const pillar = typeof PR.towerSel === "string" ? prPillar(PR.towerSel) : null;
+  $("p-tower-props").classList.toggle("pillar", !!pillar);
+  if (pillar) return prPillarRenderProps(pillar);
   $("p-insp-name").textContent = $("p-insp-name").title = tr("prepare.tower");
-  for (const [id, f] of Object.entries(PF)) if (f.tower) prRenderField(id, f, f.get(PR.tower));
+  $("p-tower-corner").textContent = tr("prepare.tower.corner");
+  $("p-trot-sec").classList.remove("hidden");
+  for (const [id, f] of Object.entries(PF)) if (f.tower) prRenderField(id, f, f.get(t));
   // Less than the profile purges: colours may mix at head changes.
   const vol = PF["p-tvol"].get(), lim = prTowerVolumeRange();
   $("p-tvol-note").classList.toggle("hidden", !(vol < lim.profile));
@@ -409,14 +515,43 @@ function prTowerRenderProps() {
   return true;
 }
 
-/* The slice sheet's warning: the tower on a part (the engine refuses
-   such a plate) or off the plate (slicing waits for it), with the way
-   out. */
+/* A pillar's inspector: its name, its heads (outer ring first), its exact
+   size (Snap Studio makes it), its place, the row's turn while it is in
+   the row, one pillar per head for its group, what is wrong with its
+   place. No prime volume: with the engine's tower off it does nothing. */
+function prPillarRenderProps(p) {
+  $("p-insp-name").textContent = $("p-insp-name").title = prPillarName(p);
+  $("p-tower-corner").textContent = tr("prepare.tower.center");
+  const target = prTowerTarget();
+  for (const [id, f] of Object.entries(PF)) if (f.tower && !f.setting && id !== "p-trot") prRenderField(id, f, f.get(target));
+  // The row turns while its pillars are together; one moved out of it has
+  // only a position.
+  const inRow = !target.moved && Object.values(PR.tower.pillars).filter((c) => !c.moved).length > 1;
+  $("p-trot-sec").classList.toggle("hidden", !inRow);
+  if (inRow) prRenderField("p-trot", PF["p-trot"], PF["p-trot"].get(target));
+  // Its heads as tokens, the outer ring first.
+  const slots = typeof headsActive === "function" ? headsSlots(headsActive()) : [];
+  $("p-pillar-heads").innerHTML = p.heads.map((n) => headToken({ h: n, slot: slots.find((x) => x.index === n), tag: "span" })).join("");
+  const group = PR.tower.groups?.[p.group] || {};
+  const several = (pmGroups(prPillarHeads()).find((g) => g.key === p.group)?.heads.length || 1) > 1;
+  $("p-pillar-split-row").classList.toggle("hidden", !several);
+  $("p-pillar-split").checked = !!group.split;
+  $("p-pillar-split-sub").textContent = tr(group.split === "auto" ? "prepare.tower.split_auto" : "prepare.tower.split_sub");
+  $("p-tower-dims").textContent = tr("prepare.tower.dims", { size: [p.d, p.d, p.h].map((v) => fmtDec(v, 0)).join(" × ") });
+  const chk = prPillarCheck(p);
+  const warn = !chk ? "" : chk.state !== "in" ? tr("prepare.tower.off_plate") : chk.hits.length ? tr("prepare.tower.overlap") : "";
+  $("p-tower-warn").textContent = warn;
+  $("p-tower-warn").classList.toggle("hidden", !warn);
+  return true;
+}
+
+/* The slice sheet's warning: a tower on a part (the engine refuses such a
+   plate) or off the plate (slicing waits for it), with the way out. */
 function prTowerSheetWarning() {
   const box = $("s-tower-place");
   if (!box) return;
-  const chk = prTowerShown() ? prTowerCheck() : null;
-  const kind = !chk ? "" : chk.state !== "in" ? "off_plate" : chk.hits.length ? "overlap" : "";
+  const checks = prTowerChecks().map((c) => c.check);
+  const kind = checks.some((c) => c.state !== "in") ? "off_plate" : checks.some((c) => c.hits.length) ? "overlap" : "";
   const html = kind
     ? `<span class="sl-tower-t">${esc(tr(`slice.tower.place.${kind}`))}</span><span class="sl-tower-acts"><button class="btn small" data-tower-spot>${esc(tr("prepare.tower.spot"))}</button></span>`
     : "";
@@ -428,11 +563,19 @@ function prTowerSheetWarning() {
 
 /* Off the plate, the engine would print it there: slicing waits, as for
    a part sticking out. */
-const prTowerBlocks = () => prTowerShown() && prTowerCheck()?.state !== "in" && PR.tower.x != null;
+const prTowerBlocks = () => prTowerChecks().some((c) => c.check.state !== "in");
 
 /* ------------------------------------------------------------ events */
 
 $("p-tower-sw").addEventListener("change", (e) => prTowerSetOn(e.target.checked));
+$("p-tower-kind").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-kind]");
+  if (b) prTowerSetKind(b.dataset.kind);
+});
+$("p-pillar-split").addEventListener("change", (e) => {
+  const p = typeof PR.towerSel === "string" ? prPillar(PR.towerSel) : null;
+  if (p) prPillarSetSplit(p.group, e.target.checked);
+});
 $("s-tower-place").addEventListener("click", (e) => {
   if (!e.target.closest("[data-tower-spot]")) return;
   prTowerToSpot();
@@ -443,9 +586,9 @@ onMenu("tower", (what) => {
   if (what === "off") prTowerSetOn(false);
 });
 
-/* The tower's menu, from the plate. */
-function prTowerMenu(x, y) {
-  prTowerSelect(true);
+/* The tower's menu, from the plate (`key`: the tower or pillar clicked). */
+function prTowerMenu(x, y, key = true) {
+  prTowerSelect(true, key);
   nativeMenu([
     { id: "tower:spot", label: tr("prepare.tower.spot") },
     {},

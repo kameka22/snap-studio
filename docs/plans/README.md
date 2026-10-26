@@ -10,6 +10,7 @@ lists below.
 |---|---|---|
 | [ai-setup.md](ai-setup.md) | AI dependency checks per mode (welcome step and Settings), AI locked until a mode is ready; Settings with a side menu | Implemented; checks on the Mac left (see the plan) |
 | [ai-chat.md](ai-chat.md) | AI conversations as a real chat view (Claude Code stream-json), terminal kept as advanced view | Implemented, with the Claude sign-in window; since #25 the Terminal tab shows the chat's own session (read only). Container mode and macOS checks left (see the plan) |
+| [prime-tower-per-material.md](prime-tower-per-material.md) | One prime tower per material: pillars per group of materials that bond (concentric rings, one per head), engine tower off, list order | Implemented in draft PR [#37](https://github.com/kameka22/snap-studio/pull/37); checks on the U1 left (see the plan) |
 
 ## Planned
 
