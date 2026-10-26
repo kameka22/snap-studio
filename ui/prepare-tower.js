@@ -103,7 +103,15 @@ function prTowerHeads() {
     for (const ext of prColors(o)) used.add(heads[ext] ?? 0);
   }
   if (typeof advHeads === "function") for (const h of Object.values(advHeads({ tower: false }))) used.add(h);
-  return used;
+  // A virtual head prints with its two heads; an orphan with none.
+  return vhPhysical(used, headsVirtual(pid));
+}
+
+/* The plate uses a virtual head: it changes heads at every layer. */
+function prTowerVirtualUsed() {
+  const list = headsVirtual(headsActive());
+  // A virtual head is always a choice: in the heads the slice gets.
+  return list.length > 0 && plSliced(PR.objects, bedState).some((o) => Object.values(prSliceHeads(o)).some((h) => vhFind(list, h)));
 }
 
 /* Whether the engine prints a tower now, and why not. */
@@ -372,7 +380,8 @@ function prTowerRenderSwitch() {
   sw.checked = PR.tower.on;
   sw.disabled = !!st.reason;
   const why = $("p-tower-why");
-  why.textContent = st.reason ? tr(`prepare.tower.why.${st.reason}`) : st.show ? prTowerLabel(undefined, true) : "";
+  // Off with a virtual head: advised, never turned on for the user.
+  why.textContent = st.reason ? tr(`prepare.tower.why.${st.reason}`) : st.show ? prTowerLabel(undefined, true) : !PR.tower.on && prTowerVirtualUsed() ? tr("prepare.tower.virtual_hint") : "";
   why.classList.toggle("hidden", !why.textContent);
   sw.title = st.reason ? why.textContent : "";
   $("p-tower-row").classList.toggle("off", !!st.reason);

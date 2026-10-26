@@ -185,6 +185,11 @@ assert.strictEqual(L.plTools({ n: 1 })["p-save"].on, true);
   assert.equal(back[4], undefined, "off-plate objects are left alone");
   // Nothing on the plate: nothing to map, nothing blocks.
   assert.deepEqual(L.plMigrateToColour([], stateOf, headsOf, []), {});
+  // Virtual heads and orphans (a virtual head deleted since) go across as
+  // they are: never turned into a physical head.
+  const vobjs = [{ id: 1, st: "in", heads: { 1: 101, 2: 105 } }, { id: 2, st: "in", heads: { 1: 101 } }];
+  assert.deepEqual(L.plMigrateToColour(vobjs, stateOf, (o) => o.heads, [1, 2]), { 1: 101, 2: 105 });
+  assert.deepEqual(L.plMigrateToObject(vobjs, stateOf, () => [1, 2], { 1: 101, 2: 105 }), { 1: { 1: 101, 2: 105 }, 2: { 1: 101, 2: 105 } });
   assert.deepEqual(L.plUnmapped([], {}), []);
 }
 

@@ -129,12 +129,20 @@ function headToken({ h, slot = null, on = false, tag = "button", cls = "", attrs
   return `<${tag} class="sl-token${on ? " on" : ""}${empty ? " is-empty" : ""}${unknown ? " no-colour" : ""}${cls}"${attrs}${title ? ` title="${esc(title)}"` : ""}><i${dot}></i>T${h}${after}</${tag}>`;
 }
 
+/* A virtual head as a chip (virtual-logic.js): its mix ringed with its two
+   heads' colors, its name ("V1"); `gone`: one deleted since, "?" dashed. */
+function vhToken({ name = "", color = "", ca = "", cb = "", on = false, gone = false, tag = "span", cls = "", attrs = "", title = "", after = "" }) {
+  const dot = gone ? "" : ` style="--c:${esc(color || "transparent")};--ca:${esc(ca || "transparent")};--cb:${esc(cb || "transparent")}"`;
+  return `<${tag} class="sl-token sl-vtoken${on ? " on" : ""}${gone ? " is-gone" : ""}${cls}"${attrs}${title ? ` title="${esc(title)}"` : ""}><i${dot}></i>${esc(gone ? "V?" : name)}${after}</${tag}>`;
+}
+
 /* ------------------------------------------------------------ head swatches */
 
 /* An entry of a head picker (swatch-logic.js swEntries) as a token. */
 function swToken(e, on = false) {
   // "Automatic": a dashed dot, its words beside or below it.
   if (e.state === "auto") return `<span class="sl-token sw-auto${on ? " on" : ""}"><i></i>${e.warn ? "<em>⚠</em>" : ""}</span>`;
+  if (e.v) return vhToken({ name: e.v.name, color: e.color, ca: e.v.ca, cb: e.v.cb, on, gone: !!e.v.gone, after: e.warn ? "<em>⚠</em>" : "" });
   return headToken({
     h: e.h, tag: "span", on, title: "", color: e.color,
     empty: e.state === "empty" || e.state === "unavailable",
@@ -147,13 +155,14 @@ function swToken(e, on = false) {
 function swText(e) {
   if (e.state === "auto") return tr("swatch.auto");
   if (e.state === "unavailable") return tr("swatch.unavailable");
+  if (e.v) return `T${e.v.a} + T${e.v.b} · ${e.v.ratio}`;
   const name = e.color && typeof colorName === "function" ? colorName(e.color) : "";
   return [e.kind, name].filter(Boolean).join(" · ") || (e.state === "empty" ? tr("swatch.empty") : "—");
 }
 /* A word under a head: why it may not do. `warnTag`: the picker's word for a flagged head. */
 const swTag = (e, warnTag = "") =>
   e.warn && warnTag ? warnTag : e.state === "empty" ? tr("swatch.empty") : e.state === "unknown" ? tr("swatch.unknown_colour") : "";
-const swName = (e) => (e.state === "auto" ? tr("swatch.auto") : `T${e.h} · ${swText(e)}`);
+const swName = (e) => (e.state === "auto" ? tr("swatch.auto") : e.v && !e.v.gone ? [e.v.name, swText(e), e.color && colorName(e.color)].filter(Boolean).join(" · ") : e.v ? swText(e) : `T${e.h} · ${swText(e)}`);
 
 /* A grid of choices in the search picker's shell, without its search:
    one Tab stop, arrows between them (in 2D with `columns`), Enter picks,
@@ -163,7 +172,11 @@ const swName = (e) => (e.state === "auto" ? tr("swatch.auto") : `T${e.h} · ${sw
    the button's class, `title(item)` its tooltip; `foot`: an action below
    ({ label, onClick }); `note`: a line under the grid; `head`: a title
    above it. Serves the head popover and the visual picker (visual.js). */
-function openGrid(at, { items, value, onPick, renderItem, optCls = "sw-opt", gridCls = "sw-grid", popCls = "sw-pop", title = () => "", columns = 1, foot = null, note = "", head = "", label = "" }) {
+function openGrid(at, { items, groups = null, value, onPick, renderItem, optCls = "sw-opt", gridCls = "sw-grid", popCls = "sw-pop", title = () => "", columns = 1, foot = null, note = "", head = "", label = "" }) {
+  // Several grids, each under its title (the head popover's virtual heads):
+  // one Tab stop and the arrows across all of them.
+  groups ||= [{ head, items }];
+  items = groups.flatMap((g) => g.items);
   closePicker();
   const anchor = at instanceof Element ? at : null;
   Object.assign(PK, { sections: [], value, onPick, foot, anchor, grid: true, columns, prep: false, back: anchor || document.activeElement });
@@ -175,12 +188,15 @@ function openGrid(at, { items, value, onPick, renderItem, optCls = "sw-opt", gri
   $("picker-foot").classList.toggle("hidden", !foot);
   if (foot) $("picker-foot").textContent = foot.label;
   const cur = items.find((e) => e.value === value && !e.disabled) || items.find((e) => !e.disabled);
-  $("picker-list").innerHTML = `${head ? `<div class="picker-section">${esc(head)}</div>` : ""}<div class="${gridCls}" role="listbox" aria-label="${esc(label)}"${columns > 1 ? ` style="--cols:${columns}"` : ""}>${items
-    .map((e) => {
-      const on = e.value === value;
-      return `<button type="button" class="${optCls}${on ? " on" : ""}" role="option" aria-selected="${on}" data-v="${esc(e.value)}" tabindex="${e === cur ? 0 : -1}"${e.disabled ? " disabled" : ""} title="${esc(title(e))}">${renderItem(e, on)}</button>`;
-    })
-    .join("")}</div>${note ? `<div class="sw-note">${esc(note)}</div>` : ""}`;
+  $("picker-list").innerHTML = groups
+    .filter((g) => g.items.length)
+    .map((g) => `${g.head ? `<div class="picker-section">${esc(g.head)}</div>` : ""}<div class="${gridCls}" role="listbox" aria-label="${esc(g.head || label)}"${columns > 1 ? ` style="--cols:${columns}"` : ""}>${g.items
+      .map((e) => {
+        const on = e.value === value;
+        return `<button type="button" class="${optCls}${on ? " on" : ""}" role="option" aria-selected="${on}" data-v="${esc(e.value)}" tabindex="${e === cur ? 0 : -1}"${e.disabled ? " disabled" : ""} title="${esc(title(e))}">${renderItem(e, on)}</button>`;
+      })
+      .join("")}</div>`)
+    .join("") + (note ? `<div class="sw-note">${esc(note)}</div>` : "");
   el.classList.remove("hidden");
   pkPlace(anchor ? anchor.getBoundingClientRect() : { left: at.x, top: at.y, bottom: at.y });
   anchor?.setAttribute("aria-expanded", "true");
@@ -188,9 +204,11 @@ function openGrid(at, { items, value, onPick, renderItem, optCls = "sw-opt", gri
 }
 
 /* The head popover: a grid of heads. `entries`: swEntries; `warnTag`: the
-   word under a flagged head. */
-function openSwatches(at, { entries, value, onPick, foot = null, note = "", label = "", warnTag = "" }) {
+   word under a flagged head; `virtual`: virtual heads (swVirtual), in
+   their own section under the physical ones. */
+function openSwatches(at, { entries, virtual = null, value, onPick, foot = null, note = "", label = "", warnTag = "" }) {
   openGrid(at, {
+    groups: virtual ? [{ head: tr("swatch.physical"), items: entries }, { head: tr("swatch.virtual"), items: virtual }] : null,
     items: entries,
     value,
     onPick,
@@ -515,13 +533,19 @@ function slTokens() {
     if (!box) return;
     const [gi, ext] = sel.dataset.key.split(":").map(Number);
     const fil = SL.models.find((m) => m.path === SL.groups[gi]?.path)?.filaments.find((f) => f.index === ext);
+    // A virtual head: its token after the physical ones, or "Choose" once
+    // it is gone (the slice waits for Prepare).
+    const pid = currentPrinter()?.id || "", list = headsVirtual(pid), v = +sel.value;
+    const virt = !vhIs(v) ? "" : vhFind(list, v)
+      ? vhToken({ name: vhName(list, v), color: headsColorOf(pid, v), ca: hdSpoolColor(pid, vhFind(list, v).a), cb: hdSpoolColor(pid, vhFind(list, v).b), on: true, cls: " ro" })
+      : `<span class="sl-token p-choose ro">${esc(tr("prepare.choose_head"))}</span>`;
     box.innerHTML = Array.from({ length: n }, (_, h) => {
       const slot = SL.slots.find((s) => s.index === h);
       const empty = slot && !slot.present;
       const clash = slot?.present && fil?.kind && slot.kind && fil.kind.toUpperCase() !== slot.kind.toUpperCase();
       const title = `T${h}${slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : ""}${clash ? " · " + tr("slice.material_clash") : ""}`;
       return headToken({ h, slot, tag: "span", cls: " ro", on: +sel.value === h, empty, title, after: clash ? "<em>⚠</em>" : "" });
-    }).join("");
+    }).join("") + virt;
   });
 }
 

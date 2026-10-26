@@ -1117,7 +1117,7 @@ function prStatus() {
   const blockers = prBlockers();
   // The prime tower off the plate: the engine would print it there.
   const towerOut = typeof prTowerBlocks === "function" && prTowerBlocks();
-  const blocked = blockers.colours.length + blockers.objects.length + (towerOut ? 1 : 0);
+  const blocked = blockers.colours.length + blockers.objects.length + blockers.orphans.length + (towerOut ? 1 : 0);
   const tools = plTools({
     n,
     sel: PR.sel.size,
@@ -1142,6 +1142,7 @@ function prStatus() {
   slice.title = [
     blockers.colours.length ? tr("prepare.tip.unmapped", { n: blockers.colours.length }) : "",
     blockers.objects.length ? tr("prepare.tip.uncoloured", { n: blockers.objects.length }) : "",
+    blockers.orphans.length ? tr("prepare.tip.orphan", { n: blockers.orphans.length }) : "",
     g.partial ? tr("prepare.tip.partial", { n: g.partial }) : "",
     towerOut ? tr("prepare.tower.off_plate") : "",
     g.off.length ? tr("prepare.tip.off", { n: g.off.length }) : "",
@@ -1178,6 +1179,8 @@ const PRUI = (() => {
     assocDefault: s.assocDefault === "colour" ? "colour" : "object",
     /* The modal explaining the two modes was dismissed for good. */
     assocExplained: !!s.assocExplained,
+    /* The sheet saying a virtual head goes with its spools, likewise. */
+    vhExplained: !!s.vhExplained,
   };
 })();
 const pruiSave = () =>
@@ -1190,6 +1193,7 @@ const pruiSave = () =>
       split: PRUI.split,
       assocDefault: PRUI.assocDefault,
       assocExplained: PRUI.assocExplained,
+      vhExplained: PRUI.vhExplained,
     })
   );
 
@@ -1218,6 +1222,12 @@ function prRenderInspector() {
     if (PR.assoc === "colour" && st !== "out" && (o.pick != null || !prOwnColours(o).length)) {
       if (o.pick == null) {
         pickUi = `<button type="button" class="p-ico p-warn" data-pick="${o.id}" title="${esc(tr("prepare.colour.missing"))}">${PR_ICON.warn}</button>`;
+      } else if (vhIs(o.pick)) {
+        // A virtual head, or one deleted since: no head until one is chosen.
+        const v = vhFind(headsVirtual(pid), o.pick);
+        pickUi = v
+          ? vhToken({ name: vhName(headsVirtual(pid), o.pick), color: headsColorOf(pid, o.pick), ca: hdSpoolColor(pid, v.a), cb: hdSpoolColor(pid, v.b), tag: "button", cls: " p-chip", attrs: ` type="button" data-pick="${o.id}"`, title: tr("prepare.colour.change", { h: vhName(headsVirtual(pid), o.pick) }) })
+          : `<button type="button" class="p-chip p-choose" data-pick="${o.id}">${esc(tr("prepare.choose_head"))}</button><span class="tag warn">${esc(tr("prepare.no_head"))}</span>`;
       } else {
         const s = slots.find((x) => x.index === o.pick);
         const c = s?.present && s.color ? s.color : "";
@@ -1237,11 +1247,13 @@ function prRenderInspector() {
     // No colour/heads frame off the plate, nor in "by colour" mode: the
     // plate's banner holds the choices then.
     const bare = out || PR.assoc === "colour";
-    const open = !bare && !PR.fold.has(o.id);
     const heads = live && !bare ? prHeads(o, pid, slots, n) : {};
-    const spool = (h) => slots.find((x) => x.index === h);
+    // A color left without a head (its virtual head deleted) unfolds its
+    // row: it has to be chosen again.
+    const open = !bare && (!PR.fold.has(o.id) || Object.values(heads).some((x) => x.orphan));
     const dots = [...new Set(Object.values(heads).map((x) => x.h))]
-      .map((h) => spool(h)?.present && spool(h).color ? `<i style="background:${esc(spool(h).color)}"></i>` : "")
+      .map((h) => headsColorOf(pid, h))
+      .map((c) => (c ? `<i style="background:${esc(c)}"></i>` : ""))
       .join("");
     const head = `<div class="grow-row p-obj${PR.sel.has(o.id) ? " on" : ""}" data-id="${o.id}" role="button" tabindex="0">
       ${bare ? `<span class="p-tw"></span>` : `<span class="p-tw" data-fold="${o.id}">${open ? "▾" : "▸"}</span>`}
@@ -1250,14 +1262,12 @@ function prRenderInspector() {
     const model = headsModelNow(o.path);
     return head + prColors(o).map((ext) => {
       const f = model?.filaments?.find((x) => x.index === ext);
-      const tokens = Array.from({ length: n }, (_, h) =>
-        headToken({ h, slot: spool(h), on: heads[ext]?.h === h, attrs: ` data-obj="${o.id}" data-ext="${ext}" data-h="${h}"` })
-      ).join("");
+      const cur = heads[ext];
       const label = tr("slice.color_n", { n: ext });
       return `<div class="p-color" title="${esc([label, f?.kind, f?.color].filter(Boolean).join(" · "))}">
         <span class="p-sw" style="background:${esc(f?.color || "#999")}"></span>
-        <span class="p-color-lbl">${esc(label)}</span>
-        <span class="p-toks">${tokens}</span>
+        <span class="p-color-lbl">${esc(label)}${cur?.orphan ? ` <span class="tag warn">${esc(tr("prepare.no_head"))}</span>` : ""}</span>
+        <span class="p-toks">${prHeadToken(cur?.orphan ? null : cur?.h, { pid, slots, n, own: cur?.own, attrs: ` data-obj="${o.id}" data-ext="${ext}"` })}</span>
       </div>`;
     }).join("");
   };
@@ -1687,10 +1697,17 @@ $("p-list").addEventListener("click", (e) => {
     prFixMenu(+fix.dataset.fix, r.left, r.bottom + 2);
     return;
   }
-  const tok = e.target.closest("[data-h]");
+  // A color's head: the popover, physical and virtual heads.
+  const tok = e.target.closest("[data-hpick]");
   if (tok) {
-    if (tok.dataset.ch != null) prSetColourHead(+tok.dataset.ch, +tok.dataset.h);
-    else prSetHead(PR.objects.find((o) => o.id === +tok.dataset.obj), +tok.dataset.ext, +tok.dataset.h);
+    if (PK.prep && PK.anchor === tok && !$("picker").classList.contains("hidden")) return closePicker(true);
+    if (tok.dataset.ch != null) {
+      const ext = +tok.dataset.ch;
+      prHeadPicker(tok, PR.colourHeads[ext], (h) => prSetColourHead(ext, h));
+    } else {
+      const o = PR.objects.find((x) => x.id === +tok.dataset.obj), ext = +tok.dataset.ext;
+      if (o) prHeadPicker(tok, prHeads(o)[ext]?.h, (h) => prSetHead(o, ext, h));
+    }
     return;
   }
   const row = e.target.closest(".p-obj");
@@ -2682,7 +2699,79 @@ function prHeads(o, pid = headsActive(), slots = headsSlots(pid), n = headsCount
   const out = {};
   for (const ext of colors) {
     const own = o.heads?.[ext];
-    out[ext] = own != null && own < n ? { h: own, own: true } : { h: base[ext].h, own: false };
+    // A virtual head is kept as chosen; one deleted since is an orphan,
+    // "no head": never replaced by the deduced head behind the user's back.
+    if (vhIs(own)) out[ext] = { h: own, own: true, orphan: vhOrphan(headsVirtual(pid), own) };
+    else out[ext] = own != null && own < n ? { h: own, own: true } : { h: base[ext].h, own: false };
+  }
+  return out;
+}
+
+/* A color's head as one token button, opening the head popover: a
+   physical head, a virtual head, or "Choose" when it has none (`h` null).
+   `own`: chosen by the user, rather than deduced (outlined). One head
+   and no virtual head: nothing to choose, a plain token. */
+function prHeadToken(h, { pid = headsActive(), slots = headsSlots(pid), n = headsCount(pid), own = true, attrs = "" } = {}) {
+  const list = headsVirtual(pid);
+  const button = n > 1 || list.length ? ` type="button" data-hpick aria-haspopup="listbox"${attrs}` : attrs;
+  const tag = n > 1 || list.length ? "button" : "span";
+  const caret = button !== attrs ? `<span class="p-caret" aria-hidden="true">▾</span>` : "";
+  if (h == null) return `<${tag} class="sl-token p-choose"${button}>${esc(tr("prepare.choose_head"))}${caret}</${tag}>`;
+  if (vhIs(h)) {
+    const v = vhFind(list, h);
+    const name = vhName(list, h);
+    return vhToken({ name, color: headsColorOf(pid, h), ca: hdSpoolColor(pid, v.a), cb: hdSpoolColor(pid, v.b), on: own, tag, cls: " p-tok", attrs: button, title: `${name} · T${v.a} + T${v.b} · ${vhRatio(v.pct)}`, after: caret });
+  }
+  return headToken({ h, slot: slots.find((x) => x.index === h), on: own, tag, cls: " p-tok", attrs: button, after: caret });
+}
+
+/* The head popover for a color: the physical heads, the printer's virtual
+   heads, and "Create a virtual head…" (picked for that color once made). */
+function prHeadPicker(anchor, value, onPick) {
+  const pid = headsActive(), slots = headsSlots(pid), n = headsCount(pid);
+  const list = headsVirtual(pid);
+  const v = value == null || vhOrphan(list, value) ? null : String(value);
+  const canMake = pid && vhCanAdd(list) && vhLoaded(slots).length >= 2;
+  openSwatches(anchor, {
+    entries: swEntries(swHeads({ count: n, slots }), { value: v != null && !vhIs(v) ? v : null }),
+    virtual: list.length ? vsEntries(pid) : null,
+    value: v,
+    label: tr("swatch.choose_head"),
+    note: slots.length ? "" : tr("swatch.connect"),
+    foot: canMake ? { label: tr("swatch.create_virtual"), onClick: () => (closePicker(), vsOpen(pid, { done: onPick })) } : null,
+    onPick: (x) => onPick(+x),
+  });
+  PK.prep = true;
+}
+
+/* How many of the plate's colors use these head values (virtual heads
+   being deleted): by object, each object's color; by colour, each plate
+   colour and each object with its own pick. */
+function prVirtualUsers(values) {
+  const set = new Set(values.map(Number));
+  let n = 0;
+  for (const o of PR.objects) {
+    if (bedState(o) === "out") continue;
+    if (PR.assoc === "colour") n += set.has(+o.pick) ? 1 : 0;
+    else n += prColors(o).filter((ext) => set.has(+o.heads?.[ext])).length;
+  }
+  if (PR.assoc === "colour") n += Object.values(PR.colourHeads).filter((h) => set.has(+h)).length;
+  return n;
+}
+
+/* The plate's colors left without a head (a virtual head deleted since),
+   in either mode: they block the slice until one is chosen. */
+function prOrphans() {
+  // Declarations: prStatus may run before heads.js is read.
+  if (typeof headsActive !== "function") return [];
+  const pid = headsActive(), list = headsVirtual(pid);
+  const out = [];
+  const on = PR.objects.filter((o) => bedState(o) !== "out");
+  if (PR.assoc === "colour") {
+    for (const ext of plPlateColours(PR.objects, bedState, prBannerColours)) if (vhOrphan(list, PR.colourHeads[ext])) out.push({ ext });
+    for (const o of on) if (vhOrphan(list, o.pick)) out.push({ o });
+  } else {
+    for (const o of on) for (const ext of prColors(o)) if (vhOrphan(list, o.heads?.[ext])) out.push({ o, ext });
   }
   return out;
 }
@@ -2715,10 +2804,12 @@ function prPlateColours() {
    a head, and the uncoloured objects without a picked one. Declarations:
    `prStatus` may run before this point of the file. */
 function prBlockers() {
-  if (PR.assoc !== "colour") return { colours: [], objects: [] };
+  const orphans = prOrphans();
+  if (PR.assoc !== "colour") return { colours: [], objects: [], orphans };
   return {
     colours: plUnmapped(plPlateColours(PR.objects, bedState, prBannerColours), PR.colourHeads),
     objects: plUncoloured(PR.objects, bedState, prOwnColours),
+    orphans,
   };
 }
 function prUnmapped() {
@@ -2759,10 +2850,12 @@ function prColourPalette(o, x, y, anchor = null) {
   if (!o) return;
   const pid = headsActive(), slots = headsSlots(pid), n = headsCount(pid);
   const pal = plPalette(o.pick, n);
-  if (pal.single && !pal.plate) return prSetPick(o, 0);
+  if (pal.single && !pal.plate && !headsVirtual(pid).length) return prSetPick(o, 0);
+  const list = headsVirtual(pid);
   openSwatches(anchor || { x, y }, {
     entries: swHeads({ count: pal.heads.length, slots }),
-    value: o.pick == null ? null : String(o.pick),
+    virtual: list.length ? vsEntries(pid) : null,
+    value: o.pick == null || vhOrphan(list, o.pick) ? null : String(o.pick),
     label: tr("prepare.menu.colour"),
     note: slots.length ? "" : tr("swatch.connect"),
     foot: pal.plate ? { label: tr("prepare.colour.plate"), onClick: () => (closePicker(true), prSetPick(o, null)) } : null,
@@ -2791,18 +2884,17 @@ function prColourAction(o, x, y) {
 function prColourBanner(live, slots, n) {
   const cols = prPlateColours();
   if (!cols.length) return "";
-  const spool = (h) => slots.find((x) => x.index === h);
   const rows = cols
     .map(({ ext, kind, color }) => {
       const cur = PR.colourHeads[ext];
-      const unmapped = cur == null;
-      const tokens = live
-        ? Array.from({ length: n }, (_, h) => headToken({ h, slot: spool(h), on: cur === h, attrs: ` data-ch="${ext}" data-h="${h}"` })).join("")
-        : "";
+      // Never chosen, or its virtual head deleted since.
+      const orphan = vhOrphan(headsVirtual(live ? headsActive() : ""), cur);
+      const unmapped = cur == null || orphan;
+      const tokens = live ? prHeadToken(unmapped ? null : cur, { slots, n, own: true, attrs: ` data-ch="${ext}"` }) : "";
       const label = tr("slice.color_n", { n: ext });
       return `<div class="p-color${unmapped ? " unmapped" : ""}" title="${esc([label, kind, color].filter(Boolean).join(" · "))}">
         <span class="p-sw" style="background:${esc(color || "#999")}"></span>
-        <span class="p-color-lbl">${esc(label)}${unmapped ? ` <span class="tag warn">${esc(tr("prepare.assoc.unmapped"))}</span>` : ""}</span>
+        <span class="p-color-lbl">${esc(label)}${unmapped ? ` <span class="tag warn">${esc(tr(orphan ? "prepare.no_head" : "prepare.assoc.unmapped"))}</span>` : ""}</span>
         <span class="p-toks">${tokens}</span>
       </div>`;
     })
@@ -2915,8 +3007,8 @@ function prHeadColors(gl, o, mesh) {
   if (pid) {
     const slots = headsSlots(pid);
     for (const [ext, h] of Object.entries(prShownHeads(o, pid, slots))) {
-      const s = slots.find((x) => x.index === h);
-      const rgb = s?.present && s.color ? hexToRgb(s.color) : null;
+      // A virtual head shows its mix; an orphan keeps the file's color.
+      const rgb = hexToRgb(headsColorOf(pid, h));
       if (!rgb || ext > 16) continue;
       on[ext] = 1;
       col.set(rgb.map((v) => v / 255), ext * 3);
@@ -2975,8 +3067,15 @@ function prRefreshSpools() {
   const pid = headsActive();
   if (pid) headsRefreshSlots(pid);
 }
-window.addEventListener("headschange", () => {
+window.addEventListener("headschange", (e) => {
   if (window.currentView !== "prepare") return;
+  // A mix's color from the engine: only colors change, the choices do
+  // not; an open popover stays (the list is redrawn once it closes).
+  if (e.detail?.what === "mix") {
+    prSchedule();
+    if (!(PK.prep && PK.grid && !$("picker").classList.contains("hidden"))) prRenderInspector();
+    return;
+  }
   prPaletteClose();
   prRenderInspector();
   prSchedule();

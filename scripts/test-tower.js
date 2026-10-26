@@ -140,4 +140,13 @@ const k = T.ptSizeKey([["a.3mf#0", [0, 0, 0], [1, 1, 1]]], { heads: 2, width: 35
 assert.strictEqual(k, T.ptSizeKey([["a.3mf#0", [0, 0, 0], [1, 1, 1]]], { heads: 2, width: 35 }));
 assert.notStrictEqual(k, T.ptSizeKey([["a.3mf#0", [0, 0, 0], [1, 1, 1]]], { heads: 3, width: 35 }));
 
+// A plate printed with a virtual head alone (V1 = T0 + T2) uses two heads:
+// the tower shows.
+{
+  const V = require("../ui/virtual-logic.js");
+  const heads = V.vhPhysical(new Set([101]), [{ uid: 1, a: 0, b: 2, pct: 33 }]);
+  assert.deepStrictEqual(T.ptState({ heads: heads.size, on: true }), { show: true, reason: null });
+  assert.strictEqual(T.ptState({ heads: V.vhPhysical(new Set([103]), []).size, on: true }).reason, "single", "an orphan prints nothing");
+}
+
 console.log("tower: ok");
