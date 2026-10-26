@@ -10,24 +10,26 @@ TPU…), that tower stacks PETG layers on PLA layers: it comes off or
 collapses. Today the slice sheet can only say so (`slice.tower.conflict`)
 and offer "No tower" or an outer wall in one material (#35, #36).
 
-Snap Studio gets the community workaround, automated: **small pillars,
-one per group of materials that bond**, printed as ordinary objects, with
+Snap Studio offers the community workaround, generated for the user:
+**small pillars, one per group of materials that bond**, printed as ordinary objects, with
 the engine's tower turned off.
 
 - A group printed by **one head** gets a plain tube.
 - A group printed by **several heads** gets **one pillar of concentric
   rings**, one ring per head: each head primes on its own ring, the rings
   bond to each other because they are the same material.
-- **One pillar per head** stays available (a choice, and the fallback when
-  a ring pillar finds no room).
-- The pillars are generated in the 3MF (walls only, no infill, no top or
+- **One pillar per head** stays available (a per-group option, and the
+  fallback when a ring pillar finds no room).
+- The pillars are generated in the 3MF sent to the engine (walls only, no infill, no top or
   bottom layers), as tall as their head's last layer, **first in the object
-  list** with `print_order = as_obj_list`.
+  list** with `print_order = as_obj_list`. They are never saved in the
+  user's project: Snap Studio regenerates them at every slice.
 - In Prepare they show as the grey translucent boxes of #36's tower, placed
-  side by side automatically, moved and turned like it.
+  side by side automatically, moved like it (the row can be turned).
 
 The feature lives under #36's « Tour d'amorçage » switch: it is a way to
-print the prime tower, not a new option to find.
+print the prime tower, **always the user's choice**, offered only on plates
+whose materials do not bond. The default stays the engine's single tower.
 
 ## The feasibility test (done)
 
@@ -131,25 +133,27 @@ by layer), the **tower kind** is:
 - **Single** — the engine's tower, as today;
 - **Per material** — the pillars.
 
-Proposed rule (to confirm, see the open questions):
+The rule (decided on review):
 
-- **Automatic**: the kind follows the plate. If the heads it prints with
-  (`prTowerHeads`, virtual heads expanded) hold two materials that do not
-  bond (`spBonds === false` for one pair), the tower is per material;
-  otherwise it is single. Nothing to choose in the common case, and the
-  plate that would get a broken tower never does.
-- **A visible line and a way back**: under the switch, Prepare says
-  « Une tour par matériau : PLA (T0, T1) · PETG (T2) » with a small
-  segmented control « Une tour » / « Par matériau » (shown only when the
-  materials do not bond). Choosing « Une tour » is kept on the plate
-  (`PR.tower.kind = "single"`) and brings back today's conflict line in the
-  slice sheet.
-- **Plates whose materials all bond** keep the engine's tower; the control
-  is hidden (see the open question on offering pillars there too).
+- **Always a choice, never automatic.** The default kind is **single**,
+  on every plate, including plates whose materials do not bond. Snap Studio
+  never switches to pillars by itself.
+- **Offered only when the materials do not bond**: the heads the plate
+  prints with (`prTowerHeads`, virtual heads expanded) hold two materials
+  for which `spBonds` is **false**. Plates whose materials all bond (or are
+  not known) never see the choice and keep the engine's tower.
+- **In Prepare**: under the switch, a small segmented control
+  « Une tour » / « Par matériau » (single selected by default) with the
+  reason « Ces matériaux n'adhèrent pas entre eux : une tour commune se
+  décollerait. ». With « Par matériau », the line lists the groups:
+  « Une tour par matériau : PLA (T0, T1) · PETG (T2) ».
+- **The choice is kept on the plate** (`PR.tower.kind`). If the plate
+  changes so that its materials all bond again, the control hides and the
+  single tower is printed; the choice comes back with the conflict.
 
 The slice sheet's conflict line (`advRenderTower`) gets a third button,
-« Une tour par matériau », next to "No tower" and "Outer wall in …"; with
-pillars on, the line becomes an information line
+« Une tour par matériau », next to "No tower" and "Outer wall in …" (the
+same choice as Prepare's control, kept in sync); with pillars on, the line becomes an information line
 « Une tour par matériau : PLA (T0, T1) · PETG (T2) » and the
 `wipe_tower_filament` warning goes away (there is no shared tower any more).
 
@@ -221,8 +225,8 @@ bounding square, the agreed grey box.
 - **Ring**: a closed tube part (outer and inner cylinder walls, 48 sides),
   printed with walls only: 2 perimeters on each side of the tube. Rings of
   a pillar touch (no gap), so they bond.
-- **Sizes** (constants in `ui/pillar-logic.js`, to tune from CC's test
-  files): innermost ring outer diameter 12 mm; each ring ~2 mm thick
+- **Sizes are automatic** (decided: no size setting). Constants in
+  `ui/pillar-logic.js`, to tune from CC's test files: innermost ring outer diameter 12 mm; each ring ~2 mm thick
   (about 4 lines at 0.45 mm); a one-head tube 15 mm. Two heads: about
   16 mm; four heads: about 24 mm.
 - **Stability**: a tall thin tube can be knocked over by the nozzle. The
@@ -260,9 +264,10 @@ bounding square, the agreed grey box.
   warnings, sheet warning (`#s-tower-place`) and slicing block
   (`prTowerBlocks`) as the tower, for each pillar.
 - The inspector of a pillar: its name (« Tour d'amorçage · PLA »), its heads
-  as head tokens (T0 outer, T1 inner), its size (exact, not estimated: Snap
-  Studio makes it), position and rotation, and a switch
-  « Une tour par tête » for that group (rings ↔ one per head). The prime
+  as head tokens (T0 outer, T1 inner), its size (read only, exact: Snap
+  Studio makes it; no size field), its position (and the row's turn), and
+  a switch « Une tour par tête » for that group (rings by default ↔ one
+  per head). The prime
   volume slider is **not** shown: with the engine's tower off it does
   nothing (the U1 primes by its own tool-change macro).
 - Hover label: « Tour d'amorçage · PLA (T0, T1) 16 × 16 × 30 mm ».
@@ -270,12 +275,13 @@ bounding square, the agreed grey box.
 ### State
 
 `PR.tower` grows, saved with the plate and its undo steps
-(`prTowerStored` / `prTowerRestore`, old plates load as `kind` auto):
+(`prTowerStored` / `prTowerRestore`, old plates load as `kind` single and
+no pillars):
 
 ```js
 tower: {
   on, x, y, rot, real,            // as today: the engine's tower
-  kind: null,                     // null: automatic; "single" | "material": the user's choice
+  kind: "single",                 // "single" (default) | "material": the user's choice
   row: { rot: 0 },                // the row's turn while its pillars are together
   pillars: {                      // by group key, e.g. "PLA" or "PETG+PCTG"
     PLA: { x, y, split: false, moved: false },
@@ -318,13 +324,25 @@ today.
   it should. The pillars are objects named « Tour d'amorçage · PLA »
   (translated name): Moonraker's object list and the preview show them as
   such.
-- **Saving the plate** (`plate_save` / `save_scene`): the pillars are
-  written as real objects, first in the list, with their per-object
-  settings, and `print_order = as_obj_list` / `enable_prime_tower = 0` in
-  the project settings: the file prints the same in Snapmaker Orca. Each
-  pillar object gets `snapstudio_pillar = <group key>` metadata; opening a
-  Snap Studio file on an empty plate turns them back into pillars
-  (`plate_tower` learns to read them), not into user objects.
+- **The 3MF sent to the engine** (`write_scene`, the slice's
+  `plate.3mf`) contains the generated pillars, first in the list, with their
+  per-object settings. It is a work file, never shown or saved.
+- **Saving the plate** (`plate_save` / `save_scene`) writes **only the
+  user's parts**, never the pillars (decided). #36's tower is kept today in
+  `Metadata/project_settings.config` with Orca's own keys
+  (`enable_prime_tower`, `wipe_tower_x` / `wipe_tower_y`,
+  `wipe_tower_rotation_angle`), and `plate_tower` (`plate.rs` `tower_of`)
+  reads it back, trusting the switch only when the file's application is
+  Snap Studio (`ours`). The pillars follow the same idea, with Snap Studio's
+  own data in a separate entry, `Metadata/snapstudio_tower.json`
+  (`write3mf::append_entry`): `{ kind, row: { rot }, pillars: { <group
+  key>: { x, y, split, moved } } }`. Orca ignores an unknown entry.
+  `plate_tower` returns it with the tower, read only when `ours`; opening
+  the file on an empty plate restores the choice and the pillars' places,
+  and the pillars are regenerated at the next slice.
+- **In Snapmaker Orca** the saved file has **no pillars**: it gets the
+  switch and the single tower's place, as today, so Orca prints its own
+  single tower if the switch is on. Said nowhere in the UI.
 - **Object order**: with `as_obj_list`, the user's objects also print in
   list order inside a layer. That is the order of Prepare's list today; say
   it nowhere unless #22 adds a reorderable list.
@@ -381,8 +399,10 @@ stay clean.
   - `pmGroups`: PLA + PLA + PETG → [PLA (T0, T1)], [PETG (T2)]; ABS + ASA
     one group; PETG + PCTG + PET one group; a `null` pair split; unknown
     material alone; virtual head components; orphans ignored;
-  - `pmKind`: automatic (no bond → material, all bond → single), the
-    user's choice kept, `by object` and single head → none;
+  - `pmKind`: single by default, also when materials do not bond; the
+    choice offered only when a pair does not bond (`null` pairs: not
+    offered); « Par matériau » kept, falling back to single while the
+    materials all bond; `by object` and single head → none;
   - heights: per head from objects, from painted triangles, from support /
     wall heads, virtual heads, rounding up to the layer;
   - sizes: ring diameters, the `h / 8` rule, the bounding box;
@@ -392,15 +412,17 @@ stay clean.
   - overrides: `enable_prime_tower 0`, `print_order as_obj_list`,
     `independent_support_layer_height 0`, no `wipe_tower_x`.
 - `scripts/test-tower.js`: the single tower unchanged; `PR.tower` old
-  plates restore with `kind` auto and no pillars.
+  plates restore with `kind` single and no pillars.
 - `scripts/test-adv.js`: the conflict line's third button; the information
   line with pillars; the tower group disabled.
 - `cargo test --lib`:
   - `plate.rs`: a pillar mesh is closed and manifold, its rings' extruders,
     pillars first in `write_items`' list, an off-plate pillar refused;
   - `write3mf.rs`: per-object settings in `model_settings.config`, read back;
-  - `save_scene` with pillars: objects, marker metadata, project settings;
-    `plate_tower` reads them back as pillars.
+  - `write_scene` with pillars: the pillars are in the engine's 3MF, first;
+  - `save_scene` with pillars: only the user's parts, the
+    `snapstudio_tower.json` entry; `plate_tower` reads it back (only for a
+    Snap Studio file).
 - **Opt-in engine test** (`#[ignore]`, as `engine_prime_tower_position`:
   `SNAPSTUDIO_ENGINE=… cargo test --lib engine_material_pillars -- --ignored --nocapture`),
   CC's plate rebuilt through the real code path (scene + `pillars`), its
@@ -414,8 +436,9 @@ stay clean.
   4. no `;TYPE:Prime tower`, nothing outside the objects;
   5. the tool changes land above the pillars (the position of each `T<n>`).
 - Screenshots (light / dark, FR / EN): Prepare with a PLA + PETG plate and
-  its two pillars, a pillar selected with its inspector, the split variant,
-  the « Une tour / Par matériau » control, the slice sheet's line, the
+  its two pillars, the « Une tour / Par matériau » control with single
+  selected, a pillar selected with its inspector, the split variant,
+  the slice sheet's conflict line with its third button and the information line, the
   sliced preview.
 
 ## Risks
@@ -447,20 +470,22 @@ stay clean.
 - The order on a plate with supports.
 - Colour bleed on same-material changes, against the engine's tower.
 
-## Open questions
+## Decisions taken on review
 
-1. **Automatic or a choice?** Proposed: automatic when materials do not
-   bond, with « Une tour / Par matériau » to go back. Or always ask?
-2. **Offer pillars on every multi-head plate?** They were 37 min faster on
-   the test plate, but without the tower's purge volume colours may bleed.
-   Proposed: only for materials that do not bond at first, open it later
-   after a real print.
-3. **Rings or one per head by default?** Proposed: rings (less room), one
-   per head as a per-group switch and as the fallback when space is short.
-4. **Saved 3MF**: pillars written as real objects (prints the same in
-   Snapmaker Orca, Snap Studio turns them back into pillars) — fine?
-5. **Pillar size**: 15 mm for one head, about 2 mm more per extra head, at
-   least `h / 8`, 3 mm brim — or a size setting in the inspector?
+1. **Always a choice**: pillars are never switched on automatically. When
+   the materials do not bond, « Une tour / Par matériau » is offered in
+   Prepare (under the tower switch) and on the slice sheet's conflict line;
+   the default stays the single tower.
+2. **Only when materials do not bond**: not offered on other multi-head
+   plates.
+3. **Rings by default**; one pillar per head as the fallback when space is
+   short and as a per-group option.
+4. **Not saved in the 3MF**: the saved project holds only the user's
+   parts, with the choice and the pillars' places as Snap Studio data
+   (`Metadata/snapstudio_tower.json`); the pillars are regenerated at
+   slicing and are always in the 3MF sent to the engine. Opened in
+   Snapmaker Orca, the file has no pillars.
+5. **Automatic sizes**: no size setting in the inspector.
 
 ## Docs (later)
 
@@ -471,6 +496,6 @@ stay clean.
 
 Implement, then **review your whole diff against `main`**: every reader of
 `PR.tower` (`rg "PR\.tower|prTower"`), the slice request and the saved
-3MF with and without pillars, undo steps, virtual heads and orphans, i18n,
+3MF (never any pillar) and the engine's 3MF (always the pillars), undo steps, virtual heads and orphans, i18n,
 themes, keyboard. Fix what you find and report that review in the pull
 request. Run the opt-in engine test on the Mac and paste its output.
