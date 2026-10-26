@@ -492,6 +492,36 @@ stay clean.
 - README and site: in the 0.16 batch, one short line.
 - CHANGELOG: the line under *Unreleased* in the implementation PR.
 
+## As implemented
+
+Where the code differs from the text above, or settles what it left open:
+
+- **State**: `PR.tower.groups` holds each group's split (`true` chosen,
+  `"auto"` forced for room, forgotten by « Placer à un endroit libre »);
+  `PR.tower.pillars` holds each pillar's center by **pillar** key (`"PLA"`,
+  or `"PLA/T1"` once split) with `moved`. `kind` and `row` as planned.
+  Undo steps hold the places, groups and row; `kind` is a setting, as the
+  switch.
+- **Placement**: a pillar that appears (a new material) takes a free place
+  as a row of its own; the others keep theirs, and one that goes is
+  forgotten. A group split or joined again in a row nobody moved: the row
+  is laid out again; once a pillar was moved by hand, the new ones take a
+  place of their own. « Placer à un endroit libre » lays the row out again.
+- **Inspector**: the section is « Centre »; the row's turn shows while the
+  pillar is still in a row of several. A split pillar is named with its
+  head (« Tour d'amorçage · PLA (T1) »), in the inspector and in the
+  engine's object list.
+- **Sizes**: rings 2 mm thick around an 8 mm hole (12 / 16 / 20 / 24 mm for
+  one to four heads), a one-head tube 15 / 11 mm, at least `h / 8` wide; the
+  box drawn and checked includes the 3 mm brim.
+- **Slice sheet**: the information line has a « Une tour » button, the way
+  back, as Prepare's control.
+- **Saved file**: the tower's place is saved whenever the switch is on (the
+  engine's default place, 15 / 220, if Prepare never showed the single
+  tower); `snapstudio_tower.json` is read even without it.
+- **Engine**: `slice.rs` also forces the three overrides whenever a request
+  has pillars, whatever the sheet sends.
+
 ## For the implementer
 
 Implement, then **review your whole diff against `main`**: every reader of
