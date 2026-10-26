@@ -324,8 +324,9 @@ function advRenderRows() {
     support: $("s-supports").checked ? advLabel("support_type") : tr("slice.adv.off"),
     brim: $("s-brim").checked ? advLabel("brim_type", SL.adv.brim_type || "outer_only") : tr("slice.adv.off"),
     seam: advLabel("seam_position"),
+    // Off with a virtual head: advised (it changes heads at every layer).
     mm: !advOn("enable_prime_tower")
-      ? tr("slice.adv.mm_no_tower")
+      ? tr(prTowerVirtualUsed() ? "prepare.tower.virtual_hint" : "slice.adv.mm_no_tower")
       : +advVal("wipe_tower_filament") > 0
       ? tr("slice.adv.mm_tower_wall", { t: `T${+advVal("wipe_tower_filament") - 1}` })
       : tr("slice.adv.mm_tower"),

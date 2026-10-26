@@ -76,4 +76,21 @@ assert.strictEqual(S.swMove([], 0, "Home"), -1);
   for (const k of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) assert.strictEqual(S.swMove(g, 2, k, 1), S.swMove(g, 2, k), k + ": one column as before");
 }
 
+// Virtual heads: their own entries (100 + uid), flagged when their
+// materials no longer bond; a deleted one is "unavailable", not a head.
+{
+  const list = [{ uid: 1, a: 0, b: 2, pct: 33 }, { uid: 4, a: 3, b: 1, pct: 50 }];
+  const vs = S.swVirtual({ list, colorOf: (v) => (v.uid === 1 ? "#36d96f" : "#800040"), name: (v) => (v.uid === 1 ? "V1" : "V2"), ratio: (v) => (v.uid === 1 ? "2:1" : "1:1"), bonds: (v) => v.uid !== 4, parts: () => ["#00aeef", "#ffe500"] });
+  assert.deepStrictEqual(vs.map((e) => e.value), ["101", "104"]);
+  assert.deepStrictEqual(vs[0].v, { name: "V1", a: 0, b: 2, ratio: "2:1", ca: "#00aeef", cb: "#ffe500" });
+  assert.deepStrictEqual([vs[0].h, vs[0].color, vs[0].warn, vs[1].warn], [null, "#36d96f", false, true]);
+  assert.deepStrictEqual(S.swVirtual({}), []);
+  const gone = S.swEntries(S.swHeads({ count: 4 }), { value: 103 }).pop();
+  assert.deepStrictEqual([gone.state, gone.h, gone.v], ["unavailable", null, { gone: true }], "a deleted virtual head");
+  // The keyboard crosses from the heads to the virtual heads: one list.
+  const all = [...S.swHeads({ count: 4 }), ...vs];
+  assert.strictEqual(S.swMove(all, 3, "ArrowRight", 2), 4, "T3 → V1");
+  assert.strictEqual(S.swMove(all, 5, "ArrowRight", 2), 0, "the last wraps to T0");
+}
+
 console.log("swatch: ok");

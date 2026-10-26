@@ -92,6 +92,9 @@ ui/               HTML/CSS/JS interface, one file per view (no build step)
   prepare-tower.js tower-logic.js   Prepare's prime tower: switch, box,
                   placement, size estimate (tower-logic.js, tested by
                   scripts/test-tower.js)
+  virtual.js virtual-logic.js   virtual heads (two spools mixed layer by
+                  layer): Heads and spools section, creation sheet, the rules
+                  (virtual-logic.js, tested by scripts/test-virtual.js)
   i18n.js         translation, number and date formats, language switching
   whatsnew.js whatsnew-logic.js   What's new: sidebar card, the site's page
                   in a sheet; whats-new.json, its highlights (scripts/whats-new.py)
@@ -102,6 +105,7 @@ src-tauri/src/
   lib.rs          Tauri commands, mesh:// gcode:// thumb:// cam:// prn:// protocols
   plate.rs        plate, scene to slice        orient.rs     auto-orientation
   slice.rs        background slicing           presets.rs    Orca presets
+  mixcolor.rs     virtual heads' preview color (Orca's MIT pigment mixer)
   printers.rs     Moonraker: status, sending   watch.rs      live WebSocket
   model3mf.rs     3MF reading                  write3mf.rs   3MF writing
   mesh.rs stl.rs  geometry                     gcode.rs      G-code parsing

@@ -367,7 +367,8 @@ function renderModelMap(fromPrinter) {
       const key = `${gi}:${e}`;
       const fil = model?.filaments.find((f) => f.index === e);
       let head = heads[e]?.h ?? (fromPrinter ? null : prev[key]);
-      if (head == null || head >= n) head = autoHead(fil, e, taken);
+      // A virtual head (or one deleted since) is kept as Prepare has it.
+      if (!vhIs(head) && (head == null || head >= n)) head = autoHead(fil, e, taken);
       taken.add(head);
       const color = g.colors.length === 1 ? "" : tr("slice.color_n", { n: e });
       const label = nested ? color : several ? name : color || name;
@@ -381,11 +382,12 @@ function renderModelMap(fromPrinter) {
           const slot = SL.slots.find((s) => s.index === h);
           const desc = slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : "";
           return `<option value="${h}"${h === head ? " selected" : ""}>T${h}${esc(desc)}</option>`;
-        }).join("")}</select>
+        }).join("")}${vhIs(head) ? `<option value="${head}" selected>${esc(vhName(headsVirtual(pid || ""), head) || "—")}</option>` : ""}</select>
       </div>`);
     }
   });
   $("s-map").innerHTML = rows.join("");
+  slOrphanLine();
   slUsedHeads();
   // Bed temperatures depend on the heads used.
   pdBedLine();
@@ -455,9 +457,21 @@ document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
   slSummary();
 });
 
-/* Heads used by the model (colors → heads); empty if unknown. */
+/* Heads used by the model (colors → heads), a virtual head giving its two
+   physical ones; empty if unknown. */
 function slUsedSet() {
-  return new Set([...document.querySelectorAll("#s-map select")].map((s) => +s.value));
+  return vhPhysical(slMapValues(), headsVirtual(currentPrinter()?.id || ""));
+}
+/* The map's head values as they are (virtual ones included). */
+const slMapValues = () => new Set([...document.querySelectorAll("#s-map select")].map((s) => +s.value));
+
+/* Colors left without a head (a virtual head deleted since): the slice
+   waits, Prepare is where to choose one. */
+const slOrphans = () => [...slMapValues()].filter((h) => vhOrphan(headsVirtual(currentPrinter()?.id || ""), h));
+function slOrphanLine() {
+  const n = slOrphans().length;
+  $("s-orphan").classList.toggle("hidden", !n);
+  if (!SL.job) $("s-go").disabled = !!n || !$("s-engine").classList.contains("hidden");
 }
 
 /* Bottom bar: what will go to the engine, in one line. */
@@ -483,6 +497,11 @@ function slSummary() {
   $("s-summary").innerHTML = parts
     .map((p) => (typeof p === "object" ? `<span class="${esc(p.cls)}">${esc(p.text)}</span>` : `<span>${esc(p)}</span>`))
     .join("");
+  // A virtual head mixes evenly with thin layers (Snapmaker's advice).
+  const pid = currentPrinter()?.id || "";
+  const mixes = [...slMapValues()].some((h) => vhFind(headsVirtual(pid), h));
+  const layer = parseProcess($("s-process").value)?.h;
+  $("s-vlayer").classList.toggle("hidden", !(mixes && layer > 0.12));
   // What goes to the engine changed: the prime tower's materials too, and
   // its place.
   if (typeof advRenderTower === "function") advRenderTower();
@@ -564,13 +583,21 @@ async function startSlice() {
     setSliceMessage(tr("slice.need_profiles"), "err");
     return;
   }
+  if (slOrphans().length) {
+    setSliceMessage(tr("slice.orphan"), "err");
+    return;
+  }
   // Model color → head, object by object; entry i is about color i + 1.
   const maps = SL.groups.map(() => []);
   document.querySelectorAll("#s-map select").forEach((s) => (maps[+s.dataset.group][+s.dataset.ext - 1] = +s.value));
   for (const m of maps) for (let i = 0; i < m.length; i++) if (m[i] == null) m[i] = 0;
+  // Virtual heads: after the physical ones (head n + k), their mixes sent.
+  const pid = currentPrinter()?.id || "";
+  const eng = vhEngine(new Set(maps.flat()), headsVirtual(pid), filaments.length);
+  const virtual_heads = eng.heads.map((v) => ({ a: v.a, b: v.b, pct: v.pct, color: headsVirtualColor(pid, v) || null }));
   const groupOf = (i) => SL.groups.findIndex((g) => g.items.includes(i));
-  const scene = SL.source.items.map(({ id, colors, heads, ...it }, i) => ({ ...it, extruder_map: maps[groupOf(i)] || [] }));
-  const heads = [...new Set(maps.flat())];
+  const scene = SL.source.items.map(({ id, colors, heads, ...it }, i) => ({ ...it, extruder_map: (maps[groupOf(i)] || []).map(eng.index) }));
+  const heads = [...vhPhysical(new Set(maps.flat()), headsVirtual(pid))];
   const empty = heads.filter((h) => SL.slots.find((s) => s.index === h && !s.present));
   if (empty.length) {
     setSliceMessage(tr("slice.head_empty", { heads: empty.map((h) => "T" + h).join(", ") }), "err");
@@ -610,7 +637,7 @@ async function startSlice() {
   try {
     const job = await invoke("slice_start", {
       request: {
-        source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
+        source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors, virtual_heads,
         overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });
@@ -1106,4 +1133,18 @@ document.addEventListener("keydown", (e) => {
   // The spool sheet, open on top, keeps its keys.
   if (!$("spmodal").classList.contains("hidden")) return;
   if (e.key === "Escape") closeSheet($("sendmodal"));
+});
+
+/* Colors left without a head: Prepare is where to choose one. */
+$("s-orphan-go").addEventListener("click", () => {
+  closeSheet($("smodal"));
+  switchView("prepare");
+});
+/* A virtual head deleted (a spool unloaded) while the sheet is open: its
+   colors wait for a head. */
+window.addEventListener("headschange", (e) => {
+  if ($("smodal").classList.contains("hidden") || !["virtual", "mix"].includes(e.detail?.what)) return;
+  slTokens();
+  slOrphanLine();
+  slSummary();
 });

@@ -17,6 +17,7 @@ lists below.
 |---|---|---|
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
+| [virtual-heads.md](virtual-heads.md) | Virtual heads: color mixing of two spools (Snapmaker Orca's Full Spectrum), one head token per color in Prepare | Written, draft PR |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
