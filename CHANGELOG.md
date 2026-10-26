@@ -11,6 +11,15 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Changed
+- **A lighter AI sandbox**: on macOS and Linux the AI's sandbox is now
+  Claude Code's own (Seatbelt, or bubblewrap and socat on Linux): no Docker,
+  no yolobox, no image to build, just Python and its three modules. Claude
+  only reaches the conversation's folder, reads nothing in your home folder
+  and its commands have no network. Already using yolobox? Nothing changes:
+  your setting and your conversations stay in the container, and "Container
+  (yolobox)" remains a choice in Settings → AI.
+
 ## [0.15.0] — 2026-10-25
 
 ### Added
