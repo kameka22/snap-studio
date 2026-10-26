@@ -831,7 +831,7 @@
     "other": "{n} objets ne tiennent pas sur le plateau"
   },
   "slice.reading_spools": "lecture des bobines…",
-  "slice.adv.open": "Réglages avancés",
+  "slice.adv.open": "Plus de réglages",
   "slice.adv.seam": "Couture",
   "slice.adv.mm": "Multi-matériaux",
   "slice.adv.save": "Enregistrer comme profil perso…",
@@ -2255,5 +2255,12 @@
   "prepare.tower.dims_est": "{size} mm, estimée",
   "prepare.tower.size_title": "Taille",
   "prepare.tower.volume": "Volume d’amorçage",
-  "prepare.tower.vol_low": "Moins de purge que le profil : risque de couleurs mélangées au changement de tête"
+  "prepare.tower.vol_low": "Moins de purge que le profil : risque de couleurs mélangées au changement de tête",
+  "slice.level": "Réglages affichés",
+  "slice.level.basic": "Essentiel",
+  "slice.level.advanced": "Avancé",
+  "slice.level.hint": {"one": "1 réglage avancé modifié", "other": "{n} réglages avancés modifiés"},
+  "slice.level.show": "Afficher",
+  "settings.slice_level": "Réglages de découpe affichés",
+  "settings.slice_level.sub": "Essentiel montre l'indispensable ; Avancé ajoute qualité, remplissage, parois, surfaces et plus. Aussi dans la barre de titre de la fenêtre de découpe."
 }

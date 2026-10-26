@@ -828,7 +828,7 @@
     "other": "{n} objects do not fit on the plate"
   },
   "slice.reading_spools": "reading spools…",
-  "slice.adv.open": "Advanced settings",
+  "slice.adv.open": "More settings",
   "slice.adv.seam": "Seam",
   "slice.adv.mm": "Multi-material",
   "slice.adv.save": "Save as Custom Profile…",
@@ -2252,5 +2252,12 @@
   "prepare.tower.dims_est": "{size} mm, estimated",
   "prepare.tower.size_title": "Size",
   "prepare.tower.volume": "Prime volume",
-  "prepare.tower.vol_low": "Less purge than the profile: colours may mix at head changes"
+  "prepare.tower.vol_low": "Less purge than the profile: colours may mix at head changes",
+  "slice.level": "Settings shown",
+  "slice.level.basic": "Basic",
+  "slice.level.advanced": "Advanced",
+  "slice.level.hint": {"one": "1 advanced setting changed", "other": "{n} advanced settings changed"},
+  "slice.level.show": "Show",
+  "settings.slice_level": "Slice settings shown",
+  "settings.slice_level.sub": "Basic shows the essentials; Advanced adds quality, infill, walls, surfaces and more. Also in the slice window's title bar."
 }
