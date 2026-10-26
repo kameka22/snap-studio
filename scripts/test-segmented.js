@@ -14,6 +14,13 @@ assert.deepStrictEqual(S.segItems([], "x"), []);
 assert.deepStrictEqual(S.segItems([{ value: 0.5, text: "0.5×" }, { value: 1, text: "1×" }], 1).map((x) => [x.value, x.on]), [["0.5", false], ["1", true]]);
 assert.strictEqual(S.segItems([{ value: "a", label: "A", text: "ignored" }], "a")[0].label, "A", "label wins over text");
 
+// The slice sheet's level (adv-logic.js SL_LEVELS): two segments, the
+// saved one on.
+const A = require("../ui/adv-logic.js");
+const levels = A.SL_LEVELS.map((v) => ({ value: v, text: v === "basic" ? "Basic" : "Advanced" }));
+assert.deepStrictEqual(S.segItems(levels, "basic").map((x) => [x.value, x.on]), [["basic", true], ["advanced", false]]);
+assert.deepStrictEqual(S.segItems(levels, "advanced").map((x) => x.on), [false, true]);
+
 // Flags: inline SVG for the app's languages, the code otherwise.
 for (const c of ["fr", "en", "FR"]) assert.ok(/^<svg[^>]*aria-hidden="true"/.test(S.segFlag(c)), c);
 assert.ok(!/id=/.test(S.SEG_FLAGS.en + S.SEG_FLAGS.fr), "no ids: the flags appear several times");

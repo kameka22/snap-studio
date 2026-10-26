@@ -11,6 +11,13 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Basic and Advanced slice settings**: the slice sheet opens in Basic,
+  with the settings it had before 0.15; Advanced, chosen in its title bar or
+  in Settings → Prepare, shows them all. Hidden settings keep their values
+  and still apply, and Basic says how many advanced ones are changed. Anyone
+  who already changed one of the new settings starts in Advanced.
+
 ## [0.15.0] — 2026-10-25
 
 ### Added

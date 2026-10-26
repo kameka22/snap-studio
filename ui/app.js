@@ -35,6 +35,9 @@ const DEFAULTS = {
   recents: [],
   /* How the AI is used: "container", "local", "both", "off"; null until asked. */
   aiModes: null,
+  /* The slice sheet's level, "basic" or "advanced"; null until first set
+     (slice-adv.js, sliceLevelDefault). */
+  sliceLevel: null,
 };
 
 /* A stored value, or {} when there is none or it is unreadable: a corrupt
@@ -63,10 +66,10 @@ const state = {
 };
 
 function save() {
-  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes } = state;
+  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, sliceLevel } = state;
   localStorage.setItem(
     "snapstudio",
-    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes })
+    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, sliceLevel })
   );
 }
 

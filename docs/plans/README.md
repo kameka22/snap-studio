@@ -16,6 +16,7 @@ lists below.
 | Plan | Subject | State |
 |---|---|---|
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
+| [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
