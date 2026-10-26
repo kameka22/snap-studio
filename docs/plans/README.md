@@ -16,7 +16,7 @@ lists below.
 | Plan | Subject | State |
 |---|---|---|
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
-| [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR |
+| [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
