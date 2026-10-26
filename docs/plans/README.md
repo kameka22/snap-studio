@@ -20,6 +20,7 @@ lists below.
 | [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
 | [virtual-heads.md](virtual-heads.md) | Virtual heads: color mixing of two spools (Snapmaker Orca's Full Spectrum), one head token per color in Prepare | Written, draft PR |
+| [prints-redesign.md](prints-redesign.md) | Prints page redesign: three directions (dashboard, agenda per printer, list and record) as mockups | Written, draft PR |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
