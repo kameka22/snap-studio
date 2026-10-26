@@ -100,6 +100,14 @@ Le plateau U1 comme dans Orca — puis découper.
   et pivote comme une pièce ; sa taille est estimée, puis réelle après la
   découpe. Une tour sur une pièce ou hors du plateau est signalée, avec une
   correction.
+- **Une tour par matériau** : quand les matériaux du plateau n'adhèrent pas
+  entre eux (PLA et PETG…), choisissez **Par matériau** plutôt que **Une
+  tour** : de petits piliers, un par groupe de matériaux qui adhèrent, avec
+  un anneau par tête (ou un pilier par tête). Leur taille est automatique ;
+  ils sont refaits à chaque découpe et jamais enregistrés dans le 3MF.
+- **Têtes virtuelles** (le *Full Spectrum* de Snapmaker Orca) : deux bobines
+  chargées mélangées en une nouvelle couleur, proposée dans les choix de
+  tête comme une vraie. Voir [Têtes et bobines](#-votre-imprimante-en-3d).
 
 <br clear="both">
 
@@ -126,6 +134,9 @@ Le moteur Snapmaker Orca, intégré : inutile d'installer Snapmaker Orca.
   droite, les quatre têtes de la U1 et les couleurs du modèle en dessous.
 - Chaque couleur de chaque objet envoyée vers sa tête, d'après les bobines
   lues sur l'imprimante.
+- **Essentiel** ou **Avancé**, dans la barre de titre de la fenêtre ou
+  Réglages → Préparer : Essentiel garde l'indispensable, Avancé montre tous
+  les réglages.
 - **Vitesse** : un seul curseur de 50 % à 120 % du profil.
 - Qualité, remplissage, parois, surfaces et plus, avec des styles (supports,
   bordure, couture, motifs) choisis en images.
@@ -139,7 +150,12 @@ Le moteur Snapmaker Orca, intégré : inutile d'installer Snapmaker Orca.
 Le moteur est téléchargé une fois (environ 30 Mo) et tenu à jour par l'app.
 La fenêtre de découpe place l'imprimante, le plateau et la qualité à gauche,
 les ajustements à droite, les quatre têtes de la U1 et les couleurs du
-modèle en dessous :
+modèle en dessous. Elle s'ouvre en **Essentiel** : imprimante, plateau,
+qualité, remplissage, parois, vitesse, supports, bordure, couture et
+multimatériau. **Avancé** ajoute les panneaux ⚙ (Plus de réglages),
+Surfaces, Autres et la prévention des coulures. Les réglages masqués
+gardent leur valeur et s'appliquent toujours ; Essentiel indique combien de
+réglages avancés sont modifiés, avec un lien pour les afficher :
 
 - les bobines lues sur l'imprimante, chaque couleur de chaque objet envoyée
   vers sa tête, la surface du plateau (PEI texturé, PEI lisse…) et sa
@@ -159,7 +175,7 @@ modèle en dessous :
   avec Préparer, où elle se place sur le plateau ; la tête de son mur
   extérieur), la prévention des coulures ; un avertissement quand la tour mélangerait des
   matières qui n'adhèrent pas (PLA et PETG, PLA et TPU…), avec des
-  corrections en un clic.
+  corrections en un clic, dont une tour par matériau.
 
 Puis un aperçu des trajectoires avec durée, filament et coût, envoyé à
 l'imprimante — avec son image sur l'écran de l'imprimante — ou enregistré en
@@ -241,9 +257,17 @@ Les imprimantes sont trouvées seules sur le réseau ; la U1 est montrée en 3D.
 <details>
 <summary>Plus de détails</summary>
 
-Sous chaque imprimante : ses [fichiers et timelapses](#-fichiers-et-timelapses-de-limprimante),
+Sous chaque imprimante : **Têtes et bobines**, ses [fichiers et timelapses](#-fichiers-et-timelapses-de-limprimante),
 et Entretien et réglages avec ses trois onglets — [Contrôle](#-contrôle),
 [Entretien](#-entretien) et [Nivellement](#-nivellement).
+
+**Têtes virtuelles**, dans Têtes et bobines, comme le *Full Spectrum* de
+Snapmaker Orca : deux bobines chargées mélangées en une nouvelle couleur,
+avec un seul curseur de 4:1 à 1:4 (les têtes alternent couche par couche),
+jusqu'à 8 par imprimante. Des matériaux qui n'adhèrent pas entre eux ne se
+mélangent pas. Quand l'une de ses bobines est déchargée, la tête virtuelle
+est supprimée et ce qui l'utilisait attend une nouvelle tête avant la
+découpe.
 
 </details>
 
@@ -441,21 +465,27 @@ imprimante sur le réseau, moteur de découpe et IA. Ensuite, **l'app se met
 ## Concevoir avec l'IA
 
 L'IA utilise [Claude Code](https://docs.claude.com/en/docs/claude-code/setup)
-avec votre compte Claude, soit dans un bac à sable (un conteneur isolé),
-soit directement sur votre ordinateur. L'assistant de bienvenue et
+avec votre compte Claude, soit dans un bac à sable, soit directement sur
+votre ordinateur. Sous macOS et Linux, le bac à sable est **celui de Claude
+Code** (intégré) : Claude n'accède qu'au dossier de la conversation, ne lit
+rien d'autre dans votre dossier personnel et ses commandes n'ont pas de
+réseau. Un **conteneur (yolobox)** reste un choix dans Réglages → IA. Sous
+Windows, l'IA tourne sur cet ordinateur. L'assistant de bienvenue et
 Réglages → IA vérifient ce dont votre choix a besoin et indiquent comment
 installer ce qui manque ; un mode s'ouvre dès que tout est prêt.
 
-| | Bac à sable | Cet ordinateur |
-|---|---|---|
-| Claude Code 2.1.286 ou plus récent, connecté | ✓ | ✓ |
-| [yolobox](https://github.com/finbarr/yolobox) | ✓ | |
-| Un moteur de conteneur démarré : Docker (ou OrbStack), Podman ou `container` d'Apple | ✓ | |
-| Python 3 avec `trimesh`, `manifold3d`, `numpy` | | ✓ |
+| | Bac à sable (intégré) | Conteneur (yolobox) | Cet ordinateur |
+|---|---|---|---|
+| Claude Code 2.1.286 ou plus récent, connecté | ✓ | ✓ | ✓ |
+| Python 3 avec `trimesh`, `manifold3d`, `numpy` | ✓ | | ✓ |
+| Linux : `bubblewrap` et `socat` | ✓ | | |
+| [yolobox](https://github.com/finbarr/yolobox) | | ✓ | |
+| Un moteur de conteneur démarré : Docker (ou OrbStack), Podman ou `container` d'Apple | | ✓ | |
 
 **Une conversation**, à partir d'un fichier (« Modifier avec l'IA » dans
 Fichiers) ou de zéro : décrivez ce que vous voulez — des idées sont
-proposées — choisissez où elle tourne et le modèle Claude. L'aperçu 3D et la
+proposées — ajoutez des images (croquis, photos : déposées, collées ou
+choisies), choisissez où elle tourne et le modèle Claude. L'aperçu 3D et la
 discussion sont côte à côte : chaque version exportée par Claude est gardée,
 mesurée (taille, poids, étanchéité) et peut être réaffichée ;
 **Enregistrer** met la version affichée dans vos fichiers, **Découper**
@@ -529,7 +559,7 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
-| **Un bac à sable IA plus léger** — celui de Claude Code sous macOS et Linux, sans Docker ni yolobox (yolobox conservé pour qui l'utilise) | [#62](https://github.com/kameka22/snap-studio/pull/62) |
+| **Une nouvelle page Impressions** — un tableau de bord avec statistiques, imprimantes en direct et file d'attente, l'historique des impressions, et une fiche pour chacune | [#65](https://github.com/kameka22/snap-studio/pull/65) |
 | **D'autres agents IA** — OpenCode à côté de Claude Code (OpenAI, Google, Mistral, modèles locaux…), un seul actif à la fois | [plan](docs/plans/ai-agents.md) |
 
 Les travaux en cours, ce qui reste à vérifier sur une vraie imprimante et les

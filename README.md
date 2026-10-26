@@ -87,6 +87,14 @@ The U1 plate as in Orca — then slice.
   tower on the plate as a grey box, in a free corner. Move and turn it like
   a part; its size is estimated, then the real one after slicing. A tower
   on a part or off the plate is flagged, with a fix.
+- **One tower per material**: when the plate's materials do not bond (PLA
+  and PETG…), choose **Per material** instead of **One tower**: small
+  pillars, one per group of materials that bond, with one ring per head (or
+  one pillar per head). Sizes are automatic; they are rebuilt at every
+  slice and never saved in the 3MF.
+- **Virtual heads** (Snapmaker Orca's *Full Spectrum*): mix two loaded
+  spools into a new color, offered in the head pickers like a real head.
+  See [Heads and spools](#-your-printer-in-3d).
 
 <br clear="both">
 
@@ -112,6 +120,8 @@ The Snapmaker Orca engine, built in: you do not need Snapmaker Orca installed.
 - Printer, plate and quality on the left, the adjustments on the right, the
   U1's four heads and the model's colors below.
 - Each color of each object sent to its head, from the spools read on the printer.
+- **Basic** or **Advanced**, in the sheet's title bar or Settings →
+  Prepare: Basic keeps the essentials, Advanced shows every setting.
 - **Speed**: one slider from 50 % to 120 % of the profile.
 - Quality, infill, walls, surfaces and more, with styles (supports, brim,
   seam, patterns) chosen from pictures.
@@ -123,7 +133,12 @@ The Snapmaker Orca engine, built in: you do not need Snapmaker Orca installed.
 
 The engine is downloaded once (about 30 MB) and kept up to date by the app.
 The slice sheet puts the printer, plate and quality on the left, the
-adjustments on the right, the U1's four heads and the model's colors below:
+adjustments on the right, the U1's four heads and the model's colors below.
+It opens in **Basic**, the essentials: printer, plate, quality, infill,
+walls, speed, supports, brim, seam and multi-material. **Advanced** adds
+the ⚙ panels (More settings), Surfaces, Other and ooze prevention. Hidden
+settings keep their values and still apply; Basic says how many advanced
+ones are changed, with a link to show them.
 
 - the spools read from the printer, each color of each object sent to its
   head, the plate surface (textured PEI, smooth PEI…) and its temperature;
@@ -140,7 +155,8 @@ adjustments on the right, the U1's four heads and the model's colors below:
 - **multi-material**: the prime tower (its own switch, shared with
   Prepare, where it is placed on the plate; its outer wall's head), ooze
   prevention; a warning when the tower would mix materials that do not
-  bond (PLA and PETG, PLA and TPU…), with one-click fixes.
+  bond (PLA and PETG, PLA and TPU…), with one-click fixes, one tower per
+  material among them.
 
 Then a toolpath preview with duration, filament and cost, sent to the
 printer — with its picture on the printer's screen — or saved as G-code.
@@ -219,9 +235,16 @@ Printers are found on the network on their own; the U1 is shown in 3D.
 <details>
 <summary>More details</summary>
 
-Under each printer: its [files and timelapses](#-printer-files-and-timelapses),
+Under each printer: **Heads and spools**, its [files and timelapses](#-printer-files-and-timelapses),
 and Care & Tuning with its three tabs — [Control](#-control), [Care](#-care)
 and [Bed Leveling](#-bed-leveling).
+
+**Virtual heads**, in Heads and spools, as Snapmaker Orca's *Full
+Spectrum*: two loaded spools mixed into a new color, with one slider from
+4:1 to 1:4 (the heads alternate layer by layer), up to 8 per printer.
+Materials that do not bond cannot be mixed. When one of its spools is
+unloaded, the virtual head is deleted and what used it waits for a new head
+before slicing.
 
 </details>
 
@@ -401,21 +424,26 @@ app updates itself** (on Linux, the AppImage).
 ## Design with AI
 
 The AI runs [Claude Code](https://docs.claude.com/en/docs/claude-code/setup)
-with your Claude account, either in a sandbox (an isolated container) or
-directly on your computer. The welcome assistant and Settings → AI check
-what your choice needs and say how to install what is missing; a mode
-opens once everything is ready.
+with your Claude account, either in a sandbox or directly on your computer.
+On macOS and Linux the sandbox is **Claude Code's own** (built-in): Claude
+only reaches the conversation's folder, reads nothing else in your home
+folder and its commands have no network. A **container (yolobox)** remains
+a choice in Settings → AI. On Windows, the AI runs on this computer. The
+welcome assistant and Settings → AI check what your choice needs and say
+how to install what is missing; a mode opens once everything is ready.
 
-| | Sandbox | This computer |
-|---|---|---|
-| Claude Code 2.1.286 or later, signed in | ✓ | ✓ |
-| [yolobox](https://github.com/finbarr/yolobox) | ✓ | |
-| A running container engine: Docker (or OrbStack), Podman, or Apple `container` | ✓ | |
-| Python 3 with `trimesh`, `manifold3d`, `numpy` | | ✓ |
+| | Sandbox (built-in) | Container (yolobox) | This computer |
+|---|---|---|---|
+| Claude Code 2.1.286 or later, signed in | ✓ | ✓ | ✓ |
+| Python 3 with `trimesh`, `manifold3d`, `numpy` | ✓ | | ✓ |
+| Linux: `bubblewrap` and `socat` | ✓ | | |
+| [yolobox](https://github.com/finbarr/yolobox) | | ✓ | |
+| A running container engine: Docker (or OrbStack), Podman, or Apple `container` | | ✓ | |
 
 **A conversation**, from a file ("Edit with AI" in Files) or from scratch:
-describe what you want — ideas are offered — choose where it runs and the
-Claude model. The 3D preview and the chat sit side by side: every version
+describe what you want — ideas are offered — add images (sketches,
+photos: dropped, pasted or chosen), choose where it runs and the Claude
+model. The 3D preview and the chat sit side by side: every version
 Claude exports is kept, measured (size, weight, watertight) and can be shown
 again; **Save** puts the version shown in your files, **Slice** sends it to
 Prepare. **Stop Claude** (or Esc) interrupts an answer; the **Terminal** tab
@@ -483,7 +511,7 @@ with its pull request (drafts, approved or under discussion):
 | **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
-| **A lighter AI sandbox** — Claude Code's own sandbox on macOS and Linux, no Docker or yolobox needed (yolobox kept for those who use it) | [#62](https://github.com/kameka22/snap-studio/pull/62) |
+| **A new Prints page** — a dashboard with stats, live printers and the queue, the print history, and a page for each print | [#65](https://github.com/kameka22/snap-studio/pull/65) |
 | **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
 
 Work in progress, what remains to check on a real printer and ideas for later
