@@ -73,7 +73,7 @@ Your 3MF files at a glance.
 
 ### 🧩 Prepare
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Prepare: a model on the plate, its colors sent to the heads, and the prime tower" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Prepare: a model on the plate, each color sent to its head, and one prime tower per material" />
 
 The U1 plate as in Orca — then slice.
 
@@ -113,7 +113,7 @@ Claude modifies a part or creates one from a description.
 
 ### ✂️ Slicing
 
-<img align="right" width="40%" hspace="12" src="docs/screenshots/slicing.png" alt="The slice sheet" />
+<img align="right" width="40%" hspace="12" src="docs/screenshots/slicing.png" alt="The slice sheet, in Basic" />
 
 The Snapmaker Orca engine, built in: you do not need Snapmaker Orca installed.
 

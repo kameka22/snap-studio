@@ -82,7 +82,7 @@ Vos fichiers 3MF en un coup d'œil.
 
 ### 🧩 Préparer
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Préparer : un modèle sur le plateau, ses couleurs envoyées aux têtes, et la tour d'amorçage" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/prepare.png" alt="Préparer : un modèle sur le plateau, chaque couleur envoyée à sa tête, et une tour d'amorçage par matériau" />
 
 Le plateau U1 comme dans Orca — puis découper.
 
@@ -126,7 +126,7 @@ Claude modifie une pièce ou en crée une à partir d'une description.
 
 ### ✂️ Découpe
 
-<img align="right" width="40%" hspace="12" src="docs/screenshots/slicing.png" alt="La fenêtre de découpe" />
+<img align="right" width="40%" hspace="12" src="docs/screenshots/slicing.png" alt="La fenêtre de découpe, en Essentiel" />
 
 Le moteur Snapmaker Orca, intégré : inutile d'installer Snapmaker Orca.
 
