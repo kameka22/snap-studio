@@ -1,19 +1,106 @@
 {
-  "current": "0.15",
+  "current": "0.16",
   "versions": [
     {
+      "version": "0.16",
+      "tagline": {
+        "en": "Mixed colours, one tower per material, and a lighter slice sheet.",
+        "fr": "Des couleurs mélangées, une tour par matériau, et une découpe plus légère."
+      },
+      "features": [
+        {
+          "id": "virtual-heads",
+          "icon": "spool",
+          "color": "#30d158",
+          "edge": "linear-gradient(90deg, #0a84ff, #ffd60a)",
+          "image": "../assets/virtual-heads.webp",
+          "position": "50% 40%",
+          "tag": { "en": "Heads", "fr": "Têtes" },
+          "chip": { "en": "Virtual heads", "fr": "Têtes virtuelles" },
+          "title": { "en": "Mix two spools into a new colour", "fr": "Mélangez deux bobines en une nouvelle couleur" },
+          "text": {
+            "en": "Like Snapmaker Orca’s Full Spectrum: in Heads and spools, pick two loaded spools and a ratio from 4:1 to 1:4. The heads alternate layer by layer.",
+            "fr": "Comme le Full Spectrum de Snapmaker Orca : dans Têtes et bobines, choisissez deux bobines chargées et un ratio de 4:1 à 1:4. Les têtes alternent couche par couche."
+          },
+          "alt": { "en": "A virtual head mixing white and black PLA, one layer of each", "fr": "Une tête virtuelle qui mélange du PLA blanc et noir, une couche de chaque" }
+        },
+        {
+          "id": "per-material-towers",
+          "icon": "cube",
+          "color": "#7d7aff",
+          "edge": "linear-gradient(90deg, #5856d6, #0a84ff)",
+          "image": "../assets/per-material-towers.webp",
+          "position": "0% 30%",
+          "tag": { "en": "Prepare", "fr": "Préparer" },
+          "chip": { "en": "Tower per material", "fr": "Tour par matériau" },
+          "title": { "en": "One prime tower per material", "fr": "Une tour d’amorçage par matériau" },
+          "text": {
+            "en": "When the plate’s materials do not bond, choose Per material: one small tower for each group of materials, rebuilt at every slice.",
+            "fr": "Quand les matériaux du plateau n’adhèrent pas entre eux, choisissez Par matériau : une petite tour par groupe de matériaux, refaite à chaque découpe."
+          },
+          "alt": { "en": "Two prime towers, PLA and PETG, on the plate", "fr": "Deux tours d’amorçage, PLA et PETG, sur le plateau" }
+        },
+        {
+          "id": "slice-levels",
+          "icon": "sliders",
+          "color": "#64d2ff",
+          "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
+          "image": "../assets/slice-levels.webp",
+          "position": "100% 0%",
+          "tag": { "en": "Slicing", "fr": "Découpe" },
+          "chip": { "en": "Basic / Advanced", "fr": "Essentiel / Avancé" },
+          "title": { "en": "Basic or Advanced settings", "fr": "Réglages Essentiel ou Avancé" },
+          "text": {
+            "en": "The slice sheet opens in Basic, with the essentials. Advanced shows every setting; hidden ones still apply.",
+            "fr": "La fenêtre de découpe s’ouvre en Essentiel. Avancé montre tous les réglages ; ceux qui sont masqués s’appliquent toujours."
+          },
+          "alt": { "en": "The slice sheet in Basic", "fr": "La fenêtre de découpe en Essentiel" }
+        },
+        {
+          "id": "ai-sandbox",
+          "icon": "shield",
+          "color": "#bf5af2",
+          "edge": "linear-gradient(90deg, #bf5af2, #0a84ff)",
+          "image": "../assets/ai-sandbox.webp",
+          "position": "50% 0%",
+          "tag": { "en": "AI", "fr": "IA" },
+          "chip": { "en": "AI sandbox", "fr": "Bac à sable IA" },
+          "title": { "en": "A lighter AI sandbox", "fr": "Un bac à sable IA plus léger" },
+          "text": {
+            "en": "On macOS and Linux, Claude now works in Claude Code’s own sandbox: no Docker, no yolobox, just Python. yolobox remains a choice.",
+            "fr": "Sous macOS et Linux, Claude travaille maintenant dans le bac à sable de Claude Code : ni Docker ni yolobox, juste Python. yolobox reste un choix."
+          },
+          "alt": { "en": "Settings › AI with the built-in sandbox", "fr": "Réglages › IA avec le bac à sable intégré" }
+        }
+      ],
+      "small": [
+        {
+          "icon": "create", "color": "#ff9f0a",
+          "title": { "en": "Images to start a conversation", "fr": "Des images pour commencer" },
+          "text": { "en": "Drop, paste or choose sketches and photos when you start an AI conversation.", "fr": "Déposez, collez ou choisissez croquis et photos en lançant une conversation IA." }
+        },
+        {
+          "icon": "check", "color": "#30d158",
+          "title": { "en": "Fixes", "fr": "Corrections" },
+          "text": { "en": "“Check Again” in Settings › AI no longer stays stuck, and a dropped image no longer lands in recent folders.", "fr": "« Vérifier à nouveau » dans Réglages › IA ne reste plus bloqué, et une image déposée n’arrive plus dans les dossiers récents." }
+        }
+      ]
+    },
+    {
       "version": "0.15",
+      "date": "2026-10-25",
       "tagline": {
         "en": "The prime tower on the plate, and every slice setting at hand.",
         "fr": "La tour d’amorçage sur le plateau, et tous les réglages de découpe sous la main."
       },
+      "summary": { "en": "Prime tower in Prepare, slice settings in pictures", "fr": "Tour d’amorçage dans Préparer, réglages de découpe en images" },
       "features": [
         {
           "id": "prime-tower",
           "icon": "cube",
           "color": "#7d7aff",
           "edge": "linear-gradient(90deg, #5856d6, #0a84ff)",
-          "image": "../assets/prepare.webp",
+          "image": "../assets/prime-tower.webp",
           "position": "0% 20%",
           "tag": { "en": "Prepare", "fr": "Préparer" },
           "chip": { "en": "Prime tower", "fr": "Tour d’amorçage" },
@@ -109,7 +196,7 @@
           "icon": "explore",
           "color": "#ff9f0a",
           "edge": "linear-gradient(90deg, #ff9500, #ffcc00)",
-          "image": "../assets/library.webp",
+          "image": "../assets/library-0.14.webp",
           "tag": { "en": "Explore", "fr": "Explorer" },
           "chip": { "en": "Explore", "fr": "Explorer" },
           "title": { "en": "The whole Snapmaker world, in one place", "fr": "Tout l’univers Snapmaker, au même endroit" },
@@ -124,7 +211,7 @@
           "icon": "prepare",
           "color": "#7d7aff",
           "edge": "linear-gradient(90deg, #5856d6, #0a84ff)",
-          "image": "../assets/prepare.webp",
+          "image": "../assets/prime-tower.webp",
           "position": "0% 0%",
           "tag": { "en": "Prepare", "fr": "Préparer" },
           "chip": { "en": "Colour modes", "fr": "Modes de couleur" },
@@ -154,7 +241,7 @@
           "icon": "create",
           "color": "#bf5af2",
           "edge": "linear-gradient(90deg, #af52de, #ff2d92)",
-          "image": "../assets/ai-chat.webp",
+          "image": "../assets/ai-chat-0.14.webp",
           "tag": { "en": "Create", "fr": "Créer" },
           "chip": { "en": "Create", "fr": "Créer" },
           "title": { "en": "The AI is now called Create", "fr": "L’IA s’appelle maintenant Créer" },
@@ -227,7 +314,7 @@
           "icon": "control",
           "color": "#ff9f0a",
           "edge": "linear-gradient(90deg, #ff9500, #ffcc00)",
-          "image": "../assets/control.webp",
+          "image": "../assets/control-0.13.webp",
           "tag": { "en": "Care & Tuning", "fr": "Entretien et réglages" },
           "chip": { "en": "Control", "fr": "Contrôle" },
           "title": { "en": "Drive the printer without G-code", "fr": "Pilotez l’imprimante sans G-code" },
@@ -242,7 +329,7 @@
           "icon": "cube",
           "color": "#0a84ff",
           "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
-          "image": "../assets/printer.webp",
+          "image": "../assets/printer-0.13.webp",
           "tag": { "en": "Printer", "fr": "Imprimante" },
           "chip": { "en": "The U1 in 3D", "fr": "Le U1 en 3D" },
           "title": { "en": "Your U1, in 3D", "fr": "Votre U1, en 3D" },
@@ -257,7 +344,7 @@
           "icon": "spool",
           "color": "#30d158",
           "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
-          "image": "../assets/control.webp",
+          "image": "../assets/control-0.13.webp",
           "position": "100% 30%",
           "zoom": 1.55,
           "tag": { "en": "Spools", "fr": "Bobines" },
@@ -307,7 +394,7 @@
       "version": "0.12",
       "date": "2026-10-21",
       "summary": { "en": "Prepare reworked, ten display themes, bed leveling", "fr": "Préparer repensé, dix thèmes d’affichage, nivellement du plateau" },
-      "image": "../assets/display.webp",
+      "image": "../assets/display-0.12.webp",
       "alt": { "en": "Settings › Display and its themes", "fr": "Réglages › Affichage et ses thèmes" },
       "highlights": [
         {
@@ -332,7 +419,7 @@
       "version": "0.11",
       "date": "2026-10-20",
       "summary": { "en": "A printer’s files, sharing by QR code, print speed", "fr": "Fichiers de l’imprimante, partage par QR code, vitesse d’impression" },
-      "image": "../assets/printer-files.webp",
+      "image": "../assets/printer-files-0.11.webp",
       "alt": { "en": "A printer’s files", "fr": "Les fichiers d’une imprimante" },
       "highlights": [
         {
@@ -376,7 +463,7 @@
       "version": "0.9",
       "date": "2026-10-18",
       "summary": { "en": "Maintenance per printer, choice of the Claude model", "fr": "Entretien par imprimante, choix du modèle Claude" },
-      "image": "../assets/maintenance.webp",
+      "image": "../assets/maintenance-0.9.webp",
       "alt": { "en": "A printer’s maintenance", "fr": "L’entretien d’une imprimante" },
       "highlights": [
         {
