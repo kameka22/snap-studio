@@ -1,25 +1,25 @@
 {
-  "version": "0.15",
+  "version": "0.16",
   "highlights": [
     {
-      "id": "prime-tower",
-      "en": "Prime tower",
-      "fr": "Tour d’amorçage"
+      "id": "virtual-heads",
+      "en": "Virtual heads",
+      "fr": "Têtes virtuelles"
     },
     {
-      "id": "slice-settings",
-      "en": "Slice settings",
-      "fr": "Réglages de découpe"
+      "id": "per-material-towers",
+      "en": "Tower per material",
+      "fr": "Tour par matériau"
     },
     {
-      "id": "spool-colours",
-      "en": "Spool colours",
-      "fr": "Couleurs des bobines"
+      "id": "slice-levels",
+      "en": "Basic / Advanced",
+      "fr": "Essentiel / Avancé"
     },
     {
-      "id": "camera-close",
-      "en": "Camera",
-      "fr": "Caméra"
+      "id": "ai-sandbox",
+      "en": "AI sandbox",
+      "fr": "Bac à sable IA"
     }
   ]
 }
