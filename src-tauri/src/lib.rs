@@ -1,5 +1,6 @@
 mod menu;
 mod migrate;
+mod mixcolor;
 mod access;
 mod auth;
 mod bedmesh;
@@ -541,6 +542,13 @@ async fn plate_save(scene: Vec<plate::SceneItem>, tower: Option<plate::TowerPlac
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())
+}
+
+/// A virtual head's preview color: `a` and `b` (`#rrggbb`) mixed at each
+/// share of `b`, as Snapmaker Orca shows its mixed filaments.
+#[tauri::command]
+fn mix_colors(a: String, b: String, shares: Vec<f32>) -> Result<Vec<String>, String> {
+    mixcolor::mix_hex(&a, &b, &shares).ok_or_else(|| "unreadable color".to_string())
 }
 
 /// The prime tower a 3MF keeps (its first plate's), if any.
@@ -2032,6 +2040,7 @@ pub fn run() {
             plate_orient,
             plate_save,
             plate_tower,
+            mix_colors,
             print_send,
             pf_overview,
             pf_count,

@@ -272,6 +272,37 @@ pub struct Request {
     /// Name given to a scene's result (G-code name).
     #[serde(default)]
     pub name: Option<String>,
+    /// The virtual heads the plate uses, in order: the `k`-th is head
+    /// `n + k` in the extruder maps (`n` physical heads), so the engine's
+    /// virtual filament `n + k + 1`.
+    #[serde(default)]
+    pub virtual_heads: Vec<VirtualHead>,
+}
+
+/// A virtual head: two physical heads (from 0) the engine alternates layer
+/// by layer, `pct` the share of `b` (Snapmaker Orca's mixed filament), and
+/// its preview color for the G-code's images.
+#[derive(Deserialize, Serialize, Clone, Debug, Default, PartialEq)]
+pub struct VirtualHead {
+    pub a: u8,
+    pub b: u8,
+    pub pct: u8,
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+/// Orca's `mixed_filament_definitions`, one row per virtual head as its
+/// `serialize_custom_entries` writes them: components from 1, enabled,
+/// custom (the layer cadence comes from the percent), no pointillism, no
+/// gradient, `Simple` distribution, no Local-Z, no bias, not deleted, not
+/// auto-generated, a stable id.
+pub fn mixed_definitions(heads: &[VirtualHead]) -> String {
+    heads
+        .iter()
+        .enumerate()
+        .map(|(k, v)| format!("{},{},1,1,{},0,g,w,m2,z0,xa0,xb0,d0,o0,u{}", v.a + 1, v.b + 1, v.pct.min(100), k + 1))
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 /// Overhang angle of the print profile (`support_threshold_angle`), which
@@ -705,6 +736,11 @@ pub fn run_job(
         for (k, v) in &req.overrides {
             overrides.insert(k.clone(), v.clone());
         }
+        // Virtual heads: the engine's command line keeps the mixes from the
+        // process settings (checked by engine_virtual_head_alternates).
+        if !req.virtual_heads.is_empty() {
+            overrides.insert("mixed_filament_definitions".into(), Value::String(mixed_definitions(&req.virtual_heads)));
+        }
         let prep = match presets::prepare(
             &idx,
             &work,
@@ -929,7 +965,10 @@ pub fn run_job(
         // The printer's screen shows the print from images in the G-code,
         // which the engine's command line does not write (`gcode_thumbs`).
         // Never a reason to fail the slice.
-        if let Some(mesh) = plate_mesh(&input, &head_colors(&req.colors, &prep.filaments)) {
+        // A virtual head shows its mix, after the physical heads.
+        let mut colors = head_colors(&req.colors, &prep.filaments);
+        colors.extend(req.virtual_heads.iter().map(|v| v.color.as_deref().and_then(crate::plate::hex_rgb)));
+        if let Some(mesh) = plate_mesh(&input, &colors) {
             for g in &produced {
                 if let Err(e) = crate::gcode_thumbs::embed(g, &mesh) {
                     eprintln!("[slice] G-code images: {e}");
@@ -2127,6 +2166,92 @@ mod tests {
         assert!(t.x0 < -5.0 && t.y0 < -5.0 && (t.w - t.d).abs() < 3.0, "{t:?}");
         // Off: none, though the U1's profiles turn it on.
         assert_eq!(slice("tower-off", &[("enable_prime_tower", s("0"))]), None);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The engine's mixed filaments, as Orca serializes them.
+    #[test]
+    fn mixed_definitions_rows() {
+        let v = |a, b, pct| VirtualHead { a, b, pct, color: None };
+        assert_eq!(mixed_definitions(&[]), "");
+        assert_eq!(mixed_definitions(&[v(0, 2, 33)]), "1,3,1,1,33,0,g,w,m2,z0,xa0,xb0,d0,o0,u1");
+        assert_eq!(
+            mixed_definitions(&[v(0, 2, 33), v(3, 1, 80)]),
+            "1,3,1,1,33,0,g,w,m2,z0,xa0,xb0,d0,o0,u1;4,2,1,1,80,0,g,w,m2,z0,xa0,xb0,d0,o0,u2"
+        );
+        let r: Request = serde_json::from_str(r##"{"source":"","machine":"m","process":"p","filaments":[],"virtual_heads":[{"a":0,"b":2,"pct":33,"color":"#2f8d38"}]}"##).unwrap();
+        assert_eq!(r.virtual_heads, vec![VirtualHead { a: 0, b: 2, pct: 33, color: Some("#2f8d38".into()) }]);
+    }
+
+    /// A virtual head reaches the engine: a 10 mm cube on V1 (T0 + T2, 2:1)
+    /// at 0.1 mm, the mix in the process settings, prints T0, T0, T2 layer
+    /// after layer; the G-code has only physical tools.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_virtual_head_alternates -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_virtual_head_alternates() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.10mm")).expect("a 0.10 mm profile").name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-mix");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let p = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.], [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.]];
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let tris: Vec<Tri> = f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("cube.3mf");
+        crate::write3mf::write_scene(&src, &[crate::write3mf::SceneObject { name: "c".into(), tris, transform: Mat::IDENTITY, extruder: None }]).unwrap();
+        let mut overrides = Map::new();
+        overrides.insert("enable_prime_tower".into(), Value::String("0".into()));
+        let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+        let sink = seen.clone();
+        run_job(
+            binary(&app).unwrap(),
+            index_for(&app).unwrap(),
+            Request {
+                machine,
+                process,
+                filaments: vec![pla; 4],
+                // Head 4: the first virtual head on a 4-head printer.
+                scene: vec![crate::plate::SceneItem {
+                    path: src.to_string_lossy().to_string(), item: 0, name: "c".into(), pos: [135.0, 135.0],
+                    rot: [0.0; 3], scale: [1.0; 3], extruder_map: vec![4], piece: None,
+                }],
+                virtual_heads: vec![VirtualHead { a: 0, b: 2, pct: 33, color: Some("#2f8d38".into()) }],
+                overrides,
+                name: Some("mix".into()),
+                ..Default::default()
+            },
+            "mix".into(),
+            &move |p| sink.lock().unwrap().push(p),
+        );
+        let last = seen.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+        let gcode = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+        assert!(gcode.contains("; mixed_filament_definitions = 1,3,1,1,33,"), "the mix reached the engine");
+        // The tool printing each layer's features.
+        let (mut tool, mut layer, mut per_layer) = (None::<u8>, -1i32, std::collections::BTreeMap::<i32, std::collections::BTreeSet<u8>>::new());
+        for l in gcode.lines() {
+            if l.starts_with(";LAYER_CHANGE") {
+                layer += 1;
+            } else if let Some(t) = l.strip_prefix('T').and_then(|t| t.trim().parse::<u8>().ok()) {
+                tool = Some(t);
+            } else if l.starts_with(";TYPE:") && layer >= 0 {
+                if let Some(t) = tool {
+                    per_layer.entry(layer).or_default().insert(t);
+                }
+            }
+        }
+        let seq: Vec<u8> = per_layer.values().map(|s| *s.iter().next().unwrap()).collect();
+        println!("tools by layer: {:?}", &seq[..seq.len().min(12)]);
+        assert!(per_layer.values().all(|s| s.len() == 1), "one head per layer");
+        assert!(seq.len() >= 90, "a 10 mm cube at 0.1 mm: {} layers", seq.len());
+        assert!(seq.chunks(3).take(seq.len() / 3).all(|c| c == [0, 0, 2]), "T0, T0, T2: {seq:?}");
+        assert_eq!(last.stats.unwrap().tools, vec![0, 2], "only physical tools");
+        discard("mix");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
