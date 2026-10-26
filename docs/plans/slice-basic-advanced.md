@@ -18,23 +18,15 @@ The level only changes **what is shown**. Every value keeps applying in both
 levels: hiding never resets, never drops an override, never changes the
 slice.
 
-## Names
+## Names (decided)
 
-| | EN | FR |
-|---|---|---|
-| Recommended | **Basic** / **Advanced** | **Essentiel** / **Avancé** |
-| Asked first | Simple / Full | Simple / Complet |
-
-Basic/Advanced is recommended: "Advanced" says these are expert settings
-(not "more of the same"), it is the word Orca and most slicers use, and
-"Full" reads as a size. The final choice is the owner's; only the i18n
-values change.
-
-Because the ⚙ buttons are already called "Advanced settings"
-(`slice.adv.open`) and are still shown in Basic (Speed, Supports, Brim,
-Seam, Multi-material), their tooltip and aria label become **"More
-settings"** / **« Plus de réglages »**, so that Basic does not show buttons
-called "Advanced".
+- **Basic** / **Advanced** in English, **Essentiel** / **Avancé** in French
+  (asked first: Simple / Full). "Advanced" says these are expert settings,
+  as in Orca and most slicers.
+- The ⚙ buttons, called "Advanced settings" (`slice.adv.open`) and still
+  shown in Basic (Speed, Supports, Brim, Seam, Multi-material), are renamed
+  **"More settings"** / **« Plus de réglages »** (tooltip and aria label),
+  so that Basic shows no buttons called "Advanced".
 
 ## What each level shows
 
@@ -69,7 +61,7 @@ levels.
 - Footer: the prime tower warnings (`#s-tower`, `#s-tower-place`), progress,
   summary, buttons.
 
-Two 0.15 items stay in Basic on purpose:
+Two 0.15 items stay in Basic (decided):
 
 - **The prime tower switch on the Multi-material row.** In 0.14.2 the tower
   was turned on inside that panel (`enable_prime_tower`); 0.15 moved it to
