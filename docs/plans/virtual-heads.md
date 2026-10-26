@@ -17,8 +17,9 @@ Snap Studio gets **virtual heads**:
   modes) and in the slice sheet's read-only map;
 - sent to the engine as Orca's mixed filaments, so the G-code alternates the
   two heads;
-- **deleted automatically** when one of their two spools is unloaded, which
-  the user is told once, at creation, with « Ne plus afficher ».
+- **deleted automatically** when one of their two spools is unloaded: what
+  used it becomes **« sans tête »** and the slice waits for a choice; the
+  user is told once, at creation, with « Ne plus afficher ».
 
 Prepare's head choice also changes: today every color row shows the four
 head tokens; it will show **only the chosen head**, and a click opens the
@@ -140,13 +141,15 @@ nextUid: 4,
 - **Value of a virtual head** in every head field (`o.heads[ext]`, `o.pick`,
   `PR.colourHeads[ext]`, `map[file][ext]`, picker values): **`100 + uid`**.
   A number like the physical ones, never confused with one (heads are < 16),
-  stable when another virtual head is deleted. Helpers in a new pure file
+  stable when another virtual head is deleted. A value whose uid no longer
+  exists is an **orphan**: it is kept as it is and means « sans tête »
+  (see "Unloading"). Helpers in a new pure file
   `ui/virtual-logic.js`: `vhIs(h)`, `vhUid(h)`, `vhOf(pid, h)`,
   `vhComponents(h)` → `[a, b]`, `vhPhysical(set)` (expands a set of heads to
   the physical ones).
 - **Display name**: `V1`, `V2`… by creation order among the printer's
   current virtual heads (recomputed, not stored). Subtitle: `T0 + T2 · 2:1`.
-- **Limit**: **8 virtual heads per printer** (Orca allows 60 on a U1; eight
+- **Limit** (decided): **8 virtual heads per printer** (Orca allows 60 on a U1; eight
   keeps the popover to three short rows, and `write3mf`'s 1–16 clamp holds).
   The "+" is disabled at 8 with a tooltip.
 - **Per printer**, not per plate: like the heads' profiles. A plate only
@@ -155,7 +158,8 @@ nextUid: 4,
 
 ## The ratio and its slider
 
-The slider has **7 notches**, the cadences Orca can really print:
+The slider has **7 notches** (decided: 4:1 to 1:4), the cadences Orca can
+really print:
 
 | Notch | Cadence A:B | `pct` (share of B) | Caption |
 |---|---|---|---|
@@ -206,7 +210,8 @@ Under the four head cards (`hvRender`), a **"Virtual heads"** section:
 - one card per virtual head, same size as `.sl-headcard`: a **split spool**
   (mix color in the middle, a ring half A half B), `V1`, `T0 + T2 · 2:1`,
   and two icon buttons: edit (opens the sheet filled in) and delete
-  (confirms if a plate uses it, then the fallback below);
+  (confirms if a plate uses it; what used it becomes « sans tête », as on
+  unloading);
 - a dashed **"+ Virtual head"** card, disabled with a reason when fewer than
   two heads hold a spool whose color is read, when the printer is offline
   and its spools were never read, or at 8;
@@ -250,9 +255,9 @@ Mockup: [`docs/mockups/virtual-heads/index.html`](../mockups/virtual-heads/index
   reflow with the sheet width; `prefers-reduced-motion` drops the color
   transition.
 - **The slider** under the swatch, as above; caption under it.
-- **Materials**: both spools' families compared with `spTowerAdvice`'s
-  bonding rule. Not bonding (PLA + PETG, PLA + PVA…): an inline warning
-  and **Create disabled** — Snapmaker says not to mix them. Same family, a
+- **Materials** (decided): both spools' families compared with
+  `spTowerAdvice`'s bonding rule. Not bonding (PLA + PETG, PLA + PVA…): an
+  inline warning and **Create disabled** — Snapmaker says not to mix them. Same family, a
   different finish (PLA + PLA Silk): allowed, a short hint.
 - **Duplicate**: same pair and same notch as an existing one → Create
   disabled, « Identique à V2 ».
@@ -268,8 +273,8 @@ like `#assocmodal`:
 
 > **Une tête virtuelle dépend de ses deux bobines**
 > V1 mélange T0 et T2. Si vous déchargez l'une des deux bobines, V1 est
-> supprimée automatiquement, et ce qui l'utilisait passe sur la tête qui
-> reste chargée.
+> supprimée automatiquement : ce qui l'utilisait se retrouve sans tête, et
+> la découpe attend que vous en choisissiez une.
 > ☐ Ne plus afficher        [Compris]
 
 EN: "A virtual head depends on its two spools … ☐ Don't show this again
@@ -306,8 +311,9 @@ colour" mode) shows T0…T3 as tokens, the chosen one lit. It becomes:
   small ▾. Click, Enter or Space opens the head popover under it, chosen
   head focused, physical heads then virtual heads then "Create…". Picking
   calls the existing `prSetHead` / `prSetColourHead`; Esc closes.
-- An **unmapped** color (by colour) shows a dashed « Choisir » token in the
-  warning color instead of four unlit ones (the `sans tête` tag stays).
+- An **unmapped** color (by colour), or one whose virtual head was deleted
+  (either mode), shows a dashed « Choisir » token in the warning color
+  instead of four unlit ones, with the `sans tête` tag.
 - A deduced head (not the user's own choice) keeps today's look difference
   (`own` false → the token is outlined, not filled).
 - The row is shorter, so the floating list (#28) shows more objects; the
@@ -360,20 +366,49 @@ colour" mode) shows T0…T3 as tokens, the chosen one lit. It becomes:
   read or no spool data never deletes anything. A spool swapped for another
   (still present) keeps the virtual head; its color is recomputed, and the
   materials ⚠ appears if they no longer bond.
-- What happens to what used it, everywhere it is stored (objects' `heads`
-  and `pick`, `PR.colourHeads`, the per-file `map`):
-  - it goes to the **component that is still loaded**;
-  - both unloaded at once: the value is **removed**: by object, the row
-    falls back to the deduced head (`headsResolve`); by colour, the color
-    becomes « sans tête » and the slice waits for a choice, as today.
+- **What used it becomes « sans tête »** (decided), in both association
+  modes and wherever it is stored (objects' `heads` and `pick`,
+  `PR.colourHeads`, the per-file `map`). No head is guessed: the mix was a
+  deliberate choice, and printing the remaining component alone would give
+  a color the user did not pick.
+  - The stored value is **kept as an orphan** (`100 + uid` of a deleted
+    head) rather than erased: `vhOrphan(h)` is true, every reader treats it
+    as "no head". In "by object" mode this is new: `prHeads` must **not**
+    fall back to the deduced head (`headsResolve`) for an orphan, otherwise
+    the row would silently get one.
+  - Picking a head on the row replaces the orphan, as any choice does.
+- **Blocking**, with what exists for "by colour" today:
+  - `prBlockers()` gains `orphans: [{ o, ext }]` in **both** modes (today it
+    only reports in "by colour" mode); `prStatus` counts them, so **Slice is
+    disabled** and its tooltip says why (`prepare.tip.orphan`: « 2 couleurs
+    n'ont plus de tête : choisissez-en une dans la liste »).
+  - The row shows the dashed « Choisir » token and the `sans tête` tag; in
+    "by object" mode the object row unfolds so the color is visible; the
+    colour banner (by colour) lists it like an unmapped color.
+  - The slice sheet, if open or opened from elsewhere (the printer view,
+    Library), refuses the same way: its Slice button disabled and a line
+    above it, « Des couleurs n'ont plus de tête : retournez dans Préparer
+    pour en choisir une », with « Ouvrir Préparer ». `renderModelMap` shows
+    the « Choisir » token read-only for those colors.
+  - Switching association mode carries orphans as they are (they stay
+    blocking).
 - **Notice**: one toast per read, grouped: « T2 a été déchargée : V1
-  (T0 + T2) a été supprimée. 3 couleurs passent sur T0. » with « Voir dans
-  Préparer » when Prepare is not open. Not undoable (the spool is gone);
-  creating it again is two clicks.
-- The same fallback runs when the user deletes a virtual head by hand (after
-  a confirmation that says how many colors use it), and when a plate refers
-  to a uid that no longer exists (an old plate, another printer).
+  (T0 + T2) a été supprimée. 3 couleurs n'ont plus de tête : choisissez-en
+  une pour découper. » with « Voir dans Préparer » when Prepare is not open.
+  Not undoable (the spool is gone); creating it again is two clicks.
+- The same rule applies when the user **deletes** a virtual head by hand
+  (after a confirmation: « 3 couleurs utilisent V1. Elles n'auront plus de
+  tête jusqu'à ce que vous en choisissiez une. »), and when a plate refers to
+  a uid that does not exist (an old plate, another printer).
 - A printer with fewer heads than a component (`headsCount`) deletes it too.
+
+## Decisions (from the review of the spec)
+
+1. Unloading a component: what used the virtual head becomes « sans tête »
+   and the slice is blocked until a head is chosen (no fallback to the
+   remaining head).
+2. Materials that do not bond: creation is blocked.
+3. Limits: 8 virtual heads per printer; slider from 4:1 to 1:4.
 
 ## Interactions
 
@@ -417,11 +452,14 @@ suggestions):
 | `heads.virtual.need_two` | Load two spools to mix their colors. | Chargez deux bobines pour mélanger leurs couleurs. |
 | `heads.virtual.max` | Up to {n} virtual heads. | {n} têtes virtuelles au maximum. |
 | `heads.virtual.explain.title` | A virtual head depends on its two spools | Une tête virtuelle dépend de ses deux bobines |
-| `heads.virtual.explain.body` | {name} mixes {a} and {b}. If you unload one of the two spools, {name} is deleted automatically and what used it moves to the head still loaded. | {name} mélange {a} et {b}. Si vous déchargez l'une des deux bobines, {name} est supprimée automatiquement, et ce qui l'utilisait passe sur la tête qui reste chargée. |
+| `heads.virtual.explain.body` | {name} mixes {a} and {b}. If you unload one of the two spools, {name} is deleted automatically: what used it is left without a head, and slicing waits until you choose one. | {name} mélange {a} et {b}. Si vous déchargez l'une des deux bobines, {name} est supprimée automatiquement : ce qui l'utilisait se retrouve sans tête, et la découpe attend que vous en choisissiez une. |
 | `heads.virtual.explain.noshow` | Don't show this again | Ne plus afficher |
 | `heads.virtual.explain.ok` | Got it | Compris |
-| `heads.virtual.removed` | {h} was unloaded: {name} ({a} + {b}) was deleted. {n} colors move to {to}. | {h} a été déchargée : {name} ({a} + {b}) a été supprimée. {n} couleurs passent sur {to}. |
-| `heads.virtual.delete_confirm` | {n} colors use {name}. They will move to {to}. | {n} couleurs utilisent {name}. Elles passeront sur {to}. |
+| `heads.virtual.removed` | {h} was unloaded: {name} ({a} + {b}) was deleted. {n} colors have no head now: choose one to slice. | {h} a été déchargée : {name} ({a} + {b}) a été supprimée. {n} couleurs n'ont plus de tête : choisissez-en une pour découper. |
+| `heads.virtual.delete_confirm` | {n} colors use {name}. They will have no head until you choose one. | {n} couleurs utilisent {name}. Elles n'auront plus de tête jusqu'à ce que vous en choisissiez une. |
+| `prepare.tip.orphan` | {n} colors no longer have a head: choose one in the list | {n} couleurs n'ont plus de tête : choisissez-en une dans la liste |
+| `slice.orphan` | Some colors no longer have a head: go back to Prepare to choose one. | Des couleurs n'ont plus de tête : retournez dans Préparer pour en choisir une. |
+| `slice.open_prepare` | Open Prepare | Ouvrir Préparer |
 | `swatch.virtual` | Virtual heads | Têtes virtuelles |
 | `swatch.create_virtual` | Create a virtual head… | Créer une tête virtuelle… |
 | `prepare.choose_head` | Choose | Choisir |
@@ -435,13 +473,19 @@ Plurals with the existing `_one` / `_other` scheme where a count shows.
 
 - `scripts/test-virtual.js` (new, pure `ui/virtual-logic.js`): value ↔ uid,
   names V1…, notch ↔ pct ↔ cadence (Orca's formula, all 7 notches and the
-  in-between percents), duplicate detection, limit, `vhPhysical`, the
-  unload fallback (one component, both, by object vs by colour, the per-file
-  map), the engine mapping (`n + k`, stable order).
+  in-between percents), duplicate detection, limit, `vhPhysical`,
+  `vhOrphan`, unloading (one component or both, by object and by colour,
+  the per-file map: every user becomes an orphan, none gets a guessed
+  head; an offline read deletes nothing), the engine mapping (`n + k`,
+  stable order).
 - `scripts/test-swatch.js`: virtual entries, the second section, keyboard
   moves across sections, the "unavailable" virtual value.
 - `scripts/test-prepare.js`: single-token rows, popover values, migration
-  between modes with virtual values.
+  between modes with virtual values and orphans; `prBlockers` reports
+  orphans in both modes and Slice is disabled until each gets a head; an
+  orphan in "by object" mode is not replaced by the deduced head.
+- Slice sheet: Slice disabled with the « Ouvrir Préparer » line while an
+  orphan remains.
 - `scripts/test-tower.js`: a plate on V1 alone uses two heads.
 - `cargo test --lib`: `mixcolor` golden values; `mixed_definitions` golden
   string; a scene with a virtual head writes `extruder` 5; saved plate's
@@ -449,7 +493,8 @@ Plurals with the existing `_one` / `_other` scheme where a count shows.
   alternates `T0 T0 T2`.
 - Screenshots (light/dark, FR/EN): Heads and spools section, creation sheet
   at 1:1 and 3:1, explanatory sheet, Prepare rows with one token, the open
-  popover with virtual heads, the toast.
+  popover with virtual heads, the toast, a blocked plate with « Choisir »
+  rows.
 
 ## Out of scope
 
@@ -462,5 +507,6 @@ paint tool (the values will already work).
 
 Implement, then **review your whole diff against `main`** (logic, every
 place a head value is read — `rg "\.heads\b|colourHeads|\.pick\b|extruder_map"`
-—, the fallback paths, i18n, themes, keyboard), fix what you find, and
+— so that no reader turns an orphan into a head, the blocking paths, i18n,
+themes, keyboard), fix what you find, and
 report that review in the pull request.
