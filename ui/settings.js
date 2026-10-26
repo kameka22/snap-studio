@@ -288,6 +288,7 @@ segmented("opt-pref", {
   titleOf: (v) => $("opt-pref").querySelector(`option[value="${v}"]`)?.text || "",
 });
 segmented("set-assoc");
+segmented("set-slice-level");
 // Long choices: radio cards, each with what it means.
 segmented("set-ai-mode", { cls: "cards", subs: { container: "welcome.ai.container.sub", local: "welcome.ai.local.sub", both: "welcome.ai.both.sub" } });
 $("set-ai-mode").closest(".grow-row").classList.add("stack");

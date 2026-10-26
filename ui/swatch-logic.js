@@ -54,9 +54,29 @@ function swEntries(heads, { value = null, auto = null, base = 0 } = {}) {
   out.push(...heads);
   const v = value == null ? null : String(value);
   if (v != null && v !== "" && !out.some((e) => e.value === v) && /^\d+$/.test(v) && +v - base >= 0) {
-    out.push({ value: v, h: +v - base, kind: "", color: "", state: "unavailable", disabled: true, warn: false });
+    // A virtual head no longer there (100 + uid) is no physical head.
+    const gone = +v >= 100;
+    out.push({ value: v, h: gone ? null : +v - base, v: gone ? { gone: true } : undefined, kind: "", color: "", state: "unavailable", disabled: true, warn: false });
   }
   return out;
+}
+
+/* The virtual heads of a picker (virtual-logic.js): `list` the printer's
+   [{ uid, a, b, pct }], `colorOf(v)` its mix, `name(v)` "V1",
+   `bonds(v)` false when its two materials no longer bond, `parts(v)` its
+   two heads' colors. Each: { value (100 + uid), h: null, v: { name, a, b,
+   ratio, ca, cb }, color, state: "ok", warn }. */
+function swVirtual({ list = [], colorOf = () => "", name = () => "", ratio = () => "", bonds = () => true, parts = () => ["", ""] }) {
+  return list.map((v) => ({
+    value: String(100 + v.uid),
+    h: null,
+    v: { name: name(v), a: v.a, b: v.b, ratio: ratio(v), ca: parts(v)[0] || "", cb: parts(v)[1] || "" },
+    kind: "",
+    color: colorOf(v) || "",
+    state: "ok",
+    disabled: false,
+    warn: bonds(v) === false,
+  }));
 }
 
 /* Roving focus among `items` ({ disabled }): the next one for `key` from
@@ -83,4 +103,4 @@ function swMove(items, i, key, cols = 1) {
   return -1;
 }
 
-if (typeof module !== "undefined") module.exports = { swLuma, swEdge, swHeads, swEntries, swMove, SW_KEYS };
+if (typeof module !== "undefined") module.exports = { swLuma, swEdge, swHeads, swEntries, swVirtual, swMove, SW_KEYS };

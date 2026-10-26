@@ -662,6 +662,29 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// An object on a virtual head (head 4 on a 4-head printer) is written
+    /// on extruder 5: the engine's first mixed filament.
+    #[test]
+    fn a_virtual_head_is_written_after_the_physical_ones() {
+        let tmp = std::env::temp_dir().join("snapstudio-plate-virtual");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("one.3mf");
+        crate::write3mf::write_scene(&src, &[
+            crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
+        ]).unwrap();
+        let item = SceneItem {
+            path: src.to_string_lossy().to_string(), item: 0, name: "a".into(), pos: [100.0, 100.0],
+            rot: [0.0; 3], scale: unit_scale(), extruder_map: vec![4], piece: None,
+        };
+        let out = tmp.join("scene.3mf");
+        write_scene(&[item], (270.0, 270.0), &out).unwrap();
+        let mut zip = crate::model3mf::open(&out).unwrap();
+        let m = crate::mesh::load_mesh(&mut zip, 10_000).unwrap();
+        assert!(!m.extruders.is_empty() && m.extruders.iter().all(|e| *e == 5), "{:?}", &m.extruders[..m.extruders.len().min(4)]);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// A saved plate keeps its prime tower where Orca does (the project's
     /// settings), and reads it back, saying it is ours; without one, none.
     #[test]

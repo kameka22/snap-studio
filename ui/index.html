@@ -657,6 +657,9 @@
       <p id="hv-note" class="hv-note"></p>
       <div id="hv-grid" class="sl-heads hv-grid"></div>
       <div id="hv-msg" class="pf-test"></div>
+      <div class="set-section hv-vtitle" data-i18n="heads.virtual.title">Virtual heads</div>
+      <p class="hv-note" data-i18n="heads.virtual.note">A virtual head mixes two loaded spools: the engine alternates them layer by layer.</p>
+      <div id="hv-virtual" class="sl-heads hv-grid"></div>
     </section>
   </div>
 </section>
@@ -1033,6 +1036,15 @@
           <option value="colour" data-i18n="prepare.assoc.colour">By colour</option>
         </select>
       </div>
+      <div class="grow-row">
+        <span class="k"><span data-i18n="settings.slice_level">Slice settings shown</span>
+          <span class="sub" data-i18n="settings.slice_level.sub">Basic shows the essentials; Advanced adds quality, infill, walls, surfaces and more. Also in the slice window's title bar.</span>
+        </span>
+        <select id="set-slice-level">
+          <option value="basic" data-i18n="slice.level.basic">Basic</option>
+          <option value="advanced" data-i18n="slice.level.advanced">Advanced</option>
+        </select>
+      </div>
     </div>
       </div>
     </div>
@@ -1148,6 +1160,10 @@
         <h3 data-i18n="prepare.slice">Slice</h3>
         <div id="s-file" class="det-sub"></div>
       </div>
+      <select id="s-level" class="hidden" tabindex="-1" aria-label="Settings shown" data-i18n-aria="slice.level">
+        <option value="basic" data-i18n="slice.level.basic">Basic</option>
+        <option value="advanced" data-i18n="slice.level.advanced">Advanced</option>
+      </select>
     </div>
 
     <div id="s-engine" class="sl-engine hidden"></div>
@@ -1171,11 +1187,12 @@
           <select id="s-bed" class="hidden" tabindex="-1"></select>
           <div id="s-bedtemp" class="s-bedtemp"></div>
 
-          <div class="set-section sl-sec-adv"><span data-i18n="slice.quality">Quality</span><button class="btn info-btn sl-adv-btn" data-adv="quality" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button></div>
+          <div class="set-section sl-sec-adv"><span data-i18n="slice.quality">Quality</span><button class="btn info-btn sl-adv-btn" data-adv="quality" data-level="advanced" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button></div>
           <div class="sl-layer">
             <div class="sl-layer-head"><span data-i18n="slice.layer_height">Layer height</span><b id="s-layer-val">—</b></div>
             <div id="s-layer-chips" class="sl-chips"></div>
             <div class="sl-scale"><span data-i18n="slice.finer">finer</span><span data-i18n="slice.faster">faster</span></div>
+            <div id="s-vlayer" class="sl-note sl-vlayer hidden" data-i18n="slice.virtual.layer_hint">For an even mix, choose 0.10 mm or less.</div>
           </div>
           <div class="sl-layer">
             <div class="sl-layer-head"><span data-i18n="slice.style">Style</span></div>
@@ -1194,13 +1211,13 @@
           <div class="sl-adjust">
             <div class="sl-card sl-tile">
               <small data-i18n="slice.infill">Infill</small>
-              <button class="btn info-btn sl-adv-btn sl-tile-adv" data-adv="infill" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn sl-tile-adv" data-adv="infill" data-level="advanced" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
               <b id="s-infill-val">—</b>
               <input type="range" id="s-infill" min="0" max="100" step="5" />
             </div>
             <div class="sl-card sl-tile">
               <small data-i18n="slice.walls">Walls</small>
-              <button class="btn info-btn sl-adv-btn sl-tile-adv" data-adv="walls" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn sl-tile-adv" data-adv="walls" data-level="advanced" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
               <div class="sl-stepper">
                 <button class="btn" data-step="-1" title="Fewer walls" data-i18n-title="slice.walls_less">−</button>
                 <b id="s-walls-val">—</b>
@@ -1214,7 +1231,7 @@
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 4a10 10 0 0 0-8.7 15h17.4A10 10 0 0 0 12 4m0 2a8 8 0 0 1 7.5 11h-15A8 8 0 0 1 12 6m4.2 2.4-5 4.6a1.6 1.6 0 1 0 2.2 2.2z"/></svg></span>
               <span class="k"><span id="s-speed-label" data-i18n="slice.speed">Speed</span><small id="s-adv-sum-speed" class="sub"></small></span>
               <b id="s-speed-val" class="sl-speed-val">100 %</b>
-              <button class="btn info-btn sl-adv-btn" data-adv="speed" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn" data-adv="speed" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
               <div class="sl-speed-ctl">
                 <input type="range" id="s-speed" min="50" max="120" step="5" value="100" aria-labelledby="s-speed-label" />
                 <div class="sl-speed-marks" data-marks="s-speed"></div>
@@ -1224,35 +1241,36 @@
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16v4H4zm2 6h2v12H6zm5 0h2v12h-2zm5 0h2v12h-2z"/></svg></span>
               <span class="k"><span data-i18n="slice.supports">Supports</span><small id="s-adv-sum-support" class="sub"></small></span>
               <input type="checkbox" id="s-supports" class="sw" role="switch" />
-              <button class="btn info-btn sl-adv-btn" data-adv="support" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn" data-adv="support" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
             <div class="sl-adv-row">
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8zM3 3h18v18H3zm2 2v14h14V5z"/></svg></span>
               <span class="k"><span data-i18n="slice.brim">Brim</span><small id="s-adv-sum-brim" class="sub"></small></span>
               <input type="checkbox" id="s-brim" class="sw" role="switch" />
-              <button class="btn info-btn sl-adv-btn" data-adv="brim" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn" data-adv="brim" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
             <div class="sl-adv-row" id="s-adv-mm-row">
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zm5 0h4v16h-4zm5 0h4v16h-4z"/></svg></span>
               <span class="k"><span data-i18n="slice.adv.mm">Multi-material</span><small id="s-adv-sum-mm" class="sub"></small></span>
               <input type="checkbox" id="s-tower-sw" class="sw" role="switch" aria-label="Prime tower" data-i18n-aria="slice.adv.g.tower" />
-              <button class="btn info-btn sl-adv-btn" data-adv="mm" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn" data-adv="mm" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
             <div class="sl-adv-row">
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 2a7 7 0 0 1 1 13.9V5.1q-.5-.1-1-.1"/></svg></span>
               <span class="k"><span data-i18n="slice.adv.seam">Seam</span><small id="s-adv-sum-seam" class="sub"></small></span>
-              <button class="btn info-btn sl-adv-btn" data-adv="seam" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn" data-adv="seam" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
-            <div class="sl-adv-row">
+            <div class="sl-adv-row" data-level="advanced">
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M3 5h18v3H3zm0 5.5h18v3H3zM3 16h18v3H3z" opacity=".35"/><path d="M3 5h18v3H3zm0 11h18v3H3z"/></svg></span>
               <span class="k"><span data-i18n="slice.adv.surfaces">Surfaces</span><small id="s-adv-sum-surfaces" class="sub"></small></span>
-              <button class="btn info-btn sl-adv-btn" data-adv="surfaces" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn" data-adv="surfaces" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
-            <div class="sl-adv-row">
+            <div class="sl-adv-row" data-level="advanced">
               <span class="sl-adv-ico"><svg viewBox="0 0 24 24"><path d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4m7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4m7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4"/></svg></span>
               <span class="k"><span data-i18n="slice.adv.other">Other</span><small id="s-adv-sum-other" class="sub"></small></span>
-              <button class="btn info-btn sl-adv-btn" data-adv="other" title="Advanced settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
+              <button class="btn info-btn sl-adv-btn" data-adv="other" title="More settings" data-i18n-title="slice.adv.open"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><i class="sl-adv-n"></i></button>
             </div>
+            <div id="s-level-hint" class="sl-level-hint hidden" role="status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m9.3 4a7.3 7.3 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.4 7.4 0 0 0-2-1.2L16.5 2h-4l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2.5l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2"/></svg><span id="s-level-hint-t"></span><span aria-hidden="true">·</span><button type="button" id="s-level-show" class="w-link" data-i18n="slice.level.show">Show</button></div>
           </div>
           <div class="sl-line sl-save-line">
             <button id="s-save-process" class="w-link" data-i18n="slice.adv.save">Save as Custom Profile…</button>
@@ -1282,6 +1300,7 @@
     </div>
 
     <div class="sl-foot">
+      <div id="s-orphan" class="sl-tower bad hidden" role="status"><span class="sl-tower-t" data-i18n="slice.orphan">Some colors no longer have a head: go back to Prepare to choose one.</span><span class="sl-tower-acts"><button type="button" id="s-orphan-go" class="btn small" data-i18n="slice.open_prepare">Open Prepare</button></span></div>
       <div id="s-tower-place" class="sl-tower hidden" role="status"></div>
       <div id="s-tower" class="sl-tower hidden" role="status"></div>
       <div id="s-progress" class="progress hidden"><i></i></div>
@@ -1816,6 +1835,48 @@
   </div>
 </div>
 
+<div id="vhmodal" class="modal hidden">
+  <div class="modal-box vh-box" role="dialog" aria-modal="true" aria-labelledby="vh-title">
+    <button type="button" id="vh-close" class="vh-x" aria-label="Close" data-i18n-aria="common.close">✕</button>
+    <h3 id="vh-title" data-i18n="heads.virtual.new">New virtual head</h3>
+    <div class="vh-stage">
+      <svg id="vh-lines" class="vh-lines" aria-hidden="true"></svg>
+      <div class="vh-heads">
+        <button type="button" id="vh-a" class="vh-card" aria-haspopup="listbox" aria-expanded="false"></button>
+        <button type="button" id="vh-b" class="vh-card" aria-haspopup="listbox" aria-expanded="false"></button>
+      </div>
+      <div class="vh-mix">
+        <div id="vh-swatch" class="vh-swatch"></div>
+        <b id="vh-name"></b>
+        <small id="vh-color"></small>
+      </div>
+    </div>
+    <div class="vh-slider">
+      <span id="vh-la" class="vh-end"></span>
+      <input type="range" id="vh-notch" min="1" max="7" step="1" value="4" aria-label="Mix" data-i18n-aria="heads.virtual.mix" />
+      <span id="vh-lb" class="vh-end"></span>
+    </div>
+    <div id="vh-caption" class="vh-caption" aria-hidden="true"></div>
+    <div id="vh-warn" class="vh-warn hidden" role="status"></div>
+    <p class="vh-note"><span data-i18n="heads.virtual.preview_note">Indicative preview: the mix is made layer by layer and depends on the filaments, the layer height and the light.</span>
+      <button type="button" class="btn info-btn vh-info" title="Top and bottom flat surfaces show a single layer, so one of the two colors." data-i18n-title="heads.virtual.surfaces_note" aria-label="Top and bottom flat surfaces show a single layer, so one of the two colors." data-i18n-aria="heads.virtual.surfaces_note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-1 5h2v2h-2zm0 4h2v6h-2z"/></svg></button></p>
+    <div class="modal-actions">
+      <button id="vh-cancel" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="vh-go" class="btn primary" data-i18n="heads.virtual.create">Create</button>
+    </div>
+  </div>
+</div>
+<div id="vhexplain" class="modal hidden">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="vhx-title">
+    <h3 id="vhx-title" data-i18n="heads.virtual.explain.title">A virtual head depends on its two spools</h3>
+    <p id="vhx-body"></p>
+    <label class="q-check"><input id="vhx-noshow" type="checkbox" /> <span data-i18n="heads.virtual.explain.noshow">Don't show this again</span></label>
+    <div class="modal-actions">
+      <button id="vhx-close" class="btn" data-cancel data-i18n="common.cancel">Cancel</button>
+      <button id="vhx-ok" class="btn primary" data-i18n="heads.virtual.explain.ok">Got it</button>
+    </div>
+  </div>
+</div>
 <div id="assocmodal" class="modal hidden">
   <div class="modal-box" role="dialog" aria-labelledby="assoc-title">
     <h3 id="assoc-title" data-i18n="prepare.assoc.modal.title">Two ways to assign heads</h3>
@@ -2067,10 +2128,12 @@
 <script src="slice-speed.js"></script>
 <script src="prints.js"></script>
 <script src="prepare-logic.js"></script>
+<script src="virtual-logic.js"></script>
 <script src="tower-logic.js"></script>
 <script src="prepare.js"></script>
 <script src="prepare-tower.js"></script>
 <script src="heads.js"></script>
+<script src="virtual.js"></script>
 <script src="spoolcheck.js"></script>
 <script src="bedmesh-logic.js"></script>
 <script src="maint.js"></script>

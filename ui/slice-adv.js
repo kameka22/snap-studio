@@ -242,12 +242,15 @@ function advOverrides() {
   for (const k in o) o[k] = String(o[k]);
   return o;
 }
-/* Every key of a category, whatever applies now (counting, resetting). */
+/* Every key of a category, whatever applies now (counting, resetting);
+   with a `level`, only those of the groups it shows. */
 const ADV_TREE_ALL = ["tree_support_branch_angle", "tree_support_branch_angle_organic", "tree_support_branch_distance", "tree_support_branch_distance_organic", "tree_support_branch_diameter", "tree_support_branch_diameter_organic", "tree_support_tip_diameter", "tree_support_wall_count", "tree_support_auto_brim", "tree_support_brim_width"];
-function advCatKeysAll(cat) {
-  return ADV_CATS[cat].groups.flatMap((g) => (typeof g.keys === "function" ? ADV_TREE_ALL : g.keys));
+function advCatKeysAll(cat, level = null) {
+  return ADV_CATS[cat].groups
+    .filter((g) => !level || advLevelShows(cat, g.t, level))
+    .flatMap((g) => (typeof g.keys === "function" ? ADV_TREE_ALL : g.keys));
 }
-const advCountOf = (cat) => advCatKeysAll(cat).filter((k) => k in SL.adv && (!ADV_WHEN[k] || ADV_WHEN[k]())).length;
+const advCountOf = (cat, level = null) => advCatKeysAll(cat, level).filter((k) => k in SL.adv && (!ADV_WHEN[k] || ADV_WHEN[k]())).length;
 /* The advanced differences, for the summary: not the tower's switch,
    which is on the sheet. */
 function advCount() {
@@ -321,8 +324,9 @@ function advRenderRows() {
     support: $("s-supports").checked ? advLabel("support_type") : tr("slice.adv.off"),
     brim: $("s-brim").checked ? advLabel("brim_type", SL.adv.brim_type || "outer_only") : tr("slice.adv.off"),
     seam: advLabel("seam_position"),
+    // Off with a virtual head: advised (it changes heads at every layer).
     mm: !advOn("enable_prime_tower")
-      ? tr("slice.adv.mm_no_tower")
+      ? tr(prTowerVirtualUsed() ? "prepare.tower.virtual_hint" : "slice.adv.mm_no_tower")
       : +advVal("wipe_tower_filament") > 0
       ? tr("slice.adv.mm_tower_wall", { t: `T${+advVal("wipe_tower_filament") - 1}` })
       : tr("slice.adv.mm_tower"),
@@ -346,13 +350,15 @@ function advRenderRows() {
     // Quality, Infill and Walls have no row of their own: no summary.
     const s = $("s-adv-sum-" + cat);
     if (s) s.textContent = sum[cat] || "";
-    const n = advCountOf(cat);
+    // The keys the level shows: the hidden ones are in the hint below.
+    const n = advCountOf(cat, slLevel());
     const btn = document.querySelector(`.sl-adv-btn[data-adv="${cat}"]`);
     btn.classList.toggle("mod", n > 0);
     btn.querySelector(".sl-adv-n").textContent = n || "";
     // Ten such buttons on the sheet: each says which panel it opens.
     btn.setAttribute("aria-label", `${tr("slice.adv.open")} — ${tr(ADV_CATS[cat].title)}${n ? ` (${n})` : ""}`);
   }
+  slLevelHint();
   spdRenderRow();
   slSummary();
 }
@@ -436,13 +442,13 @@ function advRenderPanel() {
   const c = ADV_CATS[ADV.cat];
   if (!c) return;
   $("s-adv-title").textContent = tr(c.title);
-  $("s-adv-reset").classList.toggle("hidden", advCountOf(ADV.cat) === 0);
+  $("s-adv-reset").classList.toggle("hidden", advCountOf(ADV.cat, slLevel()) === 0);
   const note = ADV.cat === "support" && !$("s-supports").checked ? tr("slice.adv.support_off")
     : ADV.cat === "brim" && !$("s-brim").checked ? tr("slice.adv.brim_off")
     : ADV.cat === "mm" && !advOn("enable_prime_tower") ? tr("slice.adv.tower_off")
     : "";
   const groups = c.groups
-    .filter((g) => !g.when || g.when())
+    .filter((g) => (!g.when || g.when()) && advLevelShows(ADV.cat, g.t, slLevel()))
     .map((g) => {
       const keys = (typeof g.keys === "function" ? g.keys() : g.keys).filter((k) => !ADV_WHEN[k] || ADV_WHEN[k]());
       const rows = keys.map(advField).join("");
@@ -674,7 +680,8 @@ $("s-adv-back").addEventListener("click", advClose);
 $("s-adv-body").addEventListener("scroll", () => PK.grid && closePicker(), { passive: true });
 $("s-adv-reset").addEventListener("click", () => {
   if (ADV.cat === "speed") return spdResetAll();
-  for (const k of advCatKeysAll(ADV.cat)) delete SL.adv[k];
+  // Only what the level shows: Basic never changes a hidden value.
+  for (const k of advCatKeysAll(ADV.cat, slLevel())) delete SL.adv[k];
   advRemember();
   advRenderPanel();
   advRenderRows();
@@ -691,6 +698,67 @@ window.addEventListener("langchange", () => {
     if (ADV.cat) advRenderPanel();
   });
 });
+
+/* ------------------------------------------------------------ levels */
+
+/* Basic shows the sheet as it was in 0.14.2, Advanced every setting
+   (adv-logic.js). The level only changes what is shown: advOverrides(),
+   "Save as Custom Profile…" and the summary keep every difference. One
+   saved value (state.sliceLevel), two controls: the sheet's title bar and
+   Settings → Prepare. Someone who never chose one starts in Basic, or in
+   Advanced if they already changed one of its settings: set once, at the
+   first start that needs it. */
+if (!sliceLevelValid(state.sliceLevel)) {
+  state.sliceLevel = sliceLevelDefault(SL.memory);
+  save();
+}
+const slLevel = () => state.sliceLevel;
+
+/* The multi-material keys only apply with several heads (advOverrides). */
+const ADV_MM_KEYS = new Set(advCatKeysAll("mm"));
+/* A kept difference that applies now (as advCountOf). */
+const advApplies = (k) => (!ADV_WHEN[k] || ADV_WHEN[k]()) && (!ADV_MM_KEYS.has(k) || multiHead());
+
+/* The one way to change the level, from either control: both follow,
+   then the sheet. A value already set is ignored (no loop between the
+   two selects). */
+function slLevelSet(level) {
+  if (!sliceLevelValid(level) || level === state.sliceLevel) return;
+  state.sliceLevel = level;
+  save();
+  slLevelApply();
+}
+
+/* The level on the controls and the sheet: rows and buttons marked
+   data-level="advanced" hidden in Basic (CSS), the open panel closed when
+   Basic hides it, redrawn otherwise (Multi-material without its ooze
+   group), the counters and the hint redone. Never touches a value. */
+function slLevelApply() {
+  const level = slLevel();
+  for (const id of ["s-level", "set-slice-level"]) if ($(id) && $(id).value !== level) $(id).value = level;
+  $("smodal").classList.toggle("sl-basic", level === "basic");
+  if ($("smodal").classList.contains("hidden")) return;
+  if (ADV.cat && !advLevelShows(ADV.cat, null, level)) return advClose();
+  if (ADV.cat) advRenderPanel();
+  advRenderRows();
+}
+
+/* Basic: how many advanced settings differ, with a way to show them. */
+function slLevelHint() {
+  const n = advHiddenKeys(SL.adv, slLevel(), advApplies).length;
+  $("s-level-hint").classList.toggle("hidden", !n);
+  if (n) $("s-level-hint-t").textContent = tr("slice.level.hint", { n });
+}
+
+$("s-level").addEventListener("change", (e) => slLevelSet(e.target.value));
+$("set-slice-level").addEventListener("change", (e) => slLevelSet(e.target.value));
+$("s-level-show").addEventListener("click", () => {
+  slLevelSet("advanced");
+  // The hint is gone: the focus goes to the level it changed.
+  $("s-level")._seg?.box.querySelector('[aria-checked="true"]')?.focus();
+});
+segmented("s-level", { cls: "compact" });
+slLevelApply();
 
 /* ------------------------------------------------------ save as profile */
 

@@ -3186,6 +3186,11 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .modal-box.sl-box { width: 940px; padding: 0; gap: 0; overflow: hidden; display: flex; flex-direction: column; }
 .sl-box > * { flex-shrink: 0; }
 .sl-head { display: flex; align-items: center; gap: 14px; padding: 16px 22px 12px; border-bottom: 1px solid var(--separator); }
+/* The title on the left, the level (Basic / Advanced) on the right. */
+.sl-head .sl-title { flex: 1; min-width: 0; }
+.sl-head .seg { flex: none; }
+/* Basic: what only Advanced shows is not there at all. */
+#smodal.sl-basic [data-level="advanced"] { display: none; }
 .sl-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: contain; background: var(--thumb-bg); }
 .sl-title h3 { margin: 0; }
 .modal-box .sl-title h3 + .det-sub { margin-top: 2px; }
@@ -3784,6 +3789,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .sl-adv-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; min-height: 40px; }
 .sl-adv-row + .sl-adv-row { border-top: 1px solid var(--separator); }
 .sl-adv-row.hidden { display: none; }
+/* Basic: the advanced settings changed, closing the rows. */
+.sl-level-hint { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--separator); font-size: 11px; color: var(--text-tertiary); }
+.sl-level-hint svg { width: 12px; height: 12px; fill: currentColor; flex: none; }
+.sl-level-hint .w-link { font-size: 11px; }
 .sl-adv-ico svg { width: 15px; height: 15px; fill: var(--text-secondary); display: block; }
 .sl-adv-row .k { flex: 1; display: flex; flex-direction: column; min-width: 0; font-size: 13px; }
 .sl-adv-row .k .sub { color: var(--text-tertiary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4991,6 +5000,81 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .prn-estop:empty { display: none; }
 .prn-estop .ct-estop { margin: 0; padding: 5px 12px; gap: 6px; font-size: 11px; box-shadow: none; }
 .prn-estop .ct-estop svg { width: 14px; height: 14px; }
+
+/* ---------- Virtual heads (virtual.js) ---------- */
+.hv-vtitle { margin-top: 22px; }
+/* The mix in the middle, its two heads at the ends. */
+.vh-spool { background: linear-gradient(90deg, var(--ca) 0 16%, var(--c) 16% 84%, var(--cb) 84%); }
+.vh-card-item .sl-hc-top span { font-weight: 500; color: var(--text-secondary); }
+.vh-warn-tag { font-style: normal; color: var(--warning); margin-left: auto; }
+.vh-acts { display: flex; gap: 6px; justify-content: flex-end; }
+.vh-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: 96px; padding: 8px; border-radius: var(--radius-card);
+  border: 1.5px dashed color-mix(in srgb, var(--text) 25%, transparent); background: none;
+  color: var(--accent); font: inherit; font-size: 13px; cursor: pointer;
+}
+.vh-add span { font-size: 22px; line-height: 1; }
+.vh-add small { color: var(--text-tertiary); font-size: 11px; text-align: center; }
+.vh-add:disabled { color: var(--text-tertiary); cursor: default; }
+.vh-add:not(:disabled):hover { border-color: var(--accent); }
+.vh-add:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.modal-box.vh-box { width: 480px; position: relative; }
+.vh-x { position: absolute; top: 12px; right: 12px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: none; color: var(--text-secondary); font-size: 14px; cursor: pointer; }
+.vh-x:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.vh-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 56px; padding: 4px 0 6px; }
+.vh-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; fill: none; stroke-width: 2; color: var(--text-tertiary); }
+.vh-heads { position: relative; display: flex; justify-content: space-between; width: 100%; }
+.vh-card {
+  display: flex; align-items: center; gap: 10px; width: 150px; padding: 8px 10px; text-align: left;
+  border: 1px solid var(--card-border); border-radius: var(--radius-card); background: var(--card-bg);
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.vh-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border)); }
+.vh-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vh-card-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vh-card-t small { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vh-dot { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.vh-mix { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.vh-mix small { font-size: 11px; color: var(--text-secondary); }
+/* The mix, ringed half with each head's color. */
+.vh-swatch {
+  width: 64px; height: 64px; border-radius: 50%; margin-bottom: 4px;
+  background: radial-gradient(circle, var(--c) 0 26px, var(--card-bg) 26px 28px, transparent 28px), conic-gradient(var(--cb) 0 50%, var(--ca) 0 100%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: background-color 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) { .vh-swatch { transition: none; } }
+.vh-slider { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.vh-end { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; }
+.vh-end i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+#vh-notch {
+  flex: 1; height: 22px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none;
+}
+#vh-notch::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(100% / 6 - 1px), color-mix(in srgb, var(--text) 30%, transparent) calc(100% / 6 - 1px) calc(100% / 6)), linear-gradient(90deg, var(--ca), var(--cb));
+}
+#vh-notch::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border-radius: 50%;
+  background: var(--c); border: 2px solid var(--card-bg); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+#vh-notch:focus-visible { outline: none; }
+#vh-notch:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus-ring); }
+.vh-caption { text-align: center; font-size: 13px; margin-top: 4px; }
+.vh-warn { margin-top: 8px; padding: 6px 10px; border-radius: 8px; font-size: 12px; color: var(--text); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+.vh-warn.bad { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.vh-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0 0; font-size: 11px; color: var(--text-tertiary); }
+.vh-note .vh-info { flex: none; width: 18px; height: 18px; }
+/* A virtual head's token: its mix ringed with its two heads' colors. */
+.sl-vtoken i { border: 0; background: radial-gradient(circle, var(--c) 0 3.5px, transparent 4px), conic-gradient(var(--cb) 0 50%, var(--ca) 0 100%); }
+.sl-vtoken.is-gone i { background: none; border: 1.5px dashed color-mix(in srgb, var(--text) 40%, transparent); }
+/* Prepare: one token per color, a popover on click. */
+.p-toks .sl-token.p-tok, .p-toks .sl-token.p-choose { gap: 4px; }
+.p-caret { font-size: 9px; color: var(--text-tertiary); margin-left: 1px; }
+.sl-token.p-choose, .p-chip.p-choose { border: 1px dashed var(--warning); color: var(--warning-text, var(--warning)); background: none; font-weight: 600; cursor: pointer; }
+.p-obj.on .p-chip.p-choose { color: var(--accent-text); border-color: var(--accent-text); }
 
 /* ======================================================================
    macOS theme (macOS 26 Tahoe, Liquid Glass). Structure, not only colors:

@@ -11,6 +11,19 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Basic and Advanced slice settings**: the slice sheet opens in Basic,
+  with the settings it had before 0.15; Advanced, chosen in its title bar or
+  in Settings → Prepare, shows them all. Hidden settings keep their values
+  and still apply, and Basic says how many advanced ones are changed. Anyone
+  who already changed one of the new settings starts in Advanced.
+- **Virtual heads (color mixing)**: in Heads and spools, mix two loaded
+  spools into a new color with one slider, as Snapmaker Orca's Full
+  Spectrum does (the heads alternate layer by layer). Virtual heads appear
+  in Prepare's head pickers, where each color now shows only its head; one
+  is deleted when one of its spools is unloaded, and what used it waits for
+  a new head before slicing.
+
 ### Changed
 - **A lighter AI sandbox**: on macOS and Linux the AI's sandbox is now
   Claude Code's own (Seatbelt, or bubblewrap and socat on Linux): no Docker,
