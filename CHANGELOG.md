@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-26
+
 ### Added
 - **Basic and Advanced slice settings**: the slice sheet opens in Basic,
   with the settings it had before 0.15; Advanced, chosen in its title bar or
@@ -581,7 +583,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/kameka22/snap-studio/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/kameka22/snap-studio/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/kameka22/snap-studio/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/kameka22/snap-studio/compare/v0.14.0...v0.14.1
