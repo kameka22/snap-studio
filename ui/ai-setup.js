@@ -242,6 +242,8 @@ function aisHelp(row, report) {
           cmd(
             `python3 -m pip install --user${report.python_managed ? " --break-system-packages" : ""} ${AIS_MODULES.join(" ")}`
           ),
+          // A Python newer than manifold3d's wheels builds it, which needs TBB.
+          ...(os === "macos" ? [{ note: tr("ais.help.modules_tbb") }, cmd("brew install tbb")] : []),
         ],
       };
   }
@@ -301,7 +303,9 @@ function aiRenderChecks(box, choice = aiChoice()) {
         <span class="ais-status">${esc(aisStatus(row, r))}</span>
         ${help ? `<div class="ais-help"><p>${esc(help.text)}</p>${help.items
           .map((h) =>
-            h.cmd
+            h.note
+              ? `<p>${esc(h.note)}</p>`
+              : h.cmd
               ? `<div class="ais-cmd"><code>${esc(h.cmd)}</code><button class="btn small" data-copy="${esc(h.cmd)}">${esc(tr("ais.copy"))}</button></div>`
               : h.url
                 ? `<button class="w-link" data-url="${esc(h.url)}">${esc(h.label)} ↗</button>`

@@ -1138,6 +1138,7 @@
   "ais.help.python": "Install Python 3:",
   "ais.help.modules": "Install the modules, in the Terminal:",
   "ais.help.modules_managed": "Install the modules, in the Terminal (your Python refuses plain installs: this one goes to your user folder and leaves Python itself alone):",
+  "ais.help.modules_tbb": "If pip has to build manifold3d (a Python newer than its packages) and stops on “tbb was not found”, install TBB with Homebrew, then run the command above again:",
   "welcome.ai.title": "Design with AI",
   "welcome.ai.lead": "Claude can modify your models or create new ones, by chatting. It needs a few tools on this computer.",
   "welcome.ai.q_use": "Do you want to use the AI?",

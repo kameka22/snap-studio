@@ -32,6 +32,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   and its commands have no network. Already using yolobox? Nothing changes:
   your setting and your conversations stay in the container, and "Container
   (yolobox)" remains a choice in Settings → AI.
+- AI setup on macOS: the modules' help also gives `brew install tbb`, for
+  a Python newer than manifold3d's packages (3.15), where pip builds it and
+  stops on "tbb was not found".
 
 ## [0.15.0] — 2026-10-25
 
