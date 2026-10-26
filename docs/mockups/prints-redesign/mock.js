@@ -5,7 +5,7 @@
    printer status (printers.rs) or is marked as new data in the plan. */
 
 const Q = new URLSearchParams(location.search);
-const S = { p: Q.get("p") || "a", v: Q.get("v") || "overview", theme: Q.get("theme") || "light" };
+const S = { p: Q.get("p") || "d", v: Q.get("v") || "overview", theme: Q.get("theme") || "light" };
 if (Q.has("shot")) document.documentElement.classList.add("shot");
 
 /* ------------------------------------------------------------ data */
@@ -222,18 +222,26 @@ function liveTile(k) {
         : `<span class="chip">Buse <b>140 °C</b></span><span class="chip">Plateau <b>80 °C</b></span><span class="chip">Reste <b>1 h 22</b></span>`}</div>
     </div></div>`;
 }
-function renderAOverview() {
-  toolbar({ title: "Impressions", sub: "2 en cours · 4 en attente", right: seg(["7 jours", "30 jours", "Tout"], 0) });
+function statsStrip() {
   const spark = (v) => `<span class="spark">${v.map((h) => `<i style="height:${h}%"></i>`).join("")}</span>`;
-  $("view").innerHTML = `<div class="mk-scroll"><div class="pa">
-    <div class="pa-stats">
+  return `<div class="pa-stats">
       <div class="card pa-stat"><div class="row"><small>Temps d'impression</small>${spark([40, 65, 30, 80, 55, 90, 70])}</div><b>38 h 20</b><span class="sub">25 impressions sur 7 jours</span></div>
       <div class="card pa-stat"><small>Filament utilisé</small><b>2,41 kg</b>
         <div class="stack" style="height:7px"><i style="width:58%;background:${C.noir}"></i><i style="width:13%;background:${C.orange}"></i><i style="width:14%;background:${C.bleu}"></i><i style="width:15%;background:${C.gris}"></i></div>
         <span class="sub">PLA 1,72 kg · PETG 0,69 kg</span></div>
       <div class="card pa-stat"><small>Coût estimé</small><b>51,30 €</b><span class="sub">D'après le prix au kilo des profils filament</span></div>
       <div class="card pa-stat"><div class="row"><div class="grow" style="display:flex;flex-direction:column;gap:4px"><small>Taux de réussite</small><b>92 %</b></div>${ring(0.92, 46, 5, "")}</div><span class="sub">23 terminées · 1 annulée · 1 erreur</span></div>
-    </div>
+    </div>`;
+}
+function queueRows() {
+  return QUEUE.map((q, i) => `<div class="pa-q"><span class="grip">${I.grip}</span><span class="n">${i + 1}</span>${thumb(q.kind, q.cols)}
+            <span class="t" style="min-width:0"><b class="ell">${q.name}</b><small>${PRN[q.prn]} · ${q.t} · ${dots(q.cols)}</small></span>
+            <span class="w">début ${q.start}<small>${i === 0 ? "après Support casque" : i === 1 ? "à la reprise de Benchy" : "plateau à vider avant"}</small></span></div>`).join("");
+}
+function renderAOverview() {
+  toolbar({ title: "Impressions", sub: "2 en cours · 4 en attente", right: seg(["7 jours", "30 jours", "Tout"], 0) });
+  $("view").innerHTML = `<div class="mk-scroll"><div class="pa">
+    ${statsStrip()}
     <div>
       <div class="sec"><span class="vp-section">En cours</span><small>2 imprimantes sur 2 occupées</small></div>
       <div class="pa-live">${liveTile("atelier")}${liveTile("bureau")}</div>
@@ -457,13 +465,65 @@ function renderCDetail() {
     </div></div>`;
 }
 
+
+/* ====================================================== D: A + C */
+function renderDOverview() {
+  toolbar({ title: "Impressions", sub: "2 en cours · 4 en attente", right: seg(["7 j", "30 j", "Tout"], 0) });
+  const grp = (label, tot, rows) => `<div class="pd-g">${label}<span>${tot}</span></div>` + rows.map((h) => `<div class="pd-h">${thumb(h.kind, h.cols, "s36")}
+      <span class="t"><b class="ell">${h.name}</b><small>${h.at}${h.why ? ` · ${h.why}` : ""}</small></span>
+      <span class="muted ell">${PRN[h.prn]}</span><span class="num">${h.dur}</span><span class="row num" style="gap:6px">${dots(h.cols)}${h.g}</span><span class="r">${badge(h.st)}</span></div>`).join("");
+  $("view").innerHTML = `<div class="mk-scroll"><div class="pa">
+    ${statsStrip()}
+    <div>
+      <div class="sec"><span class="vp-section">En cours</span><small>2 imprimantes sur 2 occupées · cliquez une carte pour la fiche</small></div>
+      <div class="pa-live">${liveTile("atelier")}${liveTile("bureau")}</div>
+    </div>
+    <div class="pd-bottom">
+      <div class="pd-left">
+      <div class="card">
+        <div class="card-head"><h3>File d'attente</h3><small>4 · 6 h 13</small><span class="link">Glisser pour réordonner</span></div>
+        <div class="pa-list">${queueRows()}</div>
+      </div>
+      <div class="card panel">
+        <h3>Aujourd'hui<small>depuis 08:00</small></h3>
+        <div class="pb-occ">
+          <div class="l"><span>U1 Atelier</span><div class="progress"><i style="width:68%"></i></div><b class="num">68 %</b></div>
+          <div class="l"><span>U1 Bureau</span><div class="progress"><i style="width:36%"></i></div><b class="num">36 %</b></div>
+        </div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">6 h 40 d'impression · 176,4 g. Les deux imprimantes seront libres vers <b style="color:var(--text)">21:31</b> si la file part sans attendre.</p>
+      </div>
+      </div>
+      <div class="card pd-hist">
+        <div class="card-head"><h3>Historique</h3><small>25 sur 7 jours</small>
+          <div class="pc-search pd-search">${I.search}<span>Rechercher…</span><kbd>⌘F</kbd></div></div>
+        <div class="pd-tools">${seg(["Toutes", "Terminées", "Échecs <em>2</em>"], 0)}
+          <span class="chip">${I.printer}U1 Atelier</span><span class="chip">${I.printer}U1 Bureau</span><span class="chip"><i class="d" style="--c:${C.orange}"></i>PLA</span><span class="chip"><i class="d" style="--c:${C.bleu}"></i>PETG</span></div>
+        ${grp("Aujourd'hui", "108,2 g", HIST.filter((h) => h.day === "today"))}
+        ${grp("Hier", "184,1 g", HIST.filter((h) => h.day === "yday"))}
+        ${grp("Samedi 24 octobre", "70,3 g", HIST.filter((h) => h.day === "sat"))}
+      </div>
+    </div>
+  </div></div>`;
+}
+function dToolbar() {
+  toolbar({ back: true, title: "Impressions", sub: "Tableau de bord · 2 en cours · 4 en attente", right: `<button class="tb-btn labeled">${I.plus}<span>Ajouter à la file</span></button>` });
+}
+function renderDRunning() { renderCOverview(); dToolbar(); }
+function renderDFinished() { renderCDetail(); dToolbar(); }
+
 /* ------------------------------------------------------------ switcher */
 function render() {
   document.documentElement.dataset.scheme = S.theme;
   renderSide();
-  ({ a: { overview: renderAOverview, detail: renderADetail }, b: { overview: renderBOverview, detail: renderBDetail }, c: { overview: renderCOverview, detail: renderCDetail } })[S.p][S.v]();
+  const R = {
+    a: { overview: renderAOverview, detail: renderADetail },
+    b: { overview: renderBOverview, detail: renderBDetail },
+    c: { overview: renderCOverview, detail: renderCDetail },
+    d: { overview: renderDOverview, detail: renderDRunning, finished: renderDFinished },
+  }[S.p];
+  (R[S.v] || R.detail)();
   const sw = (key, items) => `<div class="seg">${items.map(([v, t]) => `<button class="seg-btn${S[key] === v ? " on" : ""}" data-k="${key}" data-v="${v}">${t}</button>`).join("")}</div>`;
-  $("switch").innerHTML = `<b>Proposition</b>${sw("p", [["a", "A · Tableau de bord"], ["b", "B · Agenda"], ["c", "C · Liste et fiche"]])}${sw("v", [["overview", "Vue d'ensemble"], ["detail", "Fiche"]])}${sw("theme", [["light", "Clair"], ["dark", "Sombre"]])}`;
+  $("switch").innerHTML = `<b>Proposition</b>${sw("p", [["d", "D · A + C"], ["a", "A · Tableau de bord"], ["b", "B · Agenda"], ["c", "C · Liste et fiche"]])}${sw("v", [["overview", "Vue d'ensemble"], ["detail", "Fiche"], ...(S.p === "d" ? [["finished", "Fiche terminée"]] : [])])}${sw("theme", [["light", "Clair"], ["dark", "Sombre"]])}`;
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-k]");

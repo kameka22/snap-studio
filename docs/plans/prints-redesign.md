@@ -7,17 +7,47 @@ and a record that lists the slice summary. It works, but it says little at a
 glance: no live view on the overview, no sense of time for the queue, no
 search in the history, nothing learned from past prints.
 
-This plan proposes **three directions**, as mockups, to choose from before
-any code. Each one covers running prints, the queue, the history and an
-opened print.
+This plan first proposed **three directions** (A, B, C) as mockups. The
+user chose a **mix of A and C**, drawn as **D**, which is the direction to
+implement; A, B and C stay in the mockup for reference.
 
 Mockup: [`docs/mockups/prints-redesign/index.html`](../mockups/prints-redesign/index.html)
 (open it in a browser; the bar at the bottom switches proposal, view and
 theme). Screenshots, 1440 × 900, light and dark, French UI, sample data for
-two Snapmaker U1: `proposal-{a,b,c}-{overview,detail}-{light,dark}-fr.png`.
+two Snapmaker U1: `proposal-d-{overview,detail-running,detail-finished}-{light,dark}-fr.png`
+for D, `proposal-{a,b,c}-{overview,detail}-{light,dark}-fr.png` for the others.
 `shoot.sh` redraws them with headless Chrome.
 
-## The three directions
+## Chosen direction: D — A + C
+
+The dashboard of A for what is happening now, the history and the record of
+C for looking back.
+
+- **Overview** (from A): the stats strip over a period (7 d / 30 d / All,
+  segmented control in the title bar); one live card per busy printer
+  (camera, progress, layer, end time, heads with the active one ringed,
+  temperatures, Pause / Resume and Cancel on the card); the queue (drag to
+  reorder, estimated start, why it waits) with a small **Today** card under
+  it (busy share per printer, when both will be free).
+- **History** (from C), in place of A's table: search, a segmented filter
+  (All / Finished / Failed: running and queued prints are already above),
+  chips per printer and material, groups Today / Yesterday / by day with the
+  filament used; rows with thumbnail, time and failure reason, printer,
+  duration, filament by color, state.
+- **Record** (from C): clicking a card, a queued print or a history row
+  turns the page into C's split, with a back button to the dashboard. The
+  list on the left keeps the context (in progress, queue, history, same
+  filters); the record on the right shows, for a running print, camera, big
+  progress, time per layer, filament per head and timeline; for a finished
+  one, the timelapse, the **Result** card (Success / Failed, note), real
+  against estimated duration, filament, time per feature, Reprint and Open
+  in Prepare.
+
+A docked right pane over the dashboard was considered for the record; at
+1440 × 900 it left too little of the dashboard readable, while the split's
+list carries the same information in a column.
+
+## The three first directions (reference)
 
 ### A — Dashboard
 
@@ -103,9 +133,8 @@ A mail-style split: for someone who looks back and compares.
 
 ## Open questions
 
-- Which direction, or which mix (for example C's list with A's live tiles
-  on top)?
-- Period stats: on the page (A) or in a separate view?
+- D's record: the split (as drawn) or a sheet over the dashboard?
+- Period stats: is 7 d / 30 d / All enough, or per printer too?
 - The Result card: asked at the end of every print (in the "next one?"
   sheet), or only in the record?
 - How long to keep the history, and should the G-code go after a while?
