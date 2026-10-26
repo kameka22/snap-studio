@@ -75,17 +75,16 @@ function aiCheck(force = false) {
   if (AIS.report && !force) return Promise.resolve(AIS.report);
   AIS.pending = AIS.init
     .then(() => invoke("ai_check", { scope: { yolobox: aiYoloboxScope() } }))
-    .then((r) => {
-      AIS.report = r;
-      window.dispatchEvent(new Event("aichange"));
-      return r;
-    })
+    .then((r) => (AIS.report = r))
     .catch((e) => {
       toast(String(e), true);
       return AIS.report;
     })
     .finally(() => {
+      // Cleared first: a view redrawn on "aichange" no longer shows the
+      // check as running, even when it failed.
       AIS.pending = null;
+      window.dispatchEvent(new Event("aichange"));
     });
   return AIS.pending;
 }

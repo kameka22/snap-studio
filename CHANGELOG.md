@@ -36,6 +36,10 @@ with its packages for macOS, Windows and Linux. What comes next:
   a Python newer than manifold3d's packages (3.15), where pip builds it and
   stops on "tbb was not found".
 
+### Fixed
+- Settings → AI: "Check Again" no longer stays on "Checking…" once the
+  check is done.
+
 ## [0.15.0] — 2026-10-25
 
 ### Added
