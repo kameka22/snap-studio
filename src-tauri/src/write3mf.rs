@@ -222,41 +222,53 @@ pub struct Part {
     pub paint: Vec<Option<Box<str>>>,
 }
 
+/// An object of a plate made of parts, with its own settings: written as
+/// the object's `<metadata>` in `model_settings.config`, which Orca reads as
+/// the object's config (the prime pillars' walls-only settings).
+pub struct Object {
+    pub name: String,
+    pub parts: Vec<Part>,
+    pub settings: Vec<(String, String)>,
+}
+
 /// Writes a single object made of several parts, each with its head.
 ///
 /// It is the form the slicer expects for a multicolor model: a single object
 /// stays in one piece (a part placed up high does not fall back onto the
 /// plate), and `model_settings.config` assigns a head to each part.
 pub fn write_multipart(dst: &Path, name: &str, parts: &[Part], transform: &Mat) -> Result<()> {
-    write_composites(dst, &[(name, parts, *transform)])
+    write_composites(dst, &[(name, parts, *transform, &[])])
 }
 
-/// Writes several objects made of parts, placements already applied to the
-/// triangles (plate scene).
-pub fn write_objects(dst: &Path, objects: &[(String, Vec<Part>)]) -> Result<()> {
-    let list: Vec<(&str, &[Part], Mat)> = objects
+/// Writes several objects made of parts, in this order, placements already
+/// applied to the triangles (plate scene).
+pub fn write_objects(dst: &Path, objects: &[Object]) -> Result<()> {
+    let list: Vec<Composite> = objects
         .iter()
-        .map(|(n, p)| (n.as_str(), p.as_slice(), Mat::IDENTITY))
+        .map(|o| (o.name.as_str(), o.parts.as_slice(), Mat::IDENTITY, o.settings.as_slice()))
         .collect();
     write_composites(dst, &list)
 }
 
+/// An object to write: name, parts, placement, own settings.
+type Composite<'a> = (&'a str, &'a [Part], Mat, &'a [(String, String)]);
+
 /// Composite objects: each part is a mesh, each object an assembly of its
 /// parts, placed in the `<build>`.
-fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> {
-    if objects.is_empty() || objects.iter().any(|(_, p, _)| p.is_empty()) {
+fn write_composites(dst: &Path, objects: &[Composite]) -> Result<()> {
+    if objects.is_empty() || objects.iter().any(|(_, p, _, _)| p.is_empty()) {
         return Err(anyhow!(crate::t!("err.no_part")));
     }
     let (mut z, opts) = begin_archive(dst)?;
     let mut w = std::io::BufWriter::with_capacity(1 << 20, &mut z);
     begin_model(&mut w)?;
-    let all: Vec<&[Tri]> = objects.iter().flat_map(|(_, parts, _)| parts.iter().map(|p| p.tris.as_slice())).collect();
+    let all: Vec<&[Tri]> = objects.iter().flat_map(|(_, parts, _, _)| parts.iter().map(|p| p.tris.as_slice())).collect();
     let color_id = write_palette(&mut w, &all)?;
 
     // Ids: parts first (from 2), then the composite objects.
     let mut next = 2u32;
     let mut part_ids: Vec<Vec<u32>> = Vec::new();
-    for (_, parts, _) in objects {
+    for (_, parts, _, _) in objects {
         let mut ids = Vec::new();
         for p in parts.iter() {
             write_mesh_object(&mut w, next, &p.name, &p.tris, &p.paint, &color_id)?;
@@ -266,7 +278,7 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
         part_ids.push(ids);
     }
     let mut whole_ids = Vec::new();
-    for ((name, _, _), ids) in objects.iter().zip(&part_ids) {
+    for ((name, _, _, _), ids) in objects.iter().zip(&part_ids) {
         writeln!(w, r#"  <object id="{next}" type="model" name="{}">"#, xml_escape(name))?;
         writeln!(w, "   <components>")?;
         for id in ids {
@@ -279,7 +291,7 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
     }
     writeln!(w, " </resources>")?;
     writeln!(w, " <build>")?;
-    for ((_, _, xf), id) in objects.iter().zip(&whole_ids) {
+    for ((_, _, xf, _), id) in objects.iter().zip(&whole_ids) {
         writeln!(w, r#"  <item objectid="{id}" transform="{}"/>"#, mat_str(xf))?;
     }
     writeln!(w, " </build>")?;
@@ -289,13 +301,16 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
 
     z.start_file("Metadata/model_settings.config", opts)?;
     let mut s = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<config>\n");
-    for (((name, parts, _), ids), whole) in objects.iter().zip(&part_ids).zip(&whole_ids) {
+    for (((name, parts, _, settings), ids), whole) in objects.iter().zip(&part_ids).zip(&whole_ids) {
         s.push_str(&format!("  <object id=\"{whole}\">\n"));
         s.push_str(&format!("    <metadata key=\"name\" value=\"{}\"/>\n", xml_escape(name)));
         s.push_str(&format!(
             "    <metadata key=\"extruder\" value=\"{}\"/>\n",
             parts[0].extruder.clamp(1, 16)
         ));
+        for (k, v) in settings.iter() {
+            s.push_str(&format!("    <metadata key=\"{}\" value=\"{}\"/>\n", xml_escape(k), xml_escape(v)));
+        }
         for (p, id) in parts.iter().zip(ids) {
             s.push_str(&format!("    <part id=\"{id}\" subtype=\"normal_part\">\n"));
             s.push_str(&format!("      <metadata key=\"name\" value=\"{}\"/>\n", xml_escape(&p.name)));
@@ -406,6 +421,36 @@ mod tests {
                 c: color,
             })
             .collect()
+    }
+
+    /// Objects keep their order and their own settings: each object's block
+    /// of `model_settings.config` holds its keys, after its name and head.
+    #[test]
+    fn objects_carry_their_settings() {
+        let dir = std::env::temp_dir().join("snapstudio_w3mf_settings");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("objects.3mf");
+        let part = |name: &str, x: f32, head: u8| Part { name: name.into(), tris: cube(10.0, [200, 40, 40]).into_iter().map(|mut t| { for v in &mut t.v { v[0] += x; } t }).collect(), extruder: head, paint: vec![] };
+        write_objects(&path, &[
+            Object { name: "pillar".into(), parts: vec![part("ring", 0.0, 2)], settings: vec![("sparse_infill_density".into(), "0%".into()), ("brim_type".into(), "outer_only".into())] },
+            Object { name: "model & co".into(), parts: vec![part("a", 50.0, 1), part("b", 70.0, 3)], settings: vec![] },
+        ]).unwrap();
+        let mut zip = crate::model3mf::open(&path).unwrap();
+        let cfg = String::from_utf8(crate::model3mf::read_entry(&mut zip, "Metadata/model_settings.config").unwrap()).unwrap();
+        let blocks: Vec<&str> = cfg.split("<object ").skip(1).collect();
+        assert_eq!(blocks.len(), 2);
+        assert!(blocks[0].contains(r#"<metadata key="name" value="pillar"/>"#), "first in the list: {cfg}");
+        assert!(blocks[0].contains(r#"<metadata key="sparse_infill_density" value="0%"/>"#));
+        assert!(blocks[0].contains(r#"<metadata key="brim_type" value="outer_only"/>"#));
+        let head = blocks[0].split("<part").next().unwrap();
+        assert!(head.contains("sparse_infill_density"), "the object's, not a part's");
+        assert!(blocks[1].contains("model &amp; co") && !blocks[1].contains("sparse_infill_density"), "{cfg}");
+        let m = mesh::load_mesh(&mut zip, 100_000).unwrap();
+        assert_eq!(m.tris.len(), 36);
+        let mut heads: Vec<u8> = m.extruders.clone();
+        heads.dedup();
+        assert_eq!(heads, vec![2, 1, 3], "parts on their heads, in order");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// What is written must be read back identically by our own reader.
