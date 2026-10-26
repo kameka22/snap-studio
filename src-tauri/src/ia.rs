@@ -48,7 +48,8 @@ pub struct Conversation {
     /// Initial request, sent on the first pass in the terminal.
     #[serde(default)]
     pub prompt: String,
-    /// "container" or "local".
+    /// "sandbox" (Claude Code's built-in sandbox), "container" (yolobox) or
+    /// "local".
     pub engine: String,
     pub created_at: u64,
     pub updated_at: u64,
@@ -600,7 +601,17 @@ fn title_for(prompt: &str, source: &Path) -> String {
 }
 
 /// Prepares a conversation: folder, instructions, tools, converted object.
+/// The ways a conversation runs: Claude Code's own sandbox, a container
+/// (yolobox), this computer. Anything else is refused: it would run as
+/// "this computer" without saying so.
+pub const ENGINES: [&str; 3] = ["sandbox", "container", "local"];
+
+fn check_engine(engine: &str) -> Result<()> {
+    if ENGINES.contains(&engine) { Ok(()) } else { Err(anyhow!("unknown engine: {engine}")) }
+}
+
 pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation> {
+    check_engine(engine)?;
     if !source.is_file() {
         return Err(anyhow!(crate::t!("err.file_not_found")));
     }
@@ -660,6 +671,7 @@ pub fn create_blank(
     dest_dir: &Path,
     bounds: Option<[f32; 3]>,
 ) -> Result<Conversation> {
+    check_engine(engine)?;
     let prompt = prompt.trim();
     if prompt.is_empty() {
         return Err(anyhow!(crate::t!("ia.new.need_prompt")));

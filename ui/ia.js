@@ -23,6 +23,8 @@ const IA = {
   source: null,
   /* "edit" from Files, "create" from the ＋ button. */
   mode: "edit",
+  /* Images dropped in the sheet: they leave with the initial request. */
+  attach: [],
   /* Conversation open on screen, or null on the list. */
   open: null,
   /* How the open conversation shows: "chat" (ia-chat.js) or "term", the raw
@@ -77,8 +79,10 @@ async function iaRefresh() {
   }
 }
 
-/* Why a conversation is only read: its mode is not ready (anymore). */
-const iaLockFor = (c) => (AIS.report && !iaModes().includes(c.engine) ? iaLockReason(c) : null);
+/* Why a conversation is only read: its mode is not ready (anymore), or not
+   chosen. A container conversation keeps yolobox, whichever sandbox new
+   ones use. */
+const iaLockFor = (c) => (AIS.report && !aiEngineReady(c.engine) ? iaLockReason(c) : null);
 
 /* New checks, or a new choice in Settings. */
 window.addEventListener("aichange", () => {
@@ -140,7 +144,7 @@ function iaOrigin(c) {
   return c.dest_dir ? `${tr("ia.creation")} · ${baseName(c.dest_dir)}` : tr("ia.creation");
 }
 
-const iaEngineName = (c) => tr(c.engine === "container" ? "ia.engine.container_short" : "ia.engine.local_short");
+const iaEngineName = (c) => tr(c.engine === "container" ? "ia.engine.container_short" : c.engine === "sandbox" ? "ia.engine.sandbox_short" : "ia.engine.local_short");
 
 /* Missing or unreadable source: a real tile. The fallback is wired by a
    listener (below), never an inline onerror — the app's CSP (script-src
@@ -559,18 +563,19 @@ function iaRenderEngines() {
   const ready = iaModes();
   const cur = ready.includes(IA.engine) ? IA.engine : ready[0] || "";
   IA.engine = cur;
-  $("ia-engines").innerHTML = ["container", "local"]
+  // The Sandbox card runs in the chosen sandbox (built-in or yolobox).
+  $("ia-engines").innerHTML = [aiSandboxEngine(aiSandbox()), "local"]
     .map((m) => {
       const on = m === cur, ok = ready.includes(m);
       const sub = ok
-        ? tr(m === "container" ? "ia.new.run_container" : "ia.new.run_local")
+        ? tr(m === "local" ? "ia.new.run_local" : "ia.new.run_container")
         : !aiWanted().includes(m)
           ? tr("ia.new.run_off")
           : AIS.report
             ? tr("ia.new.run_missing")
             : tr("ais.checking");
       return `<button type="button" class="ia-engine${on ? " on" : ""}" data-engine="${m}" role="radio" aria-checked="${on}"${ok ? "" : " disabled"}>
-        <span class="ia-engine-icon">${IA_ENGINE_ICON[m]}</span>
+        <span class="ia-engine-icon">${IA_ENGINE_ICON[aiSide(m)]}</span>
         <span class="ia-engine-text"><b>${esc(tr("ais.mode." + m))}</b><small>${esc(sub)}</small></span>
       </button>`;
     })
@@ -601,6 +606,8 @@ function iaSheet(mode) {
   $("ia-cfields").classList.toggle("hidden", !create);
   $("ia-new-icon").innerHTML = IA_GLYPH;
   $("ia-prompt").value = "";
+  IA.attach = [];
+  iaRenderAttach();
   $("ia-msg").textContent = "";
   $("ia-msg").className = "pf-test";
   iaSheetTexts();
@@ -683,6 +690,44 @@ function iaNew() {
 $("ia-bed-fill").addEventListener("click", iaBedFill);
 
 $("ia-prompt").addEventListener("input", iaPromptFit);
+
+/* Images for the initial request, as in the conversation: dropped anywhere
+   on the sheet, pasted in the request, or chosen. */
+function iaRenderAttach() {
+  chatRenderThumbs($("ia-attach"), IA.attach, iaRenderAttach);
+}
+async function iaAddFiles(files) {
+  await chatReadImages(files, IA.attach);
+  iaRenderAttach();
+}
+const iaHasImage = (e) => [...(e.dataTransfer?.items || [])].some((i) => i.type.startsWith("image/"));
+const iaBox = $("iamodal").querySelector(".modal-box");
+iaBox.addEventListener("dragover", (e) => {
+  if (!iaHasImage(e)) return;
+  e.preventDefault();
+  $("ia-drop").classList.add("over");
+});
+iaBox.addEventListener("dragleave", (e) => {
+  if (!iaBox.contains(e.relatedTarget)) $("ia-drop").classList.remove("over");
+});
+iaBox.addEventListener("drop", (e) => {
+  $("ia-drop").classList.remove("over");
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  e.preventDefault();
+  iaAddFiles(files);
+});
+$("ia-prompt").addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  e.preventDefault();
+  iaAddFiles(files);
+});
+$("ia-drop-add").addEventListener("click", () => $("ia-file").click());
+$("ia-file").addEventListener("change", (e) => {
+  iaAddFiles([...e.target.files]);
+  e.target.value = "";
+});
 $("ia-ideas").addEventListener("click", (e) => {
   const b = e.target.closest("[data-idea]");
   if (!b) return;
@@ -751,6 +796,8 @@ async function iaCreate() {
           engine: IA.engine,
           model,
         });
+    if (IA.attach.length) CHAT.firstImages.set(c.id, IA.attach);
+    IA.attach = [];
     closeSheet($("iamodal"));
     await iaRefresh();
     switchView("ia");

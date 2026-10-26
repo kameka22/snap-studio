@@ -31,7 +31,8 @@ function iaMatches(c, query, filters = {}) {
   if (f.kind === "edit" && c.kind === "create") return false;
   if (f.state === "saved" && !c.saved) return false;
   if (f.state === "pending" && c.saved) return false;
-  if (f.engine !== "all" && (c.engine === "container" ? "container" : "local") !== f.engine) return false;
+  // Both sandboxes (built-in, yolobox) count as the Sandbox side.
+  if (f.engine !== "all" && (c.engine === "local" ? "local" : "container") !== f.engine) return false;
   const words = iaFold(query).split(/\s+/).filter(Boolean);
   if (!words.length) return true;
   const hay = iaFold([c.title, c.prompt, c.source_name, iaBase(c.dest_dir)].join("\n"));

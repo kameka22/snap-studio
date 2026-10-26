@@ -274,6 +274,9 @@ function wAiEnter() {
   W.ai.phase = "ask";
   W.ai.use = prev === "off" ? "no" : "yes";
   W.ai.mode = wAiNoSandbox() ? "local" : prev && prev !== "off" ? prev : "container";
+  // The sandbox it will be: the built-in one, or yolobox for whoever has it.
+  $("w-ai-sandbox-sub").dataset.i18n = aiSandboxSub();
+  $("w-ai-sandbox-sub").textContent = tr(aiSandboxSub());
   document.querySelectorAll('#w-ai-where .w-opt[data-mode="container"], #w-ai-where .w-opt[data-mode="both"]').forEach((el) =>
     el.classList.toggle("hidden", wAiNoSandbox())
   );

@@ -33,8 +33,12 @@ const DEFAULTS = {
   wheelSpeed: 1,
   dir: null,
   recents: [],
-  /* How the AI is used: "container", "local", "both", "off"; null until asked. */
+  /* How the AI is used: "container" (the Sandbox side), "local", "both",
+     "off"; null until asked. */
   aiModes: null,
+  /* Which sandbox the Sandbox side uses: "builtin" (Claude Code's own) or
+     "yolobox"; null until decided once (ai-logic.js aiSandboxDefault). */
+  aiSandbox: null,
   /* The slice sheet's level, "basic" or "advanced"; null until first set
      (slice-adv.js, sliceLevelDefault). */
   sliceLevel: null,
@@ -66,10 +70,10 @@ const state = {
 };
 
 function save() {
-  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, sliceLevel } = state;
+  const { view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, aiSandbox, sliceLevel } = state;
   localStorage.setItem(
     "snapstudio",
-    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, sliceLevel })
+    JSON.stringify({ view, sort, asc, tile, pref, recursive, detailsWidth, invertWheel, wheelAction, wheelSpeed, dir, recents, aiModes, aiSandbox, sliceLevel })
   );
 }
 
@@ -1137,9 +1141,11 @@ listen("tauri://drag-leave", () => document.body.classList.remove("dragover"));
 listen("tauri://drag-drop", (e) => {
   document.body.classList.remove("dragover");
   const p = e.payload?.paths?.[0];
+  // Images are for the AI's message or creation sheet (their own drop).
+  if (!p || /\.(png|jpe?g|gif|webp)$/i.test(p)) return;
   // A file dropped opens its folder (a file path pushed to the recents
   // would stay there as a dead entry); a folder opens itself.
-  if (p) openDir(p.replace(/[\\/][^\\/]+\.(3mf|stl|gcode|gco|g|obj|step|stp)$/i, ""));
+  openDir(p.replace(/[\\/][^\\/]+\.(3mf|stl|gcode|gco|g|obj|step|stp)$/i, ""));
 });
 
 /* rubber-band selection in the empty area */
