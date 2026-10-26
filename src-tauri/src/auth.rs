@@ -530,6 +530,16 @@ mod tests {
 
     /// Against the real Claude: `AUTH_REAL=1 cargo test --lib real_sign_in -- --ignored --nocapture`.
     /// Prints no secret, only what the window would show.
+    /// The built-in sandbox signs in as this computer: Claude itself, no
+    /// token of its own.
+    #[test]
+    fn the_builtin_sandbox_uses_this_computers_sign_in() {
+        assert!(sandbox_env("sandbox").is_empty());
+        let tools = Tools { claude: Some("/usr/local/bin/claude".into()), yolobox: Some("/usr/local/bin/yolobox".into()) };
+        let a = argv("sandbox", &tools, &["auth", "status"]).unwrap();
+        assert_eq!(a, ["/usr/local/bin/claude", "auth", "status"]);
+    }
+
     #[test]
     #[ignore]
     fn real_sign_in() {

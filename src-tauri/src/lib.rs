@@ -1642,11 +1642,11 @@ fn ia_get(id: String) -> Result<ia::Conversation, String> {
 
 // ---------------------------------------------------------------- IA
 
-/// What the AI needs, mode by mode (sandbox, this Mac). A few seconds: the
-/// container engines and Python are asked.
+/// What the AI needs, mode by mode (built-in sandbox, container, this Mac).
+/// A few seconds: Python, and the container engines when `scope` asks.
 #[tauri::command]
-async fn ai_check() -> Result<setup::Report, String> {
-    tauri::async_runtime::spawn_blocking(setup::check).await.map_err(|e| e.to_string())
+async fn ai_check(scope: Option<setup::CheckScope>) -> Result<setup::Report, String> {
+    tauri::async_runtime::spawn_blocking(move || setup::check(scope.unwrap_or_default())).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
