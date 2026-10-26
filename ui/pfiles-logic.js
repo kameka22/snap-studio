@@ -143,5 +143,19 @@ function pflToggle(set, key, on = !set.has(key)) {
   return s;
 }
 
+/* What to delete, one batch per root in the order the roots first appear:
+   the videos tab can mix a `timelapse` and a `camera` root, and a path is
+   only found under its own. A video's picture follows it. */
+function pflDeleteBatches(files) {
+  const out = [];
+  for (const f of files) {
+    let b = out.find((x) => x.root === f.root);
+    if (!b) out.push((b = { root: f.root, paths: [] }));
+    b.paths.push(f.path);
+    if (f.thumb) b.paths.push(f.thumb);
+  }
+  return out;
+}
+
 if (typeof module !== "undefined")
-  module.exports = { pflPrnQuery, PFL_SORTS, PFL_SPEEDS, pflFold, pflKey, pflName, pflVideoDate, pflVideoTitle, pflDuration, pflDate, pflTitle, pflMatches, pflSort, pflSummary, pflFilaments, pflSendStats, pflCanChange, pflNeighbor, pflNextSpeed, pflClock, pflToggle };
+  module.exports = { pflPrnQuery, PFL_SORTS, PFL_SPEEDS, pflFold, pflKey, pflName, pflVideoDate, pflVideoTitle, pflDuration, pflDate, pflTitle, pflMatches, pflSort, pflSummary, pflFilaments, pflSendStats, pflCanChange, pflNeighbor, pflNextSpeed, pflClock, pflToggle, pflDeleteBatches };

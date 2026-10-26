@@ -5,6 +5,16 @@
    a 3MF of colored parts, the instructions, the tools and the export skill.
    The detail screen holds the conversation and the 3D pane. */
 
+/* A stored value, or null: a throwing storage (private mode, cleared site
+   data) must not stop this script at load. */
+const iaLs = (k) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+
 const IA = {
   list: [],
   engine: null,
@@ -13,18 +23,20 @@ const IA = {
   source: null,
   /* "edit" from Files, "create" from the ＋ button. */
   mode: "edit",
+  /* Images dropped in the sheet: they leave with the initial request. */
+  attach: [],
   /* Conversation open on screen, or null on the list. */
   open: null,
   /* How the open conversation shows: "chat" (ia-chat.js) or "term", the raw
      Claude Code terminal on the same session. */
-  view: localStorage.getItem("snapstudio.iaview") === "term" ? "term" : "chat",
+  view: iaLs("snapstudio.iaview") === "term" ? "term" : "chat",
   /* One emulator per conversation: leaving the tab must not erase anything.
      id -> { term, fit, el, dead } */
   terms: new Map(),
   /* List: search, filters and order (ia-list.js), kept between launches. */
   q: "",
   filters: iaStored("snapstudio.ia.filters", { kind: "all", state: "all", engine: "all" }),
-  sort: IA_SORTS.includes(localStorage.getItem("snapstudio.ia.sort")) ? localStorage.getItem("snapstudio.ia.sort") : IA_SORTS[0],
+  sort: IA_SORTS.includes(iaLs("snapstudio.ia.sort")) ? iaLs("snapstudio.ia.sort") : IA_SORTS[0],
   /* Card selected with the keyboard (or last clicked), by id. */
   sel: null,
   /* Card whose title is being edited. */
@@ -58,16 +70,34 @@ async function iaRefresh() {
   }
   iaRender();
   // What the AI needs changes without notice — Docker starts and stops —
-  // and checking takes a moment: on the side, each time the tab opens.
-  aiCheck(true).then(() => {
-    if (!IA.open) iaRender();
-    iaApplyAi();
-  });
+  // and checking takes a moment: on the side, when the tab opens, at most
+  // once every 30 s (the Docker and Python probes are not free). The
+  // "aichange" event the check raises redraws the list.
+  if (Date.now() - (IA.checkedAt || 0) > 30000) {
+    IA.checkedAt = Date.now();
+    aiCheck(true).then(iaApplyAi);
+  }
 }
+
+/* Why a conversation is only read: its mode is not ready (anymore), or not
+   chosen. A container conversation keeps yolobox, whichever sandbox new
+   ones use. */
+const iaLockFor = (c) => (AIS.report && !aiEngineReady(c.engine) ? iaLockReason(c) : null);
 
 /* New checks, or a new choice in Settings. */
 window.addEventListener("aichange", () => {
-  if (!IA.open) iaRender();
+  const c = IA.open ? IA.list.find((x) => x.id === IA.open) : null;
+  if (c) {
+    // The open conversation follows: AI switched off in Settings, or Docker
+    // gone, locks it; back again unlocks it.
+    const locked = iaLockFor(c);
+    if (locked !== IA.locked) {
+      IA.locked = locked;
+      if (locked) IA.view = "chat";
+      iaRender();
+      iaHint(c);
+    }
+  } else iaRender();
   if (!$("iamodal").classList.contains("hidden")) iaRenderEngines();
   iaApplyAi();
 });
@@ -114,7 +144,7 @@ function iaOrigin(c) {
   return c.dest_dir ? `${tr("ia.creation")} · ${baseName(c.dest_dir)}` : tr("ia.creation");
 }
 
-const iaEngineName = (c) => tr(c.engine === "container" ? "ia.engine.container_short" : "ia.engine.local_short");
+const iaEngineName = (c) => tr(c.engine === "container" ? "ia.engine.container_short" : c.engine === "sandbox" ? "ia.engine.sandbox_short" : "ia.engine.local_short");
 
 /* Missing or unreadable source: a real tile. The fallback is wired by a
    listener (below), never an inline onerror — the app's CSP (script-src
@@ -237,7 +267,7 @@ function iaRender() {
   sideCount("ia", IA.list.length);
   const c = detail && IA.list.find((x) => x.id === IA.open);
   if (c) tbSet("ia", c.title, `${iaOrigin(c)} · ${iaEngineName(c)}`);
-  else tbSet("ia", tr("nav.ia"), IA.list.length ? tr("ia.count", { n: IA.list.length }) : "");
+  else tbSet("ia", tr("nav.create"), IA.list.length ? tr("ia.count", { n: IA.list.length }) : "");
   $("ia-detail").classList.toggle("hidden", !detail);
   $("ia-empty").classList.toggle("hidden", detail || IA.list.length > 0);
   $("ia-listbar").classList.toggle("hidden", detail || IA.list.length === 0);
@@ -284,7 +314,7 @@ function iaRenderList() {
     .map((g) => (titled && g.key ? `<h4 class="ia-group" role="presentation">${esc(tr(IA_GROUP_LABEL[g.key]))}</h4>` : "") + g.items.map(iaCard).join(""))
     .join("");
   const n = IA.list.length;
-  tbSet("ia", tr("nav.ia"), n ? (shown.length < n ? tr("ia.count_shown", { shown: shown.length, n }) : tr("ia.count", { n })) : "");
+  tbSet("ia", tr("nav.create"), n ? (shown.length < n ? tr("ia.count_shown", { shown: shown.length, n }) : tr("ia.count", { n })) : "");
 }
 
 /* ------------------------------------------------------------ list controls */
@@ -295,7 +325,48 @@ function iaSyncListbar() {
   $("ia-f-state").value = IA.filters.state;
   $("ia-f-engine").value = IA.filters.engine;
   $("ia-sort").value = IA.sort;
+  iaSyncFilters();
 }
+
+/* The Filters button: how many narrow the list; the Sort button: the order. */
+function iaSyncFilters() {
+  const n = segActive(IA.filters);
+  $("ia-fcount").textContent = n ? fmtNum(n) : "";
+  $("ia-fcount").classList.toggle("hidden", !n);
+  $("ia-filters").classList.toggle("on", n > 0);
+  const order = $("ia-sort").selectedOptions[0]?.text || "";
+  $("ia-sort-t").textContent = order;
+  $("ia-sort-btn").setAttribute("aria-label", `${tr("ia.list.sort")}: ${order}`);
+}
+
+/* The filters as pills, in a popover under their button. */
+for (const id of ["ia-f-kind", "ia-f-state", "ia-f-engine"]) segmented(id, { cls: "compact" });
+function iaFiltersOpen(on) {
+  $("ia-fpop").classList.toggle("hidden", !on);
+  $("ia-filters").setAttribute("aria-expanded", String(on));
+  if (on) requestAnimationFrame(() => $("ia-fpop").querySelector('.seg-btn[tabindex="0"]')?.focus());
+}
+$("ia-filters").addEventListener("click", () => iaFiltersOpen($("ia-fpop").classList.contains("hidden")));
+$("ia-fpop").addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  e.preventDefault();
+  e.stopPropagation();
+  iaFiltersOpen(false);
+  $("ia-filters").focus();
+});
+document.addEventListener("mousedown", (e) => {
+  if (!$("ia-fpop").classList.contains("hidden") && !e.target.closest(".ia-fwrap")) iaFiltersOpen(false);
+});
+// Tab out of it: it closes behind.
+$("ia-fpop").addEventListener("focusout", (e) => {
+  if (e.relatedTarget && !e.relatedTarget.closest(".ia-fwrap")) iaFiltersOpen(false);
+});
+
+/* The order: a native menu, checked, as the Files sort. */
+$("ia-sort-btn").addEventListener("click", (e) =>
+  menuUnder(e.currentTarget, [...$("ia-sort").options].map((o) => ({ id: "iasort:" + o.value, label: o.text, checked: o.value === IA.sort })))
+);
+onMenu("iasort", (v) => setSelect("ia-sort", v));
 iaSyncListbar();
 
 $("ia-q").addEventListener("input", (e) => {
@@ -325,12 +396,14 @@ for (const [id, key] of [["ia-f-kind", "kind"], ["ia-f-state", "state"], ["ia-f-
   $(id).addEventListener("change", (e) => {
     IA.filters[key] = e.target.value;
     localStorage.setItem("snapstudio.ia.filters", JSON.stringify(IA.filters));
+    iaSyncFilters();
     iaRenderList();
   });
 }
 $("ia-sort").addEventListener("change", (e) => {
   IA.sort = e.target.value;
   localStorage.setItem("snapstudio.ia.sort", IA.sort);
+  iaSyncFilters();
   iaRenderList();
 });
 $("ia-clearq").addEventListener("click", () => {
@@ -490,18 +563,19 @@ function iaRenderEngines() {
   const ready = iaModes();
   const cur = ready.includes(IA.engine) ? IA.engine : ready[0] || "";
   IA.engine = cur;
-  $("ia-engines").innerHTML = ["container", "local"]
+  // The Sandbox card runs in the chosen sandbox (built-in or yolobox).
+  $("ia-engines").innerHTML = [aiSandboxEngine(aiSandbox()), "local"]
     .map((m) => {
       const on = m === cur, ok = ready.includes(m);
       const sub = ok
-        ? tr(m === "container" ? "ia.new.run_container" : "ia.new.run_local")
+        ? tr(m === "local" ? "ia.new.run_local" : "ia.new.run_container")
         : !aiWanted().includes(m)
           ? tr("ia.new.run_off")
           : AIS.report
             ? tr("ia.new.run_missing")
             : tr("ais.checking");
       return `<button type="button" class="ia-engine${on ? " on" : ""}" data-engine="${m}" role="radio" aria-checked="${on}"${ok ? "" : " disabled"}>
-        <span class="ia-engine-icon">${IA_ENGINE_ICON[m]}</span>
+        <span class="ia-engine-icon">${IA_ENGINE_ICON[aiSide(m)]}</span>
         <span class="ia-engine-text"><b>${esc(tr("ais.mode." + m))}</b><small>${esc(sub)}</small></span>
       </button>`;
     })
@@ -527,11 +601,13 @@ function iaPromptFit() {
 
 function iaSheet(mode) {
   IA.mode = mode;
-  IA.newModel = localStorage.getItem(IA_NEW_MODEL_KEY) || "";
+  IA.newModel = iaLs(IA_NEW_MODEL_KEY) || "";
   const create = mode === "create";
   $("ia-cfields").classList.toggle("hidden", !create);
   $("ia-new-icon").innerHTML = IA_GLYPH;
   $("ia-prompt").value = "";
+  IA.attach = [];
+  iaRenderAttach();
   $("ia-msg").textContent = "";
   $("ia-msg").className = "pf-test";
   iaSheetTexts();
@@ -594,6 +670,7 @@ onMenu("iadest", async (arg) => {
 });
 
 /* Creation from scratch: the size limit starts from the printer's bed. */
+steppersIn($("ia-cfields"));
 const iaBed = () => (typeof PR !== "undefined" && PR.bed) || { w: 270, d: 270 };
 function iaBedFill() {
   const bed = iaBed();
@@ -613,6 +690,44 @@ function iaNew() {
 $("ia-bed-fill").addEventListener("click", iaBedFill);
 
 $("ia-prompt").addEventListener("input", iaPromptFit);
+
+/* Images for the initial request, as in the conversation: dropped anywhere
+   on the sheet, pasted in the request, or chosen. */
+function iaRenderAttach() {
+  chatRenderThumbs($("ia-attach"), IA.attach, iaRenderAttach);
+}
+async function iaAddFiles(files) {
+  await chatReadImages(files, IA.attach);
+  iaRenderAttach();
+}
+const iaHasImage = (e) => [...(e.dataTransfer?.items || [])].some((i) => i.type.startsWith("image/"));
+const iaBox = $("iamodal").querySelector(".modal-box");
+iaBox.addEventListener("dragover", (e) => {
+  if (!iaHasImage(e)) return;
+  e.preventDefault();
+  $("ia-drop").classList.add("over");
+});
+iaBox.addEventListener("dragleave", (e) => {
+  if (!iaBox.contains(e.relatedTarget)) $("ia-drop").classList.remove("over");
+});
+iaBox.addEventListener("drop", (e) => {
+  $("ia-drop").classList.remove("over");
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  e.preventDefault();
+  iaAddFiles(files);
+});
+$("ia-prompt").addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  e.preventDefault();
+  iaAddFiles(files);
+});
+$("ia-drop-add").addEventListener("click", () => $("ia-file").click());
+$("ia-file").addEventListener("change", (e) => {
+  iaAddFiles([...e.target.files]);
+  e.target.value = "";
+});
 $("ia-ideas").addEventListener("click", (e) => {
   const b = e.target.closest("[data-idea]");
   if (!b) return;
@@ -681,6 +796,8 @@ async function iaCreate() {
           engine: IA.engine,
           model,
         });
+    if (IA.attach.length) CHAT.firstImages.set(c.id, IA.attach);
+    IA.attach = [];
     closeSheet($("iamodal"));
     await iaRefresh();
     switchView("ia");
@@ -962,6 +1079,8 @@ async function iaHint(c) {
   try {
     resumable = await invoke("ia_resumable", { id: c.id });
   } catch {}
+  // Another conversation opened meanwhile: its own hint stands.
+  if (IA.open !== c.id) return;
   if (resumable) {
     el.classList.add("hidden");
     return;
@@ -975,7 +1094,7 @@ async function iaOpen(id) {
   if (!c) return;
   IA.open = id;
   // A conversation whose mode is not ready (anymore) is only read.
-  IA.locked = AIS.report && !iaModes().includes(c.engine) ? iaLockReason(c) : null;
+  IA.locked = iaLockFor(c);
   if (IA.locked) IA.view = "chat";
   iaRender();
   $("ia-left").dataset.mode = IA.view;
@@ -1084,7 +1203,7 @@ function iaChatApply(r, save = true) {
 }
 /* The user's choice is kept apart from what fits: a narrow window clamps
    the column without forgetting it. */
-let iaChatWanted = iaRatioOk(parseFloat(localStorage.getItem(IA_CHAT_KEY)));
+let iaChatWanted = iaRatioOk(parseFloat(iaLs(IA_CHAT_KEY)));
 let iaChatR = iaChatApply(iaChatWanted, false);
 const iaChatSet = (r) => {
   iaChatR = iaChatApply(r);
@@ -1139,7 +1258,7 @@ iaResizeObserver.observe($("ia-term"));
    object alone, framed closer), the choice kept. The viewer is shared with
    Files and Prepare: their own setting comes back when it leaves. */
 const IA_BED_KEY = "snapstudio.ia.bed";
-IA.bed = localStorage.getItem(IA_BED_KEY) === "1";
+IA.bed = iaLs(IA_BED_KEY) === "1";
 IA.viewerOwned = false;
 function iaBedApply() {
   $("ia-bed").checked = IA.bed;
@@ -1500,7 +1619,7 @@ async function iaSave(then) {
     iaMarkSaved(c, path);
     if (path !== before) {
       await refresh();
-      toast(tr("ia.saved_toast", { name: path.split("/").pop() }));
+      toast(tr("ia.saved_toast", { name: path.split(/[\\/]/).pop() }));
     }
     if (then) await then(path);
   } catch (e) {
@@ -1547,6 +1666,7 @@ $("ia-stage").addEventListener("dblclick", (e) => {
 window.addEventListener("langchange", () => {
   iaRender();
   iaBedApply();
+  iaSyncFilters();
   if (IA.open) {
     const c = IA.list.find((x) => x.id === IA.open);
     if (c) iaHint(c);

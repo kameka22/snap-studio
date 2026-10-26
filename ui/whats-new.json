@@ -1,0 +1,25 @@
+{
+  "version": "0.15",
+  "highlights": [
+    {
+      "id": "prime-tower",
+      "en": "Prime tower",
+      "fr": "Tour d’amorçage"
+    },
+    {
+      "id": "slice-settings",
+      "en": "Slice settings",
+      "fr": "Réglages de découpe"
+    },
+    {
+      "id": "spool-colours",
+      "en": "Spool colours",
+      "fr": "Couleurs des bobines"
+    },
+    {
+      "id": "camera-close",
+      "en": "Camera",
+      "fr": "Caméra"
+    }
+  ]
+}

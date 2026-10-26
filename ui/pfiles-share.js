@@ -6,7 +6,9 @@
    network, the file on the clipboard, Save As. The file is fetched from
    the printer once, on the first choice (share.rs keeps the copy). */
 
-const PFS = { file: null, pid: null, local: new Map(), caps: null, timer: 0, until: 0, busy: false };
+/* `gen` counts the sheet's openings and closings: an action started on a
+   file the sheet has since left must not act on it. */
+const PFS = { file: null, pid: null, local: new Map(), caps: null, timer: 0, until: 0, busy: false, gen: 0 };
 
 const pfsLocalKey = (f) => `${PFS.pid}|${pflKey(f)}|${f.modified}`;
 
@@ -21,6 +23,8 @@ function pfsSub(f) {
 
 async function pfsOpen(f) {
   if (!f) return;
+  PFS.gen++;
+  pfsBusy(false);
   PFS.file = f;
   PFS.pid = PFL.pid;
   if (!PFS.caps) PFS.caps = await invoke("share_caps").catch(() => ({ native: false, copy: false }));
@@ -59,13 +63,12 @@ function pfsBusy(on) {
   document.querySelectorAll("#pfs-grid .pfs-tile").forEach((b) => (b.disabled = on));
 }
 
-/* The local copy: fetched from the printer the first time. */
-async function pfsLocal() {
-  const key = pfsLocalKey(PFS.file);
+/* The local copy of `f`: fetched from the printer the first time. */
+async function pfsLocal(f, pid) {
+  const key = pfsLocalKey(f);
   if (PFS.local.has(key)) return PFS.local.get(key);
   pfsMsg(tr("share.fetching"), "busy");
-  const f = PFS.file;
-  const path = await invoke("share_fetch", { printerId: PFS.pid, root: f.root, path: f.path, modified: f.modified || 0 });
+  const path = await invoke("share_fetch", { printerId: pid, root: f.root, path: f.path, modified: f.modified || 0 });
   PFS.local.set(key, path);
   pfsMsg("");
   return path;
@@ -73,9 +76,14 @@ async function pfsLocal() {
 
 async function pfsDo(kind, tile) {
   if (PFS.busy || !PFS.file) return;
+  // The file and printer of this action: the sheet may show another one
+  // by the time the fetch ends (closed with Escape, opened on a second
+  // file), and that one must not be shared under this one's title.
+  const { file: f, pid, gen } = PFS;
   pfsBusy(true);
   try {
-    const path = await pfsLocal();
+    const path = await pfsLocal(f, pid);
+    if (gen !== PFS.gen) return;
     if (kind === "native") {
       // The menu opens under the tile.
       const r = tile.getBoundingClientRect();
@@ -84,7 +92,7 @@ async function pfsDo(kind, tile) {
       await invoke("share_copy", { path });
       pfsMsg(tr("share.copied"), "ok");
     } else if (kind === "save") {
-      const name = PFS.file.path.split("/").pop();
+      const name = f.path.split("/").pop();
       const dest = await window.__TAURI__.dialog.save({ defaultPath: name }).catch(() => null);
       if (dest) {
         await invoke("share_save", { path, dest });
@@ -134,6 +142,7 @@ function pfsStopQr() {
 }
 
 function pfsClose() {
+  PFS.gen++; // an action still fetching ends without acting
   pfsStopQr();
   closeSheet($("pfshare"));
 }

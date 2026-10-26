@@ -26,6 +26,9 @@ const CHAT = {
   attach: [],
   /* Initial requests already sent, so a reopening does not send them twice. */
   autoSent: new Set(),
+  /* Conversation id → images dropped in the creation sheet, which leave
+     with its initial request. */
+  firstImages: new Map(),
   /* The turn of the conversation shown: "" | "answering" | "stopping". */
   phase: "",
 };
@@ -530,16 +533,17 @@ function chatHandle(ev, live) {
       else if (ev.is_error && ev.result) chatNote(String(ev.result), "error");
       break;
     case "exited":
-      if (CHAT.busy.has(CHAT.id)) chatNote(tr("chat.exited"), "muted");
+      if (CHAT.busy.has(CHAT.id)) {
+        chatNote(tr("chat.exited"), "muted");
+        // What the process said on stderr: the reason, when it failed to start.
+        if (ev.stderr) chatNote(String(ev.stderr), "muted pre");
+        // A sandbox that could not start, in words (chat.rs).
+        if (ev.message) chatNote(String(ev.message), "error");
+      }
       chatSetBusy(false);
       break;
     case "auth_failed":
       if (live) chatAuthFailed();
-      break;
-    case "error":
-      if (CHAT.id) IA.failed.add(CHAT.id);
-      chatSetBusy(false);
-      chatNote(ev.text, "error");
       break;
   }
 }
@@ -547,10 +551,11 @@ function chatHandle(ev, live) {
 listen("ia-chat", (e) => {
   const { id, events } = e.payload;
   for (const ev of events) {
-    if (id === CHAT.id) chatHandle(ev, true);
-    else if (ev.type === "result" || ev.type === "exited" || ev.type === "error") {
+    if (id === CHAT.id && CHAT.loading === id) CHAT.early.push(ev);
+    else if (id === CHAT.id) chatHandle(ev, true);
+    else if (ev.type === "result" || ev.type === "exited") {
       CHAT.busy.delete(id);
-      if ((ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") || ev.type === "error") IA.failed.add(id);
+      if (ev.type === "result" && ev.is_error && ev.subtype !== "error_during_execution") IA.failed.add(id);
       iaStatusChanged();
     }
   }
@@ -607,11 +612,21 @@ async function chatOpen(c) {
   chatClearAttachments();
   chatModelFill(c);
   let past = [];
+  // Live events of this conversation wait while its past is read: the log
+  // is written before an event is sent, so one arriving now may already be
+  // in the past; rendered twice, a tool row or a message would double.
+  CHAT.loading = c.id;
+  CHAT.early = [];
   try {
     past = (await invoke("ia_chat_history", { id: c.id })) || [];
   } catch {}
   if (CHAT.id !== c.id) return;
   for (const ev of past) chatHandle(ev, false);
+  const seen = new Set(past.map((ev) => JSON.stringify(ev)));
+  const early = CHAT.early.filter((ev) => !seen.has(JSON.stringify(ev)));
+  CHAT.loading = null;
+  CHAT.early = [];
+  for (const ev of early) chatHandle(ev, true);
   chatList.scrollTop = chatList.scrollHeight;
   const busy = CHAT.busy.has(c.id);
   CHAT.busy.delete(c.id);
@@ -626,17 +641,24 @@ async function chatOpen(c) {
   chatSetLocked(!!IA.locked);
   if (!past.length) {
     chatList.appendChild(chatDiv("chat-empty", tr(iaIsCreation(c) ? "chat.empty_create" : "chat.empty")));
-    if (c.prompt && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
+    const images = CHAT.firstImages.get(c.id) || [];
+    if ((c.prompt || images.length) && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
       CHAT.autoSent.add(c.id);
-      chatSend(c.prompt, []);
+      CHAT.firstImages.delete(c.id);
+      chatSend(c.prompt || "", images);
     }
   }
   $("chat-input").focus();
 }
 
 function chatLeave() {
+  const id = CHAT.id;
   CHAT.id = null;
   chatClearAttachments();
+  // An idle Claude is not kept running (nor its sandbox) while the
+  // conversation is not shown: the next message resumes it. One that is
+  // answering goes on, and its end is still reported to the list.
+  if (id && !CHAT.busy.has(id)) invoke("ia_chat_close", { id }).catch(() => {});
 }
 
 /* ------------------------------------------------------------ sending */
@@ -664,7 +686,10 @@ async function chatSend(text, attachments) {
       chatSetBusy(false);
       chatNote(String(e), "error");
     } else {
+      // Left meanwhile: the card in the list must still show the failure.
       CHAT.busy.delete(id);
+      IA.failed.add(id);
+      iaStatusChanged();
     }
   }
 }
@@ -732,26 +757,37 @@ function chatReadImage(file) {
   });
 }
 
-async function chatAddFiles(files) {
+/* Reads the images among `files` into `list`, up to CHAT_MAX_IMAGES: the
+   message being written, or the creation sheet's (ia.js). */
+async function chatReadImages(files, list) {
   for (const f of files) {
     if (!f.type.startsWith("image/")) continue;
-    if (CHAT.attach.length >= CHAT_MAX_IMAGES) {
+    if (list.length >= CHAT_MAX_IMAGES) {
       toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
       break;
     }
     try {
-      CHAT.attach.push(await chatReadImage(f));
+      list.push(await chatReadImage(f));
     } catch (e) {
       toast(e.message, true);
     }
   }
+}
+
+async function chatAddFiles(files) {
+  await chatReadImages(files, CHAT.attach);
   chatRenderAttachments();
 }
 
 function chatRenderAttachments() {
-  const box = $("chat-attach");
+  chatRenderThumbs($("chat-attach"), CHAT.attach, chatRenderAttachments);
+  chatGrow();
+}
+
+/* `list`'s images into `box`, each with its ✕; `again` redraws. */
+function chatRenderThumbs(box, list, again) {
   box.innerHTML = "";
-  CHAT.attach.forEach((a, i) => {
+  list.forEach((a, i) => {
     const t = chatDiv("chat-thumb");
     const img = document.createElement("img");
     img.src = a.url;
@@ -760,14 +796,13 @@ function chatRenderAttachments() {
     x.textContent = "✕";
     x.title = tr("common.delete");
     x.onclick = () => {
-      CHAT.attach.splice(i, 1);
-      chatRenderAttachments();
+      list.splice(i, 1);
+      again();
     };
     t.append(img, x);
     box.appendChild(t);
   });
-  box.classList.toggle("hidden", !CHAT.attach.length);
-  chatGrow();
+  box.classList.toggle("hidden", !list.length);
 }
 
 function chatClearAttachments() {
@@ -848,5 +883,8 @@ chatList.addEventListener("click", (e) => {
 /* A new language: the conversation is drawn again from its past. */
 window.addEventListener("langchange", () => {
   const c = CHAT.id && IA.list.find((x) => x.id === CHAT.id);
-  if (c && !CHAT.busy.has(c.id)) chatOpen(c);
+  // Redrawn even while answering (notes, permission cards and labels
+  // change language); only a text being streamed is left alone, it
+  // would lose its partial text until the next piece.
+  if (c && !CHAT.streaming) chatOpen(c);
 });

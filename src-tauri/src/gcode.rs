@@ -63,6 +63,10 @@ pub struct GMeta {
     pub per_tool_g: Vec<f32>,
     pub cost: Option<f32>,
     pub layer_height: Option<f32>,
+    /// The prime tower's front-left corner (`wipe_tower_x` / `wipe_tower_y`,
+    /// the first plate's) and its turn in degrees (`wipe_tower_rotation_angle`).
+    pub tower_at: [Option<f32>; 2],
+    pub tower_angle: Option<f32>,
     pub total_layers: Option<u32>,
     pub generator: Option<String>,
     /// Color of each filament (`#rrggbb`), empty if the slicer does not write it.
@@ -129,10 +133,11 @@ fn hex_list(v: &str) -> Vec<String> {
         .map(|s| {
             let s = s.trim().trim_matches('"');
             let hex = s.strip_prefix('#').unwrap_or("");
-            if hex.len() >= 6 && hex[..6].chars().all(|c| c.is_ascii_hexdigit()) {
-                format!("#{}", hex[..6].to_ascii_lowercase())
-            } else {
-                String::new()
+            // `get`, not a byte slice: a non-ASCII character at the cut
+            // (a comment of the slicer's) must not end the parse.
+            match hex.get(..6) {
+                Some(h) if h.chars().all(|c| c.is_ascii_hexdigit()) => format!("#{}", h.to_ascii_lowercase()),
+                _ => String::new(),
             }
         })
         .collect()
@@ -179,7 +184,8 @@ fn parse_duration(s: &str) -> Option<u32> {
                 _ => 0,
             };
             if mult > 0 {
-                total += v * mult;
+                // Saturating: a nonsense "99999999d" must not overflow.
+                total = total.saturating_add(v.saturating_mul(mult));
                 any = true;
             }
             num.clear();
@@ -267,6 +273,12 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                 meta.total_layers = v.parse().ok();
             } else if let Some(v) = comment_value(l, "layer_height") {
                 meta.layer_height = v.parse().ok();
+            } else if let Some(v) = comment_value(l, "wipe_tower_rotation_angle") {
+                meta.tower_angle = v.parse().ok();
+            } else if let Some(v) = comment_value(l, "wipe_tower_x") {
+                meta.tower_at[0] = v.split(',').next().and_then(|x| x.trim().parse().ok());
+            } else if let Some(v) = comment_value(l, "wipe_tower_y") {
+                meta.tower_at[1] = v.split(',').next().and_then(|y| y.trim().parse().ok());
             } else if let Some(v) = comment_value(l, "estimated first layer printing time (normal mode)") {
                 meta.first_layer_s = meta.first_layer_s.or_else(|| parse_duration(v));
             } else if let Some(v) = comment_value(l, "model printing time") {
@@ -522,6 +534,9 @@ pub struct SliceStats {
     pub filament_types: Vec<String>,
     /// Color of each G-code tool (`#rrggbb`, empty if unknown), as sliced.
     pub filament_colors: Vec<String>,
+    /// The prime tower as printed, if there is one: Prepare shows its real
+    /// size once sliced.
+    pub tower: Option<TowerBox>,
 }
 
 pub fn stats(d: &GcodeData) -> SliceStats {
@@ -557,7 +572,45 @@ pub fn stats(d: &GcodeData) -> SliceStats {
         estimated_only: d.meta.print_time_s.is_none(),
         filament_types: d.meta.filaments.clone(),
         filament_colors: d.meta.colors.clone(),
+        tower: tower_box(d, d.meta.tower_at.map(|v| v.unwrap_or(0.0)), d.meta.tower_angle.unwrap_or(0.0)),
     }
+}
+
+/// The prime tower as printed, in its own frame (turned with it): the
+/// corner it was placed at (`x`, `y`, the engine's `wipe_tower_x` /
+/// `wipe_tower_y`), then the box its extrusions fill — brim and ribs
+/// included — from (`x0`, `y0`) relative to that corner, `w` × `d`, and its
+/// height `h`, in mm.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub struct TowerBox {
+    pub x: f32,
+    pub y: f32,
+    pub x0: f32,
+    pub y0: f32,
+    pub w: f32,
+    pub d: f32,
+    pub h: f32,
+}
+
+/// The prime tower's extrusions (`;TYPE:Prime tower`), seen in the tower's
+/// own frame: the engine turns the tower by `angle` degrees around its
+/// front-left corner `at`, so the moves are turned back around it before
+/// taking their extent. None without a tower.
+pub fn tower_box(d: &GcodeData, at: [f32; 2], angle: f32) -> Option<TowerBox> {
+    let (s, c) = (-angle.to_radians()).sin_cos();
+    let (mut x0, mut y0, mut x1, mut y1, mut h) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN, 0f32);
+    for seg in d.segs.iter().filter(|s| s.feature == 10 && !s.travel) {
+        for p in [&seg.a, &seg.b] {
+            let (dx, dy) = (p[0] - at[0], p[1] - at[1]);
+            let (x, y) = (dx * c - dy * s, dx * s + dy * c);
+            x0 = x0.min(x);
+            y0 = y0.min(y);
+            x1 = x1.max(x);
+            y1 = y1.max(y);
+            h = h.max(p[2]);
+        }
+    }
+    (x0 <= x1).then(|| TowerBox { x: at[0], y: at[1], x0, y0, w: x1 - x0, d: y1 - y0, h })
 }
 
 /// Serialization for the viewer.
@@ -824,9 +877,42 @@ G1 X30 Y30 F9000
         assert!(old.filament_types.is_empty() && old.filament_colors.is_empty());
     }
 
+    /// The tower's box, in its own frame: from the corner it was placed at,
+    /// read from the config block; turned 90°, its width runs along Y.
+    #[test]
+    fn tower_box_in_the_tower_frame() {
+        let g = "; wipe_tower_x = 100,15\n; wipe_tower_y = 50,220\n; wipe_tower_rotation_angle = 90\n\
+                 G1 X0 Y0 Z0.2\n;TYPE:Outer wall\nG1 X10 Y0 E1\n\
+                 ;TYPE:Prime tower\nG1 X102 Y48 F600\nG1 X102 Y88 E2\nG1 X76 Y88 E3\nG1 Z5\nG1 X76 Y48 E4\n";
+        let d = parse(g.as_bytes()).unwrap();
+        assert_eq!(d.meta.tower_at, [Some(100.0), Some(50.0)], "the first plate's");
+        let t = stats(&d).tower.unwrap();
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
+        assert!(near(t.x, 100.0) && near(t.y, 50.0), "{t:?}");
+        // 40 mm along Y is the width, 26 mm along −X the depth; the box
+        // starts 2 mm before the corner on both sides (a brim).
+        assert!(near(t.w, 40.0) && near(t.d, 26.0) && near(t.x0, -2.0) && near(t.y0, -2.0), "{t:?}");
+        assert!(near(t.h, 5.0), "{t:?}");
+        assert_eq!(stats(&parse("G1 X1 E1\n".as_bytes()).unwrap()).tower, None, "no tower");
+    }
+
     #[test]
     fn prusa_extruder_colour_is_a_fallback() {
         let d = parse("; extruder_colour = \"#112233\"\nG1 X1 E1\n".as_bytes()).unwrap();
         assert_eq!(d.meta.colors, vec!["#112233"]);
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::hex_list;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(hex_list("#AABBCC;#112233"), vec!["#aabbcc", "#112233"]);
+        // Six bytes that are not six characters: skipped, never a panic.
+        assert_eq!(hex_list("#aaaaaé"), vec![""]);
+        assert_eq!(hex_list("#é"), vec![""]);
+        assert_eq!(hex_list("#aabbccé"), vec!["#aabbcc"]);
     }
 }

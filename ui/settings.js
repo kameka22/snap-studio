@@ -81,6 +81,14 @@ function settingsShown() {
 
 function setAiRender() {
   $("set-ai-mode").value = aiChoice();
+  // Which sandbox: with a Sandbox side, and where the built-in one exists.
+  const side = aiWanted().some((m) => m !== "local");
+  $("set-ai-sandbox-row").classList.toggle("hidden", !side || AI_OS === "windows");
+  $("set-ai-sandbox").value = aiSandbox();
+  $("set-ai-sandbox-sub").textContent = tr(aiSandbox() === "yolobox" ? "settings.ai.sandbox.yolobox.sub" : "settings.ai.sandbox.builtin.sub");
+  // A yolobox user whose built-in sandbox is ready: offered, never switched.
+  $("set-ai-builtin").classList.toggle("hidden", !(side && aiSandbox() === "yolobox" && AI_OS !== "windows" && AIS.report?.ready.sandbox));
+  $("set-ai-mode")._seg?.render();
   aiRenderChecks($("set-ai-checks"), aiChoice());
 }
 
@@ -92,6 +100,8 @@ function setAiFlag() {
 }
 
 $("set-ai-mode").addEventListener("change", (e) => aiSetChoice(e.target.value));
+$("set-ai-sandbox").addEventListener("change", (e) => aiSetSandbox(e.target.value));
+$("set-ai-builtin-go").addEventListener("click", () => aiSetSandbox("builtin"));
 $("set-ai-recheck").addEventListener("click", () => {
   aiCheck(true);
   setAiRender();
@@ -271,3 +281,29 @@ document.querySelector('#set-stage .set-pane[data-cat="about"]').addEventListene
 
 /* Help menu: report, suggest, the project. */
 onMenu("help", (what) => aboutOpen(what));
+
+/* ------------------------------------------------------------ pills */
+
+/* Settings with few choices as pills over their selects (segmented.js). */
+const SET_WHEEL_ICONS = {
+  zoom: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a7 7 0 0 1 5.6 11.2l5.1 5.1-1.4 1.4-5.1-5.1A7 7 0 1 1 10 3m0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10m-1 2h2v2h2v2h-2v2H9v-2H7V9h2z"/></svg>',
+  pan: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.5 3.5-1.4 1.4L13 5.8V11h5.2l-1.1-1.1 1.4-1.4L22 12l-3.5 3.5-1.4-1.4 1.1-1.1H13v5.2l1.1-1.1 1.4 1.4L12 22l-3.5-3.5 1.4-1.4 1.1 1.1V13H5.8l1.1 1.1-1.4 1.4L2 12l3.5-3.5 1.4 1.4L5.8 11H11V5.8L9.9 6.9 8.5 5.5z"/></svg>',
+  orbit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 0 1 7.7 5.8l1.8-1v5.4l-4.7-2.7 1.8-1A6 6 0 0 0 6 12H4a8 8 0 0 1 8-8m-6.7 9.5 4.7 2.7-1.8 1A6 6 0 0 0 18 12h2a8 8 0 0 1-15.7 2.2l-1.8 1V9.8z"/></svg>',
+};
+segmented("set-wheel-action", { icons: SET_WHEEL_ICONS });
+// Short words in the pills, the full ones in their tooltips.
+const SET_PREF_SHORT = ["settings.thumb.short.auto", "settings.thumb.short.plate", "settings.thumb.short.model", "settings.thumb.short.render"];
+segmented("opt-pref", {
+  labelOf: (v, text) => (SET_PREF_SHORT[+v] ? tr(SET_PREF_SHORT[+v]) : text),
+  titleOf: (v) => $("opt-pref").querySelector(`option[value="${v}"]`)?.text || "",
+});
+segmented("set-assoc");
+segmented("set-ai-sandbox");
+segmented("set-slice-level");
+// Long choices: radio cards, each with what it means.
+segmented("set-ai-mode", {
+  cls: "cards",
+  // The Sandbox card says which sandbox it is.
+  subs: { get container() { return aiSandboxSub(); }, local: "welcome.ai.local.sub", both: "welcome.ai.both.sub" },
+});
+$("set-ai-mode").closest(".grow-row").classList.add("stack");

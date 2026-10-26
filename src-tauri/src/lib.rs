@@ -1,9 +1,11 @@
 mod menu;
 mod migrate;
+mod mixcolor;
 mod access;
 mod auth;
 mod bedmesh;
 mod chat;
+mod control;
 mod discover;
 mod engine;
 mod favorites;
@@ -20,6 +22,7 @@ mod presets;
 mod printers;
 mod printer_files;
 mod share;
+mod snapmaker;
 mod orient;
 mod paint;
 mod plate;
@@ -229,26 +232,32 @@ fn meta_of(path: &str) -> MetaDto {
     dto
 }
 
-/// Metadata of a batch of files, read in parallel.
+/// Metadata of a batch of files, read in parallel. Off the async runtime:
+/// a large folder would otherwise hold one of its workers for the whole
+/// batch, with the status polls and the send progress behind it.
 #[tauri::command]
 async fn read_metas(paths: Vec<String>) -> Vec<MetaDto> {
-    let workers = std::thread::available_parallelism()
-        .map(|n| n.get().clamp(2, 8))
-        .unwrap_or(4);
-    let chunk = paths.len().div_ceil(workers).max(1);
-    let mut out: Vec<MetaDto> = Vec::with_capacity(paths.len());
-    std::thread::scope(|s| {
-        let mut handles = Vec::new();
-        for part in paths.chunks(chunk) {
-            handles.push(s.spawn(move || part.iter().map(|p| meta_of(p)).collect::<Vec<_>>()));
-        }
-        for h in handles {
-            if let Ok(v) = h.join() {
-                out.extend(v);
+    tauri::async_runtime::spawn_blocking(move || {
+        let workers = std::thread::available_parallelism()
+            .map(|n| n.get().clamp(2, 8))
+            .unwrap_or(4);
+        let chunk = paths.len().div_ceil(workers).max(1);
+        let mut out: Vec<MetaDto> = Vec::with_capacity(paths.len());
+        std::thread::scope(|s| {
+            let mut handles = Vec::new();
+            for part in paths.chunks(chunk) {
+                handles.push(s.spawn(move || part.iter().map(|p| meta_of(p)).collect::<Vec<_>>()));
             }
-        }
-    });
-    out
+            for h in handles {
+                if let Ok(v) = h.join() {
+                    out.extend(v);
+                }
+            }
+        });
+        out
+    })
+    .await
+    .unwrap_or_default()
 }
 
 /// On-demand geometry analysis: real bounding box and triangle count.
@@ -289,6 +298,40 @@ fn open_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
 #[tauri::command]
 fn lib_sites() -> Vec<library::Site> {
     library::sites()
+}
+
+/// Explore's home: a few products of the Snapmaker Store.
+#[tauri::command]
+async fn snap_store_highlights(limit: Option<usize>) -> Result<Vec<snapmaker::Product>, String> {
+    snapmaker::highlights(limit.unwrap_or(6).clamp(1, 12)).await.map_err(|e| e.to_string())
+}
+
+/// The floating navigation's buttons: on the tab shown.
+#[tauri::command]
+fn lib_nav(app: tauri::AppHandle, what: String) -> Result<(), String> {
+    library::nav_command(&app, &what).map_err(|e| e.to_string())
+}
+
+/// The pinned camera over a site: where the interface's pinned window is
+/// and its page's settings (printer, name, texts), or None when it is not
+/// shown. Async: a web view is created off the main thread (see lib_open).
+#[tauri::command]
+async fn cam_view_set(app: tauri::AppHandle, rect: Option<library::Rect>, setup: String) {
+    library::set_cam(&app, rect, setup);
+}
+
+/// The camera view's buttons (open the printer, unpin, close): passed on
+/// to the interface, which owns the camera.
+#[tauri::command]
+fn cam_view_action(app: tauri::AppHandle, what: String) {
+    use tauri::Emitter;
+    let _ = app.emit("cam-view-action", what);
+}
+
+/// A site's icon, as a data URL (None: not found).
+#[tauri::command]
+async fn lib_favicon(id: String) -> Option<String> {
+    library::favicon(&id).await
 }
 
 /// Async on purpose: a sync command runs on the main thread, and creating a
@@ -425,8 +468,10 @@ async fn slice_lists(machine: Option<String>) -> Result<slice::PresetLists, Stri
 
 /// Starting values of the simplified settings for a given preset.
 #[tauri::command]
-async fn slice_defaults(machine: String, process: String) -> Result<slice::Simple, String> {
-    slice::defaults(&machine, &process).map_err(|e| e.to_string())
+async fn slice_defaults(_machine: String, process: String) -> Result<slice::Simple, String> {
+    // `machine` is still sent by the sheet; a process's quick settings do
+    // not depend on it.
+    slice::defaults(&process).map_err(|e| e.to_string())
 }
 
 /// Starts a background slice; progress arrives through the `slice-progress`
@@ -492,10 +537,25 @@ async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) ->
 
 /// Saves the plate as 3MF.
 #[tauri::command]
-async fn plate_save(scene: Vec<plate::SceneItem>, path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, Path::new(&path)))
+async fn plate_save(scene: Vec<plate::SceneItem>, tower: Option<plate::TowerPlace>, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, tower, Path::new(&path)))
         .await
         .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+/// A virtual head's preview color: `a` and `b` (`#rrggbb`) mixed at each
+/// share of `b`, as Snapmaker Orca shows its mixed filaments.
+#[tauri::command]
+fn mix_colors(a: String, b: String, shares: Vec<f32>) -> Result<Vec<String>, String> {
+    mixcolor::mix_hex(&a, &b, &shares).ok_or_else(|| "unreadable color".to_string())
+}
+
+/// The prime tower a 3MF keeps (its first plate's), if any.
+#[tauri::command]
+async fn plate_tower(path: String) -> Result<Option<plate::FileTower>, String> {
+    tauri::async_runtime::spawn_blocking(move || plate::tower_of(Path::new(&path)))
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -550,9 +610,9 @@ fn send_progress(app: &tauri::AppHandle, phase: &'static str, percent: Option<f3
 
 /// Starts a G-code on an idle printer.
 ///
-/// Same run as Snapmaker Orca: preparation (heads and options) through
-/// Klipper macros, check in `print_task_config`, then upload with launch.
-/// Returns a warning if an option was not confirmed.
+/// Same run as Snapmaker Orca: checks and head mapping, upload without
+/// launch, then a start carrying the options (`start_printing`). Returns an
+/// error message for the options the printer did not apply.
 async fn launch(
     app: &tauri::AppHandle,
     p: &printers::Printer,
@@ -562,27 +622,27 @@ async fn launch(
     tools: &[u8],
     map: &[(u8, u8)],
 ) -> Result<Option<String>, String> {
-    let warning = prepare_printer(app, p, options, tools, map).await?;
+    prepare_printer(app, p, options, tools, map).await?;
     let handle = app.clone();
-    printers::upload(&p.host, p.port, gcode, name, true, move |sent, total| {
+    printers::upload(&p.host, p.port, gcode, name, false, move |sent, total| {
         let pct = if total > 0 { sent as f32 * 100.0 / total as f32 } else { 0.0 };
         send_progress(&handle, "upload", Some(pct), None);
     })
     .await
     .map_err(|e| e.to_string())?;
-    Ok(warning)
+    start_printing(p, name, options, tools, map).await
 }
 
 /// Before a print starts, whatever its G-code comes from: the printer is
-/// idle, every head used has a spool, the heads and options are set.
-/// Returns a warning if an option was not confirmed.
+/// idle, every head used has a spool, the heads are mapped. The options go
+/// with the start itself (`start_printing`).
 async fn prepare_printer(
     app: &tauri::AppHandle,
     p: &printers::Printer,
     options: &printers::StartOptions,
     tools: &[u8],
     map: &[(u8, u8)],
-) -> Result<Option<String>, String> {
+) -> Result<(), String> {
     printers::check_map(tools, map).map_err(|e| e.to_string())?;
     send_progress(app, "check", None, None);
     let st = printers::status(&p.host, p.port).await;
@@ -606,25 +666,37 @@ async fn prepare_printer(
     }
 
     send_progress(app, "prepare", None, None);
-    let script = printers::preprint_script(options, tools, map, false);
-    if let Err(e) = printers::gcode_script(&p.host, p.port, &script).await {
-        // Firmware older than 1.3.0: a single macro for the options.
-        if !printers::is_unknown_command(&e) {
-            return Err(t!("err.prepare_refused", err = e));
-        }
-        let legacy = printers::preprint_script(options, tools, map, true);
-        printers::gcode_script(&p.host, p.port, &legacy)
+    let script = printers::map_script(tools, map);
+    if !script.is_empty() {
+        printers::gcode_script_checked(&p.host, p.port, &script)
             .await
             .map_err(|e| t!("err.prepare_refused", err = e))?;
     }
-    let mut warning = None;
-    if let Some(cfg) = printers::task_config(&p.host, p.port).await {
-        let missing = printers::unapplied_options(&cfg, options);
-        if !missing.is_empty() {
-            warning = Some(t!("err.options_unconfirmed", opts = missing.join(", ")));
-        }
+    // As Snapmaker Orca, for a firmware that knows it; the options of the
+    // start request are what count.
+    if let Err(e) = printers::gcode_script(&p.host, p.port, &printers::preference_script(options)).await {
+        eprintln!("[print] SET_PRINT_PREFERENCE: {e}");
     }
-    Ok(warning)
+    Ok(())
+}
+
+/// Starts a file of `gcodes` with its options, then reads back what the
+/// printer applied: the options it ignored come back as an error message
+/// (the print has started all the same).
+async fn start_printing(
+    p: &printers::Printer,
+    path: &str,
+    options: &printers::StartOptions,
+    tools: &[u8],
+    map: &[(u8, u8)],
+) -> Result<Option<String>, String> {
+    let route = printers::start_print(&p.host, p.port, path, options, tools, map)
+        .await
+        .map_err(|e| t!("err.start_refused", err = e))?;
+    eprintln!("[print] {path} started ({route:?})");
+    let Some(cfg) = printers::task_config(&p.host, p.port).await else { return Ok(None) };
+    let missing: Vec<String> = printers::unapplied_options(&cfg, options).iter().map(|k| t!(*k)).collect();
+    Ok((!missing.is_empty()).then(|| t!("err.options_unapplied", opts = missing.join(", "))))
 }
 
 // ---------------------------------------------------------------- printer files
@@ -689,7 +761,7 @@ async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Resu
     let mut out = Vec::new();
     for path in &paths {
         let r = match printer_files::check_change(&root, path, printing.as_deref()) {
-            Ok(()) if root == "gcodes" => printer_files::delete(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            Ok(()) if root == "gcodes" => printer_files::delete_retrying(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
             // Timelapses: also through the camera service when Moonraker
             // only lists them (a U1's read-only `camera` folder).
             Ok(()) => printer_files::delete_video(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
@@ -761,10 +833,8 @@ async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Opti
     // needs its record (the extruder map goes back to identity when it
     // ends), so it goes the copy's way, as any sent print.
     if !request.queue && request.source_id == request.printer_id && !printers::is_remap(&request.map) {
-        let warning = prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
-        printer_files::start(&p.host, p.port, &request.path)
-            .await
-            .map_err(|e| t!("pfiles.err.start", err = e))?;
+        prepare_printer(&app, &p, &request.options, &tools, &request.map).await?;
+        let warning = start_printing(&p, &request.path, &request.options, &tools, &request.map).await?;
         send_progress(&app, "done", Some(100.0), warning);
         return Ok(None);
     }
@@ -899,6 +969,18 @@ fn share_qr_start(path: String, printer_id: String) -> Result<share::QrShare, St
 #[tauri::command]
 fn share_qr_stop() {
     share::qr_stop();
+}
+
+/// Only the app's own page reads its protocols. Tauri attaches them to
+/// every webview the app creates, the Library's tabs included, where a
+/// third-party site could otherwise fetch `gcode://` or `thumb://` (the
+/// answers allow any origin) and read local files.
+fn own_webview<R: tauri::Runtime>(ctx: &tauri::UriSchemeContext<'_, R>) -> bool {
+    ctx.webview_label() == "main"
+}
+
+fn refused() -> Response<Vec<u8>> {
+    Response::builder().status(403).body(Vec::new()).unwrap()
 }
 
 /// `prn://localhost/f?id=<printer>&root=<root>&p=<path>`: a file of a
@@ -1269,6 +1351,22 @@ async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
     bedmesh::measure(&p.host, p.port, temp).await.map_err(|e| e.to_string())
 }
 
+/// Care & Tuning › Control: the printer's state, with its configuration
+/// when asked (`config`, once per opening).
+#[tauri::command]
+async fn control_read(printer_id: String, config: Option<bool>) -> Result<serde_json::Value, String> {
+    let p = printer_by_id(&printer_id)?;
+    let (state, cfg) = control::read(&p.host, p.port, config.unwrap_or(false)).await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "state": state, "config": cfg }))
+}
+
+/// Carries out one of Control's actions (never raw G-code: `control::Action`).
+#[tauri::command]
+async fn control_run(printer_id: String, action: control::Action) -> Result<(), String> {
+    let p = printer_by_id(&printer_id)?;
+    control::run(&p.host, p.port, &action).await.map_err(|e| e.to_string())
+}
+
 /// Stops the probing cleanly (the U1, once its leveling has begun).
 #[tauri::command]
 async fn bed_mesh_abort(printer_id: String) -> Result<(), String> {
@@ -1454,12 +1552,6 @@ fn ia_chat_answer(
     chat::answer(&id, &request_id, allow, always, input).map_err(|e| e.to_string())
 }
 
-/// Permission mode of the conversation (accept edits, ask, plan…).
-#[tauri::command]
-fn ia_chat_mode(id: String, mode: String) -> Result<(), String> {
-    chat::set_mode(&id, &mode).map_err(|e| e.to_string())
-}
-
 /// Claude model of the conversation; none: the account's default.
 #[tauri::command]
 fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
@@ -1520,21 +1612,10 @@ fn auth_term_open(app: tauri::AppHandle, kind: String, cols: u16, rows: u16) -> 
     auth::term_open(&app, &kind, cols, rows).map_err(|e| e.to_string())
 }
 
-/// Opens — or reopens — a conversation's terminal.
-#[tauri::command]
-fn pty_open(app: tauri::AppHandle, id: String, cols: u16, rows: u16) -> Result<(), String> {
-    let c = ia::get(&id).map_err(|e| e.to_string())?;
-    pty::open(&app, &c, cols, rows).map_err(|e| e.to_string())
-}
-
+/// Keystrokes for the sign-in terminal (`auth_term_open`).
 #[tauri::command]
 fn pty_write(id: String, data: String) -> Result<(), String> {
     pty::write(&id, &data).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn pty_resize(id: String, cols: u16, rows: u16) -> Result<(), String> {
-    pty::resize(&id, cols, rows).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1546,12 +1627,6 @@ fn pty_close(id: String) {
 #[tauri::command]
 fn ia_resumable(id: String) -> bool {
     ia::has_session(&id)
-}
-
-/// True if a terminal is already running for this conversation.
-#[tauri::command]
-fn pty_running(id: String) -> bool {
-    pty::is_open(&id)
 }
 
 /// Working folder, to open it in the Finder.
@@ -1567,11 +1642,11 @@ fn ia_get(id: String) -> Result<ia::Conversation, String> {
 
 // ---------------------------------------------------------------- IA
 
-/// What the AI needs, mode by mode (sandbox, this Mac). A few seconds: the
-/// container engines and Python are asked.
+/// What the AI needs, mode by mode (built-in sandbox, container, this Mac).
+/// A few seconds: Python, and the container engines when `scope` asks.
 #[tauri::command]
-async fn ai_check() -> Result<setup::Report, String> {
-    tauri::async_runtime::spawn_blocking(setup::check).await.map_err(|e| e.to_string())
+async fn ai_check(scope: Option<setup::CheckScope>) -> Result<setup::Report, String> {
+    tauri::async_runtime::spawn_blocking(move || setup::check(scope.unwrap_or_default())).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1642,9 +1717,8 @@ fn delete_conversation(id: &str) -> Result<IaDeleted, String> {
     // never someone else's Claude session.
     ia::get(id).map_err(|_| t!("err.conv_unknown"))?;
     // Deleting under a running Claude would leave it running without a
-    // directory, and still writing its transcript: both close first, and each
+    // directory, and still writing its transcript: it closes first, and the
     // close waits for its process to exit.
-    pty::close(id);
     chat::close(id);
     ia::watch_stop(id);
     // Listed before the folder goes: the project folder's name derives from it.
@@ -1673,7 +1747,7 @@ struct IaDeletePlan {
 fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
     ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
     let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
-    Ok(IaDeletePlan { files: found.paths.len(), running: pty::is_open(&id) || chat::is_open(&id) })
+    Ok(IaDeletePlan { files: found.paths.len(), running: chat::is_open(&id) })
 }
 
 #[tauri::command]
@@ -1850,32 +1924,48 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(update::Pending::default())
         .manage(discover::Discovery::default())
-        .register_asynchronous_uri_scheme_protocol("cam", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("cam", |ctx, request: Request<Vec<u8>>, responder| {
+            // Ours, and the pinned camera's view over a site (library.rs).
+            if !own_webview(&ctx) && !library::is_cam_view(ctx.webview_label()) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             tauri::async_runtime::spawn(async move {
                 responder.respond(handle_cam(uri).await);
             });
         })
-        .register_asynchronous_uri_scheme_protocol("prn", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("prn", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             let range = request.headers().get("range").and_then(|v| v.to_str().ok()).map(String::from);
             tauri::async_runtime::spawn(async move {
                 responder.respond(handle_prn(uri, range).await);
             });
         })
-        .register_asynchronous_uri_scheme_protocol("gcode", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("gcode", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
                 responder.respond(handle_gcode(&uri));
             }));
         })
-        .register_asynchronous_uri_scheme_protocol("mesh", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("mesh", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
                 responder.respond(handle_mesh(&uri));
             }));
         })
-        .register_asynchronous_uri_scheme_protocol("thumb", |_app, request: Request<Vec<u8>>, responder| {
+        .register_asynchronous_uri_scheme_protocol("thumb", |ctx, request: Request<Vec<u8>>, responder| {
+            if !own_webview(&ctx) {
+                return responder.respond(refused());
+            }
             let uri = request.uri().to_string();
             let _ = pool().send(Box::new(move || {
                 responder.respond(handle_thumb(&uri));
@@ -1949,6 +2039,8 @@ pub fn run() {
             plate_pieces,
             plate_orient,
             plate_save,
+            plate_tower,
+            mix_colors,
             print_send,
             pf_overview,
             pf_count,
@@ -1978,6 +2070,11 @@ pub fn run() {
             camera_start,
             camera_stop,
             lib_sites,
+            snap_store_highlights,
+            lib_nav,
+            cam_view_set,
+            cam_view_action,
+            lib_favicon,
             lib_open,
             lib_close,
             lib_show,
@@ -2001,12 +2098,10 @@ pub fn run() {
             ia_versions,
             ia_revert,
             ia_stats,
-            pty_open,
             ia_chat_history,
             ia_chat_send,
             ia_chat_stop,
             ia_chat_answer,
-            ia_chat_mode,
             ia_chat_model,
             ia_chat_running,
             ia_chat_close,
@@ -2017,9 +2112,7 @@ pub fn run() {
             auth_sandbox_clear,
             auth_term_open,
             pty_write,
-            pty_resize,
             pty_close,
-            pty_running,
             ia_resumable,
             fav_list,
             fav_add,
@@ -2042,6 +2135,8 @@ pub fn run() {
             bed_mesh_measure,
             bed_mesh_stop,
             bed_mesh_abort,
+            control_read,
+            control_run,
             app_notify,
             printers_watch_start,
             printers_watch_stop,
@@ -2108,8 +2203,9 @@ mod tests {
     fn dump_meta() {
         let dir = std::env::var("PROBE_DIR")
             .unwrap_or_else(|_| format!("{}/Downloads", std::env::var("HOME").unwrap()));
-        let mut files: Vec<_> = std::fs::read_dir(dir)
-            .unwrap()
+        // Local probe over real 3MFs; skip when Downloads (or PROBE_DIR) is absent (CI).
+        let Ok(rd) = std::fs::read_dir(&dir) else { return; };
+        let mut files: Vec<_> = rd
             .flatten()
             .map(|e| e.path())
             .filter(|p| p.extension().map(|e| e.eq_ignore_ascii_case("3mf")).unwrap_or(false))

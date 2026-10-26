@@ -16,6 +16,9 @@ lists below.
 | Plan | Subject | State |
 |---|---|---|
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
+| [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
+| [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
+| [virtual-heads.md](virtual-heads.md) | Virtual heads: color mixing of two spools (Snapmaker Orca's Full Spectrum), one head token per color in Prepare | Written, draft PR |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
@@ -70,6 +73,14 @@ tests), whose real behavior remains to be checked.
   off; the emergency stop brings the printer back to ready; the
   temperature proposed from Moonraker's history; the shape diagnosis on
   real beds; a lost connection followed until the end.
+- **Control** (unreleased, #17): on a U1, each action against the machine —
+  `T<n> A0` from the app, `AUTO_FEEDING EXTRUDER=<n>` (does it home or
+  heat by itself?), `INNER_FILAMENT_UNLOAD` after picking the head,
+  `CONTROL_EXTRUDE_ACTION` / `CONTROL_RETRACT_ACTION` on the active head,
+  `ROUGHLY_CLEAN_NOZZLE`, `M106` on the active head's fan, the chamber fan,
+  `SET_PURIFIER FAN=inner`, the light; jogging near the edges (Y capped at
+  270 mm in front of the head docks, Z ≥ 0.5 mm); the screen of the U1
+  while the app drives it; the camera view in the tab.
 - **AI sandbox**: if a sandbox restarts while idle, the exit code shown in
   the Terminal tab and the `[chat] Claude ended…` console line say why.
 

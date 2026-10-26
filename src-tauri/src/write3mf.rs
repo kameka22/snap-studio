@@ -36,26 +36,29 @@ fn xml_escape(s: &str) -> String {
 }
 
 /// Merges identical vertices: a mesh with shared vertices slices much better
-/// than a triangle soup.
+/// than a triangle soup. One entry per triangle, in order: `None` for a
+/// degenerate one (two vertices the same), which makes the slicer's repair
+/// fail. The writer follows this list, so the two never disagree on which
+/// triangles are kept: a second test there, by float equality, took `-0.0`
+/// (a mirrored object) for `0.0` and shifted every later index.
 #[allow(dead_code)]
-fn weld(tris: &[Tri]) -> (Vec<[f32; 3]>, Vec<[u32; 3]>) {
+fn weld(tris: &[Tri]) -> (Vec<[f32; 3]>, Vec<Option<[u32; 3]>>) {
     let mut verts: Vec<[f32; 3]> = Vec::with_capacity(tris.len());
     let mut index: HashMap<[u32; 3], u32> = HashMap::with_capacity(tris.len());
     let mut faces = Vec::with_capacity(tris.len());
+    // `+ 0.0` turns -0.0 into 0.0: the same point, one vertex.
+    let bits = |x: f32| (x + 0.0).to_bits();
     for t in tris {
         let mut f = [0u32; 3];
         for (k, v) in t.v.iter().enumerate() {
-            let key = [v[0].to_bits(), v[1].to_bits(), v[2].to_bits()];
+            let key = [bits(v[0]), bits(v[1]), bits(v[2])];
             let id = *index.entry(key).or_insert_with(|| {
                 verts.push(*v);
                 (verts.len() - 1) as u32
             });
             f[k] = id;
         }
-        // A degenerate triangle makes the slicer's repair fail.
-        if f[0] != f[1] && f[1] != f[2] && f[0] != f[2] {
-            faces.push(f);
-        }
+        faces.push((f[0] != f[1] && f[1] != f[2] && f[0] != f[2]).then_some(f));
     }
     (verts, faces)
 }
@@ -83,7 +86,7 @@ fn write_mesh_object<W: Write>(
     color_id: &HashMap<[u8; 3], usize>,
 ) -> Result<()> {
     let (verts, faces) = weld(tris);
-    if faces.is_empty() {
+    if faces.iter().all(Option::is_none) {
         return Err(anyhow!(crate::t!("err.object_empty", name = name)));
     }
     let single = tris.first().map(|t| t.c).filter(|c| tris.iter().all(|t| t.c == *c));
@@ -111,16 +114,9 @@ fn write_mesh_object<W: Write>(
     }
     writeln!(w, "    </vertices>")?;
     writeln!(w, "    <triangles>")?;
-    let mut fi = 0usize;
-    for (ti, t) in tris.iter().enumerate() {
-        // `weld` may have left out degenerate triangles: follow the same order.
-        let (a, b, c) = (t.v[0], t.v[1], t.v[2]);
-        let deg = a == b || b == c || a == c;
-        if deg {
-            continue;
-        }
-        let f = faces[fi];
-        fi += 1;
+    for (ti, (t, f)) in tris.iter().zip(&faces).enumerate() {
+        // `weld` decides which triangles are degenerate: nothing is retested here.
+        let Some(f) = f else { continue };
         let painted = match paint.get(ti) {
             Some(Some(p)) => format!(r#" paint_color="{p}""#),
             _ => String::new(),
@@ -317,6 +313,16 @@ fn write_composites(dst: &Path, objects: &[(&str, &[Part], Mat)]) -> Result<()> 
     Ok(())
 }
 
+/// Adds a file to a 3MF already written.
+pub fn append_entry(dst: &Path, name: &str, data: &[u8]) -> Result<()> {
+    let f = std::fs::OpenOptions::new().read(true).write(true).open(dst)?;
+    let mut z = zip::ZipWriter::new_append(f)?;
+    z.start_file(name, zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated))?;
+    z.write_all(data)?;
+    z.finish()?;
+    Ok(())
+}
+
 /// Writes a geometry 3MF holding the objects and their placements.
 #[cfg(test)]
 pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
@@ -497,5 +503,30 @@ mod tests {
             size[0],
             size[1]
         );
+    }
+}
+
+#[cfg(test)]
+mod weld_tests {
+    use super::weld;
+    use crate::mesh::Tri;
+
+    fn tri(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> Tri {
+        Tri { v: [a, b, c], c: [255, 255, 255] }
+    }
+
+    #[test]
+    fn degenerate_triangles_are_decided_once() {
+        let tris = vec![
+            tri([0., 0., 0.], [1., 0., 0.], [0., 1., 0.]),
+            // -0.0 is 0.0 (a mirrored object): the same vertex, a degenerate triangle.
+            tri([0., 0., 0.], [-0.0, 0., 0.], [1., 0., 0.]),
+            tri([0., 0., 0.], [0., 1., 0.], [0., 0., 1.]),
+        ];
+        let (verts, faces) = weld(&tris);
+        assert_eq!(faces.len(), tris.len(), "one entry per triangle, in order");
+        assert!(faces[1].is_none(), "the degenerate one is marked, not dropped");
+        assert_eq!(verts.len(), 4, "-0.0 welded with 0.0");
+        assert_eq!(faces[2], Some([0, 2, 3]), "indices follow the welded vertices");
     }
 }

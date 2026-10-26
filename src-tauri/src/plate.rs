@@ -191,12 +191,12 @@ pub fn items(path: &Path) -> Result<Vec<PlateItem>> {
         }]);
     }
     let mut zip = crate::model3mf::open(path)?;
-    let build = crate::mesh::build_items(&mut zip)?;
+    // All at once: the container is parsed a single time for every object.
+    let loaded = crate::mesh::load_items(&mut zip, FULL_BUDGET)?;
     let (names, plates) = crate::model3mf::object_settings(&mut zip);
-    let many = build.len() > 1;
-    let mut out = Vec::with_capacity(build.len());
-    for (i, b) in build.iter().enumerate() {
-        let it = crate::mesh::load_item(&mut zip, i, FULL_BUDGET)?;
+    let many = loaded.len() > 1;
+    let mut out = Vec::with_capacity(loaded.len());
+    for (i, (b, it)) in loaded.iter().enumerate() {
         let mut extruders = crate::mesh::colors_used(&it.mesh);
         if extruders.is_empty() {
             extruders.push(1);
@@ -255,10 +255,8 @@ pub fn filament_colored(zip: &mut crate::model3mf::Zip, m: &mut MeshData) {
 
 pub fn hex_rgb(s: &str) -> Option<[u8; 3]> {
     let h = s.trim_start_matches('#');
-    if h.len() < 6 {
-        return None;
-    }
-    let n = u32::from_str_radix(&h[..6], 16).ok()?;
+    // `get`: a non-ASCII character at the cut gives None, not a panic.
+    let n = u32::from_str_radix(h.get(..6)?, 16).ok()?;
     Some([(n >> 16) as u8, (n >> 8) as u8, n as u8])
 }
 
@@ -346,9 +344,70 @@ pub fn write_scene(scene: &[SceneItem], bed: (f32, f32), dst: &Path) -> Result<W
     write_items(scene, Some(bed), dst)
 }
 
-/// Saves the whole plate as 3MF, without plate checks.
-pub fn save_scene(scene: &[SceneItem], dst: &Path) -> Result<()> {
-    write_items(scene, None, dst).map(|_| ())
+/// Saves the whole plate as 3MF, without plate checks; its prime tower, if
+/// shown, in the project's settings as Orca keeps it.
+pub fn save_scene(scene: &[SceneItem], tower: Option<TowerPlace>, dst: &Path) -> Result<()> {
+    write_items(scene, None, dst)?;
+    if let Some(t) = tower {
+        crate::write3mf::append_entry(dst, PROJECT_SETTINGS, &serde_json::to_vec_pretty(&t.settings())?)?;
+    }
+    Ok(())
+}
+
+const PROJECT_SETTINGS: &str = "Metadata/project_settings.config";
+
+/// A plate's prime tower: shown or not, front-left corner and turn
+/// (degrees), as the engine places it.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct TowerPlace {
+    pub on: bool,
+    pub x: f32,
+    pub y: f32,
+    pub rot: f32,
+}
+
+/// The prime tower a 3MF keeps, with whether Snap Studio wrote it (`ours`):
+/// an Orca project's switch is its profile's, not a choice of the user.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+pub struct FileTower {
+    #[serde(flatten)]
+    pub place: TowerPlace,
+    pub ours: bool,
+}
+
+impl TowerPlace {
+    /// Orca's keys: one position per plate (this one is the first plate).
+    fn settings(&self) -> serde_json::Value {
+        serde_json::json!({
+            "enable_prime_tower": if self.on { "1" } else { "0" },
+            "wipe_tower_x": [format!("{:.3}", self.x)],
+            "wipe_tower_y": [format!("{:.3}", self.y)],
+            "wipe_tower_rotation_angle": format!("{:.3}", self.rot),
+        })
+    }
+}
+
+/// The first plate's prime tower in a 3MF's project settings, if it says.
+pub fn tower_of(path: &Path) -> Option<FileTower> {
+    if is_stl(path) {
+        return None;
+    }
+    let mut zip = crate::model3mf::open(path).ok()?;
+    let data = crate::model3mf::read_entry(&mut zip, PROJECT_SETTINGS)?;
+    let v: serde_json::Value = serde_json::from_slice(&data).ok()?;
+    let num = |k: &str| -> Option<f32> {
+        let x = v.get(k)?;
+        let x = x.as_array().map_or(Some(x), |a| a.first())?;
+        x.as_str().and_then(|s| s.trim().parse().ok()).or_else(|| x.as_f64().map(|f| f as f32))
+    };
+    let place = TowerPlace {
+        on: v.get("enable_prime_tower").and_then(|x| x.as_str()) == Some("1"),
+        x: num("wipe_tower_x")?,
+        y: num("wipe_tower_y")?,
+        rot: num("wipe_tower_rotation_angle").unwrap_or(0.0),
+    };
+    let ours = crate::model3mf::read_meta(&mut zip).application.as_deref() == Some("Snap Studio");
+    Some(FileTower { place, ours })
 }
 
 fn write_items(scene: &[SceneItem], bed: Option<(f32, f32)>, dst: &Path) -> Result<Written> {
@@ -603,6 +662,57 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// An object on a virtual head (head 4 on a 4-head printer) is written
+    /// on extruder 5: the engine's first mixed filament.
+    #[test]
+    fn a_virtual_head_is_written_after_the_physical_ones() {
+        let tmp = std::env::temp_dir().join("snapstudio-plate-virtual");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("one.3mf");
+        crate::write3mf::write_scene(&src, &[
+            crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
+        ]).unwrap();
+        let item = SceneItem {
+            path: src.to_string_lossy().to_string(), item: 0, name: "a".into(), pos: [100.0, 100.0],
+            rot: [0.0; 3], scale: unit_scale(), extruder_map: vec![4], piece: None,
+        };
+        let out = tmp.join("scene.3mf");
+        write_scene(&[item], (270.0, 270.0), &out).unwrap();
+        let mut zip = crate::model3mf::open(&out).unwrap();
+        let m = crate::mesh::load_mesh(&mut zip, 10_000).unwrap();
+        assert!(!m.extruders.is_empty() && m.extruders.iter().all(|e| *e == 5), "{:?}", &m.extruders[..m.extruders.len().min(4)]);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// A saved plate keeps its prime tower where Orca does (the project's
+    /// settings), and reads it back, saying it is ours; without one, none.
+    #[test]
+    fn saved_plate_keeps_its_tower() {
+        let tmp = std::env::temp_dir().join("snapstudio-plate-tower");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("one.3mf");
+        crate::write3mf::write_scene(&src, &[
+            crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
+        ]).unwrap();
+        let item = SceneItem {
+            path: src.to_string_lossy().to_string(), item: 0, name: "a".into(), pos: [100.0, 100.0],
+            rot: [0.0; 3], scale: unit_scale(), extruder_map: vec![], piece: None,
+        };
+        let out = tmp.join("saved.3mf");
+        let place = TowerPlace { on: true, x: 12.5, y: 210.25, rot: 90.0 };
+        save_scene(std::slice::from_ref(&item), Some(place), &out).unwrap();
+        assert_eq!(tower_of(&out), Some(FileTower { place, ours: true }));
+        assert_eq!(items(&out).unwrap().len(), 1, "the objects still read");
+        let mut zip = crate::model3mf::open(&out).unwrap();
+        let cfg: serde_json::Value = serde_json::from_slice(&crate::model3mf::read_entry(&mut zip, PROJECT_SETTINGS).unwrap()).unwrap();
+        assert_eq!(cfg["wipe_tower_x"], serde_json::json!(["12.500"]), "one per plate, as Orca");
+        save_scene(&[item], None, &out).unwrap();
+        assert_eq!(tower_of(&out), None);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// A painted object goes to the engine with its painting, states
     /// renumbered to the heads chosen, geometry in one piece per volume.
     #[test]
@@ -720,3 +830,16 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod hex_tests {
+    use super::hex_rgb;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(hex_rgb("#ff8000"), Some([255, 128, 0]));
+        assert_eq!(hex_rgb("ff8000ff"), Some([255, 128, 0]));
+        assert_eq!(hex_rgb("#aaaaaé"), None);
+        assert_eq!(hex_rgb("#abc"), None);
+    }
+}

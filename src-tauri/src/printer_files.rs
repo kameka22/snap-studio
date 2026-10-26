@@ -215,7 +215,10 @@ fn strings(v: Option<&Value>) -> Vec<String> {
 
 fn color(s: &str) -> Option<String> {
     let h = s.trim().trim_start_matches('#');
-    (h.len() >= 6 && h[..6].chars().all(|c| c.is_ascii_hexdigit())).then(|| format!("#{}", h[..6].to_ascii_lowercase()))
+    // `get`: a non-ASCII character at the cut gives None, not a panic.
+    h.get(..6)
+        .filter(|h| h.chars().all(|c| c.is_ascii_hexdigit()))
+        .map(|h| format!("#{}", h.to_ascii_lowercase()))
 }
 
 /// `/server/files/metadata`. `file_dir` is the file's folder in its root:
@@ -618,7 +621,13 @@ async fn range(url: &str, start: u64, len: u64) -> Result<Vec<u8>> {
     }
     if r.status().as_u16() == 200 {
         // A server that ignores ranges sends the whole file: read only up to
-        // the piece, then drop the connection.
+        // the piece, then drop the connection — and not past a few megabytes:
+        // a `moov` at the end of a long video (ffmpeg's layout) would mean
+        // reading the whole video, twice over the hops. No duration then.
+        const NO_RANGE_MAX: u64 = 8 * 1024 * 1024;
+        if start + len > NO_RANGE_MAX {
+            return Err(anyhow!("no range support: {} bytes would be read", start + len));
+        }
         let bytes = read_upto(r, start + len).await?;
         return Ok(bytes.get(start as usize..).map(<[u8]>::to_vec).unwrap_or_default());
     }
@@ -677,6 +686,40 @@ pub async fn delete(host: &str, port: u16, root: &str, path: &str) -> Result<()>
         return Err(refused(r).await);
     }
     Ok(())
+}
+
+/// An error worth a second try: no answer in time, no connection, or the
+/// server's own failure (5xx). A refusal (403, 404, 405) is final.
+fn passing(e: &anyhow::Error) -> bool {
+    if let Some(r) = e.downcast_ref::<reqwest::Error>() {
+        return r.is_timeout() || r.is_connect() || r.is_request();
+    }
+    e.to_string().starts_with("HTTP 5")
+}
+
+/// `delete`, tried up to three times when Moonraker did not answer or
+/// failed on its side (busy with a file's metadata, a timeout): a file
+/// deleted by a request that timed out is then found gone, not deleted
+/// twice (a 404 is a refusal, taken as final — the file is gone).
+pub async fn delete_retrying(host: &str, port: u16, root: &str, path: &str) -> Result<()> {
+    let mut last = None;
+    for i in 0..3 {
+        if i > 0 {
+            tokio::time::sleep(Duration::from_millis(600)).await;
+            // Gone meanwhile (the timed-out request went through): done.
+            if let Ok(list) = list_root(&base(host, port), root).await {
+                if !list.iter().any(|(p, _, _)| p == path) {
+                    return Ok(());
+                }
+            }
+        }
+        match delete(host, port, root, path).await {
+            Ok(()) => return Ok(()),
+            Err(e) if passing(&e) => last = Some(e),
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last.unwrap_or_else(|| anyhow!("delete failed")))
 }
 
 /// The camera service's id of a video (U1): the instance whose video has
@@ -745,10 +788,12 @@ pub async fn delete_video(host: &str, port: u16, root: &str, path: &str) -> Resu
         let msg = r.get("message").and_then(|m| m.as_str()).unwrap_or("failed").to_string();
         return Err(anyhow!(crate::t!("pfiles.err.video_delete", err = msg)));
     }
+    // The service may delete after answering, and a long video takes a
+    // moment to go: up to five seconds before the video is said to stay.
     let b = base(host, port);
-    for i in 0..5 {
+    for i in 0..10 {
         if i > 0 {
-            tokio::time::sleep(Duration::from_millis(400)).await;
+            tokio::time::sleep(Duration::from_millis(500)).await;
         }
         if let Ok(list) = list_root(&b, root).await {
             if !list.iter().any(|(p, _, _)| p == path) {
@@ -777,6 +822,8 @@ pub fn display_name(path: &str) -> String {
 
 /// Renames a print file; returns its new path.
 pub async fn rename(host: &str, port: u16, path: &str, new_name: &str) -> Result<String> {
+    // The source as much as the destination: nothing outside `gcodes`.
+    file_url("", "gcodes", path)?;
     let dest = rename_target(path, new_name)?;
     file_url("", "gcodes", &dest)?;
     let r = client()
@@ -1289,5 +1336,28 @@ mod tests {
         assert!(e.to_string().contains("405"), "{e}");
         // A print file goes through Moonraker.
         block_on(delete_video("127.0.0.1", port, "gcodes", "Cube-1a2b3c.gcode")).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod hex_tests {
+    use super::color;
+
+    #[test]
+    fn colours_cut_safely() {
+        assert_eq!(color("#FF8000FF").as_deref(), Some("#ff8000"));
+        assert_eq!(color("#aaaaaé"), None);
+        assert_eq!(color("zzzzzz"), None);
+    }
+}
+
+#[cfg(test)]
+mod rename_tests {
+    #[test]
+    fn a_source_outside_gcodes_is_refused() {
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        // Refused before any request: the port is never reached.
+        let e = rt.block_on(super::rename("127.0.0.1", 1, "../config/printer.cfg", "x")).unwrap_err();
+        assert!(e.to_string().contains("invalid path"), "{e}");
     }
 }

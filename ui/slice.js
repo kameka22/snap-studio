@@ -16,7 +16,7 @@ const SL = {
   /* Last preview produced, awaiting a decision. */
   preview: null,
   /* Choices kept: per machine preset, and the last printer. */
-  memory: JSON.parse(localStorage.getItem("snapstudio.slice") || "{}"),
+  memory: storedObject("snapstudio.slice"),
 };
 
 function rememberFor(machine) {
@@ -133,7 +133,7 @@ async function sliceLoad() {
       const m = models[i];
       return {
         path,
-        stem: path.split("/").pop().replace(/\.(3mf|stl)$/i, ""),
+        stem: path.split(/[\\/]/).pop().replace(/\.(3mf|stl)$/i, ""),
         filaments: m?.filaments || [],
         used: m?.used?.length ? m.used : [1],
       };
@@ -238,8 +238,14 @@ $("s-beds").addEventListener("click", (e) => {
 
 async function onMachineChange(mem) {
   const machine = $("s-machine").value;
+  // Two quick changes (0.4 then 0.6): only the last one's lists may land,
+  // or the process list and the remembered adjustments would be the
+  // other machine's.
+  const seq = (SL.machineSeq = (SL.machineSeq || 0) + 1);
   try {
-    SL.lists = await invoke("slice_lists", { machine });
+    const lists = await invoke("slice_lists", { machine });
+    if (seq !== SL.machineSeq) return;
+    SL.lists = lists;
     const m = mem || rememberFor(machine);
     // The first choice known and offered for this machine; failing that, the
     // standard 0.20 mm profile.
@@ -251,10 +257,11 @@ async function onMachineChange(mem) {
     renderHeads(m.filaments || (m.filament ? [m.filament] : null), false);
     renderModelMap(false);
     await loadDefaults(m.simple);
+    if (seq !== SL.machineSeq) return;
     spdLoad(m.speed);
     advLoad(m.adv);
   } catch (e) {
-    setSliceMessage(String(e), "err");
+    if (seq === SL.machineSeq) setSliceMessage(String(e), "err");
   }
 }
 
@@ -360,7 +367,8 @@ function renderModelMap(fromPrinter) {
       const key = `${gi}:${e}`;
       const fil = model?.filaments.find((f) => f.index === e);
       let head = heads[e]?.h ?? (fromPrinter ? null : prev[key]);
-      if (head == null || head >= n) head = autoHead(fil, e, taken);
+      // A virtual head (or one deleted since) is kept as Prepare has it.
+      if (!vhIs(head) && (head == null || head >= n)) head = autoHead(fil, e, taken);
       taken.add(head);
       const color = g.colors.length === 1 ? "" : tr("slice.color_n", { n: e });
       const label = nested ? color : several ? name : color || name;
@@ -374,11 +382,12 @@ function renderModelMap(fromPrinter) {
           const slot = SL.slots.find((s) => s.index === h);
           const desc = slot ? (slot.present ? ` · ${slot.kind || "?"}` : " · " + tr("printers.empty_tag")) : "";
           return `<option value="${h}"${h === head ? " selected" : ""}>T${h}${esc(desc)}</option>`;
-        }).join("")}</select>
+        }).join("")}${vhIs(head) ? `<option value="${head}" selected>${esc(vhName(headsVirtual(pid || ""), head) || "—")}</option>` : ""}</select>
       </div>`);
     }
   });
   $("s-map").innerHTML = rows.join("");
+  slOrphanLine();
   slUsedHeads();
   // Bed temperatures depend on the heads used.
   pdBedLine();
@@ -448,9 +457,21 @@ document.querySelector("#smodal .sl-stepper").addEventListener("click", (e) => {
   slSummary();
 });
 
-/* Heads used by the model (colors → heads); empty if unknown. */
+/* Heads used by the model (colors → heads), a virtual head giving its two
+   physical ones; empty if unknown. */
 function slUsedSet() {
-  return new Set([...document.querySelectorAll("#s-map select")].map((s) => +s.value));
+  return vhPhysical(slMapValues(), headsVirtual(currentPrinter()?.id || ""));
+}
+/* The map's head values as they are (virtual ones included). */
+const slMapValues = () => new Set([...document.querySelectorAll("#s-map select")].map((s) => +s.value));
+
+/* Colors left without a head (a virtual head deleted since): the slice
+   waits, Prepare is where to choose one. */
+const slOrphans = () => [...slMapValues()].filter((h) => vhOrphan(headsVirtual(currentPrinter()?.id || ""), h));
+function slOrphanLine() {
+  const n = slOrphans().length;
+  $("s-orphan").classList.toggle("hidden", !n);
+  if (!SL.job) $("s-go").disabled = !!n || !$("s-engine").classList.contains("hidden");
 }
 
 /* Bottom bar: what will go to the engine, in one line. */
@@ -476,6 +497,15 @@ function slSummary() {
   $("s-summary").innerHTML = parts
     .map((p) => (typeof p === "object" ? `<span class="${esc(p.cls)}">${esc(p.text)}</span>` : `<span>${esc(p)}</span>`))
     .join("");
+  // A virtual head mixes evenly with thin layers (Snapmaker's advice).
+  const pid = currentPrinter()?.id || "";
+  const mixes = [...slMapValues()].some((h) => vhFind(headsVirtual(pid), h));
+  const layer = parseProcess($("s-process").value)?.h;
+  $("s-vlayer").classList.toggle("hidden", !(mixes && layer > 0.12));
+  // What goes to the engine changed: the prime tower's materials too, and
+  // its place.
+  if (typeof advRenderTower === "function") advRenderTower();
+  if (typeof prTowerSheetWarning === "function") prTowerSheetWarning();
 }
 
 /* Adjustments touched by hand: they survive a profile change. */
@@ -521,9 +551,12 @@ function setSliceMessage(text, cls) {
 }
 
 /* Progress bar; `null` hides it. */
+/* The bar never goes back (a late event, a rounding): SL.pct holds the
+   furthest point; null hides it and starts over. */
 function setSliceProgress(pct) {
   $("s-progress").classList.toggle("hidden", pct == null);
-  if (pct != null) $("s-progress").firstElementChild.style.width = Math.max(2, pct) + "%";
+  SL.pct = pct == null ? 0 : Math.max(SL.pct || 0, Math.min(100, pct));
+  if (pct != null) $("s-progress").firstElementChild.style.width = Math.max(2, SL.pct) + "%";
 }
 
 function showSliceBusy(busy) {
@@ -531,11 +564,15 @@ function showSliceBusy(busy) {
   $("s-cancel").classList.toggle("hidden", busy);
   $("s-stop").classList.toggle("hidden", !busy);
   document
-    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn)")
+    .querySelectorAll("#smodal select, #smodal input, #smodal .sl-areas button:not(.info-btn), #s-tower button, #s-tower-place button")
     .forEach((el) => (el.disabled = busy));
   if (busy) closePicker();
-  // Unlocked: the chips of empty heads must stay inactive.
-  else slTokens();
+  // Unlocked: the chips of empty heads must stay inactive, and the prime
+  // tower's switch while no tower can be printed.
+  else {
+    slTokens();
+    $("s-tower-sw").disabled = !!prTowerState().reason;
+  }
 }
 
 async function startSlice() {
@@ -546,13 +583,21 @@ async function startSlice() {
     setSliceMessage(tr("slice.need_profiles"), "err");
     return;
   }
+  if (slOrphans().length) {
+    setSliceMessage(tr("slice.orphan"), "err");
+    return;
+  }
   // Model color → head, object by object; entry i is about color i + 1.
   const maps = SL.groups.map(() => []);
   document.querySelectorAll("#s-map select").forEach((s) => (maps[+s.dataset.group][+s.dataset.ext - 1] = +s.value));
   for (const m of maps) for (let i = 0; i < m.length; i++) if (m[i] == null) m[i] = 0;
+  // Virtual heads: after the physical ones (head n + k), their mixes sent.
+  const pid = currentPrinter()?.id || "";
+  const eng = vhEngine(new Set(maps.flat()), headsVirtual(pid), filaments.length);
+  const virtual_heads = eng.heads.map((v) => ({ a: v.a, b: v.b, pct: v.pct, color: headsVirtualColor(pid, v) || null }));
   const groupOf = (i) => SL.groups.findIndex((g) => g.items.includes(i));
-  const scene = SL.source.items.map(({ id, colors, heads, ...it }, i) => ({ ...it, extruder_map: maps[groupOf(i)] || [] }));
-  const heads = [...new Set(maps.flat())];
+  const scene = SL.source.items.map(({ id, colors, heads, ...it }, i) => ({ ...it, extruder_map: (maps[groupOf(i)] || []).map(eng.index) }));
+  const heads = [...vhPhysical(new Set(maps.flat()), headsVirtual(pid))];
   const empty = heads.filter((h) => SL.slots.find((s) => s.index === h && !s.present));
   if (empty.length) {
     setSliceMessage(tr("slice.head_empty", { heads: empty.map((h) => "T" + h).join(", ") }), "err");
@@ -563,6 +608,11 @@ async function startSlice() {
     return slot?.present && slot.color ? slot.color : null;
   });
 
+  // The prime tower off the plate: the engine would print it there.
+  if (prTowerBlocks()) {
+    setSliceMessage(tr("prepare.tower.off_plate"), "err");
+    return;
+  }
   // The profile's values the Speed adjustment works from must be this
   // profile's.
   await ADV.ready?.catch(() => {});
@@ -578,12 +628,17 @@ async function startSlice() {
 
   showSliceBusy(true);
   setSliceMessage(tr("slice.preparing"), "busy");
+  setSliceProgress(null);
   setSliceProgress(0);
+  SL.starting = true;
+  SL.early = [];
+  // The tower's real size comes with the preview: it is this plate's.
+  SL.towerKey = prTowerKey();
   try {
-    SL.job = await invoke("slice_start", {
+    const job = await invoke("slice_start", {
       request: {
-        source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors,
-        overrides: { ...advOverrides(), ...spdOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
+        source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors, virtual_heads,
+        overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });
     const bedLabel = $("s-bed").selectedOptions[0]?.textContent || "";
@@ -591,23 +646,41 @@ async function startSlice() {
     // queued print back to Prepare.
     const plate = typeof prPlateOf === "function" ? prPlateOf(SL.source.items.map((it) => it.id)) : [];
     SL.request = { printer: printer?.id || "", filaments, colors, machine, process, bed, bedLabel, plate };
+    SL.job = job;
+    // What the job said before its id was known.
+    const early = SL.early.filter((p) => p.id === job);
+    SL.starting = false;
+    SL.early = [];
+    for (const p of early) await onSliceProgress({ payload: p });
   } catch (e) {
+    SL.starting = false;
+    SL.early = [];
     showSliceBusy(false);
     setSliceProgress(null);
     setSliceMessage(String(e), "err");
   }
 }
 
-listen("slice-progress", async (e) => {
+async function onSliceProgress(e) {
   const p = e.payload;
-  if (!SL.job || p.id !== SL.job) return;
+  // Rust emits from the moment the job is spawned, before `slice_start`
+  // has answered with its id: what arrives meanwhile is kept, and replayed
+  // once the id is known (an early error would otherwise be lost, the
+  // sheet stuck on "Preparing").
+  if (!SL.job) {
+    if (SL.starting) SL.early.push(p);
+    return;
+  }
+  if (p.id !== SL.job) return;
   if (p.phase === "preparation") {
     setSliceMessage(tr("slice.preparing_model"), "busy");
   } else if (p.phase === "slicing") {
     if (p.percent != null) {
+      // The engine's stage (its log, Rust's Tracker) and the job's share.
       stopElapsed();
       setSliceProgress(p.percent);
-      setSliceMessage(`${p.message || tr("slice.slicing")} ${Math.round(p.percent)} %`, "busy");
+      const stage = p.stage ? tr(`slice.stage.${p.stage}`) : tr("slice.slicing");
+      setSliceMessage(`${stage} ${Math.round(SL.pct)} %`, "busy");
     } else {
       tickElapsed(p.elapsed_s);
     }
@@ -632,7 +705,8 @@ listen("slice-progress", async (e) => {
     SL.job = null;
     setSliceMessage(p.message || tr("slice.engine_silent"), "err");
   }
-});
+}
+listen("slice-progress", onSliceProgress);
 
 /* The counter runs in the UI when the engine reports no progress. */
 let elapsedTimer = 0;
@@ -652,6 +726,7 @@ function stopElapsed() {
 
 function showPreview(job, p) {
   const req = SL.request || { filaments: [], colors: [] };
+  prTowerSliced(p.stats?.tower, SL.towerKey);
   SL.preview = { job, source: SL.source, gcode: p.gcode, stats: p.stats || {}, printer: req.printer, saved: null, replaces: SL.replaces };
   const toolColors = req.filaments.map((_, i) => hexToRgb(req.colors[i]));
   const toolNames = req.filaments.map((name) => name.replace(/\s*@.*$/, ""));
@@ -688,7 +763,7 @@ async function savePreview() {
   try {
     const path = await invoke("slice_save", { id: pv.job, dir: null });
     pv.saved = path;
-    toast(tr("slice.gcode_saved", { name: path.split("/").pop() }));
+    toast(tr("slice.gcode_saved", { name: path.split(/[\\/]/).pop() }));
     await refresh();
   } catch (e) {
     toast(String(e), true);
@@ -996,7 +1071,7 @@ listen("print-send", (e) => {
     setSendBusy(false);
     closeSheet($("sendmodal"));
     toast(tr("send.started", { name: p?.name || tr("slice.printer") }));
-    if (s.message) toast(s.message, true);
+    if (s.message) startWarning(s.message);
     // From a printer's files, the slice preview (if any) stays as it was.
     if (!SL.remote) closeViewer();
   }
@@ -1058,4 +1133,18 @@ document.addEventListener("keydown", (e) => {
   // The spool sheet, open on top, keeps its keys.
   if (!$("spmodal").classList.contains("hidden")) return;
   if (e.key === "Escape") closeSheet($("sendmodal"));
+});
+
+/* Colors left without a head: Prepare is where to choose one. */
+$("s-orphan-go").addEventListener("click", () => {
+  closeSheet($("smodal"));
+  switchView("prepare");
+});
+/* A virtual head deleted (a spool unloaded) while the sheet is open: its
+   colors wait for a head. */
+window.addEventListener("headschange", (e) => {
+  if ($("smodal").classList.contains("hidden") || !["virtual", "mix"].includes(e.detail?.what)) return;
+  slTokens();
+  slOrphanLine();
+  slSummary();
 });

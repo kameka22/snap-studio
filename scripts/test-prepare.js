@@ -66,6 +66,14 @@ assert.strictEqual(L.plNudge("scale", 10, -1, true, bed), 10);
 assert.strictEqual(L.plNudge("scale", 100, 1, true, bed), 110);
 assert.strictEqual(L.plWrapDeg(270), -90);
 
+// The prime tower's volume: its own bounds, whole steps, 5 with ⇧.
+assert.deepStrictEqual([L.plRange("purge", bed, 0, { min: 15, max: 90 }).min, L.plRange("purge", bed, 0, { min: 15, max: 90 }).max], [15, 90]);
+assert.deepStrictEqual([L.plRange("purge").min, L.plRange("purge").max], [15, 90], "defaults without bounds");
+assert.strictEqual(L.plNudge("purge", 45, -1, false, bed, 0, { min: 15, max: 90 }), 44);
+assert.strictEqual(L.plNudge("purge", 45, 1, true, bed, 0, { min: 15, max: 90 }), 50);
+assert.strictEqual(L.plNudge("purge", 15, -1, false, bed, 0, { min: 15, max: 90 }), 15, "never below the minimum purge");
+assert.strictEqual(L.plNudge("purge", 88, 1, true, bed, 0, { min: 15, max: 90 }), 90);
+
 // Bringing a box back on the plate by the smallest move.
 assert.deepStrictEqual(L.plInside({ x0: 250, y0: 10, x1: 290, y1: 50 }, bed), [-20, 0]);
 assert.deepStrictEqual(L.plInside({ x0: -5, y0: -8, x1: 20, y1: 30 }, bed), [5, 8]);
@@ -140,5 +148,77 @@ const busy = L.plTools({ n: 1, sel: 1, onBed: 1, orienting: true, splitting: tru
 assert.deepStrictEqual([busy["p-orient"], busy["p-split"]], [{ show: true, on: false }, { show: true, on: false }]);
 assert.strictEqual(L.plTools({ n: 1 })["p-slice"].on, false);
 assert.strictEqual(L.plTools({ n: 1 })["p-save"].on, true);
+
+
+// Bulk buttons of the object list: "all" without a relevant selection or
+// with the whole side selected, "some" with a count otherwise; a mixed
+// selection counts each side alone.
+{
+  const on = [{ id: 1 }, { id: 2 }], off = [{ id: 3 }, { id: 4 }, { id: 5 }];
+  assert.deepEqual(L.plBulk(new Set(), on), { mode: "all", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1]), on), { mode: "some", n: 1 });
+  assert.deepEqual(L.plBulk(new Set([1, 2]), on), { mode: "all", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1, 3, 4]), off), { mode: "some", n: 2 });
+  assert.deepEqual(L.plBulk(new Set([1, 3, 4]), on), { mode: "some", n: 1 });
+  assert.deepEqual(L.plBulk(new Set([9]), off), { mode: "all", n: 3 });
+}
+
+// Colour modes: the plate's colours, the hand-off between the two modes,
+// and what blocks the slice.
+{
+  const objs = [
+    { id: 1, extruders: [1, 2], heads: { 1: 0, 2: 1 }, st: "in" },
+    { id: 2, extruders: [2, 3], heads: { 2: 1 }, st: "in" },
+    { id: 3, extruders: [3], heads: { 3: 3 }, st: "in" },
+    { id: 4, extruders: [4], heads: { 4: 2 }, st: "out" },
+  ];
+  const stateOf = (o) => o.st, coloursOf = (o) => o.extruders;
+  const headsOf = (o) => Object.fromEntries(o.extruders.map((c) => [c, o.heads[c] ?? c - 1]));
+  // Off-plate colours are not the plate's.
+  assert.deepEqual(L.plPlateColours(objs, stateOf, coloursOf), [1, 2, 3]);
+  // Colour 2: both objects agree on T1. Colour 3: object 2 defaults to T2, object 3 chose T3 → conflict.
+  assert.deepEqual(L.plMigrateToColour(objs, stateOf, headsOf, [1, 2, 3]), { 1: 0, 2: 1, 3: null });
+  assert.deepEqual(L.plUnmapped([1, 2, 3], { 1: 0, 2: 1, 3: null }), [3]);
+  // Colour → object: the global heads become each object's own; unmapped colours keep the object's choice.
+  const back = L.plMigrateToObject(objs, stateOf, coloursOf, { 1: 2, 2: null, 3: 0 });
+  assert.deepEqual(back, { 1: { 1: 2, 2: 1 }, 2: { 2: 1, 3: 0 }, 3: { 3: 0 } });
+  assert.equal(back[4], undefined, "off-plate objects are left alone");
+  // Nothing on the plate: nothing to map, nothing blocks.
+  assert.deepEqual(L.plMigrateToColour([], stateOf, headsOf, []), {});
+  // Virtual heads and orphans (a virtual head deleted since) go across as
+  // they are: never turned into a physical head.
+  const vobjs = [{ id: 1, st: "in", heads: { 1: 101, 2: 105 } }, { id: 2, st: "in", heads: { 1: 101 } }];
+  assert.deepEqual(L.plMigrateToColour(vobjs, stateOf, (o) => o.heads, [1, 2]), { 1: 101, 2: 105 });
+  assert.deepEqual(L.plMigrateToObject(vobjs, stateOf, () => [1, 2], { 1: 101, 2: 105 }), { 1: { 1: 101, 2: 105 }, 2: { 1: 101, 2: 105 } });
+  assert.deepEqual(L.plUnmapped([], {}), []);
+}
+
+// "By colour" mode: an on-plate object without a colour from its file,
+// and without a head picked by hand, blocks the slice.
+{
+  const objs = [
+    { id: 1, extruders: [1], st: "in" },
+    { id: 2, extruders: [], st: "in" },
+    { id: 3, extruders: [], st: "in", pick: 2 },
+    { id: 4, extruders: [], st: "out" },
+  ];
+  assert.deepEqual(L.plUncoloured(objs, (o) => o.st, (o) => o.extruders || []), [2]);
+}
+
+// "By colour" palette: every head, the picked one on; "the plate's colours"
+// only once a head is picked; a single head is no choice.
+{
+  const none = L.plPalette(null, 4);
+  assert.deepStrictEqual(none.heads.map((x) => x.h), [0, 1, 2, 3]);
+  assert.ok(none.heads.every((x) => !x.on));
+  assert.strictEqual(none.plate, false, "no plate row before a pick");
+  assert.strictEqual(none.single, false);
+  const two = L.plPalette(2, 4);
+  assert.deepStrictEqual(two.heads.filter((x) => x.on).map((x) => x.h), [2]);
+  assert.strictEqual(two.plate, true, "plate row once picked");
+  assert.strictEqual(L.plPalette(0, 4).plate, true, "head 0 is a pick");
+  assert.strictEqual(L.plPalette(null, 1).single, true);
+  assert.strictEqual(L.plPalette(null, 0).heads.length, 1, "at least one head");
+}
 
 console.log("prepare: ok");
