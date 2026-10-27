@@ -18,7 +18,7 @@ with its packages for macOS, Windows and Linux. What comes next:
   chosen language, and a text not yet translated shows in English (#72).
 - **Japanese, Simplified Chinese and Korean**, with the system's Chinese,
   Japanese or Korean fonts; Traditional Chinese systems start in English
-  for now.
+  for now (#73).
 
 ### Changed
 - **A new Prints page**: the prints on the left (search, filters, printer
