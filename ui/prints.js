@@ -432,6 +432,15 @@ function pjHead(job, name, state, kicker, buttons) {
 const pjPanel = (title, body, aside = "") =>
   `<section class="pj-card pj-panel"><h3>${esc(title)}${aside ? `<small>${aside}</small>` : ""}</h3>${body}</section>`;
 
+/* A heater as current / target. */
+const pjTemp = (t) => `${Math.round(t.current)} / ${Math.round(t.target)}`;
+
+/* The start options of a job, as words (`cap`: capitalised). */
+function pjOpts(job, cap = false) {
+  const o = job?.options || {}, k = cap ? "_cap" : "";
+  return [o.bed_leveling && tr("prints.opt.leveling" + k), o.flow_calibration && tr("prints.opt.flow" + k), o.timelapse && tr("prints.opt.timelapse" + k)].filter(Boolean);
+}
+
 /* Filament per head: color, spool, share, weight and length; a running
    print adds each nozzle's temperature, the active one marked. */
 function pjFilament(job, st) {
@@ -446,7 +455,7 @@ function pjFilament(job, st) {
     const c = colors[t] || s.filament_colors?.[t] || "";
     const name = names[t] || names[0] || s.filament_types?.[t] || "";
     const n = st?.nozzles?.find((x) => x.index === t);
-    const temp = n ? `<span class="pj-fil-t${n.active ? " on" : ""}"><b>${Math.round(n.current)} / ${Math.round(n.target)} °C</b>${esc(tr(n.active ? "prints.active" : "prints.standby"))}</span>` : "";
+    const temp = n ? `<span class="pj-fil-t${n.active ? " on" : ""}"><b>${pjTemp(n)} °C</b>${esc(tr(n.active ? "prints.active" : "prints.standby"))}</span>` : "";
     return `<div class="pj-fil${n?.active ? " on" : ""}" style="--c:${esc(c || "var(--text-tertiary)")}"><i></i><b>T${t}</b>
       <div class="pj-fil-n"><span>${esc(name)}</span><div class="pj-bar"><i style="width:${g != null ? ((g / max) * 100).toFixed(1) : 0}%"></i></div></div>
       <em>${g != null ? `${fmtDec(g, 1)} g` : ""}${m ? `<small>${fmtDec(m, 1)} m</small>` : ""}</em>${temp}</div>`;
@@ -489,14 +498,18 @@ function pjFeatures(job) {
    kept), on running and finished prints alike; one view alone when the
    slice has only that one. */
 function pjTimes(job, layer) {
-  const layers = pjLayers(job, layer), types = pjFeatures(job);
-  if (!layers && !types) return "";
-  const mode = PJ.times === "type" && types ? "type" : layers ? "layer" : "type";
-  const seg = [["layer", layers, tr("prints.times.layer")], ["type", types, tr("prints.times.type")]]
-    .map(([v, has, label]) => `<button type="button" class="seg-btn${mode === v ? " on" : ""}" role="radio" aria-checked="${mode === v}" data-time="${v}"${has ? "" : " disabled"}><span>${esc(label)}</span></button>`)
-    .join("");
+  const s = job?.stats;
+  const hasLayers = (s?.layer_end_s?.length || 0) >= 2, hasTypes = !!s?.features?.length;
+  if (!hasLayers && !hasTypes) return "";
+  const mode = PJ.times === "type" && hasTypes ? "type" : hasLayers ? "layer" : "type";
+  const seg =
+    hasLayers && hasTypes
+      ? `<div class="seg pj-seg-sm" role="radiogroup" aria-label="${esc(tr("prints.times"))}">${[["layer", tr("prints.times.layer")], ["type", tr("prints.times.type")]]
+          .map(([v, label]) => `<button type="button" class="seg-btn${mode === v ? " on" : ""}" role="radio" aria-checked="${mode === v}" data-time="${v}"><span>${esc(label)}</span></button>`)
+          .join("")}</div>`
+      : "";
   const sub = mode === "layer" ? tr(layer?.[0] ? "prints.layer_time.sub_running" : "prints.layer_time.sub") : tr("prints.from_slice");
-  return `<section class="pj-card pj-panel pj-times"><h3>${esc(tr("prints.times"))}<div class="seg pj-seg-sm" role="radiogroup" aria-label="${esc(tr("prints.times"))}">${seg}</div><small>${esc(sub)}</small></h3>${mode === "layer" ? layers : types}</section>`;
+  return `<section class="pj-card pj-panel pj-times"><div class="pj-panel-hd"><h3>${esc(tr(hasLayers && hasTypes ? "prints.times" : mode === "layer" ? "prints.times.layer" : "prints.times.type"))}</h3>${seg}<small>${esc(sub)}</small></div>${mode === "layer" ? pjLayers(job, layer) : pjFeatures(job)}</section>`;
 }
 
 /* The Details card, folded to one line (machine, profile, plate, layers,
@@ -504,12 +517,12 @@ function pjTimes(job, layer) {
    and dates. The choice is kept. */
 function pjDetails(job) {
   if (!job) return "";
-  const s = job.stats || {}, pr = job.profile || {}, o = job.options || {};
+  const s = job.stats || {}, pr = job.profile || {};
   const plate = pr.bed ? pr.bed_label || pr.bed : "";
   const sum = (a) => (a?.length ? a.reduce((x, y) => x + (y || 0), 0) : 0);
   const length = sum(s.per_tool_m), volume = sum(s.per_tool_cm3);
   const tower = s.tower ? `${fmtDec(s.tower.w, 0)} × ${fmtDec(s.tower.d, 0)} × ${fmtDec(s.tower.h, 1)} mm` : "";
-  const opts = [o.bed_leveling && tr("prints.opt.leveling_cap"), o.flow_calibration && tr("prints.opt.flow_cap"), o.timelapse && tr("prints.opt.timelapse_cap")].filter(Boolean);
+  const opts = pjOpts(job, true);
   const when = (t) => (t ? esc(fmtDate(t)) : "");
   const line = [pr.machine, pr.process, plate, s.layers && tr("prints.det.layers_n", { n: s.layers }), s.first_layer_s && tr("prints.det.first_layer_short", { t: fmtSpan(s.first_layer_s) })]
     .filter(Boolean)
@@ -531,8 +544,7 @@ function pjDetails(job) {
 /* What happened, then for a running print where it is and when it should
    end. */
 function pjTimeline(job, st) {
-  const o = job.options || {};
-  const opts = [o.bed_leveling && tr("prints.opt.leveling"), o.flow_calibration && tr("prints.opt.flow"), o.timelapse && tr("prints.opt.timelapse")].filter(Boolean);
+  const opts = pjOpts(job);
   const pauses = pjlPauses(job, job.finished ?? null);
   const rows = pjlTimeline(job).map((e) => {
     let extra = "";
@@ -563,8 +575,7 @@ const pjKv = (k, v) => (v == null || v === "" ? "" : `<div><span>${esc(k)}</span
 function pjProgress(st) {
   const pct = Math.round((st.progress || 0) * 100);
   const head = st.nozzles?.find((n) => n.active);
-  const pair = (t) => `${Math.round(t.current)} / ${Math.round(t.target)}`;
-  const temps = [head && pair(head), st.bed && pair(st.bed)].filter(Boolean);
+  const temps = [head && pjTemp(head), st.bed && pjTemp(st.bed)].filter(Boolean);
   return `<div class="pj-card pj-big${st.state === "paused" ? " paused" : ""}">
     <div class="pj-pct">${pct} %${st.layer ? `<small>${esc(tr("prints.layer_of", { a: st.layer[0], b: st.layer[1] }))}</small>` : ""}</div>
     <div class="progress"><i style="width:${pct}%"></i></div>
@@ -628,7 +639,7 @@ function pjStartingHtml({ job, live }) {
   const buttons = off ? `<button type="button" class="btn danger" data-act="remove">${esc(tr("prints.remove_list"))}</button>` : "";
   return `${pjHead(job, job.name, "printing", kicker, buttons)}
     <div class="pj-top"><div class="pj-media pj-shot">${pjThumbHtml(job, 640)}</div><div class="pj-card pj-big"><p class="pj-note-muted">${esc(tr(off ? "prints.starting.offline" : "prints.starting.text"))}</p></div></div>
-    <div class="pj-two">${pjPanel(tr("prints.filament"), pjFilament(job))}${pjTimeline(job)}</div>${pjDetails(job)}`;
+    <div class="pj-two">${pjPanel(tr("prints.filament"), pjFilament(job))}${pjTimeline(job)}</div>${pjTimes(job)}${pjDetails(job)}`;
 }
 
 /* Result card of a finished print: what the user says of it (set here

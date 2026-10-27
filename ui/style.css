@@ -3223,8 +3223,10 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
 .pj-fil-tot { display: flex; justify-content: space-between; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--separator); font-size: 12.5px; }
 .pj-fil-tot span { color: var(--text-secondary); }
 .pj-fil-tot b { font-variant-numeric: tabular-nums; }
-/* The Times card: its small switch in the title. */
-.pj-times h3 { gap: 10px; }
+/* The Times card: its small switch beside the title. */
+.pj-panel-hd { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.pj-panel-hd h3 { margin: 0; }
+.pj-panel-hd small { margin-left: auto; font-size: 12px; color: var(--text-secondary); text-align: right; }
 .pj-seg-sm { padding: 2px; }
 .pj-seg-sm .seg-btn { height: 20px; padding: 0 9px; font-size: 11.5px; }
 /* The Details card: one line, folded; three groups, open. */
@@ -3238,7 +3240,7 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
 .pj-det.open .pj-chev { transform: rotate(90deg); }
 .pj-det-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 24px; padding: 4px 16px 14px; }
 .pj-det-body h4 { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); }
-.pj-det-body .pj-kv b { max-width: 60%; white-space: normal; }
+.pj-det-body .pj-kv b { max-width: 60%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 @container (max-width: 720px) { .pj-det-body { grid-template-columns: minmax(0, 1fr); } }
 
 /* Timeline. */

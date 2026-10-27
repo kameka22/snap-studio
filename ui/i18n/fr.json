@@ -534,10 +534,7 @@
   "prints.started_clock": "lancée à {time}",
   "prints.heads": "Têtes et filament",
   "prints.filament": "Filament",
-  "prints.n_heads": {
-    "one": "{n} tête",
-    "other": "{n} têtes"
-  },
+  "prints.n_heads": {"one": "{n} tête", "other": "{n} têtes"},
   "prints.starting.text": "Envoyée à l'imprimante : la fiche suit l'impression dès que l'imprimante l'annonce.",
   "prints.starting.offline": "L'imprimante ne répond pas : l'impression sera suivie à son retour.",
   "prints.result": "Bilan",
@@ -1737,7 +1734,7 @@
   },
   "settings.assoc": "Attribution des couleurs aux têtes",
   "settings.assoc.sub": "Le mode de départ de Préparer ; il se change à tout moment au-dessus de la liste des objets",
-  "prepare.list.hint": "Clic : sélectionner · ⌘ clic : ajouter ou retirer · ⇧ clic : toutes les lignes jusqu’à celle-ci · glisser : sur le plateau ou à côté",
+  "prepare.list.hint":"Clic : sélectionner · ⌘ clic : ajouter ou retirer · ⇧ clic : toutes les lignes jusqu’à celle-ci · glisser : sur le plateau ou à côté",
   "prepare.loading.file": "Lecture de {name}…",
   "prepare.loading.objects": "Chargement des objets… {done} / {n}",
   "settings.display": "Affichage",
@@ -2025,14 +2022,8 @@
   "bm.hero.watch_sub": "Compensé par le maillage, mais proche de l'alerte à {limit} mm",
   "bm.hero.out": "Hors tolérance : {dev} mm",
   "bm.hero.out_sub": "Au-delà de {limit} mm, le maillage compense mal : la première couche risque de mal accrocher ou d'être écrasée.",
-  "bm.hero.stale_days": {
-    "one": "Dernière mesure il y a {n} jour",
-    "other": "Dernière mesure il y a {n} jours"
-  },
-  "bm.hero.stale_prints": {
-    "one": "{n} impression depuis la dernière mesure",
-    "other": "{n} impressions depuis la dernière mesure"
-  },
+  "bm.hero.stale_days": {"one": "Dernière mesure il y a {n} jour", "other": "Dernière mesure il y a {n} jours"},
+  "bm.hero.stale_prints": {"one": "{n} impression depuis la dernière mesure", "other": "{n} impressions depuis la dernière mesure"},
   "bm.hero.stale_sub": "Le plateau était {st} ({dev} mm). Mieux vaut le revérifier.",
   "bm.hero.cause": "Trouver la cause",
   "bm.hero.again": "Remesurer",
@@ -2107,10 +2098,7 @@
   "bm.done.same": "Comme le {d} ({from} mm)",
   "bm.done.fixed": "Réglé : {from} → {to} mm depuis le {d}",
   "bm.done.good_sub": "Rien à faire : le maillage de l'imprimante compense cet écart.",
-  "bm.done.found": {
-    "one": "Snap Studio a trouvé {n} cause probable :",
-    "other": "Snap Studio a trouvé {n} causes probables :"
-  },
+  "bm.done.found": {"one": "Snap Studio a trouvé {n} cause probable :", "other": "Snap Studio a trouvé {n} causes probables :"},
   "bm.done.look": "Pas de forme nette : la page indique quoi vérifier.",
   "bm.done.ok": "Terminé",
   "bm.done.cause": "Voir quoi faire",
@@ -2130,14 +2118,8 @@
   "bm.set.prints_off": "Jamais",
   "bm.measure_first": "Mesurer d'abord",
   "bm.due_tab": "Le nivellement demande votre attention",
-  "bm.task_stale_days": {
-    "one": "Dernière mesure il y a {n} jour : remesurer",
-    "other": "Dernière mesure il y a {n} jours : remesurer"
-  },
-  "bm.task_stale_prints": {
-    "one": "{n} impression depuis la dernière mesure : remesurer",
-    "other": "{n} impressions depuis la dernière mesure : remesurer"
-  },
+  "bm.task_stale_days": {"one": "Dernière mesure il y a {n} jour : remesurer", "other": "Dernière mesure il y a {n} jours : remesurer"},
+  "bm.task_stale_prints": {"one": "{n} impression depuis la dernière mesure : remesurer", "other": "{n} impressions depuis la dernière mesure : remesurer"},
   "bm.settings": "Réglages du nivellement",
   "bm.set.for": "Pour {name}",
   "bm.set.good": "Bon jusqu'à",
@@ -2206,10 +2188,7 @@
   "err.ctl_home_xy_first": "Faites d'abord l'origine X et Y : la U1 ne fait Z qu'ensuite",
   "whatsnew.title": "Nouveautés",
   "whatsnew.card": "Nouveautés de la {v}",
-  "whatsnew.more": {
-    "one": "{first} et {n} autre",
-    "other": "{first} et {n} autres"
-  },
+  "whatsnew.more": {"one": "{first} et {n} autre", "other": "{first} et {n} autres"},
   "whatsnew.browser": "Ouvrir dans le navigateur",
   "whatsnew.error": "La page n'a pas pu être chargée",
   "whatsnew.error_sub": "Vérifiez la connexion à internet, puis réessayez. Le journal des modifications liste aussi chaque changement.",
@@ -2350,10 +2329,7 @@
   "slice.level": "Réglages affichés",
   "slice.level.basic": "Essentiel",
   "slice.level.advanced": "Avancé",
-  "slice.level.hint": {
-    "one": "1 réglage avancé modifié",
-    "other": "{n} réglages avancés modifiés"
-  },
+  "slice.level.hint": {"one": "1 réglage avancé modifié", "other": "{n} réglages avancés modifiés"},
   "slice.level.show": "Afficher",
   "settings.slice_level": "Réglages de découpe affichés",
   "settings.slice_level.sub": "Essentiel montre l'indispensable ; Avancé ajoute qualité, remplissage, parois, surfaces et plus. Aussi dans la barre de titre de la fenêtre de découpe.",
@@ -2369,10 +2345,7 @@
   "heads.virtual.head_b": "Seconde tête",
   "heads.virtual.mix": "Mélange",
   "heads.virtual.cadence_even": "1 couche de chaque",
-  "heads.virtual.cadence": {
-    "one": "{n} couche de {a} pour 1 de {b}",
-    "other": "{n} couches de {a} pour 1 de {b}"
-  },
+  "heads.virtual.cadence": {"one": "{n} couche de {a} pour 1 de {b}", "other": "{n} couches de {a} pour 1 de {b}"},
   "heads.virtual.preview_note": "Aperçu indicatif : le mélange se fait couche par couche et dépend des filaments, de la hauteur de couche et de la lumière.",
   "heads.virtual.surfaces_note": "Les surfaces planes du dessus et du dessous montrent une seule couche, donc l’une des deux couleurs.",
   "heads.virtual.same": "Identique à {name}",
@@ -2384,23 +2357,11 @@
   "heads.virtual.explain.body": "{name} mélange {a} et {b}. Si vous déchargez l’une des deux bobines, {name} est supprimée automatiquement : ce qui l’utilisait se retrouve sans tête, et la découpe attend que vous en choisissiez une.",
   "heads.virtual.explain.noshow": "Ne plus afficher",
   "heads.virtual.explain.ok": "Compris",
-  "heads.virtual.removed": {
-    "one": "{h} a été déchargée : {names} a été supprimée.",
-    "other": "{h} a été déchargée : {names} ont été supprimées."
-  },
-  "heads.virtual.orphans": {
-    "one": "1 couleur n’a plus de tête : choisissez-en une pour découper.",
-    "other": "{n} couleurs n’ont plus de tête : choisissez-en une pour découper."
-  },
+  "heads.virtual.removed": {"one": "{h} a été déchargée : {names} a été supprimée.", "other": "{h} a été déchargée : {names} ont été supprimées."},
+  "heads.virtual.orphans": {"one": "1 couleur n’a plus de tête : choisissez-en une pour découper.", "other": "{n} couleurs n’ont plus de tête : choisissez-en une pour découper."},
   "heads.virtual.see_prepare": "Voir dans Préparer",
-  "heads.virtual.delete_confirm": {
-    "one": "1 couleur utilise {name}. Elle n’aura plus de tête jusqu’à ce que vous en choisissiez une.",
-    "other": "{n} couleurs utilisent {name}. Elles n’auront plus de tête jusqu’à ce que vous en choisissiez une."
-  },
-  "prepare.tip.orphan": {
-    "one": "1 couleur n’a plus de tête : choisissez-en une dans la liste",
-    "other": "{n} couleurs n’ont plus de tête : choisissez-en une dans la liste"
-  },
+  "heads.virtual.delete_confirm": {"one": "1 couleur utilise {name}. Elle n’aura plus de tête jusqu’à ce que vous en choisissiez une.", "other": "{n} couleurs utilisent {name}. Elles n’auront plus de tête jusqu’à ce que vous en choisissiez une."},
+  "prepare.tip.orphan": {"one": "1 couleur n’a plus de tête : choisissez-en une dans la liste", "other": "{n} couleurs n’ont plus de tête : choisissez-en une dans la liste"},
   "prepare.choose_head": "Choisir",
   "prepare.no_head": "sans tête",
   "prepare.tower.virtual_hint": "Une tête virtuelle change de tête à chaque couche : la tour d’amorçage est conseillée.",
@@ -2442,10 +2403,7 @@
   "settings.history.short.90": "90 jours",
   "settings.history.short.365": "1 an",
   "settings.history.confirm.title": "Supprimer les impressions plus anciennes ?",
-  "settings.history.confirm.text": {
-    "one": "{n} impression terminée et son G-code seront supprimés dès maintenant.",
-    "other": "{n} impressions terminées et leur G-code seront supprimés dès maintenant."
-  },
+  "settings.history.confirm.text": {"one": "{n} impression terminée et son G-code seront supprimés dès maintenant.", "other": "{n} impressions terminées et leur G-code seront supprimés dès maintenant."},
   "prints.times": "Temps",
   "prints.times.layer": "Par couche",
   "prints.times.type": "Par type",
@@ -2469,8 +2427,5 @@
   "prints.det.started": "Lancée",
   "prints.det.finished": "Terminée",
   "prints.det.first_layer_short": "1re couche {t}",
-  "prints.det.layers_n": {
-    "one": "{n} couche",
-    "other": "{n} couches"
-  }
+  "prints.det.layers_n": {"one": "{n} couche", "other": "{n} couches"}
 }
