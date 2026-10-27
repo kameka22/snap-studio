@@ -159,6 +159,33 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .hidden { display: none !important; }
 svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
 
+/* ---------- Japanese, Chinese, Korean ---------- */
+/* The Latin stack holds none of their characters, and the font each system
+   falls back to varies (a Chinese one for Japanese, a bitmap one on some
+   Linux): their own system fonts, macOS, then Windows, then Linux (Noto CJK).
+   The theme previews (data-scheme) redefine --font-ui: same here. */
+:root:lang(ja), :lang(ja) [data-scheme] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+}
+:root:lang(zh-Hans), :lang(zh-Hans) [data-scheme] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
+}
+:root:lang(ko), :lang(ko) [data-scheme] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", sans-serif;
+}
+/* Lines break between any two characters in Japanese and Chinese: the
+   strict rules keep small kana and closing punctuation off a line's start.
+   Korean puts spaces between words and breaks there, as Latin does; a word
+   longer than its box still breaks. */
+:root:lang(ja), :root:lang(zh-Hans) { line-break: strict; }
+:root:lang(ko) { word-break: keep-all; overflow-wrap: break-word; }
+/* The small labels in capitals: these scripts have no case, and their
+   characters spaced out read badly; at 10 px they are hard to read. */
+:root:is(:lang(ja), :lang(zh-Hans), :lang(ko)) :is(.listhead, .disc-title, .set-section, .ex-section h2, .ex-picker h2, .vp-section, .p-float-head, .p-grp-head .k, .pj-g, .pj-det-body h4, .picker-section, .ais-group, .sp-cols, .ct-estop, .ct-card-head, .ct-padcap, .bm-more > summary, .ia-group, .pfl-lhead, .p3d-state, .p3d-tag) {
+  letter-spacing: 0;
+}
+:root:is(:lang(ja), :lang(zh-Hans), :lang(ko)) :is(.picker-section, .p3d-tag) { font-size: 11px; }
+
 /* ---------- shared controls ---------- */
 .btn {
   appearance: none;

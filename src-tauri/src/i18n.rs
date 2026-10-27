@@ -30,20 +30,33 @@ pub struct Lang {
     pub english: &'static str,
     /// BCP 47 locale for dates and numbers.
     pub locale: &'static str,
-    /// Zero counts as singular, as one does (`Intl.PluralRules`: French,
-    /// Brazilian Portuguese).
-    zero_is_one: bool,
+    /// Which counts take the singular form.
+    plural: Plural,
     raw: &'static str,
+}
+
+/// The counts a language says in the singular (`Intl.PluralRules`' `one`).
+#[derive(Clone, Copy, PartialEq)]
+enum Plural {
+    /// One only: English, German, Spanish, Italian.
+    One,
+    /// Zero and one: French, Brazilian Portuguese.
+    ZeroOne,
+    /// None, every count reads `other`: Japanese, Chinese, Korean.
+    Never,
 }
 
 /// Supported languages, in the order the pickers show them.
 pub const LANGS: &[Lang] = &[
-    Lang { code: "en", name: "English", english: "English", locale: "en-US", zero_is_one: false, raw: include_str!("../../ui/i18n/en.json") },
-    Lang { code: "fr", name: "Français", english: "French", locale: "fr-FR", zero_is_one: true, raw: include_str!("../../ui/i18n/fr.json") },
-    Lang { code: "de", name: "Deutsch", english: "German", locale: "de-DE", zero_is_one: false, raw: include_str!("../../ui/i18n/de.json") },
-    Lang { code: "es", name: "Español", english: "Spanish", locale: "es-ES", zero_is_one: false, raw: include_str!("../../ui/i18n/es.json") },
-    Lang { code: "pt-BR", name: "Português (Brasil)", english: "Brazilian Portuguese", locale: "pt-BR", zero_is_one: true, raw: include_str!("../../ui/i18n/pt-BR.json") },
-    Lang { code: "it", name: "Italiano", english: "Italian", locale: "it-IT", zero_is_one: false, raw: include_str!("../../ui/i18n/it.json") },
+    Lang { code: "en", name: "English", english: "English", locale: "en-US", plural: Plural::One, raw: include_str!("../../ui/i18n/en.json") },
+    Lang { code: "fr", name: "Français", english: "French", locale: "fr-FR", plural: Plural::ZeroOne, raw: include_str!("../../ui/i18n/fr.json") },
+    Lang { code: "de", name: "Deutsch", english: "German", locale: "de-DE", plural: Plural::One, raw: include_str!("../../ui/i18n/de.json") },
+    Lang { code: "es", name: "Español", english: "Spanish", locale: "es-ES", plural: Plural::One, raw: include_str!("../../ui/i18n/es.json") },
+    Lang { code: "pt-BR", name: "Português (Brasil)", english: "Brazilian Portuguese", locale: "pt-BR", plural: Plural::ZeroOne, raw: include_str!("../../ui/i18n/pt-BR.json") },
+    Lang { code: "it", name: "Italiano", english: "Italian", locale: "it-IT", plural: Plural::One, raw: include_str!("../../ui/i18n/it.json") },
+    Lang { code: "ja", name: "日本語", english: "Japanese", locale: "ja-JP", plural: Plural::Never, raw: include_str!("../../ui/i18n/ja.json") },
+    Lang { code: "zh-Hans", name: "简体中文", english: "Simplified Chinese", locale: "zh-CN", plural: Plural::Never, raw: include_str!("../../ui/i18n/zh-Hans.json") },
+    Lang { code: "ko", name: "한국어", english: "Korean", locale: "ko-KR", plural: Plural::Never, raw: include_str!("../../ui/i18n/ko.json") },
 ];
 
 fn lang_of(code: &str) -> Option<&'static Lang> {
@@ -97,11 +110,25 @@ fn system() -> String {
 
 /// Language of the app for a system locale (`de_AT.UTF-8`, `pt-PT`, `fr`):
 /// matched on the language alone; any Portuguese reads Brazilian Portuguese,
-/// the only one there is.
+/// the only one there is. Chinese reads Simplified Chinese when written in
+/// it (`zh-Hans-*`, `zh-CN`, `zh-SG`, `zh`), English when written in
+/// Traditional Chinese (`zh-Hant-*`, `zh-TW`, `zh-HK`, `zh-MO`), which has
+/// no catalog yet.
 fn from_locale(loc: &str) -> String {
-    let code = loc.split(['-', '_', '.']).next().unwrap_or("").to_lowercase();
-    match code.as_str() {
+    let loc = loc.split('.').next().unwrap_or("").to_lowercase();
+    let mut parts = loc.split(['-', '_']);
+    let code = parts.next().unwrap_or("");
+    match code {
         "pt" => "pt-BR".into(),
+        "zh" => {
+            let rest: Vec<&str> = parts.collect();
+            let traditional = match rest.first() {
+                Some(&"hans") => false,
+                Some(&"hant") => true,
+                _ => rest.iter().any(|p| matches!(*p, "tw" | "hk" | "mo")),
+            };
+            if traditional { "en" } else { "zh-Hans" }.into()
+        }
         c if supported(c) => c.into(),
         _ => "en".into(),
     }
@@ -156,11 +183,15 @@ fn lookup(lang: &str, key: &str) -> Option<&'static Value> {
 }
 
 /// The `one` and `other` forms of `Intl.PluralRules`, enough for the counts
-/// shown here: some languages count zero as singular (`zero_is_one`), the
-/// others only one. (Spanish and Italian `many`, for millions, falls back to
-/// `other`.)
+/// shown here: some languages count zero as singular, most only one,
+/// Japanese, Chinese and Korean none. (Spanish and Italian `many`, for
+/// millions, falls back to `other`.)
 fn plural_form(lang: &str, n: f64) -> &'static str {
-    let one = if lang_of(lang).is_some_and(|l| l.zero_is_one) { n >= 0.0 && n < 2.0 } else { n == 1.0 };
+    let one = match lang_of(lang).map_or(Plural::One, |l| l.plural) {
+        Plural::One => n == 1.0,
+        Plural::ZeroOne => (0.0..2.0).contains(&n),
+        Plural::Never => false,
+    };
     if one {
         "one"
     } else {
@@ -268,7 +299,17 @@ mod tests {
         assert_eq!(from_locale("pt_BR"), "pt-BR");
         assert_eq!(from_locale("IT"), "it");
         assert_eq!(from_locale("fr-CA"), "fr");
-        assert_eq!(from_locale("ja-JP"), "en");
+        assert_eq!(from_locale("ja_JP.UTF-8"), "ja");
+        assert_eq!(from_locale("ko-KR"), "ko");
+        assert_eq!(from_locale("zh-Hans-CN"), "zh-Hans");
+        assert_eq!(from_locale("zh_CN.UTF-8"), "zh-Hans");
+        assert_eq!(from_locale("zh-SG"), "zh-Hans");
+        assert_eq!(from_locale("zh-Hans-HK"), "zh-Hans");
+        assert_eq!(from_locale("zh"), "zh-Hans");
+        assert_eq!(from_locale("zh-Hant-TW"), "en");
+        assert_eq!(from_locale("zh_TW"), "en");
+        assert_eq!(from_locale("zh-HK"), "en");
+        assert_eq!(from_locale("nl-NL"), "en");
         assert_eq!(from_locale(""), "en");
     }
 
@@ -290,6 +331,9 @@ mod tests {
         assert_eq!(plural_form("pt-BR", 0.0), "one");
         assert_eq!(plural_form("de", 0.0), "other");
         assert_eq!(plural_form("it", 1.0), "one");
+        assert_eq!(plural_form("ja", 1.0), "other");
+        assert_eq!(plural_form("zh-Hans", 0.0), "other");
+        assert_eq!(plural_form("ko", 1.0), "other");
         assert_eq!(t("no.such.key"), "no.such.key");
     }
 }

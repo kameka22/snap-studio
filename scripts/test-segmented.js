@@ -24,8 +24,8 @@ assert.deepStrictEqual(S.segItems(levels, "advanced").map((x) => x.on), [false, 
 // Flags: inline SVG for the app's languages, the code otherwise.
 for (const c of ["fr", "en", "FR"]) assert.ok(/^<svg[^>]*aria-hidden="true"/.test(S.segFlag(c)), c);
 assert.ok(!/id=/.test(S.SEG_FLAGS.en + S.SEG_FLAGS.fr), "no ids: the flags appear several times");
-assert.ok(/>JA</.test(S.segFlag("ja")), "no flag: its code");
-for (const c of ["de", "es", "pt-BR", "it"]) assert.ok(/^<svg/.test(S.segFlag(c)), `${c} has its flag`);
+assert.ok(/>NL</.test(S.segFlag("nl")), "no flag: its code");
+for (const c of ["de", "es", "pt-BR", "it", "ja", "zh-Hans", "ko"]) assert.ok(/^<svg/.test(S.segFlag(c)), `${c} has its flag`);
 assert.ok(!/id=/.test(Object.values(S.SEG_FLAGS).join("")), "no ids in any flag");
 assert.ok(/>X</.test(S.segFlag("<x>")) && !/<x/.test(S.segFlag("<x>")), "only letters of the code");
 assert.strictEqual(S.segFlagMode(2), "pills");
