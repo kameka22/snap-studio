@@ -51,7 +51,9 @@ and pressure advance** calibration.
 - Note on words: the U1 calls this "flow calibration", but what it measures
   is K (pressure advance). The **flow ratio** (extrusion multiplier,
   `filament_flow_ratio`) is a slicer value the U1 does not touch, so its
-  test stays in scope. To confirm on a U1 (open question 1).
+  test stays in scope. Checked on a U1: `PRINT_START` only runs
+  `FLOW_APPLY_CALIBRATE_K EXTRUDER=<i>` per head (plus `M220 S100`), no
+  `M221`, so the extrusion multiplier is left alone.
 - Bed mesh (#21), bed knobs (#32), XYZ offsets, input shaper: machine
   calibration, #38's side.
 
@@ -154,11 +156,10 @@ two existing places:
      `M220 S<pct>` per layer so the speed follows
      `start + z × step` (in vase mode the whole layer is the wall), with a
      comment per layer giving the flow for the reading;
-   - retraction: with firmware retraction, `use_firmware_retraction` = 1
-     (the engine writes `G10` / `G11`) and `SET_RETRACTION
-     RETRACT_LENGTH=<l>` per mm; without it, the retract / unretract `E`
-     moves rewritten per band (wipe off makes them single `G1 E` lines).
-     Which one depends on the U1's Klipper config (open question 2).
+   - retraction: the U1 has no firmware retraction (checked on a U1: no
+     `firmware_retraction` in `printer/objects/list`), so the retract /
+     unretract `E` moves are rewritten per band (wipe off makes them
+     single `G1 E` lines).
 
 ### Models
 
@@ -210,17 +211,15 @@ as Orca stores filament keys), plus `filament_vendor` from the spool.
 
 ## Open questions
 
-1. Does the U1's start-of-print "flow calibration" only measure K, or does
-   it also touch the extrusion multiplier? If it does, the flow ratio test
-   goes too.
-2. Does the U1's Klipper config have `[firmware_retraction]`
-   (`control_read` reads the config: easy to check)? It decides how the
-   retraction test is made.
-3. `M104 T<n>` against the U1's own heater names: same as Control's
+Answered on a U1: the start-of-print calibration only applies K (no
+`M221`), so the flow ratio test stays; no `[firmware_retraction]`, so the
+retraction test rewrites the `E` moves.
+
+1. `M104 T<n>` against the U1's own heater names: same as Control's
    `NozzleTemp` action, to reuse its command.
-4. Must the tab wait for #38's machine assistants, or can the Filament
+2. Must the tab wait for #38's machine assistants, or can the Filament
    section ship first with a minimal tab? #38 has no code yet.
-5. Keep the session per head, or per spool (a spool moved to another head
+3. Keep the session per head, or per spool (a spool moved to another head
    keeps its tests)?
 
 ## Difficulty
@@ -228,7 +227,8 @@ as Orca stores filament keys), plus `filament_vendor` from the spool.
 **Overall: medium to hard.** The slicing, sending, job records and
 per-object settings exist; the new pieces are the G-code pass, the
 profile writing, the four assistants and the engine package change. The
-retraction test is the risky one (firmware retraction or E rewriting).
+retraction test is the risky one (E moves rewritten in the G-code, no
+firmware retraction on the U1).
 
 - Tab shell, if #38 has not landed: +1 day.
 - Temperature tower + G-code pass + profile writing + summary card:
