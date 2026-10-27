@@ -67,18 +67,25 @@ Work plans in progress and ideas for later: [`docs/plans/`](plans/).
 
 ## Languages
 
-English is the reference language; French is a translation. Texts live in
-`ui/i18n/<lang>.json`, shared by the interface and Rust (menus, messages). To
-add a language:
+English is the reference language; French is a complete translation, and
+German, Spanish, Brazilian Portuguese and Italian follow. Texts live in
+`ui/i18n/<lang>.json`, shared by the interface and Rust (menus, messages). A
+key missing from a catalog falls back to English. The window starts with the
+English catalog and the current one; another language's catalog is fetched
+when it is chosen in Settings. To add a language:
 
-1. copy `ui/i18n/en.json` to `ui/i18n/<code>.json` and translate it;
-2. declare it in `src-tauri/src/i18n.rs` (`LANGS`, catalog) and in
-   `ui/i18n.js` (`LANG_NAMES`, `LOCALES`);
+1. copy `ui/i18n/en.json` to `ui/i18n/<code>.json` and translate it (keep the
+   `{placeholders}`, the HTML tags and the plural forms);
+2. add one entry to `LANGS` in `src-tauri/src/i18n.rs` (code, name in its own
+   language, BCP 47 locale for dates and numbers, catalog); the interface reads
+   the list from there, and `from_locale` maps the system language to it;
 3. add it to `LANGS` in `scripts/gen-orca-settings.py` and run the script
-   again (Orca's tabs), then to `CFBundleLocalizations` in
-   `src-tauri/Info.plist` with a `src-tauri/locales/<code>.lproj`;
-4. `python3 scripts/check-i18n.py` reports missing or unused keys and text
-   left hard-coded.
+   again (Orca's tabs, from OrcaSlicer's `.po` files), then to
+   `CFBundleLocalizations` in `src-tauri/Info.plist` with a
+   `src-tauri/locales/<code>.lproj` listed in `tauri.conf.json`;
+4. `python3 scripts/check-i18n.py` reports missing or unused keys, broken
+   placeholders or tags, each catalog's completeness and text left
+   hard-coded (`--strict`: a missing key fails for every language).
 
 ## Layout
 

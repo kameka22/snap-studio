@@ -11,6 +11,7 @@ lists below.
 | [ai-setup.md](ai-setup.md) | AI dependency checks per mode (welcome step and Settings), AI locked until a mode is ready; Settings with a side menu | Implemented; checks on the Mac left (see the plan) |
 | [ai-chat.md](ai-chat.md) | AI conversations as a real chat view (Claude Code stream-json), terminal kept as advanced view | Implemented, with the Claude sign-in window; since #25 the Terminal tab shows the chat's own session (read only). Container mode and macOS checks left (see the plan) |
 | [prime-tower-per-material.md](prime-tower-per-material.md) | One prime tower per material: pillars per group of materials that bond (concentric rings, one per head), engine tower off, list order | Implemented in draft PR [#37](https://github.com/kameka22/snap-studio/pull/37); checks on the U1 left (see the plan) |
+| [languages.md](languages.md) | German, Spanish, Brazilian Portuguese and Italian (wave 1); Japanese, Simplified Chinese and Korean next (wave 2); Weblate for review | Wave 1 implemented, draft PR |
 
 ## Planned
 
@@ -30,7 +31,8 @@ The other planned features each have a draft pull request: see the
 Features implemented and tested without the hardware (headless browser, Rust
 tests), whose real behavior remains to be checked.
 
-- **Languages**: native menu bar in English and in French, rebuilt when the
+- **Languages**: native menu bar in English, French, German, Spanish,
+  Brazilian Portuguese and Italian, rebuilt when the
   language changes in Settings; system language preselected on a fresh
   account; macOS permission prompts in French on a French system
   (`InfoPlist.strings`); the AI terminal answers in the chosen language.
@@ -106,7 +108,8 @@ Ideas dropped or postponed during the work, in no order of priority.
   (Snapmaker PR #1006, upstream PR #14161).
 - **AI**: Blender / MCP bridge, plate editable from the conversation, keeping
   colors and multiple objects.
-- **Languages**: more languages (Orca's tabs already exist in 19); internal
+- **Languages**: more languages after wave 2 (Orca's tabs already exist in
+  19, see [languages.md](languages.md)); internal
   identifiers still named `ia` (commands, storage folder) could become `ai`
   with a data migration.
 
