@@ -11,6 +11,15 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Changed
+- **A new Prints page**: the prints on the left (search, filters, printer
+  and material chips; in progress, queue, then day by day), the record on
+  the right: camera, progress and time per layer while it prints; timelapse,
+  result (success or failure, a reason, a note) and real against estimated
+  duration once done, with Reprint and Open in Prepare. The history and its
+  G-code are kept forever, unless Settings → Prints deletes them after 30
+  days, 90 days or a year.
+
 ### Fixed
 - AI setup on macOS: launched from its icon, the app found macOS's own
   Python 3.9 before the one installed with Homebrew (and so did Claude). The
