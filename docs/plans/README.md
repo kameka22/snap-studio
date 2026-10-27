@@ -21,6 +21,7 @@ lists below.
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
 | [virtual-heads.md](virtual-heads.md) | Virtual heads: color mixing of two spools (Snapmaker Orca's Full Spectrum), one head token per color in Prepare | Written, draft PR |
 | [prints-redesign.md](prints-redesign.md) | Prints page redesign: list and record (C, chosen from three mockup directions; the stats go to the printer page and a Statistics page in a follow-up) | Implemented in draft PR [#65](https://github.com/kameka22/snap-studio/pull/65) |
+| [full-spectrum-calibration.md](full-spectrum-calibration.md) | Full Spectrum color calibration: a printed swatch card (4:1 to 1:4) for two spools, the real colors corrected per ratio, saved per filament pair and used by the virtual head preview; optional TD per filament | Written, draft PR [#70](https://github.com/kameka22/snap-studio/pull/70) |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
