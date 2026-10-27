@@ -3735,7 +3735,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   overflow: hidden;
   animation: sheet-fade 120ms ease;
 }
-.picker .field { margin: 8px; }
+/* Its search field: the picker's width less its margins (WebKit adds the
+   margins to a 100 % width, and the field stuck out of the picker). */
+.picker .field { flex: none; margin: 8px; width: calc(100% - 16px); }
 .picker-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 6px; }
 .picker-section { padding: 8px 8px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); }
 .picker-item {
