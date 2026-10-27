@@ -49,27 +49,53 @@ pub fn fnv1a(parts: &[&[u8]]) -> u64 {
     h
 }
 
-/// Looks for an executable, like `which`, without depending on the shell.
+/// Folders searched for a program: the inherited `PATH`, the usual places
+/// a user installs to (`~/.local/bin`, Homebrew, `/usr/local/bin`) before
+/// the system's own folders.
 ///
-/// An app launched from the Finder does not inherit the terminal's `PATH`: so
-/// the usual locations are added, otherwise `claude` or `docker` would stay
-/// missing although they are installed.
-pub fn which(name: &str) -> Option<std::path::PathBuf> {
-    let extra = [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-        "/bin",
-    ];
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    let mut dirs: Vec<std::path::PathBuf> = std::env::var_os("PATH")
+/// An app launched from the Finder does not inherit the terminal's `PATH`,
+/// only `/usr/bin:/bin:/usr/sbin:/sbin`: put first, the system's folders
+/// would win, and macOS's `/usr/bin/python3` (the developer tools' 3.9)
+/// would be found instead of the user's Homebrew Python. Launched from a
+/// terminal, the user's own order is kept (its folders come first).
+pub fn search_path() -> Vec<std::path::PathBuf> {
+    let inherited: Vec<std::path::PathBuf> = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).collect())
         .unwrap_or_default();
-    dirs.extend(extra.iter().map(std::path::PathBuf::from));
-    if let Some(h) = home {
-        dirs.push(h.join(".local/bin"));
-        dirs.push(h.join("bin"));
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    ordered_path(inherited, home.as_deref())
+}
+
+/// The system's own folders: after the user's.
+const SYSTEM_DIRS: [&str; 4] = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+
+fn ordered_path(inherited: Vec<std::path::PathBuf>, home: Option<&std::path::Path>) -> Vec<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let system = |p: &PathBuf| SYSTEM_DIRS.iter().any(|s| p == std::path::Path::new(s));
+    let mut out: Vec<PathBuf> = inherited.iter().filter(|p| !system(p)).cloned().collect();
+    if cfg!(unix) {
+        if let Some(h) = home {
+            out.push(h.join(".local/bin"));
+        }
+        out.extend(["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"].map(PathBuf::from));
     }
+    out.extend(inherited.iter().filter(|p| system(p)).cloned());
+    if cfg!(unix) {
+        out.extend(["/usr/bin", "/bin"].map(PathBuf::from));
+        if let Some(h) = home {
+            out.push(h.join("bin"));
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|p| !p.as_os_str().is_empty() && seen.insert(p.clone()));
+    out
+}
+
+/// Looks for an executable, like `which`, without depending on the shell,
+/// in [`search_path`]'s folders: launched from the Finder, `claude`,
+/// `docker` or Homebrew's `python3` are found all the same.
+pub fn which(name: &str) -> Option<std::path::PathBuf> {
+    let dirs = search_path();
     // Windows: the command is written without its extension.
     let names: Vec<String> = if cfg!(windows) {
         vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_string()]
@@ -158,5 +184,37 @@ mod tests {
         ] {
             assert_eq!(super::b64_encode(raw.as_bytes()), enc, "for {raw:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn order(path: &str) -> Vec<String> {
+        let inherited = std::env::split_paths(path).collect();
+        ordered_path(inherited, Some(std::path::Path::new("/Users/me"))).iter().map(|p| p.display().to_string()).collect()
+    }
+
+    /// Launched from the Finder (the system's PATH only), the user's
+    /// folders come before the system's: Homebrew's python3 before macOS's.
+    #[test]
+    #[cfg(unix)]
+    fn user_folders_come_before_the_systems() {
+        let p = order("/usr/bin:/bin:/usr/sbin:/sbin");
+        let at = |d: &str| p.iter().position(|x| x == d).unwrap();
+        assert!(at("/opt/homebrew/bin") < at("/usr/bin"), "{p:?}");
+        assert!(at("/Users/me/.local/bin") < at("/usr/bin"));
+        assert!(at("/usr/local/bin") < at("/usr/bin"));
+        assert!(at("/usr/bin") < at("/sbin"), "the system's own order kept");
+        assert_eq!(p.iter().filter(|x| *x == "/usr/bin").count(), 1, "no duplicates");
+        // From a terminal: the user's own order comes first.
+        let p = order("/Users/me/.pyenv/shims:/opt/homebrew/bin:/usr/bin:/bin");
+        assert_eq!(p[0], "/Users/me/.pyenv/shims");
+        assert!(p.iter().position(|x| x == "/opt/homebrew/bin") < p.iter().position(|x| x == "/usr/bin"));
+        // No PATH at all: still the usual places.
+        let p = ordered_path(Vec::new(), None);
+        assert!(p.contains(&PathBuf::from("/opt/homebrew/bin")) && p.contains(&PathBuf::from("/usr/bin")));
     }
 }

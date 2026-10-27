@@ -86,16 +86,11 @@ pub fn inherited_markers(names: impl Iterator<Item = String>) -> Vec<String> {
         .collect()
 }
 
-/// `PATH` for Claude: launched from the Finder, the app does not inherit the
-/// terminal's, so the usual locations are added for Claude to find its tools.
+/// `PATH` for Claude and the checks: launched from the Finder, the app does
+/// not inherit the terminal's, so the usual locations come before the
+/// system's (`util::search_path`) — the same `python3` the checks find.
 pub fn child_path() -> Option<std::ffi::OsString> {
-    let mut path: Vec<std::path::PathBuf> = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).collect())
-        .unwrap_or_default();
-    if cfg!(unix) {
-        path.extend(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].map(Into::into));
-    }
-    std::env::join_paths(path).ok()
+    std::env::join_paths(crate::util::search_path()).ok()
 }
 
 /// True if a terminal is already running for this conversation.

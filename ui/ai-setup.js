@@ -144,6 +144,10 @@ function aisRows(report, choice) {
       modes: AIS_HOST,
       state: skipped ? "skipped" : missing.length ? "missing" : "ok",
       detail: missing.length && !skipped ? missing.map((i) => i.key).join(", ") : null,
+      // Python's error for a module that is there but does not import (a
+      // library it lacks, a build for another Python); "No module named"
+      // is what "missing" already says.
+      errors: missing.filter((i) => i.detail && !/^ModuleNotFoundError: No module named '?\w+'?$/.test(i.detail)).map((i) => `${i.key}: ${i.detail}`),
     });
   }
   return rows;
@@ -238,6 +242,7 @@ function aisHelp(row, report) {
       return {
         text: tr(report.python_managed ? "ais.help.modules_managed" : "ais.help.modules"),
         items: [
+          ...(row.errors || []).map((e) => ({ note: e })),
           cmd(
             `python3 -m pip install --user${report.python_managed ? " --break-system-packages" : ""} ${AIS_MODULES.join(" ")}`
           ),
