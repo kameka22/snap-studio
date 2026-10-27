@@ -21,6 +21,7 @@ lists below.
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
 | [virtual-heads.md](virtual-heads.md) | Virtual heads: color mixing of two spools (Snapmaker Orca's Full Spectrum), one head token per color in Prepare | Written, draft PR |
 | [prints-redesign.md](prints-redesign.md) | Prints page redesign: list and record (C, chosen from three mockup directions; the stats go to the printer page and a Statistics page in a follow-up) | Implemented in draft PR [#65](https://github.com/kameka22/snap-studio/pull/65) |
+| [filament-calibration.md](filament-calibration.md) | Filament calibration tests in Care & Tuning › Calibration (temperature tower, max volumetric speed, flow ratio, retraction, as OrcaSlicer), the result saved as a custom filament profile; pressure advance left to the U1; follow-up of #38 | Written, draft PR [#71](https://github.com/kameka22/snap-studio/pull/71), after [#38](https://github.com/kameka22/snap-studio/pull/38) |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
