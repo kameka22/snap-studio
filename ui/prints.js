@@ -17,6 +17,10 @@ const PJ = {
   live: [],
   /* Key chosen in the list or the sidebar; null: the default record. */
   sel: null,
+  /* The print last seen running on each printer (printer id → { file,
+     job }), its job when it is Snap Studio's: a `live:` choice follows it
+     into the history when it ends. */
+  liveJobs: {},
   /* List: segmented filter, chips (Sets of printer ids and materials), search. */
   filter: "all",
   printers: new Set(),
@@ -26,6 +30,8 @@ const PJ = {
   /* Timelapses: videos listed per printer (a short cache), jobs already
      looked for this session, the one being looked for, the video element. */
   tl: { videos: {}, tried: new Set(), looking: null, el: null },
+  /* The result's note: one textarea for the page, kept across redraws. */
+  note: { el: null, saving: Promise.resolve() },
   /* "Start the next one?" sheet: job offered, launch in progress. */
   next: null,
   launching: false,
@@ -41,6 +47,7 @@ const pjState = (s) => (PJ_STATES.includes(s) ? tr("prints.state." + s) : s);
 
 async function pjLoad() {
   PJ.jobs = (await invoke("jobs_list").catch(() => null)) || [];
+  pjTrackLive();
   pjRenderSide();
   if (window.currentView === "prints") pjRender();
 }
@@ -58,22 +65,40 @@ function pjJobOfLive(live) {
   return mine.find((j) => j.remote === live.status.job) || mine[mine.length - 1] || null;
 }
 
+/* Remembers which job is behind each running print, while it runs. A print
+   from elsewhere (no job) forgets the previous one's job; the same file
+   keeps it: the store may close the job a moment before the status says the
+   printer is free. */
+function pjTrackLive() {
+  for (const l of pjActive()) {
+    const job = pjJobOfLive(l), file = l.status.job || "", seen = PJ.liveJobs[l.printer_id];
+    if (job) PJ.liveJobs[l.printer_id] = { file, job: job.id };
+    else if (!seen || seen.file !== file) PJ.liveJobs[l.printer_id] = { file, job: null };
+  }
+}
+
 const pjThumb = (job, px = 320) =>
   job?.file ? thumbSrc(job.file, px, 0, job.created) : "";
 
 const pjName = (live) => (live.status.job || tr("prints.print")).replace(/\.gcode$/i, "");
 
-/* Estimated start time of a queued job, from what comes before it. */
-function pjStartEstimate(job) {
-  const live = pjLiveOf(job.printer_id);
-  let t = Date.now();
-  if (live && PJ_BUSY.includes(live.status.state)) t += (live.status.remaining_s || 0) * 1000;
+/* Estimated start time of every queued job (job id → ms), from what
+   comes before it on its printer: one pass over the queue. */
+function pjStartEstimates() {
+  const free = {};
+  const out = new Map();
   for (const j of pjQueue()) {
-    if (j.id === job.id) break;
-    if (j.printer_id === job.printer_id) t += (j.stats?.print_time_s || 0) * 1000;
+    if (!(j.printer_id in free)) {
+      const live = pjLiveOf(j.printer_id);
+      free[j.printer_id] = Date.now() + (live && PJ_BUSY.includes(live.status.state) ? (live.status.remaining_s || 0) * 1000 : 0);
+    }
+    out.set(j.id, free[j.printer_id]);
+    free[j.printer_id] += (j.stats?.print_time_s || 0) * 1000;
   }
-  return t;
+  return out;
 }
+
+const pjStartEstimate = (job) => pjStartEstimates().get(job.id) ?? Date.now();
 
 /* ------------------------------------------------------------ sidebar */
 
@@ -122,6 +147,15 @@ function pjShow(key) {
 /* The record shown: the one chosen, else the first running print, else
    the latest finished one (prints-logic.js). */
 function pjCurrentKey() {
+  if (PJ.sel?.startsWith("live:")) {
+    const id = PJ.sel.slice(5), live = pjLiveOf(id);
+    if (!live || !PJ_BUSY.includes(live.status.state)) {
+      // The print has finished since: its record when Snap Studio has one
+      // (chosen by its own key, so the list marks it), else the default.
+      const job = PJ.jobs.find((j) => j.id === PJ.liveJobs[id]?.job);
+      PJ.sel = job ? "job:" + job.id : null;
+    }
+  }
   if (PJ.sel && pjResolve(PJ.sel)) return PJ.sel;
   return pjlDefaultKey(pjActive().map((l) => "live:" + l.printer_id), PJ.jobs);
 }
@@ -165,11 +199,8 @@ function pjSubtitle() {
 function pjResolve(key) {
   if (key.startsWith("live:")) {
     const live = pjLiveOf(key.slice(5));
-    if (!live || !PJ_BUSY.includes(live.status.state)) {
-      // The print has finished since: switch to its history record.
-      const done = pjDone().find((j) => j.printer_id === key.slice(5));
-      return done ? { job: done, live: pjLiveOf(done.printer_id) } : null;
-    }
+    // Over: pjCurrentKey has moved the choice to its record, if any.
+    if (!live || !PJ_BUSY.includes(live.status.state)) return null;
     return { live, job: pjJobOfLive(live), active: true };
   }
   const job = PJ.jobs.find((j) => j.id === key.slice(4));
@@ -304,13 +335,15 @@ function pjRenderList(key) {
   const shown = queue.filter((j) => pjlPasses(j, q));
   if (shown.length) {
     const total = pjlQueueTime(queue);
+    const starts = pjStartEstimates();
     html.push(pjGroup(tr("prints.queue"), total ? fmtDuration(total) : ""));
     for (const j of shown) {
       const i = queue.indexOf(j);
       const t = j.stats?.print_time_s;
+      const at = fmtClock(starts.get(j.id));
       html.push(
         pjRow("job:" + j.id, j, "job:" + j.id === key, `<b><span class="pj-qn">${i + 1}.</span>${esc(j.name)}</b><small>${esc([pjPrinterName(j.printer_id), t && fmtDuration(t)].filter(Boolean).join(" · "))}</small>`,
-          `<span title="${esc(tr("prints.starts_at", { time: fmtClock(pjStartEstimate(j)) }))}">${esc(fmtClock(pjStartEstimate(j)))}</span>`)
+          `<span title="${esc(tr("prints.starts_at", { time: at }))}">${esc(at)}</span>`)
       );
     }
   }
@@ -324,7 +357,10 @@ function pjRenderList(key) {
     }
   }
   if (!html.length) html.push(`<div class="pj-none">${esc(tr("prints.none_match"))}</div>`);
-  pjSet($("pj-rows"), html.join(""));
+  // A running print changes the rows every few seconds: the row that had
+  // the focus (arrow keys) gets it back.
+  const focused = document.activeElement?.closest?.("#pj-rows .pj-row")?.dataset.key;
+  if (pjSet($("pj-rows"), html.join("")) && focused) $("pj-rows").querySelector(`.pj-row[data-key="${CSS.escape(focused)}"]`)?.focus();
   // A new choice is brought into view; a redraw leaves the scroll alone.
   if (PJ.listKey !== key) $("pj-rows").querySelector(".pj-row.sel")?.scrollIntoView({ block: "nearest" });
   PJ.listKey = key;
@@ -591,7 +627,7 @@ function pjResultHtml(job) {
     <h3>${esc(tr("prints.result"))}</h3>
     <div class="seg pj-outcome" role="radiogroup" aria-label="${esc(tr("prints.result"))}">${seg}</div>
     ${reasons}
-    <textarea id="pj-note" class="field" rows="2" placeholder="${esc(tr("prints.result.note"))}" aria-label="${esc(tr("prints.result.note"))}">${esc(r.note || "")}</textarea>
+    <div id="pj-note-slot"></div>
     <div class="pj-delta">
       <div><small>${esc(tr("prints.real"))}</small><b>${d ? esc(fmtDuration(d.total)) : "—"}</b>${d?.paused ? `<span class="pj-sub">${esc(tr("prints.paused_for", { t: fmtSpan(d.paused) }))}</span>` : ""}</div>
       <div><small>${esc(tr("prints.estimated"))}</small><b>${est ? esc(fmtDuration(est)) : "—"}</b>${
@@ -626,15 +662,26 @@ function pjTlNote(job) {
 function pjRenderDetail(it) {
   const box = $("pj-detail");
   const { job, live, active } = it;
-  // Typing a note: the record waits.
-  if (box.contains(document.activeElement) && document.activeElement.id === "pj-note") return;
   const html = active ? pjRunningHtml(it) : job.state === "queued" ? pjQueuedHtml(it) : job.state === "printing" ? pjStartingHtml(it) : pjFinishedHtml(it);
   box.dataset.printer = live?.printer_id || job?.printer_id || "";
   box.dataset.job = job?.id || "";
   const shown = job?.id || live?.printer_id || "";
   // Another record starts at its top; the same one keeps its scroll.
+  // The note being typed survives the redraw: its element is kept, with
+  // its focus and caret.
+  const note = PJ.note.el, typing = note && document.activeElement === note;
+  const caret = typing ? [note.selectionStart, note.selectionEnd] : null;
   if (pjSet(box, html) && box.dataset.shown !== shown) box.scrollTop = 0;
   box.dataset.shown = shown;
+  const noteSlot = $("pj-note-slot");
+  if (noteSlot) {
+    const el = pjNoteNode(job, typing);
+    if (el.parentNode !== noteSlot) noteSlot.append(el);
+    if (typing && document.activeElement !== el) {
+      el.focus();
+      el.setSelectionRange(...caret);
+    }
+  }
   const slot = $("pj-media");
   // The camera and the timelapse are kept across redraws: moved, not rebuilt.
   if (active) {
@@ -665,12 +712,12 @@ $("pj-detail").addEventListener("click", async (e) => {
   const res = e.target.closest("[data-res]");
   if (res) {
     const want = res.dataset.res === "ok";
-    const job = pjSelJob();
-    // The chosen one again: back to not said.
-    pjSaveResult({ success: job?.result?.success === want ? null : want });
+    // The chosen one again: back to not said (decided when the save runs,
+    // after the ones before it).
+    pjSaveResult((r) => ({ success: r.success === want ? null : want }));
   }
   const reason = e.target.closest("[data-reason]");
-  if (reason) pjSaveResult({ reason: pjSelJob()?.result?.reason === reason.dataset.reason ? null : reason.dataset.reason });
+  if (reason) pjSaveResult((r) => ({ reason: r.reason === reason.dataset.reason ? null : reason.dataset.reason }));
 });
 /* A queued print moved to another printer. */
 async function pjSetPrinter(printerId) {
@@ -702,31 +749,65 @@ let pjNoteTimer = 0;
 $("pj-detail").addEventListener("input", (e) => {
   if (e.target.id !== "pj-note") return;
   clearTimeout(pjNoteTimer);
-  pjNoteTimer = setTimeout(() => pjSaveResult({ note: e.target.value }, false), 800);
+  // The text and the record as they are now: by the time it saves, the
+  // field may show another record.
+  const { value, dataset: { job } } = e.target;
+  pjNoteTimer = setTimeout(() => pjSaveResult({ note: value }, false, job), 800);
 });
 $("pj-detail").addEventListener("focusout", (e) => {
   if (e.target.id !== "pj-note") return;
   clearTimeout(pjNoteTimer);
-  const job = pjSelJob();
+  // The field's own record, not the one shown: the field loses the focus
+  // when a redraw moves it to another record.
+  const job = PJ.jobs.find((j) => j.id === e.target.dataset.job);
   // Saved without a redraw: a click that left the field must still land.
-  if (job && (job.result?.note || "") !== e.target.value.trim()) pjSaveResult({ note: e.target.value }, false);
+  if (job && (job.result?.note || "") !== e.target.value.trim()) pjSaveResult({ note: e.target.value }, false, job.id);
 });
 
-const pjSelJob = () => PJ.jobs.find((j) => j.id === $("pj-detail").dataset.job);
-
-/* Changes the result of the record's print; `redraw` false while typing. */
-async function pjSaveResult(patch, redraw = true) {
-  const job = pjSelJob();
-  if (!job) return;
-  const cur = job.result || { success: null, reason: null, note: "" };
-  const next = { ...cur, ...patch };
-  try {
-    const saved = await invoke("job_set_result", { id: job.id, result: next });
-    pjReplace(saved);
-    if (redraw) pjRender();
-  } catch (e) {
-    toast(String(e), true);
+/* The note's textarea, one for the page, moved from record to record. Its
+   text follows the store (another record, a saved result) unless it is
+   being typed. */
+function pjNoteNode(job, typing) {
+  if (!PJ.note.el) {
+    const el = document.createElement("textarea");
+    el.id = "pj-note";
+    el.className = "field";
+    el.rows = 2;
+    PJ.note.el = el;
   }
+  const el = PJ.note.el, note = job.result?.note || "";
+  el.placeholder = tr("prints.result.note");
+  el.setAttribute("aria-label", el.placeholder);
+  if (el.dataset.job !== job.id || (!typing && el.dataset.note !== note)) el.value = note;
+  el.dataset.job = job.id;
+  el.dataset.note = note;
+  return el;
+}
+
+/* Changes the result of a print (the record's unless `id` says which);
+   `redraw` false while typing. `patch` is the fields to change, or a
+   function of the result as it stands. The saves go one after the other,
+   each built on the result the one before it left: the last one wins. The
+   note goes with every change, as it stands in the field at the click: a
+   click on Success or a reason right after typing must not resend the old
+   one. */
+function pjSaveResult(patch, redraw = true, id = $("pj-detail").dataset.job) {
+  const note = PJ.note.el?.dataset.job === id ? { note: PJ.note.el.value } : {};
+  PJ.note.saving = PJ.note.saving.then(async () => {
+    const job = PJ.jobs.find((j) => j.id === id);
+    // Gone meanwhile (removed, pruned): nothing to say of it.
+    if (!job) return;
+    const cur = { success: null, reason: null, note: "", ...job.result, ...note };
+    const next = { ...cur, ...(typeof patch === "function" ? patch(cur) : patch) };
+    try {
+      const saved = await invoke("job_set_result", { id, result: next });
+      pjReplace(saved);
+      if (redraw) pjRender();
+    } catch (e) {
+      toast(String(e), true);
+    }
+  });
+  return PJ.note.saving;
 }
 
 /* A job changed by a command: in place, without reloading the list. */
@@ -836,8 +917,9 @@ async function pjFindTimelapse(job) {
   let found = null;
   try {
     const c = PJ.tl.videos[job.printer_id];
-    const list = c && Date.now() - c.at < 120000 ? c.list : await invoke("pf_videos", { printerId: job.printer_id });
-    PJ.tl.videos[job.printer_id] = { at: c && Date.now() - c.at < 120000 ? c.at : Date.now(), list };
+    const fresh = c && Date.now() - c.at < 120000;
+    const list = fresh ? c.list : await invoke("pf_videos", { printerId: job.printer_id });
+    PJ.tl.videos[job.printer_id] = fresh ? c : { at: Date.now(), list };
     found = pjlMatchTimelapse(job, list, pflVideoDate, pflVideoTitle);
     if (found) pjReplace(await invoke("job_set_timelapse", { id: job.id, root: found.root, path: found.path }));
   } catch (e) {
@@ -1116,6 +1198,7 @@ listen("print-send", (e) => {
 
 listen("prints-status", (e) => {
   PJ.live = e.payload || [];
+  pjTrackLive();
   pjRenderSide();
   pjRefreshDetail();
 });

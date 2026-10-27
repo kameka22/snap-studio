@@ -3247,6 +3247,9 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
 .pj-outcome .seg-btn.ok.on { color: var(--success-text); }
 .pj-outcome .seg-btn.ko.on { color: var(--danger); }
 .pj-reasons { display: flex; flex-wrap: wrap; gap: 5px; }
+/* The note's textarea is one element kept across redraws (prints.js),
+   put back into this slot: the slot takes no place in the card's column. */
+#pj-note-slot { display: contents; }
 .pj-result textarea.field { min-height: 52px; resize: vertical; font-family: inherit; font-size: 12.5px; }
 .pj-delta { display: flex; gap: 14px; }
 .pj-delta > div { flex: 1; min-width: 0; }

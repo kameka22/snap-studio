@@ -120,7 +120,7 @@ function pjlPauses(job, end = job.finished) {
    paused; null when a date is missing. */
 function pjlDuration(job) {
   if (!job.started || !job.finished || job.finished < job.started) return null;
-  const paused = pjlPauses(job).reduce((a, p) => a + Math.max(0, (p.to ?? job.finished) - p.from), 0);
+  const paused = pjlPauses(job).reduce((a, p) => a + Math.max(0, p.to - p.from), 0);
   return { total: job.finished - job.started, paused };
 }
 

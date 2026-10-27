@@ -156,12 +156,18 @@ fn save_unlocked(list: &[Job]) -> Result<()> {
 
 /// Changes the store in one go.
 fn update<T>(f: impl FnOnce(&mut Vec<Job>) -> Result<T>) -> Result<T> {
+    update_pruning(f).map(|(out, _)| out)
+}
+
+/// The same, also saying how many old records the automatic deletion
+/// removed on the way (the UI is told when some went).
+fn update_pruning<T>(f: impl FnOnce(&mut Vec<Job>) -> Result<T>) -> Result<(T, usize)> {
     let _g = lock();
     let mut list = load_unlocked();
     let out = f(&mut list)?;
-    prune(&mut list, retention(), now());
+    let gone = prune(&mut list, retention(), now());
     save_unlocked(&list)?;
-    Ok(out)
+    Ok((out, gone))
 }
 
 /// Automatic deletion of the history, in days: None keeps it forever (the
@@ -185,9 +191,11 @@ pub fn set_retention(days: Option<u32>) -> Result<()> {
 
 /// Finished prints older than the chosen retention go, with their G-code;
 /// without one, nothing goes. The queue and running prints always stay.
-fn prune(list: &mut Vec<Job>, keep_days: Option<u32>, now: u64) {
-    let Some(days) = keep_days else { return };
+/// How many went.
+fn prune(list: &mut Vec<Job>, keep_days: Option<u32>, now: u64) -> usize {
+    let Some(days) = keep_days else { return 0 };
     let limit = now.saturating_sub(days as u64 * 86_400);
+    let before = list.len();
     list.retain(|j| {
         if is_done(&j.state) && j.finished.unwrap_or(j.created) < limit {
             let _ = std::fs::remove_file(&j.file);
@@ -196,6 +204,7 @@ fn prune(list: &mut Vec<Job>, keep_days: Option<u32>, now: u64) {
             true
         }
     });
+    before - list.len()
 }
 
 fn is_done(state: &str) -> bool {
@@ -453,15 +462,44 @@ fn running_job<'a>(list: &'a mut [Job], printer_id: &str, file: Option<&str>) ->
     list.get_mut(i)
 }
 
-/// The printer went from printing to paused, or back.
-fn record_state(printer_id: &str, state: &str, file: Option<&str>) {
+/// The printer went from printing to paused, or back. `printed_s`, the
+/// time the print has actually run as the printer says, is given for a pause
+/// found at the launch: the pause then started while the app was away, and
+/// is dated from it rather than from now.
+fn record_state(printer_id: &str, state: &str, file: Option<&str>, printed_s: Option<f32>) {
     if !has_printing(printer_id) {
         return;
     }
-    let r = update(|list| Ok(running_job(list, printer_id, file).map(|j| track(j, state, now()))));
+    let r = update(|list| {
+        Ok(running_job(list, printer_id, file).map(|j| {
+            let at = printed_s.map_or(now(), |s| pause_seen_at(j, s, now()));
+            track(j, state, at)
+        }))
+    });
     if let Err(e) = r {
         eprintln!("[jobs] pause not recorded: {e}");
     }
+}
+
+/// When a print found paused stopped: its start, plus the time it ran
+/// (`print_duration`, which the printer does not count while paused), plus
+/// the pauses already known. Never after now, nor before its start; now
+/// when the start is unknown.
+fn pause_seen_at(job: &Job, printed_s: f32, now: u64) -> u64 {
+    let Some(started) = job.started else { return now };
+    let mut paused = 0u64;
+    let mut open: Option<u64> = None;
+    for e in &job.events {
+        match (e.kind.as_str(), open) {
+            ("pause", None) => open = Some(e.at),
+            ("resume", Some(from)) => {
+                paused += e.at.saturating_sub(from);
+                open = None;
+            }
+            _ => {}
+        }
+    }
+    (started + printed_s.max(0.0) as u64 + paused).min(now).max(started)
 }
 
 /// Closes the running jobs of a printer that no longer is.
@@ -582,8 +620,13 @@ pub fn start(app: AppHandle) {
         loop {
             // The automatic deletion, at launch then every hour.
             if n % PRUNE_EVERY == 0 && retention().is_some() {
-                if let Err(e) = update(|_| Ok(())) {
-                    eprintln!("[jobs] history not pruned: {e}");
+                match update_pruning(|_| Ok(())) {
+                    // The list must not keep records that are gone.
+                    Ok((_, gone)) if gone > 0 => {
+                        let _ = app.emit("jobs-changed", ());
+                    }
+                    Ok(_) => {}
+                    Err(e) => eprintln!("[jobs] history not pruned: {e}"),
                 }
             }
             n = n.wrapping_add(1);
@@ -633,9 +676,14 @@ fn observe(app: &AppHandle, live: &Live) -> bool {
             m.states.insert(id.clone(), state.to_string())
         };
         // Pauses and resumes go into the job's timeline (only on a change:
-        // the store is not written at every pass).
-        if prev.as_deref() != Some(state) {
-            record_state(id, state, live.status.job.as_deref());
+        // the store is not written at every pass). At the first pass after
+        // the launch, a print found paused was paused while the app was
+        // away: the pause is dated from the time the print has run.
+        match prev.as_deref() {
+            Some(p) if p == state => {}
+            Some(_) => record_state(id, state, live.status.job.as_deref(), None),
+            None if state == "paused" => record_state(id, state, live.status.job.as_deref(), Some(live.status.elapsed_s.unwrap_or(0.0))),
+            None => {}
         }
         return false;
     }
@@ -752,13 +800,13 @@ mod tests {
         ];
         let ids = |l: &[Job]| l.iter().map(|j| j.id.clone()).collect::<Vec<_>>();
         let mut a = list.clone();
-        prune(&mut a, Some(30), now);
+        assert_eq!(prune(&mut a, Some(30), now), 3);
         assert_eq!(ids(&a), [format!("j{}", now - 10 * DAY), "j1".into(), "j2".into()]);
         let mut b = list.clone();
         prune(&mut b, Some(90), now);
         assert_eq!(b.len(), 5);
         assert!(!b.iter().any(|j| j.state == "finished"));
-        prune(&mut list, Some(365), now);
+        assert_eq!(prune(&mut list, Some(365), now), 0);
         assert_eq!(list.len(), 6);
         // A record without an end date counts from its creation.
         let mut old = vec![Job { finished: None, ..mk(5, "error") }];
@@ -795,6 +843,21 @@ mod tests {
         assert!(track(&mut j, "paused", 60));
         let kinds: Vec<(&str, u64)> = j.events.iter().map(|e| (e.kind.as_str(), e.at)).collect();
         assert_eq!(kinds, [("pause", 20), ("resume", 40), ("pause", 60)]);
+    }
+
+    #[test]
+    fn a_pause_found_at_launch_is_dated_from_the_time_printed() {
+        let now = 10_000;
+        let mut j = Job { started: Some(1000), ..mk(1, "printing") };
+        // Ran 3000 s, so the pause began at 4000.
+        assert_eq!(pause_seen_at(&j, 3000.0, now), 4000);
+        // An earlier pause of 500 s pushes it back by as much.
+        j.events = vec![JobEvent { kind: "pause".into(), at: 2000 }, JobEvent { kind: "resume".into(), at: 2500 }];
+        assert_eq!(pause_seen_at(&j, 3000.0, now), 4500);
+        // Never after now, nor before the start; now without a start.
+        assert_eq!(pause_seen_at(&j, 1e9, now), now);
+        assert_eq!(pause_seen_at(&j, -5.0, now), 1500);
+        assert_eq!(pause_seen_at(&mk(2, "printing"), 3000.0, now), now);
     }
 
     #[test]
