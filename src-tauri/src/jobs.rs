@@ -53,7 +53,8 @@ pub struct Profile {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default)]
 pub struct PrintResult {
-    pub success: bool,
+    /// None: not said yet (a note alone).
+    pub success: Option<bool>,
     /// Why it failed, a key of the record's list (`adhesion`, `clog`…).
     pub reason: Option<String>,
     pub note: String,
@@ -204,6 +205,23 @@ fn is_done(state: &str) -> bool {
 pub fn list() -> Vec<Job> {
     let _g = lock();
     load_unlocked()
+}
+
+/// A job as the Prints page reads it: with whether its G-code is still
+/// there (a record can outlive it).
+#[derive(Serialize)]
+pub struct JobView {
+    #[serde(flatten)]
+    pub job: Job,
+    pub gcode: bool,
+}
+
+pub fn view(job: Job) -> JobView {
+    JobView { gcode: Path::new(&job.file).is_file(), job }
+}
+
+pub fn views() -> Vec<JobView> {
+    list().into_iter().map(view).collect()
 }
 
 pub fn get(id: &str) -> Option<Job> {
@@ -378,17 +396,18 @@ pub fn set_result(id: &str, result: Option<PrintResult>) -> Result<Job> {
         if !is_done(&j.state) {
             return Err(anyhow!(crate::t!("err.job_not_finished")));
         }
-        j.result = result.map(|r| tidy_result(r, now()));
+        // Nothing said and no note: no result.
+        j.result = result.map(|r| tidy_result(r, now())).filter(|r| r.success.is_some() || !r.note.is_empty());
         Ok(j.clone())
     })
 }
 
-/// A result as stored: dated, its note trimmed, no failure reason for a
-/// success.
+/// A result as stored: dated, its note trimmed, a reason only for a
+/// failure.
 fn tidy_result(mut r: PrintResult, at: u64) -> PrintResult {
     r.at = at;
     r.note = r.note.trim().to_string();
-    if r.success || r.reason.as_deref().is_some_and(|s| s.trim().is_empty()) {
+    if r.success != Some(false) || r.reason.as_deref().is_some_and(|s| s.trim().is_empty()) {
         r.reason = None;
     }
     r
@@ -749,12 +768,15 @@ mod tests {
 
     #[test]
     fn results_are_tidied() {
-        let ok = tidy_result(PrintResult { success: true, reason: Some("clog".into()), note: "  fine \n".into(), at: 0 }, 42);
-        assert_eq!(ok, PrintResult { success: true, reason: None, note: "fine".into(), at: 42 });
-        let ko = tidy_result(PrintResult { success: false, reason: Some("adhesion".into()), note: String::new(), at: 0 }, 7);
+        let ok = tidy_result(PrintResult { success: Some(true), reason: Some("clog".into()), note: "  fine \n".into(), at: 0 }, 42);
+        assert_eq!(ok, PrintResult { success: Some(true), reason: None, note: "fine".into(), at: 42 });
+        let ko = tidy_result(PrintResult { success: Some(false), reason: Some("adhesion".into()), note: String::new(), at: 0 }, 7);
         assert_eq!(ko.reason.as_deref(), Some("adhesion"));
-        let blank = tidy_result(PrintResult { success: false, reason: Some(" ".into()), note: String::new(), at: 0 }, 7);
+        let blank = tidy_result(PrintResult { success: Some(false), reason: Some(" ".into()), note: String::new(), at: 0 }, 7);
         assert!(blank.reason.is_none());
+        // A note alone, nothing said yet.
+        let note = tidy_result(PrintResult { success: None, reason: Some("clog".into()), note: "lid tight".into(), at: 0 }, 7);
+        assert_eq!((note.success, note.reason, note.note.as_str()), (None, None, "lid tight"));
     }
 
     #[test]
@@ -801,7 +823,7 @@ mod tests {
         assert!(j.result.is_none() && j.events.is_empty() && j.timelapse.is_none());
         // A result keeps its reason and note.
         let r: PrintResult = serde_json::from_str(r#"{"success":false,"reason":"adhesion","note":"corner lifted"}"#).unwrap();
-        assert_eq!(r.reason.as_deref(), Some("adhesion"));
+        assert_eq!((r.success, r.reason.as_deref()), (Some(false), Some("adhesion")));
         assert_eq!(r.at, 0);
     }
 }

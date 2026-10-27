@@ -1087,8 +1087,8 @@ fn emit_jobs(app: &tauri::AppHandle) {
 
 /// Known prints: queue, running, history.
 #[tauri::command]
-fn jobs_list() -> Vec<jobs::Job> {
-    jobs::list()
+fn jobs_list() -> Vec<jobs::JobView> {
+    jobs::views()
 }
 
 /// Last printer state seen by the background tracking.
@@ -1162,15 +1162,15 @@ async fn job_requeue(app: tauri::AppHandle, id: String) -> Result<jobs::Job, Str
 
 /// The result of a finished print, set in its record (None clears it).
 #[tauri::command]
-fn job_set_result(id: String, result: Option<jobs::PrintResult>) -> Result<jobs::Job, String> {
-    jobs::set_result(&id, result).map_err(|e| e.to_string())
+fn job_set_result(id: String, result: Option<jobs::PrintResult>) -> Result<jobs::JobView, String> {
+    jobs::set_result(&id, result).map(jobs::view).map_err(|e| e.to_string())
 }
 
 /// The timelapse matched to a finished print, kept with it.
 #[tauri::command]
-fn job_set_timelapse(id: String, root: String, path: String) -> Result<jobs::Job, String> {
+fn job_set_timelapse(id: String, root: String, path: String) -> Result<jobs::JobView, String> {
     served_root(&root)?;
-    jobs::set_timelapse(&id, jobs::Timelapse { root, path }).map_err(|e| e.to_string())
+    jobs::set_timelapse(&id, jobs::Timelapse { root, path }).map(jobs::view).map_err(|e| e.to_string())
 }
 
 /// Automatic deletion of the prints history, in days (None: never).
