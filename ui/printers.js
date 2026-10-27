@@ -44,7 +44,8 @@ function switchView(v) {
   // Leaving a printer's files stops its video.
   if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
   if (v === "prints") pjRender();
-  else if (typeof pjCamStop === "function") pjCamStop();
+  // Leaving Prints stops its camera and its timelapse.
+  else if (typeof pjLeave === "function") pjLeave();
   // Explore's native views must only live in its tab.
   libSetVisible(v === "library");
   if (v === "settings") {

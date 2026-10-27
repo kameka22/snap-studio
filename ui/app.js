@@ -1020,6 +1020,7 @@ onMenu("edit", (what) => {
   if (what === "find" && window.currentView === "files") { $("search").focus(); $("search").select(); }
   // On macOS ⌘F is the menu's: the AI list has its own search.
   if (what === "find" && window.currentView === "ia" && !IA.open && IA.list.length) { $("ia-q").focus(); $("ia-q").select(); }
+  if (what === "find" && window.currentView === "prints") { $("pj-q").focus(); $("pj-q").select(); }
 });
 onMenu("files", (what) => {
   if (what === "open") { switchView("files"); pickFolder(); }
