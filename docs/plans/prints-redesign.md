@@ -155,12 +155,12 @@ and a Statistics page, and the split is the whole page.
 
 ## Open questions
 
-- The Result card: asked at the end of every print (in the "next one?"
-  sheet), or only in the record?
-- How long to keep the history, and should the G-code go after a while?
+None left.
 
 Decided: the split page (not a panel over a dashboard); no stats on this
 page, stats per printer go to the printer page in the follow-up; the
 sidebar's Prints submenu unchanged; on opening the page with nothing
 selected, the record shows the first running print, else the latest
-finished one.
+finished one; the result is set only in the record (never asked at the
+end of a print); the history and its G-code are kept forever, never
+deleted automatically.
