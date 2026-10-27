@@ -9,27 +9,59 @@
 //! (`{"one": "…", "other": "…"}`). Placeholders read `{name}`.
 //!
 //! English is the reference: a key missing from another catalog falls back to
-//! it, then to the key itself.
+//! it, then to the key itself. French is kept complete by hand; the other
+//! languages may lag behind English while their translations are reviewed.
+//!
+//! Adding a language: its catalog in `ui/i18n/<code>.json` and a row in
+//! `LANGS` (code, names, locale, plural rule): nothing else to keep in step.
 
 use anyhow::{anyhow, Result};
 use serde_json::{Map, Value};
 use std::path::PathBuf;
 use std::sync::{OnceLock, RwLock};
 
-const EN: &str = include_str!("../../ui/i18n/en.json");
-const FR: &str = include_str!("../../ui/i18n/fr.json");
+/// A language of the interface.
+pub struct Lang {
+    /// Code of the catalog file and of the preference: `pt-BR`.
+    pub code: &'static str,
+    /// Name in the language itself, for the pickers.
+    pub name: &'static str,
+    /// Name in English, for instructions given to an AI.
+    pub english: &'static str,
+    /// BCP 47 locale for dates and numbers.
+    pub locale: &'static str,
+    /// Zero counts as singular, as one does (`Intl.PluralRules`: French,
+    /// Brazilian Portuguese).
+    zero_is_one: bool,
+    raw: &'static str,
+}
 
 /// Supported languages, in the order the pickers show them.
-pub const LANGS: [&str; 2] = ["en", "fr"];
+pub const LANGS: &[Lang] = &[
+    Lang { code: "en", name: "English", english: "English", locale: "en-US", zero_is_one: false, raw: include_str!("../../ui/i18n/en.json") },
+    Lang { code: "fr", name: "Français", english: "French", locale: "fr-FR", zero_is_one: true, raw: include_str!("../../ui/i18n/fr.json") },
+    Lang { code: "de", name: "Deutsch", english: "German", locale: "de-DE", zero_is_one: false, raw: include_str!("../../ui/i18n/de.json") },
+    Lang { code: "es", name: "Español", english: "Spanish", locale: "es-ES", zero_is_one: false, raw: include_str!("../../ui/i18n/es.json") },
+    Lang { code: "pt-BR", name: "Português (Brasil)", english: "Brazilian Portuguese", locale: "pt-BR", zero_is_one: true, raw: include_str!("../../ui/i18n/pt-BR.json") },
+    Lang { code: "it", name: "Italiano", english: "Italian", locale: "it-IT", zero_is_one: false, raw: include_str!("../../ui/i18n/it.json") },
+];
+
+fn lang_of(code: &str) -> Option<&'static Lang> {
+    LANGS.iter().find(|l| l.code == code)
+}
+
+fn supported(code: &str) -> bool {
+    lang_of(code).is_some()
+}
 
 fn catalogs() -> &'static [(&'static str, Map<String, Value>)] {
     static C: OnceLock<Vec<(&'static str, Map<String, Value>)>> = OnceLock::new();
     C.get_or_init(|| {
-        [("en", EN), ("fr", FR)]
-            .into_iter()
-            .map(|(l, raw)| {
-                let v: Value = serde_json::from_str(raw).expect("invalid i18n catalog");
-                (l, v.as_object().cloned().unwrap_or_default())
+        LANGS
+            .iter()
+            .map(|l| {
+                let v: Value = serde_json::from_str(l.raw).expect("invalid i18n catalog");
+                (l.code, v.as_object().cloned().unwrap_or_default())
             })
             .collect()
     })
@@ -54,18 +86,24 @@ fn stored() -> Option<String> {
     let raw = std::fs::read(settings_path()).ok()?;
     let v: Value = serde_json::from_slice(&raw).ok()?;
     let l = v.get("language")?.as_str()?.to_string();
-    LANGS.contains(&l.as_str()).then_some(l)
+    supported(&l).then_some(l)
 }
 
 /// The system language when we support it, English otherwise.
 #[cfg_attr(test, allow(dead_code))]
 fn system() -> String {
-    let loc = sys_locale::get_locale().unwrap_or_default().to_lowercase();
-    let code = loc.split(['-', '_']).next().unwrap_or("");
-    if LANGS.contains(&code) {
-        code.to_string()
-    } else {
-        "en".into()
+    from_locale(&sys_locale::get_locale().unwrap_or_default())
+}
+
+/// Language of the app for a system locale (`de_AT.UTF-8`, `pt-PT`, `fr`):
+/// matched on the language alone; any Portuguese reads Brazilian Portuguese,
+/// the only one there is.
+fn from_locale(loc: &str) -> String {
+    let code = loc.split(['-', '_', '.']).next().unwrap_or("").to_lowercase();
+    match code.as_str() {
+        "pt" => "pt-BR".into(),
+        c if supported(c) => c.into(),
+        _ => "en".into(),
     }
 }
 
@@ -91,7 +129,7 @@ pub fn lang() -> String {
 
 /// Switches language and remembers the choice.
 pub fn set(lang: &str) -> Result<()> {
-    if !LANGS.contains(&lang) {
+    if !supported(lang) {
         return Err(anyhow!("unsupported language: {lang}"));
     }
     let path = settings_path();
@@ -117,10 +155,12 @@ fn lookup(lang: &str, key: &str) -> Option<&'static Value> {
         .or_else(|| catalog("en").and_then(|m| m.get(key)))
 }
 
-/// English and French plural rules agree on what matters here, except for
-/// zero, which French counts as singular.
+/// The `one` and `other` forms of `Intl.PluralRules`, enough for the counts
+/// shown here: some languages count zero as singular (`zero_is_one`), the
+/// others only one. (Spanish and Italian `many`, for millions, falls back to
+/// `other`.)
 fn plural_form(lang: &str, n: f64) -> &'static str {
-    let one = if lang == "fr" { n < 2.0 } else { n == 1.0 };
+    let one = if lang_of(lang).is_some_and(|l| l.zero_is_one) { n >= 0.0 && n < 2.0 } else { n == 1.0 };
     if one {
         "one"
     } else {
@@ -176,15 +216,30 @@ macro_rules! t {
 
 // ------------------------------------------------------------ web UI
 
-/// Script run in the main window before any page script: the catalogs and
-/// the current language, so the UI renders translated from its first frame.
+/// Script run in the main window before any page script: the languages, the
+/// English catalog and the current one, so the UI renders translated from its
+/// first frame. The others are fetched from `i18n/<code>.json` when picked.
 pub fn init_script() -> String {
+    let lang = lang();
+    let langs: Vec<Value> = LANGS
+        .iter()
+        .map(|l| serde_json::json!({ "code": l.code, "name": l.name, "locale": l.locale }))
+        .collect();
+    let raw = |code: &str| lang_of(code).map(|l| l.raw.trim()).unwrap_or("{}");
+    let mut catalogs = format!("{}:{}", serde_json::to_string("en").unwrap(), raw("en"));
+    if lang != "en" {
+        catalogs += &format!(",{}:{}", serde_json::to_string(&lang).unwrap(), raw(&lang));
+    }
     format!(
-        "window.__I18N__={{lang:{},catalogs:{{en:{},fr:{}}}}};",
-        serde_json::to_string(&lang()).unwrap(),
-        EN.trim(),
-        FR.trim()
+        "window.__I18N__={{lang:{},langs:{},catalogs:{{{catalogs}}}}};",
+        serde_json::to_string(&lang).unwrap(),
+        serde_json::to_string(&langs).unwrap(),
     )
+}
+
+/// The current language named in English, for instructions given to an AI.
+pub fn english_name() -> &'static str {
+    lang_of(&lang()).map_or("English", |l| l.english)
 }
 
 #[cfg(test)]
@@ -197,8 +252,32 @@ mod tests {
         let fr = catalog("fr").unwrap();
         let missing: Vec<_> = en.keys().filter(|k| !fr.contains_key(*k)).collect();
         assert!(missing.is_empty(), "missing from fr.json: {missing:?}");
-        let extra: Vec<_> = fr.keys().filter(|k| !en.contains_key(*k)).collect();
-        assert!(extra.is_empty(), "unknown to en.json: {extra:?}");
+        // The other languages may miss keys (English shows), never add any.
+        for l in LANGS {
+            let cat = catalog(l.code).unwrap_or_else(|| panic!("no catalog for {}", l.code));
+            let extra: Vec<_> = cat.keys().filter(|k| !en.contains_key(*k)).collect();
+            assert!(extra.is_empty(), "unknown to en.json, in {}.json: {extra:?}", l.code);
+        }
+    }
+
+    #[test]
+    fn system_locales() {
+        assert_eq!(from_locale("de_AT.UTF-8"), "de");
+        assert_eq!(from_locale("es-MX"), "es");
+        assert_eq!(from_locale("pt-PT"), "pt-BR");
+        assert_eq!(from_locale("pt_BR"), "pt-BR");
+        assert_eq!(from_locale("IT"), "it");
+        assert_eq!(from_locale("fr-CA"), "fr");
+        assert_eq!(from_locale("ja-JP"), "en");
+        assert_eq!(from_locale(""), "en");
+    }
+
+    #[test]
+    fn init_script_carries_english_and_the_languages() {
+        let s = init_script();
+        assert!(s.starts_with("window.__I18N__={lang:\"en\",langs:["));
+        assert!(s.contains("\"code\":\"pt-BR\""));
+        assert!(s.contains("\"name\":\"Deutsch\""));
     }
 
     #[test]
@@ -208,6 +287,9 @@ mod tests {
         assert_eq!(plural_form("fr", 0.0), "one");
         assert_eq!(plural_form("fr", 1.0), "one");
         assert_eq!(plural_form("en", 2.0), "other");
+        assert_eq!(plural_form("pt-BR", 0.0), "one");
+        assert_eq!(plural_form("de", 0.0), "other");
+        assert_eq!(plural_form("it", 1.0), "one");
         assert_eq!(t("no.such.key"), "no.such.key");
     }
 }

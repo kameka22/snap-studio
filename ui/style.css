@@ -3145,9 +3145,10 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
 
 /* The record. */
 .pj-detail { container-type: inline-size; min-width: 0; min-height: 0; overflow-y: auto; padding: 18px 24px 28px; display: flex; flex-direction: column; gap: 14px; }
-.pj-hd { display: flex; align-items: center; gap: 14px; }
+/* Long labels (German) in a narrow record: the buttons drop below the title. */
+.pj-hd { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .pj-hd-thumb { flex: none; width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: 10px; background: var(--thumb-bg); }
-.pj-hd-t { flex: 1; min-width: 0; }
+.pj-hd-t { flex: 1 1 200px; min-width: 0; }
 .pj-hd h2 { margin: 0 0 3px; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pj-kick { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: var(--text-secondary); }
 .pj-kick > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -3498,9 +3499,11 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.2;
   cursor: default;
 }
-.sl-toggle span svg { width: 15px; height: 15px; fill: currentColor; }
+.sl-toggle span svg { flex: none; width: 15px; height: 15px; fill: currentColor; }
 .sl-toggle input:checked + span { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: var(--accent); color: var(--accent); }
 .sl-toggle input:focus-visible + span { box-shadow: 0 0 0 3px var(--focus-ring); }
 .sl-toggle input:disabled + span { opacity: 0.5; }
@@ -3732,7 +3735,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   overflow: hidden;
   animation: sheet-fade 120ms ease;
 }
-.picker .field { margin: 8px; }
+/* Its search field: the picker's width less its margins (WebKit adds the
+   margins to a 100 % width, and the field stuck out of the picker). */
+.picker .field { flex: none; margin: 8px; width: calc(100% - 16px); }
 .picker-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 6px; }
 .picker-section { padding: 8px 8px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); }
 .picker-item {

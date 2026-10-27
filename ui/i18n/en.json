@@ -2424,5 +2424,6 @@
   "prints.det.started": "Started",
   "prints.det.finished": "Finished",
   "prints.det.first_layer_short": "1st layer {t}",
-  "prints.det.layers_n": {"one": "{n} layer", "other": "{n} layers"}
+  "prints.det.layers_n": {"one": "{n} layer", "other": "{n} layers"},
+  "settings.lang_failed": "This language could not be loaded: the interface stays as it was."
 }

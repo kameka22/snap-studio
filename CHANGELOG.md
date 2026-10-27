@@ -11,6 +11,12 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Four more languages**: German, Spanish, Brazilian Portuguese and
+  Italian, for the whole interface, the menus and Orca's settings; a fresh
+  account starts in the system's language. Dates and numbers follow the
+  chosen language, and a text not yet translated shows in English (#72).
+
 ### Changed
 - **A new Prints page**: the prints on the left (search, filters, printer
   and material chips; in progress, queue, then day by day), the record on

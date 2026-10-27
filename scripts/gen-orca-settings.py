@@ -26,7 +26,10 @@ ORCA = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "OrcaSlicer"
 OUT = ROOT / "ui" / "assets"
 
 # Languages of the app; English is Orca's source language.
-LANGS = ["en", "fr"]
+LANGS = ["en", "fr", "de", "es", "pt-BR", "it"]
+
+# Folder of Orca's translation, when its name differs from the app's code.
+PO_DIRS = {"pt-BR": "pt_BR"}
 
 # Texts the .po file leaves untranslated (an empty msgstr), for the settings
 # the app shows: without these the French catalog would show English.
@@ -52,6 +55,10 @@ def literals(text):
 
 
 def load_po(path):
+    """msgid → msgstr. Entries marked `#, fuzzy` are kept on purpose: in
+    Orca's catalogs they are tooltips whose English moved a little since
+    they were translated, and their text still says the same thing (checked
+    for v2.4.0: de 12, es 11, fr 10). Dropping them would show English."""
     tr, msgid, msgstr, cur = {}, None, None, None
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -77,7 +84,7 @@ def translator(lang):
     """Text → its translation in `lang`; the text itself for English."""
     if lang == "en":
         return {}, lambda text: text
-    po = next((ORCA / "localization" / "i18n" / lang).glob("*.po"))
+    po = next((ORCA / "localization" / "i18n" / PO_DIRS.get(lang, lang)).glob("*.po"))
     table = {**load_po(po)}
     for text, fixed in FIXES.get(lang, {}).items():
         table.setdefault(text, fixed)

@@ -735,14 +735,6 @@ fn write_tools(ws: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The language Claude must answer in: the app's, named in English.
-fn reply_language() -> &'static str {
-    match crate::i18n::lang().as_str() {
-        "fr" => "French",
-        _ => "English",
-    }
-}
-
 /// What the original holds, for the instructions.
 struct Summary {
     tris: usize,
@@ -806,7 +798,8 @@ Snapmaker U1) that prints it. That is how a multicolor model stays one.
 
 /// The instructions left to Claude in the working folder.
 fn instructions(source_name: &str, source: &Summary) -> String {
-    let lang = reply_language();
+    // The language Claude must answer in: the app's, named in English.
+    let lang = crate::i18n::english_name();
     let parts = source.describe();
     format!(
         "# Modifying a part to print
@@ -866,7 +859,8 @@ No Blender.
 
 /// The instructions of a conversation that starts from nothing.
 fn instructions_creation(bounds: Option<[f32; 3]>) -> String {
-    let lang = reply_language();
+    // The language Claude must answer in: the app's, named in English.
+    let lang = crate::i18n::english_name();
     let fmt = |v: f32| format!("{v:.0}");
     let envelope = match bounds {
         Some([x, y, z]) => format!(

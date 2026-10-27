@@ -47,9 +47,17 @@ ideas to talk over, use the [Discussions](https://github.com/kameka22/snap-studi
 6. **Changelog**: a user-visible change adds a line under *Unreleased* in
    [CHANGELOG.md](CHANGELOG.md), with its pull request number.
 
-## Translate
+## Translating Snap Studio
 
-English is the reference, French a translation. Adding a language is
+English is the reference; French, German, Spanish, Brazilian Portuguese and
+Italian are translations. Each language is one file, `ui/i18n/<lang>.json`,
+with the same keys as `ui/i18n/en.json`; a missing key shows in English.
+Keep the `{placeholders}`, the HTML tags and the plural forms (`one`,
+`other`…), and use the slicer community's words (OrcaSlicer's own
+translations are a good guide). Before a pull request, run
+`python3 scripts/check-i18n.py`: it checks every catalog and shows how
+complete each one is. Review in [Weblate](https://weblate.org/) is planned;
+until then, a pull request on the catalog is the way. Adding a language is
 described in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#languages).
 
 ## Security
