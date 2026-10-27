@@ -26,10 +26,10 @@ ORCA = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "OrcaSlicer"
 OUT = ROOT / "ui" / "assets"
 
 # Languages of the app; English is Orca's source language.
-LANGS = ["en", "fr", "de", "es", "pt-BR", "it"]
+LANGS = ["en", "fr", "de", "es", "pt-BR", "it", "ja", "zh-Hans", "ko"]
 
 # Folder of Orca's translation, when its name differs from the app's code.
-PO_DIRS = {"pt-BR": "pt_BR"}
+PO_DIRS = {"pt-BR": "pt_BR", "zh-Hans": "zh_CN"}
 
 # Texts the .po file leaves untranslated (an empty msgstr), for the settings
 # the app shows: without these the French catalog would show English.
