@@ -512,6 +512,7 @@ with its pull request (drafts, approved or under discussion):
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **A new Prints page** — the prints on the left (search, filters, in progress, queue, then day by day), the record on the right: camera and progress while it prints, timelapse, result and real against estimated duration once done | [#65](https://github.com/kameka22/snap-studio/pull/65) |
+| **Full Spectrum color calibration** — print a swatch card of two spools (4:1 to 1:4), correct each color against the real print, and the virtual head preview uses your values from then on | [#70](https://github.com/kameka22/snap-studio/pull/70) |
 | **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
 
 Work in progress, what remains to check on a real printer and ideas for later
