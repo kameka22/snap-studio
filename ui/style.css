@@ -3223,7 +3223,23 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
 .pj-fil-tot { display: flex; justify-content: space-between; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--separator); font-size: 12.5px; }
 .pj-fil-tot span { color: var(--text-secondary); }
 .pj-fil-tot b { font-variant-numeric: tabular-nums; }
-.pj-chips-ro { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+/* The Times card: its small switch in the title. */
+.pj-times h3 { gap: 10px; }
+.pj-seg-sm { padding: 2px; }
+.pj-seg-sm .seg-btn { height: 20px; padding: 0 9px; font-size: 11.5px; }
+/* The Details card: one line, folded; three groups, open. */
+.pj-det { padding: 0; }
+.pj-det-hd { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 16px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; border-radius: var(--radius-card); }
+.pj-det-hd:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.pj-det-hd:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+.pj-det-hd b { font-weight: 600; }
+.pj-det-hd > span { flex: 1; min-width: 0; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.pj-chev { flex: none; width: 14px; height: 14px; fill: var(--text-secondary); transition: transform 150ms ease; }
+.pj-det.open .pj-chev { transform: rotate(90deg); }
+.pj-det-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 24px; padding: 4px 16px 14px; }
+.pj-det-body h4 { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); }
+.pj-det-body .pj-kv b { max-width: 60%; white-space: normal; }
+@container (max-width: 720px) { .pj-det-body { grid-template-columns: minmax(0, 1fr); } }
 
 /* Timeline. */
 .pj-chrono { position: relative; display: flex; flex-direction: column; gap: 9px; padding-left: 18px; font-size: 12.5px; }

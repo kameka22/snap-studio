@@ -153,6 +153,28 @@ and a Statistics page, and the split is the whole page.
   removing a job from the history deletes its G-code. A job could keep its
   record (stats, thumbnail) without the G-code.
 
+## Slice details in the record
+
+The new record lost data the old one showed: the machine profile, the
+plate, print profile and options on a running print, full dates (sliced,
+started, finished), the model file and layer count on a finished print,
+target temperatures, the fan, time per layer on a finished print and time
+per feature on a running one. Two ways to bring them back were mocked
+(`data-a-*.png`, `data-b-*.png` with tabs *Overview · Slice · Details* in
+the record); **A** was chosen and is built:
+
+- Each head shows current / target temperature (`219 / 220 °C`), the
+  progress block the bed's too, and the fan is back.
+- One **Times** card holds time per layer and time per type, with a small
+  *Per layer / Per type* switch (the choice kept), on running and finished
+  prints; one view alone when the slice has only that one.
+- A **Details** card at the bottom folds to one line (machine, profile,
+  plate, layers, first layer); open, three groups: *Slice* (estimated time,
+  first layer, layers, length, volume, prime tower), *Profile* (machine,
+  print profile, plate, options), *Files and dates* (model file, G-code,
+  full dates). The choice is kept.
+- The settings chips under Filament go, to avoid showing them twice.
+
 ## One camera for the app
 
 The record of a running print first had its own camera (an image loop in

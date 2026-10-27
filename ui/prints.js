@@ -29,6 +29,10 @@ const PJ = {
   /* The camera (camera.js) in a running print's record: on by default
      (the choice is kept); its switch, one element kept across redraws. */
   cam: { want: localStorage.getItem("snapstudio.pjcam") !== "0", el: null },
+  /* The Times card's view (per layer or per type) and whether the Details
+     card is open: choices kept. */
+  times: localStorage.getItem("snapstudio.pjtimes") === "type" ? "type" : "layer",
+  details: localStorage.getItem("snapstudio.pjdetails") === "1",
   /* Timelapses: videos listed per printer (a short cache), jobs already
      looked for this session, the one being looked for, the video element. */
   tl: { videos: {}, tried: new Set(), looking: null, el: null },
@@ -217,6 +221,7 @@ function pjResolve(key) {
 const PJ_PLACEHOLDER =
   '<svg class="pj-ph" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg>';
 const PJ_ICONS = {
+  chevron: '<svg class="pj-chev" viewBox="0 0 24 24"><path d="M9 6.4 10.4 5l7 7-7 7L9 17.6 14.6 12z"/></svg>',
   printer: '<svg viewBox="0 0 24 24"><path d="M6 3h12v5h1a3 3 0 0 1 3 3v6h-4v4H6v-4H2v-6a3 3 0 0 1 3-3h1zm2 2v3h8V5zm0 10v4h8v-4z"/></svg>',
   more: '<svg viewBox="0 0 24 24"><path d="M6 10.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3m6 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3m6 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3"/></svg>',
   redo: '<svg viewBox="0 0 24 24"><path d="M12 5V2l4 4-4 4V7a5 5 0 1 0 5 5h2a7 7 0 1 1-7-7"/></svg>',
@@ -441,26 +446,13 @@ function pjFilament(job, st) {
     const c = colors[t] || s.filament_colors?.[t] || "";
     const name = names[t] || names[0] || s.filament_types?.[t] || "";
     const n = st?.nozzles?.find((x) => x.index === t);
-    const temp = n ? `<span class="pj-fil-t${n.active ? " on" : ""}"><b>${Math.round(n.current)} °C</b>${esc(tr(n.active ? "prints.active" : "prints.standby"))}</span>` : "";
+    const temp = n ? `<span class="pj-fil-t${n.active ? " on" : ""}"><b>${Math.round(n.current)} / ${Math.round(n.target)} °C</b>${esc(tr(n.active ? "prints.active" : "prints.standby"))}</span>` : "";
     return `<div class="pj-fil${n?.active ? " on" : ""}" style="--c:${esc(c || "var(--text-tertiary)")}"><i></i><b>T${t}</b>
       <div class="pj-fil-n"><span>${esc(name)}</span><div class="pj-bar"><i style="width:${g != null ? ((g / max) * 100).toFixed(1) : 0}%"></i></div></div>
       <em>${g != null ? `${fmtDec(g, 1)} g` : ""}${m ? `<small>${fmtDec(m, 1)} m</small>` : ""}</em>${temp}</div>`;
   });
   const total = s.filament_g ? `${fmtDec(s.filament_g, 1)} g${s.cost ? ` · ${fmtDec(s.cost, 2)} €` : ""}` : s.cost ? `${fmtDec(s.cost, 2)} €` : "";
   return rows.join("") + (total ? `<div class="pj-fil-tot"><span>${esc(tr(s.cost ? "prints.total_cost" : "prints.total"))}</span><b>${total}</b></div>` : "");
-}
-
-/* Settings of the slice, as chips. */
-function pjSettings(job) {
-  const o = job.options || {};
-  const chips = [
-    job.profile?.process,
-    job.profile?.bed && (job.profile.bed_label || job.profile.bed),
-    o.bed_leveling && tr("prints.opt.leveling_cap"),
-    o.flow_calibration && tr("prints.opt.flow_cap"),
-    o.timelapse && tr("prints.opt.timelapse_cap"),
-  ].filter(Boolean);
-  return chips.length ? `<div class="pj-chips-ro">${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : "";
 }
 
 /* Time per layer, from the slice: one bar per layer (or a few layers), the
@@ -478,11 +470,7 @@ function pjLayers(job, layer) {
       return `<i class="${cls}" style="height:${Math.max(4, (b.s / max) * 100).toFixed(1)}%" title="${esc(`${which} · ${fmtSpan(b.s)}`)}"></i>`;
     })
     .join("");
-  return pjPanel(
-    tr("prints.layer_time"),
-    `<div class="pj-layers">${html}</div><div class="pj-layers-ax"><span>1</span>${cur ? `<span>${esc(tr("prints.layer_of", { a: cur, b: ends.length }))}</span>` : ""}<span>${ends.length}</span></div>`,
-    esc(tr(cur ? "prints.layer_time.sub_running" : "prints.layer_time.sub"))
-  );
+  return `<div class="pj-layers">${html}</div><div class="pj-layers-ax"><span>1</span>${cur ? `<span>${esc(tr("prints.layer_of", { a: cur, b: ends.length }))}</span>` : ""}<span>${ends.length}</span></div>`;
 }
 
 /* Time per feature, from the slice. */
@@ -493,12 +481,51 @@ function pjFeatures(job) {
   if (s.travel_s > 0) items.push({ name: tr("viewer.travel"), c: [96, 104, 126], s: s.travel_s });
   const total = items.reduce((a, f) => a + f.s, 0) || 1;
   const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
-  return pjPanel(
-    tr("prints.features"),
-    `<div class="pj-stack">${items.map((f) => `<i style="width:${((f.s / total) * 100).toFixed(2)}%;background:${rgb(f.c)}" title="${esc(f.name)}"></i>`).join("")}</div>
-     <div class="pj-legend">${items.map((f) => `<div><i style="background:${rgb(f.c)}"></i><span>${esc(f.name)}</span><em>${Math.round((f.s / total) * 100)} %</em></div>`).join("")}</div>`,
-    esc(tr("prints.from_slice"))
-  );
+  return `<div class="pj-stack">${items.map((f) => `<i style="width:${((f.s / total) * 100).toFixed(2)}%;background:${rgb(f.c)}" title="${esc(f.name)}"></i>`).join("")}</div>
+     <div class="pj-legend">${items.map((f) => `<div><i style="background:${rgb(f.c)}"></i><span>${esc(f.name)}</span><em>${Math.round((f.s / total) * 100)} %</em></div>`).join("")}</div>`;
+}
+
+/* The Times card: per layer or per type (a small switch, the choice
+   kept), on running and finished prints alike; one view alone when the
+   slice has only that one. */
+function pjTimes(job, layer) {
+  const layers = pjLayers(job, layer), types = pjFeatures(job);
+  if (!layers && !types) return "";
+  const mode = PJ.times === "type" && types ? "type" : layers ? "layer" : "type";
+  const seg = [["layer", layers, tr("prints.times.layer")], ["type", types, tr("prints.times.type")]]
+    .map(([v, has, label]) => `<button type="button" class="seg-btn${mode === v ? " on" : ""}" role="radio" aria-checked="${mode === v}" data-time="${v}"${has ? "" : " disabled"}><span>${esc(label)}</span></button>`)
+    .join("");
+  const sub = mode === "layer" ? tr(layer?.[0] ? "prints.layer_time.sub_running" : "prints.layer_time.sub") : tr("prints.from_slice");
+  return `<section class="pj-card pj-panel pj-times"><h3>${esc(tr("prints.times"))}<div class="seg pj-seg-sm" role="radiogroup" aria-label="${esc(tr("prints.times"))}">${seg}</div><small>${esc(sub)}</small></h3>${mode === "layer" ? layers : types}</section>`;
+}
+
+/* The Details card, folded to one line (machine, profile, plate, layers,
+   first layer), open as three groups: the slice, the profile, the files
+   and dates. The choice is kept. */
+function pjDetails(job) {
+  if (!job) return "";
+  const s = job.stats || {}, pr = job.profile || {}, o = job.options || {};
+  const plate = pr.bed ? pr.bed_label || pr.bed : "";
+  const sum = (a) => (a?.length ? a.reduce((x, y) => x + (y || 0), 0) : 0);
+  const length = sum(s.per_tool_m), volume = sum(s.per_tool_cm3);
+  const tower = s.tower ? `${fmtDec(s.tower.w, 0)} × ${fmtDec(s.tower.d, 0)} × ${fmtDec(s.tower.h, 1)} mm` : "";
+  const opts = [o.bed_leveling && tr("prints.opt.leveling_cap"), o.flow_calibration && tr("prints.opt.flow_cap"), o.timelapse && tr("prints.opt.timelapse_cap")].filter(Boolean);
+  const when = (t) => (t ? esc(fmtDate(t)) : "");
+  const line = [pr.machine, pr.process, plate, s.layers && tr("prints.det.layers_n", { n: s.layers }), s.first_layer_s && tr("prints.det.first_layer_short", { t: fmtSpan(s.first_layer_s) })]
+    .filter(Boolean)
+    .map(esc)
+    .join(" · ");
+  const group = (title, rows) => `<div><h4>${esc(title)}</h4><div class="pj-kv">${rows}</div></div>`;
+  const body = PJ.details
+    ? `<div class="pj-det-body">
+      ${group(tr("prints.det.slice"), pjKv(tr("prints.det.est_time"), s.print_time_s ? esc(fmtDuration(s.print_time_s)) : "") + pjKv(tr("prints.det.first_layer"), s.first_layer_s ? esc(fmtSpan(s.first_layer_s)) : "") + pjKv(tr("prints.layers"), s.layers ? String(s.layers) : "") + pjKv(tr("prints.det.length"), length ? `${fmtDec(length, 1)} m` : "") + pjKv(tr("prints.det.volume"), volume ? `${fmtDec(volume, 1)} cm³` : "") + pjKv(tr("prints.det.tower"), esc(tower)))}
+      ${group(tr("prints.det.profile"), pjKv(tr("prints.det.machine"), esc(pr.machine || "")) + pjKv(tr("prints.det.process"), esc(pr.process || "")) + pjKv(tr("slice.plate"), esc(plate)) + pjKv(tr("prints.det.options"), esc(opts.length ? opts.join(", ") : tr("prints.det.options_none"))))}
+      ${group(tr("prints.det.files"), pjKv(tr("prints.det.model"), esc(job.source ? pjlBase(job.source) : "")) + pjKv(tr("prints.det.gcode"), esc(job.remote || pjlBase(job.file))) + pjKv(tr(job.state === "queued" ? "prints.det.added" : "prints.det.sliced"), when(job.created)) + pjKv(tr("prints.det.started"), when(job.started)) + pjKv(tr("prints.det.finished"), when(job.finished)))}
+    </div>`
+    : "";
+  return `<section class="pj-card pj-det${PJ.details ? " open" : ""}">
+    <button type="button" class="pj-det-hd" data-act="details" aria-expanded="${PJ.details}">${PJ_ICONS.chevron}<b>${esc(tr("prints.details"))}</b><span>${line}</span></button>${body}
+  </section>`;
 }
 
 /* What happened, then for a running print where it is and when it should
@@ -536,7 +563,8 @@ const pjKv = (k, v) => (v == null || v === "" ? "" : `<div><span>${esc(k)}</span
 function pjProgress(st) {
   const pct = Math.round((st.progress || 0) * 100);
   const head = st.nozzles?.find((n) => n.active);
-  const temps = [head && Math.round(head.current), st.bed && Math.round(st.bed.current)].filter((x) => x != null);
+  const pair = (t) => `${Math.round(t.current)} / ${Math.round(t.target)}`;
+  const temps = [head && pair(head), st.bed && pair(st.bed)].filter(Boolean);
   return `<div class="pj-card pj-big${st.state === "paused" ? " paused" : ""}">
     <div class="pj-pct">${pct} %${st.layer ? `<small>${esc(tr("prints.layer_of", { a: st.layer[0], b: st.layer[1] }))}</small>` : ""}</div>
     <div class="progress"><i style="width:${pct}%"></i></div>
@@ -547,6 +575,7 @@ function pjProgress(st) {
       ${pjKv(head ? tr("prints.kv.temps_head", { t: head.index }) : tr("slice.plate"), temps.length ? `${temps.join(" · ")} °C` : "")}
       ${pjKv(tr("printers.chamber"), st.chamber ? `${Math.round(st.chamber.current)} °C` : "")}
       ${pjKv(tr("printers.speed"), st.speed_factor != null ? `${Math.round(st.speed_factor * 100)} %` : "")}
+      ${pjKv(tr("printers.fan"), st.fan != null ? `${Math.round(st.fan * 100)} %` : "")}
     </div></div>`;
 }
 
@@ -562,7 +591,7 @@ function pjRunningHtml({ job, live }) {
       : `<button type="button" class="btn" data-act="pause">${esc(tr("prints.pause"))}</button>`) +
     `<button type="button" class="btn danger" data-act="cancel">${esc(tr("prints.cancel"))}</button>`;
   const body = job
-    ? `${pjLayers(job, st.layer)}<div class="pj-two">${pjPanel(tr("prints.heads"), pjFilament(job, st))}${pjTimeline(job, st)}</div>`
+    ? `${pjTimes(job, st.layer)}<div class="pj-two">${pjPanel(tr("prints.heads"), pjFilament(job, st))}${pjTimeline(job, st)}</div>${pjDetails(job)}`
     : `<p class="pj-note-muted">${esc(tr("prints.foreign"))}</p>`;
   return `${pjHead(job, name, st.state, kicker, buttons)}
     <div class="pj-top"><div class="pj-media pj-cam" id="pj-media"><span class="pj-cam-off">${PJ_ICONS.cam}</span></div>${pjProgress(st)}</div>${body}`;
@@ -590,7 +619,7 @@ function pjQueuedHtml({ job, live }) {
     </div>`;
   return `${pjHead(job, job.name, "queued", kicker, buttons)}
     <div class="pj-top"><div class="pj-media pj-shot">${pjThumbHtml(job, 640)}</div>${where}</div>
-    <div class="pj-two">${pjPanel(tr("prints.filament"), pjFilament(job) + pjSettings(job))}${pjTimeline(job)}</div>${pjFeatures(job)}`;
+    <div class="pj-two">${pjPanel(tr("prints.filament"), pjFilament(job))}${pjTimeline(job)}</div>${pjTimes(job)}${pjDetails(job)}`;
 }
 
 function pjStartingHtml({ job, live }) {
@@ -599,7 +628,7 @@ function pjStartingHtml({ job, live }) {
   const buttons = off ? `<button type="button" class="btn danger" data-act="remove">${esc(tr("prints.remove_list"))}</button>` : "";
   return `${pjHead(job, job.name, "printing", kicker, buttons)}
     <div class="pj-top"><div class="pj-media pj-shot">${pjThumbHtml(job, 640)}</div><div class="pj-card pj-big"><p class="pj-note-muted">${esc(tr(off ? "prints.starting.offline" : "prints.starting.text"))}</p></div></div>
-    <div class="pj-two">${pjPanel(tr("prints.filament"), pjFilament(job) + pjSettings(job))}${pjTimeline(job)}</div>`;
+    <div class="pj-two">${pjPanel(tr("prints.filament"), pjFilament(job))}${pjTimeline(job)}</div>${pjDetails(job)}`;
 }
 
 /* Result card of a finished print: what the user says of it (set here
@@ -649,8 +678,8 @@ function pjFinishedHtml({ job }) {
   const media = job.timelapse ? `<div class="pj-media" id="pj-media"></div>` : `<div class="pj-media pj-shot">${pjThumbHtml(job, 640)}<span class="pj-shot-note">${esc(pjTlNote(job))}</span></div>`;
   return `${pjHead(job, job.name, job.state, kicker, buttons)}
     <div class="pj-top">${media}${pjResultHtml(job)}</div>
-    <div class="pj-two">${pjPanel(tr("prints.filament"), pjFilament(job) + pjSettings(job), job.stats?.tools?.length ? esc(tr("prints.n_heads", { n: job.stats.tools.length })) : "")}${pjTimeline(job)}</div>
-    ${pjFeatures(job)}`;
+    <div class="pj-two">${pjPanel(tr("prints.filament"), pjFilament(job), job.stats?.tools?.length ? esc(tr("prints.n_heads", { n: job.stats.tools.length })) : "")}${pjTimeline(job)}</div>
+    ${pjTimes(job)}${pjDetails(job)}`;
 }
 
 /* Why a finished print shows its picture rather than a video. */
@@ -710,7 +739,18 @@ function pjRefreshDetail() {
 }
 
 $("pj-detail").addEventListener("click", async (e) => {
+  const tm = e.target.closest("[data-time]");
+  if (tm && !tm.disabled && PJ.times !== tm.dataset.time) {
+    PJ.times = tm.dataset.time;
+    localStorage.setItem("snapstudio.pjtimes", PJ.times);
+    return pjRender();
+  }
   const b = e.target.closest("[data-act]");
+  if (b?.dataset.act === "details") {
+    PJ.details = !PJ.details;
+    localStorage.setItem("snapstudio.pjdetails", PJ.details ? "1" : "0");
+    return pjRender();
+  }
   if (b && !b.disabled) pjAct(b.dataset.act, b);
   const chip = e.target.closest(".pj-printers [data-printer]");
   if (chip && !chip.classList.contains("on")) pjSetPrinter(chip.dataset.printer);

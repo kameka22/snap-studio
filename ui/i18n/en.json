@@ -500,13 +500,11 @@
   "prints.more": "More",
   "prints.standby": "standby",
   "prints.total_cost": "Total · estimated cost",
-  "prints.layer_time": "Time per layer",
   "prints.layer_time.sub": "from the slice",
   "prints.layer_time.sub_running": "current layer highlighted · from the slice",
   "prints.layer_n": "Layer {n}",
   "prints.layers_n": "Layers {a}–{b}",
   "prints.layer_cap": "Layer {a} / {b}",
-  "prints.features": "Time per type",
   "prints.from_slice": "from the slice",
   "prints.timeline": "Timeline",
   "prints.tl.sliced": "Sliced",
@@ -533,7 +531,10 @@
   "prints.started_clock": "started at {time}",
   "prints.heads": "Heads and filament",
   "prints.filament": "Filament",
-  "prints.n_heads": {"one": "{n} head", "other": "{n} heads"},
+  "prints.n_heads": {
+    "one": "{n} head",
+    "other": "{n} heads"
+  },
   "prints.starting.text": "Sent to the printer: the record follows the print once the printer reports it.",
   "prints.starting.offline": "The printer does not answer: the print will be followed once it is back.",
   "prints.result": "Result",
@@ -2021,8 +2022,14 @@
   "bm.hero.watch_sub": "Compensated by the mesh, but close to the {limit} mm alert",
   "bm.hero.out": "Out of tolerance: {dev} mm",
   "bm.hero.out_sub": "Beyond {limit} mm, the mesh compensates poorly: first layers may not stick, or get squashed.",
-  "bm.hero.stale_days": {"one": "Last measured {n} day ago", "other": "Last measured {n} days ago"},
-  "bm.hero.stale_prints": {"one": "{n} print since the last measurement", "other": "{n} prints since the last measurement"},
+  "bm.hero.stale_days": {
+    "one": "Last measured {n} day ago",
+    "other": "Last measured {n} days ago"
+  },
+  "bm.hero.stale_prints": {
+    "one": "{n} print since the last measurement",
+    "other": "{n} prints since the last measurement"
+  },
   "bm.hero.stale_sub": "The bed was {st} then ({dev} mm). Worth checking it again.",
   "bm.hero.cause": "Find the Cause",
   "bm.hero.again": "Measure Again",
@@ -2097,7 +2104,10 @@
   "bm.done.same": "As on {d} ({from} mm)",
   "bm.done.fixed": "Fixed: {from} → {to} mm since {d}",
   "bm.done.good_sub": "Nothing to do: the printer's mesh compensates for this.",
-  "bm.done.found": {"one": "Snap Studio found {n} likely cause:", "other": "Snap Studio found {n} likely causes:"},
+  "bm.done.found": {
+    "one": "Snap Studio found {n} likely cause:",
+    "other": "Snap Studio found {n} likely causes:"
+  },
   "bm.done.look": "No clear shape: the page shows what to check.",
   "bm.done.ok": "Done",
   "bm.done.cause": "See What to Do",
@@ -2117,8 +2127,14 @@
   "bm.set.prints_off": "Never",
   "bm.measure_first": "Measure First",
   "bm.due_tab": "Bed leveling asks for attention",
-  "bm.task_stale_days": {"one": "Last measured {n} day ago: measure again", "other": "Last measured {n} days ago: measure again"},
-  "bm.task_stale_prints": {"one": "{n} print since the last measurement: measure again", "other": "{n} prints since the last measurement: measure again"},
+  "bm.task_stale_days": {
+    "one": "Last measured {n} day ago: measure again",
+    "other": "Last measured {n} days ago: measure again"
+  },
+  "bm.task_stale_prints": {
+    "one": "{n} print since the last measurement: measure again",
+    "other": "{n} prints since the last measurement: measure again"
+  },
   "bm.settings": "Bed Leveling Settings",
   "bm.set.for": "For {name}",
   "bm.set.good": "Good up to",
@@ -2187,7 +2203,10 @@
   "err.ctl_home_xy_first": "Home X and Y first: the U1 homes Z only then",
   "whatsnew.title": "What's New",
   "whatsnew.card": "What's New in {v}",
-  "whatsnew.more": {"one": "{first} and {n} more", "other": "{first} and {n} more"},
+  "whatsnew.more": {
+    "one": "{first} and {n} more",
+    "other": "{first} and {n} more"
+  },
   "whatsnew.browser": "Open in the Browser",
   "whatsnew.error": "The page could not be loaded",
   "whatsnew.error_sub": "Check the internet connection, then try again. The changelog lists every change too.",
@@ -2328,7 +2347,10 @@
   "slice.level": "Settings shown",
   "slice.level.basic": "Basic",
   "slice.level.advanced": "Advanced",
-  "slice.level.hint": {"one": "1 advanced setting changed", "other": "{n} advanced settings changed"},
+  "slice.level.hint": {
+    "one": "1 advanced setting changed",
+    "other": "{n} advanced settings changed"
+  },
   "slice.level.show": "Show",
   "settings.slice_level": "Slice settings shown",
   "settings.slice_level.sub": "Basic shows the essentials; Advanced adds quality, infill, walls, surfaces and more. Also in the slice window's title bar.",
@@ -2344,7 +2366,10 @@
   "heads.virtual.head_b": "Second head",
   "heads.virtual.mix": "Mix",
   "heads.virtual.cadence_even": "1 layer of each",
-  "heads.virtual.cadence": {"one": "{n} layer of {a} for 1 of {b}", "other": "{n} layers of {a} for 1 of {b}"},
+  "heads.virtual.cadence": {
+    "one": "{n} layer of {a} for 1 of {b}",
+    "other": "{n} layers of {a} for 1 of {b}"
+  },
   "heads.virtual.preview_note": "Indicative preview: the mix is made layer by layer and depends on the filaments, the layer height and the light.",
   "heads.virtual.surfaces_note": "Top and bottom flat surfaces show a single layer, so one of the two colors.",
   "heads.virtual.same": "Same as {name}",
@@ -2356,11 +2381,23 @@
   "heads.virtual.explain.body": "{name} mixes {a} and {b}. If you unload one of the two spools, {name} is deleted automatically: what used it is left without a head, and slicing waits until you choose one.",
   "heads.virtual.explain.noshow": "Don't show this again",
   "heads.virtual.explain.ok": "Got it",
-  "heads.virtual.removed": {"one": "{h} was unloaded: {names} was deleted.", "other": "{h} was unloaded: {names} were deleted."},
-  "heads.virtual.orphans": {"one": "1 color has no head now: choose one to slice.", "other": "{n} colors have no head now: choose one to slice."},
+  "heads.virtual.removed": {
+    "one": "{h} was unloaded: {names} was deleted.",
+    "other": "{h} was unloaded: {names} were deleted."
+  },
+  "heads.virtual.orphans": {
+    "one": "1 color has no head now: choose one to slice.",
+    "other": "{n} colors have no head now: choose one to slice."
+  },
   "heads.virtual.see_prepare": "See in Prepare",
-  "heads.virtual.delete_confirm": {"one": "1 color uses {name}. It will have no head until you choose one.", "other": "{n} colors use {name}. They will have no head until you choose one."},
-  "prepare.tip.orphan": {"one": "1 color no longer has a head: choose one in the list", "other": "{n} colors no longer have a head: choose one in the list"},
+  "heads.virtual.delete_confirm": {
+    "one": "1 color uses {name}. It will have no head until you choose one.",
+    "other": "{n} colors use {name}. They will have no head until you choose one."
+  },
+  "prepare.tip.orphan": {
+    "one": "1 color no longer has a head: choose one in the list",
+    "other": "{n} colors no longer have a head: choose one in the list"
+  },
   "prepare.choose_head": "Choose",
   "prepare.no_head": "no head",
   "prepare.tower.virtual_hint": "A virtual head changes heads at every layer: the prime tower is recommended.",
@@ -2402,5 +2439,35 @@
   "settings.history.short.90": "90 days",
   "settings.history.short.365": "1 year",
   "settings.history.confirm.title": "Delete older prints?",
-  "settings.history.confirm.text": {"one": "{n} finished print and its G-code will be deleted now.", "other": "{n} finished prints and their G-code will be deleted now."}
+  "settings.history.confirm.text": {
+    "one": "{n} finished print and its G-code will be deleted now.",
+    "other": "{n} finished prints and their G-code will be deleted now."
+  },
+  "prints.times": "Times",
+  "prints.times.layer": "Per layer",
+  "prints.times.type": "Per type",
+  "prints.details": "Details",
+  "prints.det.slice": "Slice",
+  "prints.det.profile": "Profile",
+  "prints.det.files": "Files and dates",
+  "prints.det.est_time": "Estimated time",
+  "prints.det.first_layer": "First layer",
+  "prints.det.length": "Length",
+  "prints.det.volume": "Volume",
+  "prints.det.tower": "Prime tower",
+  "prints.det.machine": "Machine",
+  "prints.det.process": "Print profile",
+  "prints.det.options": "Options",
+  "prints.det.options_none": "None",
+  "prints.det.model": "Model",
+  "prints.det.gcode": "G-code",
+  "prints.det.sliced": "Sliced",
+  "prints.det.added": "Added",
+  "prints.det.started": "Started",
+  "prints.det.finished": "Finished",
+  "prints.det.first_layer_short": "1st layer {t}",
+  "prints.det.layers_n": {
+    "one": "{n} layer",
+    "other": "{n} layers"
+  }
 }

@@ -16,9 +16,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   and material chips; in progress, queue, then day by day), the record on
   the right: camera, progress and time per layer while it prints; timelapse,
   result (success or failure, a reason, a note) and real against estimated
-  duration once done, with Reprint and Open in Prepare. The history and its
-  G-code are kept forever, unless Settings → Prints deletes them after 30
-  days, 90 days or a year.
+  duration once done, with Reprint and Open in Prepare; a Times card (per
+  layer or per type) and a Details card (slice, profile, files and dates),
+  folded to one line, on every record. The history and its G-code are kept
+  forever, unless Settings → Prints deletes them after 30 days, 90 days or
+  a year.
 - **One camera for the app**: the printer page, the record of a running
   print and Control's card show the same camera, with the same controls
   everywhere (pin, enlarge where there is room, full size, Esc). Going from
