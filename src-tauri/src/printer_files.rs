@@ -583,9 +583,15 @@ pub async fn overview(host: &str, port: u16, printing: Option<String>) -> Result
         .collect();
 
     let video_roots = timelapse_roots(roots.as_deref());
+    let videos = list_videos(&b, &video_roots).await;
+    Ok(Overview { files, videos, video_roots, disk, printing })
+}
+
+/// Timelapse videos of every candidate root.
+async fn list_videos(b: &str, video_roots: &[Root]) -> Vec<RemoteFile> {
     let mut videos = Vec::new();
-    for r in &video_roots {
-        let Ok(list) = list_root(&b, &r.name).await else { continue };
+    for r in video_roots {
+        let Ok(list) = list_root(b, &r.name).await else { continue };
         let all: Vec<&str> = list.iter().map(|(p, _, _)| p.as_str()).collect();
         for (path, size, modified) in list.iter().filter(|(p, _, _)| is_video(p)) {
             videos.push(RemoteFile {
@@ -600,7 +606,15 @@ pub async fn overview(host: &str, port: u16, printing: Option<String>) -> Result
             });
         }
     }
-    Ok(Overview { files, videos, video_roots, disk, printing })
+    videos
+}
+
+/// The timelapse videos alone, without the print files: the Prints record
+/// looks for the one of a finished print.
+pub async fn videos(host: &str, port: u16) -> Result<Vec<RemoteFile>> {
+    let b = base(host, port);
+    let roots = get(&format!("{b}/server/files/roots"), 4).await.ok().map(|v| parse_roots(&v));
+    Ok(list_videos(&b, &timelapse_roots(roots.as_deref())).await)
 }
 
 type DurKey = (String, String, String, u64);

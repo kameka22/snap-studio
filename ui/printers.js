@@ -30,21 +30,25 @@ function switchView(v) {
   // Explore's tab strip stands in for the toolbar.
   document.body.classList.toggle("no-toolbar", v === "library");
   if (typeof p3dVisible === "function") p3dVisible(v === "printers");
-  if (v === "printers") startLive();
-  else {
+  // The screens left first, the one entered after: the camera leaves with
+  // a screen (a pinned one goes on, in its window; full size belongs to
+  // the screen it was asked on) and the next one, drawn right away, keeps
+  // a stream of the same printer.
+  if (v !== "printers") {
     stopLive();
-    // A pinned camera goes on, in its window, on every screen.
-    if (!CAM.pinned) camStop();
+    camLeave();
   }
-  // Full size belongs to the screen it was asked on.
-  CAM.full = false;
-  camPlace();
-  // Leaving Care & Tuning stops Control's reads and camera.
+  // Leaving Care & Tuning stops Control's reads and its camera.
   if (v !== "maint" && typeof ctLeave === "function") ctLeave();
   // Leaving a printer's files stops its video.
   if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
+  // Leaving Prints stops its camera and its timelapse.
+  if (v !== "prints" && typeof pjLeave === "function") pjLeave();
+  if (v === "printers") {
+    startLive();
+    prnCamHome();
+  }
   if (v === "prints") pjRender();
-  else if (typeof pjCamStop === "function") pjCamStop();
   // Explore's native views must only live in its tab.
   libSetVisible(v === "library");
   if (v === "settings") {
@@ -192,17 +196,19 @@ function current() {
 
 function prnRenderDetail() {
   const p = current();
-  // The camera follows the printer shown: switching printer turns it off.
-  if (CAM.id && CAM.id !== p?.id && !CAM.pinned) camStop();
   $("prn-empty").classList.toggle("hidden", !!p);
   $("prn-detail").classList.toggle("hidden", !p);
   $("prn-tools").classList.toggle("hidden", !p);
   if (!p) {
     tbSet("printers", tr("nav.printers"));
+    prnCamHome();
     return;
   }
   tbSet("printers", p.name || p.host, `${p.host}:${p.port}${p.model ? " · " + p.model : ""}`);
   if (typeof p3dShow === "function") p3dShow(p);
+  // The camera follows the printer shown (camera.js: switching printer
+  // turns it off, unless pinned).
+  prnCamHome();
   renderStatus(P.status.get(p.id));
 }
 
@@ -227,8 +233,7 @@ function setOffline(mode, st) {
   setOfflineSeen(connecting ? null : P.seen.get(P.sel));
   // No camera without a connection: stop it and disable its switch (a
   // pinned one stays, saying the printer does not answer).
-  if (CAM.on && CAM.id === P.sel && !CAM.pinned) camStop();
-  else if (CAM.on && CAM.id === P.sel) camOffline(true);
+  if (CAM.on && CAM.id === P.sel) CAM.pinned ? camOffline(true) : camStop();
   $("cam-toggle").disabled = true;
   const err = (!connecting && st?.message) || "";
   $("prn-offline-err").textContent = err;
@@ -552,7 +557,7 @@ listen("printer-status", (e) => {
   prnRenderList();
   if (id === P.sel) renderStatus(status);
   // The camera's printer gone: said over the camera, wherever it shows.
-  if (id === CAM.id && CAM.on && !status.online) camOffline(true);
+  camPrinterStatus(id, status.online);
 });
 
 /* Time of the last data: time only today, date and time otherwise
@@ -825,200 +830,22 @@ async function askRemove(target) {
 
 /* ------------------------------------------------------------ camera */
 
-/* As in Snapmaker Orca: the camera is woken by `camera.start_monitor` and
-   publishes a continuously renewed JPEG, read again in a loop; it switches
-   itself off unless restarted, hence the restart every 10 s. One read in
-   flight at a time: the next one starts on load. */
-/* The printer's camera: one stream at a time (CAM), its image in #cam-box,
-   which camPlace puts where it shows — the printer page (the 3D view's
-   corner or the Camera section), the pinned window over every screen, or
-   full size over the content area. Pinning is a preference, kept. */
-const CAM = { id: null, on: false, n: 0, timer: 0, keep: 0, fails: 0, offline: false, full: false,
-  pinned: localStorage.getItem("snapstudio.cam.pinned") === "1" };
-
-async function camStart() {
+/* The camera (camera.js) on this page: the 3D view's corner, else the
+   Camera section, for the printer shown. */
+function prnCamHome() {
+  if (window.currentView !== "printers") return;
   const p = current();
-  if (!p) return void ($("cam-toggle").checked = false);
-  camStop();
-  // Two quick toggles: only the last start goes on (one keep-alive).
-  const gen = (CAM.gen = (CAM.gen || 0) + 1);
-  Object.assign(CAM, { id: p.id, on: true, fails: 0 });
-  $("cam-toggle").checked = true;
-  $("cam-note").textContent = tr("printers.cam.starting");
-  $("cam-box").classList.remove("hidden");
-  camPlace();
-  try {
-    await invoke("camera_start", { printerId: p.id });
-  } catch (e) {
-    if (gen !== CAM.gen) return;
-    camStop();
-    $("cam-note").textContent = String(e);
-    return;
-  }
-  if (gen !== CAM.gen || !CAM.on) return;
-  CAM.keep = setInterval(() => invoke("camera_start", { printerId: p.id }).catch(() => {}), 10000);
-  camNext();
-}
-
-function camNext() {
-  if (!CAM.on) return;
-  // The native view over a site shows the camera meanwhile: one stream.
-  if (CAM.overlay) {
-    CAM.timer = setTimeout(camNext, 500);
-    return;
-  }
-  $("cam-img").src = schemeUrl("cam", `/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`);
-}
-
-function camStop() {
-  clearTimeout(CAM.timer);
-  clearInterval(CAM.keep);
-  if (CAM.on && CAM.id) invoke("camera_stop", { printerId: CAM.id }).catch(() => {});
-  Object.assign(CAM, { id: null, on: false, timer: 0, keep: 0 });
-  $("cam-toggle").checked = false;
-  $("cam-note").textContent = "";
-  $("cam-box").classList.add("hidden");
-  $("cam-img").removeAttribute("src");
-  CAM.full = false;
-  camOffline(false);
-  camPlace();
-}
-
-/* Where the camera shows: full size, the pinned window (unless on its own
-   printer's page, where it already is), or the printer page. */
-function camPlace() {
-  const box = $("cam-box"), pip = $("cam-pip"), full = $("cam-full");
-  const ownPage = window.currentView === "printers" && P.sel === CAM.id;
+  if (!p) return camHome(null);
   const home = $("prn-detail").classList.contains("p3d-on") ? $("p3d") : document.querySelector("#prn-detail .group.cam");
-  const host = CAM.on && CAM.full ? full : CAM.on && CAM.pinned && !ownPage ? $("cam-pip-body") : home;
-  if (box.parentElement !== host) host.appendChild(box);
-  full.classList.toggle("hidden", host !== full);
-  pip.classList.toggle("hidden", host !== $("cam-pip-body"));
-  box.classList.toggle("full", host === full);
-  const p = P.list.find((x) => x.id === CAM.id);
-  $("cam-pip-name").textContent = p ? p.name || p.host : "";
-  $("cam-pin").classList.toggle("on", CAM.pinned);
-  const label = (el, key) => {
-    el.title = tr(key);
-    el.setAttribute("aria-label", tr(key));
-  };
-  label($("cam-pin"), CAM.pinned ? "printers.cam.unpin" : "printers.cam.pin");
-  label($("cam-full-btn"), CAM.full ? "printers.cam.full_exit" : "printers.cam.full");
-  if (typeof p3dQuick === "function" && typeof P3 !== "undefined" && P3.pid) p3dQuick();
-  camOverlay();
+  camHome(home, p.id, { enlarge: true });
 }
-
-/* A site of Explore is a native view over the interface, which covers the
-   pinned window: Rust lays a small view of ours over it at the same place
-   (library.rs, camview.html), shown while a site is. Told where the pinned
-   window is, or that there is none. */
-function camOverlay() {
-  const pip = $("cam-pip");
-  const on = CAM.on && !pip.classList.contains("hidden");
-  const p = P.list.find((x) => x.id === CAM.id);
-  const setup = on
-    ? JSON.stringify({
-        id: CAM.id,
-        name: p ? p.name || p.host : "",
-        texts: { unpin: tr("printers.cam.unpin"), close: tr("printers.cam.close"), offline: tr("printers.cam.offline"), open: tr("printers.cam.open") },
-      })
-    : "";
-  const r = on ? pip.getBoundingClientRect() : null;
-  const key = on ? `${setup}|${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` : "";
-  if (key === CAM.overlayKey) return;
-  CAM.overlayKey = key;
-  invoke("cam_view_set", { rect: on ? { x: r.left, y: r.top, w: r.width, h: r.height } : null, setup }).catch(() => {});
-}
-window.addEventListener("resize", () => CAM.on && camOverlay());
-// Shown over a site or not: the interface's frames pause meanwhile.
-listen("cam-view", (e) => {
-  const shown = !!e.payload?.shown;
-  if (shown === !!CAM.overlay) return;
-  CAM.overlay = shown;
-  if (!shown && CAM.on) {
-    clearTimeout(CAM.timer);
-    camNext();
-  }
+// The Camera section's switch, and the 3D view's button, say its state.
+document.addEventListener("cam-change", () => {
+  $("cam-toggle").checked = CAM.on && CAM.id === P.sel;
+  if (window.currentView === "printers" && typeof p3dQuick === "function" && typeof P3 !== "undefined" && P3.pid) p3dQuick();
 });
-// Its buttons: the camera is the interface's.
-listen("cam-view-action", (e) => {
-  if (e.payload === "open") camOpenPrinter();
-  else if (e.payload === "unpin") camPin(false);
-  else if (e.payload === "close") camStop();
-});
-
-/* The printer does not answer: said plainly over the camera, never its
-   last image frozen. */
-function camOffline(on) {
-  CAM.offline = on;
-  $("cam-off").classList.toggle("hidden", !on);
-  $("cam-img").classList.toggle("hidden", on);
-}
-
-function camPin(on) {
-  CAM.pinned = on;
-  localStorage.setItem("snapstudio.cam.pinned", on ? "1" : "0");
-  // Unpinned away from its page: nothing shows it any more.
-  if (!on && CAM.on && !(window.currentView === "printers" && P.sel === CAM.id) && !CAM.full) camStop();
-  camPlace();
-}
-
-function camFull(on) {
-  CAM.full = on && CAM.on;
-  camPlace();
-}
-
-$("cam-img").addEventListener("load", () => {
-  if (!CAM.on) return;
-  $("cam-note").textContent = "";
-  CAM.fails = 0;
-  if (CAM.offline) camOffline(false);
-  CAM.timer = setTimeout(camNext, 200);
-});
-$("cam-img").addEventListener("error", () => {
-  if (!CAM.on) return;
-  $("cam-note").textContent = tr("printers.cam.retry");
-  // A few misses in a row: the printer is gone (its page's status is not
-  // read on other screens). Tried again, less often.
-  if (++CAM.fails >= 3) camOffline(true);
-  CAM.timer = setTimeout(camNext, CAM.offline ? 3000 : 1000);
-});
-// The camera's switch: on, the live image; off, nothing is fetched.
-$("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart() : camStop()));
-/* Enlarge the camera: its button (shown on hover). */
-function camToggleSize() {
-  const big = $("cam-box").classList.toggle("big");
-  $("cam-size").title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
-}
-// Its ✕, top right (the pinned window has its own in its header).
-$("cam-close").addEventListener("click", camStop);
-$("cam-size").addEventListener("click", camToggleSize);
-$("cam-full-btn").addEventListener("click", () => camFull(!CAM.full));
-$("cam-pin").addEventListener("click", () => camPin(!CAM.pinned));
-$("cam-pip-unpin").addEventListener("click", () => camPin(false));
-$("cam-pip-close").addEventListener("click", camStop);
-// Full size: a click beside the picture — the margin, or the bands left
-// around the image drawn to fit — gives it back, as Esc does. No frame yet
-// or offline: the whole box is the camera, only the margin does.
-$("cam-full").addEventListener("click", (e) => {
-  if (!CAM.full || e.target.closest(".cam-bar")) return;
-  if (e.target === $("cam-full")) return camFull(false);
-  const img = $("cam-img");
-  if (CAM.offline || img.classList.contains("hidden") || !img.naturalWidth) return;
-  const r = img.getBoundingClientRect();
-  const pic = camPictureRect(r.width, r.height, img.naturalWidth, img.naturalHeight);
-  if (!camInside(pic, e.clientX - r.left, e.clientY - r.top)) camFull(false);
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && CAM.full && !document.querySelector(".modal:not(.hidden)")) {
-    e.stopPropagation();
-    camFull(false);
-  }
-}, true);
+$("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart(P.sel) : camStop()));
 // The pinned window's image leads back to its printer's page.
-$("cam-pip-body").addEventListener("click", (e) => {
-  if (!e.target.closest(".cam-bar")) camOpenPrinter();
-});
 function camOpenPrinter() {
   if (!CAM.id) return;
   P.sel = CAM.id;
@@ -1027,39 +854,6 @@ function camOpenPrinter() {
   prnRenderList();
   refreshSelected();
 }
-
-/* The pinned window moves with its title bar and settles in the nearest
-   corner of the window, remembered. */
-function camCorner(c) {
-  const pip = $("cam-pip");
-  ["tl", "tr", "bl", "br"].forEach((k) => pip.classList.toggle("at-" + k, k === c));
-  pip.style.left = pip.style.top = "";
-}
-camCorner(localStorage.getItem("snapstudio.cam.corner") || "br");
-$("cam-pip-head").addEventListener("pointerdown", (e) => {
-  if (e.button !== 0 || e.target.closest("button")) return;
-  const pip = $("cam-pip"), r = pip.getBoundingClientRect();
-  const dx = e.clientX - r.left, dy = e.clientY - r.top;
-  pip.setPointerCapture(e.pointerId);
-  pip.classList.add("dragging");
-  const move = (ev) => {
-    pip.style.left = `${Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx))}px`;
-    pip.style.top = `${Math.max(0, Math.min(innerHeight - r.height, ev.clientY - dy))}px`;
-  };
-  const up = (ev) => {
-    pip.removeEventListener("pointermove", move);
-    pip.removeEventListener("pointerup", up);
-    // Measured while still dragged (its corner's anchors would stretch it).
-    const q = pip.getBoundingClientRect();
-    pip.classList.remove("dragging");
-    const c = (q.top + q.height / 2 < innerHeight / 2 ? "t" : "b") + (q.left + q.width / 2 < innerWidth / 2 ? "l" : "r");
-    localStorage.setItem("snapstudio.cam.corner", c);
-    camCorner(c);
-    camOverlay();
-  };
-  pip.addEventListener("pointermove", move);
-  pip.addEventListener("pointerup", up);
-});
 
 /* ------------------------------------------------------------ events */
 

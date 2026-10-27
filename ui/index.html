@@ -96,12 +96,11 @@
   </div>
 </aside>
 <main id="content" class="content">
-<!-- The printer camera at full size, over the content area (printers.js camPlace). -->
+<!-- The printer camera at full size, over the content area, and where its box
+     waits when nothing shows it (camera.js camPlace). -->
 <div id="cam-full" class="cam-full hidden"></div>
+<div id="cam-park" class="hidden"></div>
 <header class="toolbar" data-tauri-drag-region>
-  <div class="tb-actions tb-lead" data-for="prints">
-    <button id="pj-back" class="tb-btn hidden" title="All prints" data-i18n-title="prints.back"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
-  </div>
   <div class="tb-actions tb-lead" data-for="ia">
     <button id="ia-back" class="tb-btn hidden" title="Conversations" data-i18n-title="ia.conversations"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
   </div>
@@ -409,10 +408,21 @@
 </section>
 
 <section id="view-prints" class="view hidden">
-  <div class="pj">
-    <div id="pj-overview" class="pj-overview"></div>
-    <div id="pj-detail" class="pj-detail hidden"></div>
+  <div id="pj-split" class="pj-split">
+    <aside class="pj-list">
+      <div class="pj-tools">
+        <label class="search pj-search">
+          <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 1-4.2 10.2l-3 3-1.4-1.4 3-3A6 6 0 0 1 10 4m0 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8"/></svg>
+          <input id="pj-q" type="search" placeholder="Search prints, files…" spellcheck="false" data-i18n-placeholder="prints.search" />
+        </label>
+        <div id="pj-filter" class="seg pj-filter" role="radiogroup" aria-label="Show" data-i18n-aria="prints.filter"></div>
+        <div id="pj-chips" class="pj-chips hidden"></div>
+      </div>
+      <div id="pj-rows" class="pj-rows" role="listbox" aria-label="Prints" data-i18n-aria="nav.prints"></div>
+    </aside>
+    <div id="pj-detail" class="pj-detail"></div>
   </div>
+  <div id="pj-empty" class="pj-empty hidden"></div>
 </section>
 
 <section id="view-printers" class="view hidden">
@@ -591,11 +601,13 @@
         </div>
 
         <div class="group cam">
-          <div class="ghead"><span data-i18n="printers.camera">Camera</span><span id="cam-note" class="note"></span>
+          <div class="ghead"><span data-i18n="printers.camera">Camera</span>
             <input type="checkbox" id="cam-toggle" class="sw small" role="switch" aria-label="Camera" data-i18n-aria="printers.camera" />
           </div>
           <div id="cam-box" class="cam-box hidden"><img id="cam-img" alt="Printer camera" data-i18n-alt="printers.camera_alt" />
             <div id="cam-off" class="cam-off hidden" role="status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-3.4-3.4H6.5A4.5 4.5 0 0 1 5 10.2a6.9 6.9 0 0 1 1.2-2.6zM12 4a7 7 0 0 1 6.7 5A4.5 4.5 0 0 1 21 17.2l-1.5-1.5A2.5 2.5 0 0 0 18 11h-1l-.3-1A5 5 0 0 0 9.4 6.6L8 5.2A7 7 0 0 1 12 4"/></svg><span data-i18n="printers.cam.offline">Camera unavailable: the printer does not answer</span></div>
+            <span id="cam-tag" class="cam-tag hidden"><i></i><span class="l" data-i18n="prints.live">LIVE</span><span class="p" data-i18n="prints.paused_tag">PAUSED</span></span>
+            <span id="cam-note" class="cam-note"></span>
             <div class="cam-bar cam-bar-top"><button id="cam-close" class="cam-btn" title="Close the camera" aria-label="Close the camera" data-i18n-title="printers.cam.close" data-i18n-aria="printers.cam.close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button></div>
             <div class="cam-bar">
               <button id="cam-pin" class="cam-btn" title="Pin: keep the camera on every screen" aria-label="Pin: keep the camera on every screen" data-i18n-title="printers.cam.pin" data-i18n-aria="printers.cam.pin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6-2.5 1.2-3.3 3.3.5 4.5-1.4 1.4-4-4-4.6 4.6H4v-1.7L8.6 13.7l-4-4L6 8.3l4.5.5 3.3-3.3z"/></svg></button>
@@ -887,6 +899,7 @@
     <button class="set-cat" data-cat="nav3d"><span class="glyph" style="color: #5AC8FA"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6"/><path fill-rule="evenodd" transform="rotate(-28 12 12)" d="M12 7C5.9 7 1.5 9.2 1.5 12s4.4 5 10.5 5 10.5-2.2 10.5-5-4.4-5-10.5-5m0 1.7c5 0 8.8 1.6 8.8 3.3s-3.8 3.3-8.8 3.3-8.8-1.6-8.8-3.3 3.8-3.3 8.8-3.3"/></svg></span><span class="lbl" data-i18n="settings.nav3d">3D navigation</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="files"><span class="glyph" style="color: #007AFF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="lbl" data-i18n="nav.files">Files</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="prepare"><span class="glyph" style="color: #5856D6"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5 8.2v7.6l7 3.9 7-3.9V8.2z"/></svg></span><span class="lbl" data-i18n="nav.prepare">Prepare</span><i class="set-dot"></i></button>
+    <button class="set-cat" data-cat="prints"><span class="glyph" style="color: #FF2D55"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-2 5.5 7 4.5-7 4.5z"/></svg></span><span class="lbl" data-i18n="nav.prints">Prints</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="ai"><span class="glyph" style="color: #AF52DE"><svg viewBox="0 0 24 24"><path d="M12 2.5 14 8l5.5 2-5.5 2-2 5.5L10 12 4.5 10 10 8zm6.5 10 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/></svg></span><span class="lbl" data-i18n="nav.ia">AI</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="engine"><span class="glyph" style="color: #FF9500"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7m7.4-2.5a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5z"/></svg></span><span class="lbl" data-i18n="engine.title">Slicing engine</span><i class="set-dot"></i></button>
     <button class="set-cat" data-cat="cache"><span class="glyph" style="color: #34C759"><svg viewBox="0 0 24 24"><path d="M4 5h16v4H4zm0 6h16v4H4zm0 6h16v2H4z"/></svg></span><span class="lbl" data-i18n="settings.cache">Thumbnail cache</span><i class="set-dot"></i></button>
@@ -1060,6 +1073,24 @@
         <select id="set-slice-level">
           <option value="basic" data-i18n="slice.level.basic">Basic</option>
           <option value="advanced" data-i18n="slice.level.advanced">Advanced</option>
+        </select>
+      </div>
+    </div>
+      </div>
+    </div>
+    <div class="set-pane" data-cat="prints">
+      <div class="settings-page">
+    <h2 class="set-title" data-i18n="nav.prints">Prints</h2>
+    <div class="group">
+      <div class="grow-row stack">
+        <span class="k"><span data-i18n="settings.history">Delete history automatically</span>
+          <span class="sub" data-i18n="settings.history.sub">Finished prints and their G-code older than this are deleted. Queued and running prints are never deleted.</span>
+        </span>
+        <select id="set-history-keep">
+          <option value="" data-i18n="settings.history.never">Never</option>
+          <option value="30" data-i18n="settings.history.30">After 30 days</option>
+          <option value="90" data-i18n="settings.history.90">After 90 days</option>
+          <option value="365" data-i18n="settings.history.365">After 1 year</option>
         </select>
       </div>
     </div>
@@ -2145,6 +2176,7 @@
 <script src="i18n.js"></script>
 <script src="app.js"></script>
 <script src="camera-logic.js"></script>
+<script src="camera.js"></script>
 <script src="printers.js"></script>
 <script src="viewer.js"></script>
 <script src="slice.js"></script>
@@ -2164,6 +2196,7 @@
 <script src="slice-adv.js"></script>
 <script src="speed.js"></script>
 <script src="slice-speed.js"></script>
+<script src="prints-logic.js"></script>
 <script src="prints.js"></script>
 <script src="prepare-logic.js"></script>
 <script src="virtual-logic.js"></script>

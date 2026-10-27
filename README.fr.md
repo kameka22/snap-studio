@@ -559,7 +559,7 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
-| **Une nouvelle page Impressions** — un tableau de bord avec statistiques, imprimantes en direct et file d'attente, l'historique des impressions, et une fiche pour chacune | [#65](https://github.com/kameka22/snap-studio/pull/65) |
+| **Une nouvelle page Impressions** — les impressions à gauche (recherche, filtres, en cours, file d'attente, puis jour par jour), la fiche à droite : caméra et progression pendant l'impression, timelapse, résultat et durée réelle contre estimée une fois terminée | [#65](https://github.com/kameka22/snap-studio/pull/65) |
 | **D'autres agents IA** — OpenCode à côté de Claude Code (OpenAI, Google, Mistral, modèles locaux…), un seul actif à la fois | [plan](docs/plans/ai-agents.md) |
 
 Les travaux en cours, ce qui reste à vérifier sur une vraie imprimante et les

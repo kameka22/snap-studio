@@ -736,6 +736,13 @@ async fn pf_tools(printer_id: String, path: String, modified: f64) -> Result<Vec
     printer_files::tools(&p.host, p.port, &path, modified).await.map_err(|e| e.to_string())
 }
 
+/// A printer's timelapse videos, for the Prints record.
+#[tauri::command]
+async fn pf_videos(printer_id: String) -> Result<Vec<printer_files::RemoteFile>, String> {
+    let p = printer_by_id(&printer_id)?;
+    printer_files::videos(&p.host, p.port).await.map_err(|e| e.to_string())
+}
+
 /// Number of print files on a printer, for the sidebar.
 #[tauri::command]
 async fn pf_count(printer_id: String) -> Result<usize, String> {
@@ -1080,8 +1087,8 @@ fn emit_jobs(app: &tauri::AppHandle) {
 
 /// Known prints: queue, running, history.
 #[tauri::command]
-fn jobs_list() -> Vec<jobs::Job> {
-    jobs::list()
+fn jobs_list() -> Vec<jobs::JobView> {
+    jobs::views()
 }
 
 /// Last printer state seen by the background tracking.
@@ -1151,6 +1158,32 @@ async fn job_requeue(app: tauri::AppHandle, id: String) -> Result<jobs::Job, Str
         .map_err(|e| e.to_string())?;
     emit_jobs(&app);
     Ok(j)
+}
+
+/// The result of a finished print, set in its record (None clears it).
+#[tauri::command]
+fn job_set_result(id: String, result: Option<jobs::PrintResult>) -> Result<jobs::JobView, String> {
+    jobs::set_result(&id, result).map(jobs::view).map_err(|e| e.to_string())
+}
+
+/// The timelapse matched to a finished print, kept with it.
+#[tauri::command]
+fn job_set_timelapse(id: String, root: String, path: String) -> Result<jobs::JobView, String> {
+    served_root(&root)?;
+    jobs::set_timelapse(&id, jobs::Timelapse { root, path }).map(jobs::view).map_err(|e| e.to_string())
+}
+
+/// Automatic deletion of the prints history, in days (None: never).
+#[tauri::command]
+fn jobs_retention() -> Option<u32> {
+    jobs::retention()
+}
+
+#[tauri::command]
+fn jobs_set_retention(app: tauri::AppHandle, days: Option<u32>) -> Result<(), String> {
+    jobs::set_retention(days).map_err(|e| e.to_string())?;
+    emit_jobs(&app);
+    Ok(())
 }
 
 /// "Later": do not offer the next one again before the next print.
@@ -2044,6 +2077,7 @@ pub fn run() {
             print_send,
             pf_overview,
             pf_count,
+            pf_videos,
             pf_tools,
             share_fetch,
             share_caps,
@@ -2064,6 +2098,10 @@ pub fn run() {
             job_move,
             job_edit,
             job_requeue,
+            job_set_result,
+            job_set_timelapse,
+            jobs_retention,
+            jobs_set_retention,
             queue_dismiss,
             queue_check,
             print_action,
