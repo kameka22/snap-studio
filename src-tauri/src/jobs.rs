@@ -6,9 +6,12 @@
 //! summary. The order of `queued` jobs in the store is the queue order.
 //!
 //! A background task polls the printers: it publishes the prints snapshot
-//! (`prints-status`), closes finished jobs and, when a printer is free with a
-//! non-empty queue, asks the UI whether to start the next one
-//! (`queue-next`). Nothing starts without the user.
+//! (`prints-status`), records pauses and resumes, closes finished jobs and,
+//! when a printer is free with a non-empty queue, asks the UI whether to
+//! start the next one (`queue-next`). Nothing starts without the user.
+//!
+//! The history is kept forever, G-code included, unless the user chose an
+//! automatic deletion in Settings (`retention.json`, 30 days to a year).
 
 use crate::gcode::SliceStats;
 use crate::printers::{self, StartOptions, Status};
@@ -20,13 +23,15 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
-/// Finished prints kept.
-const HISTORY: usize = 20;
+/// Automatic deletion of the history the user may choose, in days.
+pub const RETENTIONS: [u32; 3] = [30, 90, 365];
 /// Printer polling interval.
 const POLL: Duration = Duration::from_secs(8);
 /// Right after the launch, the printer may still say it is free: a job that
 /// recent is not closed.
 const GRACE_S: u64 = 90;
+/// Passes between two automatic deletions of old history (one hour).
+const PRUNE_EVERY: u32 = 450;
 
 /// Slicing profiles, for the record.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -42,6 +47,33 @@ pub struct Profile {
     /// The Prepare plate's objects as sliced: the spool check can bring a
     /// queued print back to Prepare. None for records older than it.
     pub plate: Option<serde_json::Value>,
+}
+
+/// What the user says of a finished print, set in its record only.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct PrintResult {
+    pub success: bool,
+    /// Why it failed, a key of the record's list (`adhesion`, `clog`…).
+    pub reason: Option<String>,
+    pub note: String,
+    /// When it was last set.
+    pub at: u64,
+}
+
+/// A moment of the print seen by the background tracking.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct JobEvent {
+    /// pause | resume
+    pub kind: String,
+    pub at: u64,
+}
+
+/// The printer's video of a finished print, once matched.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Timelapse {
+    pub root: String,
+    pub path: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -74,6 +106,13 @@ pub struct Job {
     /// extruder map goes back to identity when it ends.
     #[serde(default)]
     pub remapped: bool,
+    #[serde(default)]
+    pub result: Option<PrintResult>,
+    /// Pauses and resumes, in order.
+    #[serde(default)]
+    pub events: Vec<JobEvent>,
+    #[serde(default)]
+    pub timelapse: Option<Timelapse>,
 }
 
 fn now() -> u64 {
@@ -119,25 +158,37 @@ fn update<T>(f: impl FnOnce(&mut Vec<Job>) -> Result<T>) -> Result<T> {
     let _g = lock();
     let mut list = load_unlocked();
     let out = f(&mut list)?;
-    prune(&mut list);
+    prune(&mut list, retention(), now());
     save_unlocked(&list)?;
     Ok(out)
 }
 
-/// Keeps the last `HISTORY` finished prints; the others go with their G-code.
-fn prune(list: &mut Vec<Job>) {
-    let mut done: Vec<(u64, String)> = list
-        .iter()
-        .filter(|j| is_done(&j.state))
-        .map(|j| (j.finished.unwrap_or(j.created), j.id.clone()))
-        .collect();
-    if done.len() <= HISTORY {
-        return;
+/// Automatic deletion of the history, in days: None keeps it forever (the
+/// default).
+pub fn retention() -> Option<u32> {
+    std::fs::read(dir().join("retention.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Option<u32>>(&b).ok())
+        .flatten()
+        .filter(|d| RETENTIONS.contains(d))
+}
+
+/// Saves the choice and applies it at once.
+pub fn set_retention(days: Option<u32>) -> Result<()> {
+    if days.is_some_and(|d| !RETENTIONS.contains(&d)) {
+        return Err(anyhow!("retention: {days:?}"));
     }
-    done.sort();
-    let drop: HashSet<String> = done[..done.len() - HISTORY].iter().map(|(_, id)| id.clone()).collect();
+    std::fs::write(dir().join("retention.json"), serde_json::to_vec(&days)?)?;
+    update(|_| Ok(()))
+}
+
+/// Finished prints older than the chosen retention go, with their G-code;
+/// without one, nothing goes. The queue and running prints always stay.
+fn prune(list: &mut Vec<Job>, keep_days: Option<u32>, now: u64) {
+    let Some(days) = keep_days else { return };
+    let limit = now.saturating_sub(days as u64 * 86_400);
     list.retain(|j| {
-        if drop.contains(&j.id) {
+        if is_done(&j.state) && j.finished.unwrap_or(j.created) < limit {
             let _ = std::fs::remove_file(&j.file);
             false
         } else {
@@ -211,6 +262,9 @@ pub fn add(gcode: &Path, new: NewJob, state: &str, remote: &str) -> Result<Job> 
         source: new.source,
         stats,
         remapped: false,
+        result: None,
+        events: vec![],
+        timelapse: None,
     };
     let j = job.clone();
     update(move |list| {
@@ -271,6 +325,10 @@ pub fn edit(id: &str, printer_id: Option<String>, options: Option<StartOptions>)
 /// Queues a print from the history again (new entry).
 pub fn requeue(id: &str) -> Result<Job> {
     let old = get(id).ok_or_else(|| anyhow!(crate::t!("err.job_unknown")))?;
+    // A record can outlive its G-code (removed by hand, an old copy).
+    if !Path::new(&old.file).is_file() {
+        return Err(anyhow!(crate::t!("err.job_no_gcode")));
+    }
     add(
         Path::new(&old.file),
         NewJob {
@@ -311,6 +369,80 @@ pub fn mark_remapped(id: &str) -> Result<()> {
         }
         Ok(())
     })
+}
+
+/// The result of a finished print, from its record (None clears it).
+pub fn set_result(id: &str, result: Option<PrintResult>) -> Result<Job> {
+    update(|list| {
+        let j = list.iter_mut().find(|j| j.id == id).ok_or_else(|| anyhow!(crate::t!("err.job_unknown")))?;
+        if !is_done(&j.state) {
+            return Err(anyhow!(crate::t!("err.job_not_finished")));
+        }
+        j.result = result.map(|r| tidy_result(r, now()));
+        Ok(j.clone())
+    })
+}
+
+/// A result as stored: dated, its note trimmed, no failure reason for a
+/// success.
+fn tidy_result(mut r: PrintResult, at: u64) -> PrintResult {
+    r.at = at;
+    r.note = r.note.trim().to_string();
+    if r.success || r.reason.as_deref().is_some_and(|s| s.trim().is_empty()) {
+        r.reason = None;
+    }
+    r
+}
+
+/// The timelapse found for a finished print, kept so that the record does
+/// not look for it again.
+pub fn set_timelapse(id: &str, timelapse: Timelapse) -> Result<Job> {
+    update(|list| {
+        let j = list.iter_mut().find(|j| j.id == id).ok_or_else(|| anyhow!(crate::t!("err.job_unknown")))?;
+        j.timelapse = Some(timelapse);
+        Ok(j.clone())
+    })
+}
+
+/// A pause or a resume seen by the tracking. A pause after a pause, or a
+/// resume without one, adds nothing; true when an event was added.
+fn track(job: &mut Job, state: &str, at: u64) -> bool {
+    let paused = job.events.last().is_some_and(|e| e.kind == "pause");
+    let kind = match (state, paused) {
+        ("paused", false) => "pause",
+        ("printing", true) => "resume",
+        _ => return false,
+    };
+    job.events.push(JobEvent { kind: kind.into(), at });
+    true
+}
+
+/// Snap Studio's job behind a printer's running print: the one with the
+/// file it prints, else the last started.
+fn running_job<'a>(list: &'a mut [Job], printer_id: &str, file: Option<&str>) -> Option<&'a mut Job> {
+    let mine: Vec<usize> = list
+        .iter()
+        .enumerate()
+        .filter(|(_, j)| j.printer_id == printer_id && j.state == "printing")
+        .map(|(i, _)| i)
+        .collect();
+    let i = mine
+        .iter()
+        .copied()
+        .find(|&i| file.is_some_and(|f| !list[i].remote.is_empty() && list[i].remote == f))
+        .or_else(|| mine.last().copied())?;
+    list.get_mut(i)
+}
+
+/// The printer went from printing to paused, or back.
+fn record_state(printer_id: &str, state: &str, file: Option<&str>) {
+    if !has_printing(printer_id) {
+        return;
+    }
+    let r = update(|list| Ok(running_job(list, printer_id, file).map(|j| track(j, state, now()))));
+    if let Err(e) = r {
+        eprintln!("[jobs] pause not recorded: {e}");
+    }
 }
 
 /// Closes the running jobs of a printer that no longer is.
@@ -427,7 +559,15 @@ fn offer_next(app: &AppHandle, live: &Live, finished: Option<Job>) {
 /// Background task: one pass every `POLL` seconds, while the app lives.
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
+        let mut n: u32 = 0;
         loop {
+            // The automatic deletion, at launch then every hour.
+            if n % PRUNE_EVERY == 0 && retention().is_some() {
+                if let Err(e) = update(|_| Ok(())) {
+                    eprintln!("[jobs] history not pruned: {e}");
+                }
+            }
+            n = n.wrapping_add(1);
             tick(&app).await;
             tokio::time::sleep(POLL).await;
         }
@@ -466,11 +606,18 @@ fn observe(app: &AppHandle, live: &Live) -> bool {
     let id = &live.printer_id;
     let state = live.status.state.as_str();
     if busy(state) {
-        let mut m = mon();
-        m.states.insert(id.clone(), state.to_string());
-        m.idle.insert(id.clone(), 0);
-        // New print: the question may be asked again when it ends.
-        m.asked.remove(id);
+        let prev = {
+            let mut m = mon();
+            m.idle.insert(id.clone(), 0);
+            // New print: the question may be asked again when it ends.
+            m.asked.remove(id);
+            m.states.insert(id.clone(), state.to_string())
+        };
+        // Pauses and resumes go into the job's timeline (only on a change:
+        // the store is not written at every pass).
+        if prev.as_deref() != Some(state) {
+            record_state(id, state, live.status.job.as_deref());
+        }
         return false;
     }
     let pending = has_printing(id);
@@ -540,9 +687,8 @@ mod tests {
         assert!(old.plate.is_none());
     }
 
-    #[test]
-    fn prune_keeps_recent_history_and_queue() {
-        let mk = |i: u64, state: &str| Job {
+    fn mk(i: u64, state: &str) -> Job {
+        Job {
             id: format!("j{i}"),
             name: format!("n{i}"),
             printer_id: "p".into(),
@@ -558,13 +704,104 @@ mod tests {
             source: None,
             stats: None,
             remapped: false,
-        };
-        let mut list: Vec<Job> = (0..30).map(|i| mk(i, "complete")).collect();
-        list.push(mk(100, "queued"));
-        prune(&mut list);
-        assert_eq!(list.iter().filter(|j| is_done(&j.state)).count(), HISTORY);
-        assert!(list.iter().any(|j| j.id == "j29"), "the most recent stay");
-        assert!(!list.iter().any(|j| j.id == "j0"), "the oldest go");
-        assert!(list.iter().any(|j| j.state == "queued"), "the queue is never pruned");
+            result: None,
+            events: vec![],
+            timelapse: None,
+        }
+    }
+
+    const DAY: u64 = 86_400;
+
+    #[test]
+    fn history_is_kept_forever_by_default() {
+        let mut list: Vec<Job> = (0..300).map(|i| mk(i, "complete")).collect();
+        prune(&mut list, None, 1000 * DAY);
+        assert_eq!(list.len(), 300, "no retention, nothing goes");
+    }
+
+    #[test]
+    fn prune_follows_the_retention() {
+        let now = 400 * DAY;
+        let mut list = vec![
+            mk(now - 10 * DAY, "complete"),
+            mk(now - 31 * DAY, "error"),
+            mk(now - 89 * DAY, "cancelled"),
+            mk(now - 200 * DAY, "finished"),
+            // The queue and a running print are never pruned, however old.
+            mk(1, "queued"),
+            mk(2, "printing"),
+        ];
+        let ids = |l: &[Job]| l.iter().map(|j| j.id.clone()).collect::<Vec<_>>();
+        let mut a = list.clone();
+        prune(&mut a, Some(30), now);
+        assert_eq!(ids(&a), [format!("j{}", now - 10 * DAY), "j1".into(), "j2".into()]);
+        let mut b = list.clone();
+        prune(&mut b, Some(90), now);
+        assert_eq!(b.len(), 5);
+        assert!(!b.iter().any(|j| j.state == "finished"));
+        prune(&mut list, Some(365), now);
+        assert_eq!(list.len(), 6);
+        // A record without an end date counts from its creation.
+        let mut old = vec![Job { finished: None, ..mk(5, "error") }];
+        prune(&mut old, Some(30), now);
+        assert!(old.is_empty());
+    }
+
+    #[test]
+    fn results_are_tidied() {
+        let ok = tidy_result(PrintResult { success: true, reason: Some("clog".into()), note: "  fine \n".into(), at: 0 }, 42);
+        assert_eq!(ok, PrintResult { success: true, reason: None, note: "fine".into(), at: 42 });
+        let ko = tidy_result(PrintResult { success: false, reason: Some("adhesion".into()), note: String::new(), at: 0 }, 7);
+        assert_eq!(ko.reason.as_deref(), Some("adhesion"));
+        let blank = tidy_result(PrintResult { success: false, reason: Some(" ".into()), note: String::new(), at: 0 }, 7);
+        assert!(blank.reason.is_none());
+    }
+
+    #[test]
+    fn retention_choices() {
+        assert_eq!(RETENTIONS, [30, 90, 365]);
+    }
+
+    #[test]
+    fn pauses_and_resumes_are_tracked_once() {
+        let mut j = mk(1, "printing");
+        assert!(!track(&mut j, "printing", 10), "running, nothing to say");
+        assert!(track(&mut j, "paused", 20));
+        assert!(!track(&mut j, "paused", 30), "still paused");
+        assert!(track(&mut j, "printing", 40));
+        assert!(!track(&mut j, "printing", 50));
+        assert!(track(&mut j, "paused", 60));
+        let kinds: Vec<(&str, u64)> = j.events.iter().map(|e| (e.kind.as_str(), e.at)).collect();
+        assert_eq!(kinds, [("pause", 20), ("resume", 40), ("pause", 60)]);
+    }
+
+    #[test]
+    fn running_job_prefers_the_printed_file() {
+        let mut list = vec![
+            Job { remote: "a-111111.gcode".into(), ..mk(1, "printing") },
+            Job { remote: "b-222222.gcode".into(), ..mk(2, "printing") },
+            Job { printer_id: "q".into(), ..mk(3, "printing") },
+            mk(4, "complete"),
+        ];
+        assert_eq!(running_job(&mut list, "p", Some("a-111111.gcode")).unwrap().id, "j1");
+        // Another tool's file: the last one started.
+        assert_eq!(running_job(&mut list, "p", Some("other.gcode")).unwrap().id, "j2");
+        assert_eq!(running_job(&mut list, "p", None).unwrap().id, "j2");
+        assert!(running_job(&mut list, "z", None).is_none());
+    }
+
+    #[test]
+    fn old_records_read_without_the_new_fields() {
+        let mut v = serde_json::to_value(mk(1, "complete")).unwrap();
+        let o = v.as_object_mut().unwrap();
+        o.remove("result");
+        o.remove("events");
+        o.remove("timelapse");
+        let j: Job = serde_json::from_value(v).unwrap();
+        assert!(j.result.is_none() && j.events.is_empty() && j.timelapse.is_none());
+        // A result keeps its reason and note.
+        let r: PrintResult = serde_json::from_str(r#"{"success":false,"reason":"adhesion","note":"corner lifted"}"#).unwrap();
+        assert_eq!(r.reason.as_deref(), Some("adhesion"));
+        assert_eq!(r.at, 0);
     }
 }

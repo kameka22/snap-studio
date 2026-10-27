@@ -908,6 +908,8 @@
   "err.sticks_out": "“{name}” sticks out of the plate: bring it fully onto it",
   "err.job_running": "print in progress: cancel it first",
   "err.job_unknown": "unknown job",
+  "err.job_not_finished": "the print is not finished",
+  "err.job_no_gcode": "its G-code is no longer kept",
   "notify.next": "Next in queue: {name}.",
   "err.closed_by_printer": "Connection closed by the printer",
   "err.connect_timeout": "connection timed out",

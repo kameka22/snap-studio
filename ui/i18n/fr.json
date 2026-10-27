@@ -911,6 +911,8 @@
   "err.sticks_out": "« {name} » dépasse du plateau : ramenez-le entièrement dessus",
   "err.job_running": "impression en cours : annulez-la d'abord",
   "err.job_unknown": "travail inconnu",
+  "err.job_not_finished": "l'impression n'est pas terminée",
+  "err.job_no_gcode": "son G-code n'est plus conservé",
   "notify.next": "Suivante en attente : {name}.",
   "err.closed_by_printer": "Connexion fermée par l'imprimante",
   "err.connect_timeout": "délai de connexion dépassé",
