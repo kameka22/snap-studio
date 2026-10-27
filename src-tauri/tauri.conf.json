@@ -45,7 +45,11 @@
       "files": {
         "Resources/Assets.car": "./icons/macos/Assets.car",
         "Resources/en.lproj/InfoPlist.strings": "./locales/en.lproj/InfoPlist.strings",
-        "Resources/fr.lproj/InfoPlist.strings": "./locales/fr.lproj/InfoPlist.strings"
+        "Resources/fr.lproj/InfoPlist.strings": "./locales/fr.lproj/InfoPlist.strings",
+        "Resources/de.lproj/InfoPlist.strings": "./locales/de.lproj/InfoPlist.strings",
+        "Resources/es.lproj/InfoPlist.strings": "./locales/es.lproj/InfoPlist.strings",
+        "Resources/pt-BR.lproj/InfoPlist.strings": "./locales/pt-BR.lproj/InfoPlist.strings",
+        "Resources/it.lproj/InfoPlist.strings": "./locales/it.lproj/InfoPlist.strings"
       }
     }
   },

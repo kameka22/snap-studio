@@ -737,10 +737,7 @@ fn write_tools(ws: &Path) -> Result<()> {
 
 /// The language Claude must answer in: the app's, named in English.
 fn reply_language() -> &'static str {
-    match crate::i18n::lang().as_str() {
-        "fr" => "French",
-        _ => "English",
-    }
+    crate::i18n::english_name()
 }
 
 /// What the original holds, for the instructions.

@@ -1,9 +1,11 @@
 "use strict";
 /* Interface language.
 
-   The catalogs (ui/i18n/*.json) are injected by Rust before any script runs,
-   with the current language, as `window.__I18N__`. They are shared with the
-   native side, which uses them for menus and messages.
+   Rust injects, before any script runs, `window.__I18N__`: the current
+   language, the languages offered (code, own name, locale) and the English
+   and current catalogs (ui/i18n/*.json). Another catalog is fetched when it
+   is picked. The catalogs are shared with the native side, which uses them
+   for menus and messages. A key missing from a catalog shows in English.
 
    - Static markup carries its key in an attribute and is filled by
      `applyI18n()`: data-i18n (text), data-i18n-html (trusted markup from the
@@ -15,12 +17,11 @@
 
 const I18N = window.__I18N__ || { lang: "en", catalogs: {} };
 I18N.catalogs.en = I18N.catalogs.en || {};
+/* Languages offered by the pickers, each named in its own language. */
+I18N.langs = I18N.langs || [{ code: "en", name: "English", locale: "en-US" }];
 let LANG = I18N.catalogs[I18N.lang] ? I18N.lang : "en";
 
-/* Languages offered by the pickers, each named in its own language. */
-const LANG_NAMES = { en: "English", fr: "Français" };
-const LOCALES = { en: "en-US", fr: "fr-FR" };
-const locale = () => LOCALES[LANG] || "en-US";
+const locale = () => I18N.langs.find((l) => l.code === LANG)?.locale || "en-US";
 
 let PLURALS = new Intl.PluralRules(locale());
 
@@ -85,16 +86,25 @@ const collate = (a, b) => a.localeCompare(b, locale(), { numeric: true, sensitiv
 
 function fillLangPickers() {
   for (const sel of document.querySelectorAll("select[data-lang-picker]")) {
-    sel.innerHTML = Object.entries(LANG_NAMES)
-      .filter(([code]) => I18N.catalogs[code])
-      .map(([code, name]) => `<option value="${code}">${name}</option>`)
-      .join("");
+    sel.innerHTML = I18N.langs.map((l) => `<option value="${l.code}">${l.name}</option>`).join("");
     sel.value = LANG;
   }
 }
 
+/* The catalog of `lang`, fetched the first time. */
+async function loadCatalog(lang) {
+  if (!I18N.catalogs[lang]) {
+    try {
+      I18N.catalogs[lang] = await fetch(`i18n/${lang}.json`).then((r) => r.json());
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  return !!I18N.catalogs[lang];
+}
+
 async function setLanguage(lang, persist = true) {
-  if (!I18N.catalogs[lang]) return;
+  if (!I18N.langs.some((l) => l.code === lang) || !(await loadCatalog(lang))) return;
   if (persist) {
     try {
       await window.__TAURI__.core.invoke("language_set", { lang });

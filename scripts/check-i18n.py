@@ -6,10 +6,15 @@
 Reports, and exits non-zero on:
 - keys used in the code (tr("…"), data-i18n…="…", t!("…")) but missing from
   ui/i18n/en.json;
-- keys of en.json missing from another catalog, or the other way round;
-- placeholders ({name}) that differ between languages;
+- keys of en.json missing from fr.json (kept complete by hand), keys of
+  another catalog unknown to en.json;
+- placeholders ({name}), HTML tags or plural forms that differ from English;
 - keys no code uses (keys built at run time are listed in DYNAMIC);
 - French left in the UI code outside the catalogs.
+
+The other languages may lag behind English (the missing keys show in
+English): their completeness is printed, and `--strict` makes a missing key
+an error for them too.
 """
 import json
 import re
@@ -53,6 +58,21 @@ def used_keys():
     return keys
 
 
+# Catalogs that must hold every key of en.json.
+COMPLETE = {"en", "fr"}
+
+TAG = re.compile(r"</?([a-z][a-z0-9]*)\b")
+
+
+def tags(v):
+    vals = v.values() if isinstance(v, dict) else [v]
+    return sorted(t for s in vals for t in TAG.findall(s))
+
+
+def forms(v):
+    return set(v) if isinstance(v, dict) else None
+
+
 def placeholders(v):
     vals = v.values() if isinstance(v, dict) else [v]
     return set(p for s in vals for p in re.findall(r"\{(\w+)\}", s))
@@ -75,14 +95,26 @@ def main():
     files = (".json", ".jsonl", ".md", ".py", ".stl", ".3mf", ".png", ".js", ".rs")
     catalog_like = {k for k in used if k.split(".")[0] in {x.split(".")[0] for x in en} and not k.endswith(files)}
     report("used but missing from en.json", {k for k in catalog_like if k not in en and not k.startswith(DYNAMIC) and not k.endswith(".")})
+    strict = "--strict" in sys.argv
+    completeness = []
     for lang, cat in cats.items():
         if lang == "en":
             continue
-        report(f"missing from {lang}.json", set(en) - set(cat))
+        missing = set(en) - set(cat)
+        if lang in COMPLETE or strict:
+            report(f"missing from {lang}.json", missing)
+        completeness.append(f"{lang} {100 * (len(en) - len(missing)) / len(en):.1f}%")
         report(f"unknown to en.json, in {lang}.json", set(cat) - set(en))
         report(
             f"placeholders differ in {lang}.json",
             {k for k in en if k in cat and placeholders(en[k]) != placeholders(cat[k])},
+        )
+        report(f"HTML tags differ in {lang}.json", {k for k in en if k in cat and tags(en[k]) != tags(cat[k])})
+        # A plural (which a language may need where English does not, as for
+        # ordinals) always has its "other" form, the fallback.
+        report(
+            f"plural without an 'other' form in {lang}.json",
+            {k for k, v in cat.items() if isinstance(v, dict) and "other" not in v},
         )
     report("unused keys", {k for k in en if k not in used and not k.startswith(DYNAMIC)})
 
@@ -95,7 +127,7 @@ def main():
 
     if problems:
         sys.exit(1)
-    print(f"ok: {len(en)} keys, {len(cats)} languages")
+    print(f"ok: {len(en)} keys, {len(cats)} languages ({', '.join(completeness)})")
 
 
 if __name__ == "__main__":
