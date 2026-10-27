@@ -16,10 +16,11 @@ function camHostOf({ on, full, pinned, id, home }) {
 }
 
 /* Delay before the next read, in ms: right after a frame; a moment after a
-   miss; longer once the printer is held to be gone (three misses). */
-function camRetryDelay(fails) {
+   miss; longer once the printer is held to be gone (three misses, or its
+   status said so). */
+function camRetryDelay(fails, offline = false) {
   if (!fails) return 200;
-  return fails >= 3 ? 3000 : 1000;
+  return fails >= 3 || offline ? 3000 : 1000;
 }
 
 /* The rectangle an image of imgW × imgH takes in a box of boxW × boxH with

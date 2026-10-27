@@ -96,8 +96,10 @@
   </div>
 </aside>
 <main id="content" class="content">
-<!-- The printer camera at full size, over the content area (printers.js camPlace). -->
+<!-- The printer camera at full size, over the content area, and where its box
+     waits when nothing shows it (camera.js camPlace). -->
 <div id="cam-full" class="cam-full hidden"></div>
+<div id="cam-park" class="hidden"></div>
 <header class="toolbar" data-tauri-drag-region>
   <div class="tb-actions tb-lead" data-for="ia">
     <button id="ia-back" class="tb-btn hidden" title="Conversations" data-i18n-title="ia.conversations"><svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>

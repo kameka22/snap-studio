@@ -30,22 +30,25 @@ function switchView(v) {
   // Explore's tab strip stands in for the toolbar.
   document.body.classList.toggle("no-toolbar", v === "library");
   if (typeof p3dVisible === "function") p3dVisible(v === "printers");
-  if (v === "printers") {
-    startLive();
-    prnCamHome();
-  } else {
+  // The screens left first, the one entered after: the camera leaves with
+  // a screen (a pinned one goes on, in its window; full size belongs to
+  // the screen it was asked on) and the next one, drawn right away, keeps
+  // a stream of the same printer.
+  if (v !== "printers") {
     stopLive();
-    // The camera leaves with the screen (a pinned one goes on, in its
-    // window); full size belongs to the screen it was asked on.
     camLeave();
   }
-  // Leaving Care & Tuning stops Control's reads and camera.
+  // Leaving Care & Tuning stops Control's reads and its camera.
   if (v !== "maint" && typeof ctLeave === "function") ctLeave();
   // Leaving a printer's files stops its video.
   if (v !== "pfiles" && typeof pflLeave === "function") pflLeave();
-  if (v === "prints") pjRender();
   // Leaving Prints stops its camera and its timelapse.
-  else if (typeof pjLeave === "function") pjLeave();
+  if (v !== "prints" && typeof pjLeave === "function") pjLeave();
+  if (v === "printers") {
+    startLive();
+    prnCamHome();
+  }
+  if (v === "prints") pjRender();
   // Explore's native views must only live in its tab.
   libSetVisible(v === "library");
   if (v === "settings") {
@@ -839,7 +842,7 @@ function prnCamHome() {
 // The Camera section's switch, and the 3D view's button, say its state.
 document.addEventListener("cam-change", () => {
   $("cam-toggle").checked = CAM.on && CAM.id === P.sel;
-  if (typeof p3dQuick === "function" && typeof P3 !== "undefined" && P3.pid) p3dQuick();
+  if (window.currentView === "printers" && typeof p3dQuick === "function" && typeof P3 !== "undefined" && P3.pid) p3dQuick();
 });
 $("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart(P.sel) : camStop()));
 // The pinned window's image leads back to its printer's page.

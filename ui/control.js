@@ -345,7 +345,6 @@ async function ctShow(pid, ctx = {}) {
   if (CT.pid !== pid) Object.assign(CT, { pid, built: null, homedSeen: false });
   CT.head = ctx.head ?? null;
   ctBuild();
-  ctCamHome();
   ctUpdate();
   ctlSpools(pid);
   await ctlRead(pid, true);
@@ -473,6 +472,8 @@ function ctBuild() {
       </details>
     </div>
   </div>`;
+  // The card is new: the camera's box goes back into it.
+  ctCamHome();
 }
 
 /* The tab's own parts (status, movement, fans, notices), then the shared
@@ -678,16 +679,12 @@ function ctCamHome() {
 }
 document.addEventListener("cam-change", () => {
   const sw = $("ct-cam-sw");
-  if (!sw) return;
-  const on = CAM.on && CAM.id === CT.pid;
-  sw.checked = on;
-  $("ct-cam-box").classList.toggle("on", on);
+  if (sw) sw.checked = CAM.on && CAM.id === CT.pid;
 });
 
 window.addEventListener("langchange", () => {
   if (!ctOn()) return;
   CT.built = null;
   ctBuild();
-  ctCamHome();
   ctUpdate();
 });

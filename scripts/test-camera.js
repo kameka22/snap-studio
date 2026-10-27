@@ -39,5 +39,7 @@ assert.strictEqual(C.camRetryDelay(1), 1000);
 assert.strictEqual(C.camRetryDelay(2), 1000);
 assert.strictEqual(C.camRetryDelay(3), 3000, "held to be gone");
 assert.strictEqual(C.camRetryDelay(9), 3000);
+assert.strictEqual(C.camRetryDelay(1, true), 3000, "the status said the printer is gone");
+assert.strictEqual(C.camRetryDelay(0, true), 200, "a frame came: the status was wrong");
 
 console.log("camera: ok");

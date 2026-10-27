@@ -46,9 +46,17 @@ const CAM = {
   placing: 0,
 };
 
-const camBox = () => $("cam-box");
-const camImg = () => $("cam-img");
-const camNote = (text) => ($("cam-note").textContent = text || "");
+/* The box and its parts, held once: the box moves into hosts that their
+   screens rebuild (innerHTML), which detaches it; a reference survives
+   that, an id lookup would not. Nowhere to show, it waits in #cam-park. */
+const CAM_EL = (() => {
+  const box = $("cam-box");
+  const q = (sel) => box.querySelector(sel);
+  return { box, img: q("#cam-img"), note: q("#cam-note"), off: q("#cam-off"), tag: q("#cam-tag"), size: q("#cam-size"), close: q("#cam-close"), pin: q("#cam-pin"), fullBtn: q("#cam-full-btn"), park: $("cam-park"), full: $("cam-full"), pip: $("cam-pip"), pipBody: $("cam-pip-body"), pipName: $("cam-pip-name") };
+})();
+const camBox = () => CAM_EL.box;
+const camImg = () => CAM_EL.img;
+const camNote = (text) => (CAM_EL.note.textContent = text || "");
 const camChanged = () => document.dispatchEvent(new CustomEvent("cam-change"));
 
 /* ------------------------------------------------------------ screens */
@@ -59,6 +67,12 @@ const camChanged = () => document.dispatchEvent(new CustomEvent("cam-change"));
    `enlarge` offers the Enlarge button; `close: false` hides the ✕ (the
    screen has its own switch there). */
 function camHome(el, id, opts = {}) {
+  const h = CAM.home;
+  // The same place, printer and choices as before (a record redrawn every
+  // few seconds): nothing to do, unless the box, due there, was detached
+  // meanwhile (the screen rebuilt its place).
+  const same = h && el && h.el === el && h.id === id && ["auto", "tag", "enlarge", "close"].every((k) => h.opts[k] === opts[k]);
+  if (same && (camHostOf(CAM) !== "home" || el.contains(CAM_EL.box))) return;
   CAM.home = el && id ? { el, id, opts } : null;
   // Another printer than the stream's: the stream ends, unless pinned (it
   // goes on in its window).
@@ -149,7 +163,7 @@ camImg().addEventListener("error", () => {
   camNote(tr("printers.cam.retry"));
   // A few misses in a row: the printer is gone. Tried again, less often.
   if (++CAM.fails >= 3) camOffline(true);
-  CAM.timer = setTimeout(camNext, camRetryDelay(CAM.fails));
+  CAM.timer = setTimeout(camNext, camRetryDelay(CAM.fails, CAM.offline));
 });
 document.addEventListener("visibilitychange", camResume);
 
@@ -157,8 +171,8 @@ document.addEventListener("visibilitychange", camResume);
    last image frozen. */
 function camOffline(on) {
   CAM.offline = on;
-  $("cam-off").classList.toggle("hidden", !on);
-  camImg().classList.toggle("hidden", on);
+  CAM_EL.off.classList.toggle("hidden", !on);
+  CAM_EL.img.classList.toggle("hidden", on);
 }
 
 /* ------------------------------------------------------------ place */
@@ -166,34 +180,38 @@ function camOffline(on) {
 /* Puts the box where it shows (camera-logic.js camHostOf) and paints its
    controls. A stream with nowhere to show ends. */
 function camPlace() {
-  const box = camBox(), full = $("cam-full"), pip = $("cam-pip");
+  const { box, full, pip, pipBody, park } = CAM_EL;
   const where = camHostOf(CAM);
   if (CAM.on && !where) return camStop();
-  const host = where === "full" ? full : where === "pip" ? $("cam-pip-body") : where === "home" ? CAM.home.el : null;
-  if (!host) box.remove();
-  else if (box.parentElement !== host) host.appendChild(box);
+  const host = where === "full" ? full : where === "pip" ? pipBody : where === "home" ? CAM.home.el : park;
+  if (box.parentElement !== host) host.appendChild(box);
   box.classList.toggle("hidden", !CAM.on);
   box.classList.toggle("full", where === "full");
   full.classList.toggle("hidden", where !== "full");
   pip.classList.toggle("hidden", where !== "pip");
   // The screen's choices apply to its own printer's stream.
   const o = CAM.home && (!CAM.on || CAM.home.id === CAM.id) ? CAM.home.opts : {};
-  $("cam-size").classList.toggle("hidden", !o.enlarge);
-  $("cam-close").classList.toggle("hidden", o.close === false);
-  const tag = $("cam-tag");
-  tag.classList.toggle("hidden", !o.tag);
-  tag.classList.toggle("paused", o.tag === "paused");
-  const p = typeof P !== "undefined" ? P.list.find((x) => x.id === CAM.id) : null;
-  $("cam-pip-name").textContent = p ? p.name || p.host : "";
-  $("cam-pin").classList.toggle("on", CAM.pinned);
+  CAM_EL.size.classList.toggle("hidden", !o.enlarge);
+  CAM_EL.close.classList.toggle("hidden", o.close === false);
+  CAM_EL.tag.classList.toggle("hidden", !o.tag);
+  CAM_EL.tag.classList.toggle("paused", o.tag === "paused");
+  const name = camPrinterName();
+  CAM_EL.pipName.textContent = name;
+  CAM_EL.pin.classList.toggle("on", CAM.pinned);
   const label = (el, key) => {
     el.title = tr(key);
     el.setAttribute("aria-label", tr(key));
   };
-  label($("cam-pin"), CAM.pinned ? "printers.cam.unpin" : "printers.cam.pin");
-  label($("cam-full-btn"), CAM.full ? "printers.cam.full_exit" : "printers.cam.full");
-  camOverlay();
+  label(CAM_EL.pin, CAM.pinned ? "printers.cam.unpin" : "printers.cam.pin");
+  label(CAM_EL.fullBtn, CAM.full ? "printers.cam.full_exit" : "printers.cam.full");
+  camOverlay(name);
   camChanged();
+}
+
+/* The stream's printer, as named in Printers. */
+function camPrinterName() {
+  const p = typeof P !== "undefined" ? P.list.find((x) => x.id === CAM.id) : null;
+  return p ? p.name || p.host : "";
 }
 
 function camPin(on) {
@@ -210,8 +228,8 @@ function camFull(on) {
 
 /* Enlarge, where the screen allows it: its button (shown on hover). */
 function camToggleSize() {
-  const big = camBox().classList.toggle("big");
-  $("cam-size").title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
+  const big = CAM_EL.box.classList.toggle("big");
+  CAM_EL.size.title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
 }
 
 /* ------------------------------------------------------------ overlay */
@@ -220,14 +238,13 @@ function camToggleSize() {
    pinned window: Rust lays a small view of ours over it at the same place
    (library.rs, camview.html), shown while a site is. Told where the pinned
    window is, or that there is none. */
-function camOverlay() {
-  const pip = $("cam-pip");
+function camOverlay(name = camPrinterName()) {
+  const pip = CAM_EL.pip;
   const on = CAM.on && !pip.classList.contains("hidden");
-  const p = typeof P !== "undefined" ? P.list.find((x) => x.id === CAM.id) : null;
   const setup = on
     ? JSON.stringify({
         id: CAM.id,
-        name: p ? p.name || p.host : "",
+        name,
         texts: { unpin: tr("printers.cam.unpin"), close: tr("printers.cam.close"), offline: tr("printers.cam.offline"), open: tr("printers.cam.open") },
       })
     : "";
@@ -238,6 +255,7 @@ function camOverlay() {
   invoke("cam_view_set", { rect: on ? { x: r.left, y: r.top, w: r.width, h: r.height } : null, setup }).catch(() => {});
 }
 window.addEventListener("resize", () => CAM.on && camOverlay());
+
 // Shown over a site or not: the interface's frames pause meanwhile.
 listen("cam-view", (e) => {
   const shown = !!e.payload?.shown;
@@ -254,10 +272,10 @@ listen("cam-view-action", (e) => {
 
 /* ------------------------------------------------------------ controls */
 
-$("cam-close").addEventListener("click", camStop);
-$("cam-size").addEventListener("click", camToggleSize);
-$("cam-full-btn").addEventListener("click", () => camFull(!CAM.full));
-$("cam-pin").addEventListener("click", () => camPin(!CAM.pinned));
+CAM_EL.close.addEventListener("click", camStop);
+CAM_EL.size.addEventListener("click", camToggleSize);
+CAM_EL.fullBtn.addEventListener("click", () => camFull(!CAM.full));
+CAM_EL.pin.addEventListener("click", () => camPin(!CAM.pinned));
 $("cam-pip-unpin").addEventListener("click", () => camPin(false));
 $("cam-pip-close").addEventListener("click", camStop);
 // Full size: a click beside the picture — the margin, or the bands left
@@ -265,7 +283,7 @@ $("cam-pip-close").addEventListener("click", camStop);
 // or offline: the whole box is the camera, only the margin does.
 $("cam-full").addEventListener("click", (e) => {
   if (!CAM.full || e.target.closest(".cam-bar")) return;
-  if (e.target === $("cam-full")) return camFull(false);
+  if (e.target === CAM_EL.full) return camFull(false);
   const img = camImg();
   if (CAM.offline || img.classList.contains("hidden") || !img.naturalWidth) return;
   const r = img.getBoundingClientRect();

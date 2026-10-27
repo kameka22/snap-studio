@@ -940,7 +940,7 @@ function pjTlNode(job) {
   if (!PJ.tl.el) {
     const el = document.createElement("div");
     el.className = "pj-media-in pj-video";
-    el.innerHTML = `<video id="pj-tl-video" controls playsinline preload="metadata"></video><span class="pj-tag">${PJ_ICONS.film}${esc(tr("prints.tl.tag"))}</span><span class="pj-shot-note" id="pj-tl-note"></span>`;
+    el.innerHTML = `<video id="pj-tl-video" controls playsinline preload="metadata"></video><span class="cam-tag">${PJ_ICONS.film}${esc(tr("prints.tl.tag"))}</span><span class="pj-shot-note" id="pj-tl-note"></span>`;
     const v = el.querySelector("video");
     v.addEventListener("loadedmetadata", () => {
       el.classList.remove("gone");
@@ -1188,7 +1188,7 @@ $("set-history-keep").addEventListener("change", async (e) => {
 tbSet("prints", tr("nav.prints"));
 window.addEventListener("langchange", () => {
   pjRenderSide();
-  if (PJ.tl.el) PJ.tl.el.querySelector(".pj-tag").lastChild.textContent = tr("prints.tl.tag");
+  if (PJ.tl.el) PJ.tl.el.querySelector(".cam-tag").lastChild.textContent = tr("prints.tl.tag");
   pjCamPaint();
   if (window.currentView === "prints") pjRender();
   else tbSet("prints", tr("nav.prints"), pjSubtitle());

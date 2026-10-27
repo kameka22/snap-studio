@@ -175,8 +175,10 @@ controls), for every screen:
   `camHostOf` (camera-logic.js, tested): at full size over the content
   area; at home when the stream is the home's printer (also when off, the
   box waits there hidden); in the pinned window when the stream is another
-  printer's or no screen shows one; nowhere otherwise, and the stream then
-  ends.
+  printer's or no screen shows one; nowhere otherwise (the box waits in a
+  hidden park, and a stream then ends). The box and its parts are held by
+  reference: the screens rebuild their places with innerHTML, which
+  detaches the box, and the next `camHome` puts it back.
 - The screens keep their own switches and paint them on the `cam-change`
   event: the Camera section's switch, the 3D view's button, the record's
   corner switch (on by default, the choice kept), Control's switch.
