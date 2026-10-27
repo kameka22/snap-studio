@@ -1,11 +1,11 @@
 "use strict";
-/* Prints redesign mockup: sample data and the three proposals.
+/* Prints redesign mockup: sample data and the proposals (C chosen).
    Everything below is static sample data (two Snapmaker U1, "now" is
    Monday 16:20). Each field maps to the job store (jobs.rs), the live
    printer status (printers.rs) or is marked as new data in the plan. */
 
 const Q = new URLSearchParams(location.search);
-const S = { p: Q.get("p") || "d", v: Q.get("v") || "overview", theme: Q.get("theme") || "light" };
+const S = { p: Q.get("p") || "c", v: Q.get("v") || "running", theme: Q.get("theme") || "light" };
 if (Q.has("shot")) document.documentElement.classList.add("shot");
 
 /* ------------------------------------------------------------ data */
@@ -382,7 +382,10 @@ function renderBDetail() {
   </aside></div>`;
 }
 
-/* ====================================================== C: master–detail */
+/* ====================================================== C: master–detail (chosen)
+   No stats strip on this page: period stats move to the printer page
+   (new tabs) and a Statistics page, in a follow-up. The sidebar keeps its
+   Prints submenu as today: running prints with progress, then the queue. */
 function cList(sel) {
   const r = (o, s, inner, meta) => `<div class="pc-r${s ? " sel" : ""}">${thumb(o.kind, o.cols, "s40")}<div class="t">${inner}</div><div class="m">${meta}</div></div>`;
   return `<div class="pc-list">
@@ -407,7 +410,7 @@ function cList(sel) {
   </div>`;
 }
 function renderCOverview() {
-  toolbar({ title: "Impressions", sub: "2 en cours · 4 en attente · 25 cette semaine", right: `<button class="tb-btn labeled">${I.plus}<span>Ajouter à la file</span></button>` });
+  toolbar({ title: "Impressions", sub: "2 en cours · 4 en attente", right: `<button class="tb-btn labeled">${I.plus}<span>Ajouter à la file</span></button>` });
   $("view").innerHTML = `<div class="pc">${cList("run")}
     <div class="pc-det">
       <div class="pc-hd">${thumb("helmet", J.casque.cols, "s56")}<div><h2>Support casque</h2><div class="kick">${badge("printing")}<span>U1 Atelier · lancée à 13:08 · support-casque.3mf</span></div></div>
@@ -432,7 +435,7 @@ function renderCOverview() {
     </div></div>`;
 }
 function renderCDetail() {
-  toolbar({ title: "Impressions", sub: "2 en cours · 4 en attente · 25 cette semaine", right: `<button class="tb-btn labeled">${I.plus}<span>Ajouter à la file</span></button>` });
+  toolbar({ title: "Impressions", sub: "2 en cours · 4 en attente", right: `<button class="tb-btn labeled">${I.plus}<span>Ajouter à la file</span></button>` });
   $("view").innerHTML = `<div class="pc">${cList("done")}
     <div class="pc-det">
       <div class="pc-hd">${thumb("box", [C.gris], "s56")}<div><h2>Boîte de rangement</h2><div class="kick">${badge("complete")}<span>U1 Atelier · aujourd'hui, 09:10 – 11:42</span></div></div>
@@ -466,7 +469,7 @@ function renderCDetail() {
 }
 
 
-/* ====================================================== D: A + C */
+/* ====================================================== D: A + C (superseded by C) */
 function renderDOverview() {
   toolbar({ title: "Impressions", sub: "2 en cours · 4 en attente", right: seg(["7 j", "30 j", "Tout"], 0) });
   const grp = (label, tot, rows) => `<div class="pd-g">${label}<span>${tot}</span></div>` + rows.map((h) => `<div class="pd-h">${thumb(h.kind, h.cols, "s36")}
@@ -518,17 +521,18 @@ function render() {
   const R = {
     a: { overview: renderAOverview, detail: renderADetail },
     b: { overview: renderBOverview, detail: renderBDetail },
-    c: { overview: renderCOverview, detail: renderCDetail },
+    c: { running: renderCOverview, finished: renderCDetail, overview: renderCOverview, detail: renderCDetail },
     d: { overview: renderDOverview, detail: renderDRunning, finished: renderDFinished },
   }[S.p];
-  (R[S.v] || R.detail)();
+  (R[S.v] || R[Object.keys(R)[0]])();
   const sw = (key, items) => `<div class="seg">${items.map(([v, t]) => `<button class="seg-btn${S[key] === v ? " on" : ""}" data-k="${key}" data-v="${v}">${t}</button>`).join("")}</div>`;
-  $("switch").innerHTML = `<b>Proposition</b>${sw("p", [["d", "D · A + C"], ["a", "A · Tableau de bord"], ["b", "B · Agenda"], ["c", "C · Liste et fiche"]])}${sw("v", [["overview", "Vue d'ensemble"], ["detail", "Fiche"], ...(S.p === "d" ? [["finished", "Fiche terminée"]] : [])])}${sw("theme", [["light", "Clair"], ["dark", "Sombre"]])}`;
+  $("switch").innerHTML = `<b>Proposition</b>${sw("p", [["c", "C · Liste et fiche (retenue)"], ["a", "A · Tableau de bord"], ["b", "B · Agenda"], ["d", "D · A + C (abandonnée)"]])}${sw("v", S.p === "c" ? [["running", "Fiche en cours"], ["finished", "Fiche terminée"]] : [["overview", "Vue d'ensemble"], ["detail", "Fiche"], ...(S.p === "d" ? [["finished", "Fiche terminée"]] : [])])}${sw("theme", [["light", "Clair"], ["dark", "Sombre"]])}`;
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-k]");
   if (!b) return;
   S[b.dataset.k] = b.dataset.v;
+  if (b.dataset.k === "p") S.v = S.p === "c" ? "running" : "overview";
   history.replaceState(null, "", `?p=${S.p}&v=${S.v}&theme=${S.theme}`);
   render();
 });

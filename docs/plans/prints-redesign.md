@@ -7,47 +7,62 @@ and a record that lists the slice summary. It works, but it says little at a
 glance: no live view on the overview, no sense of time for the queue, no
 search in the history, nothing learned from past prints.
 
-This plan first proposed **three directions** (A, B, C) as mockups. The
-user chose a **mix of A and C**, drawn as **D**, which is the direction to
-implement; A, B and C stay in the mockup for reference.
+This plan first proposed **three directions** (A, B, C) as mockups, then a
+mix of A and C drawn as **D**. The user finally chose **C — List and
+record**, which is the direction to implement; A, B and D stay in the
+mockup for reference (D is superseded).
 
 Mockup: [`docs/mockups/prints-redesign/index.html`](../mockups/prints-redesign/index.html)
 (open it in a browser; the bar at the bottom switches proposal, view and
-theme). Screenshots, 1440 × 900, light and dark, French UI, sample data for
-two Snapmaker U1: `proposal-d-{overview,detail-running,detail-finished}-{light,dark}-fr.png`
-for D, `proposal-{a,b,c}-{overview,detail}-{light,dark}-fr.png` for the others.
-`shoot.sh` redraws them with headless Chrome.
+theme; C opens by default). Screenshots, 1440 × 900, light and dark, French
+UI, sample data for two Snapmaker U1:
+`proposal-c-{running,finished}-{light,dark}-fr.png` for C,
+`proposal-{a,b}-{overview,detail}-{light,dark}-fr.png` and
+`proposal-d-{overview,detail-running,detail-finished}-{light,dark}-fr.png`
+for the others. `shoot.sh` redraws them with headless Chrome.
 
-## Chosen direction: D — A + C
+## Chosen direction: C — List and record
 
-The dashboard of A for what is happening now, the history and the record of
-C for looking back.
+A mail-style split, the list on the left, the record on the right, always
+open (no dashboard and no back button).
 
-- **Overview** (from A): the stats strip over a period (7 d / 30 d / All,
-  segmented control in the title bar); one live card per busy printer
-  (camera, progress, layer, end time, heads with the active one ringed,
-  temperatures, Pause / Resume and Cancel on the card); the queue (drag to
-  reorder, estimated start, why it waits) with a small **Today** card under
-  it (busy share per printer, when both will be free).
-- **History** (from C), in place of A's table: search, a segmented filter
-  (All / Finished / Failed: running and queued prints are already above),
-  chips per printer and material, groups Today / Yesterday / by day with the
-  filament used; rows with thumbnail, time and failure reason, printer,
-  duration, filament by color, state.
-- **Record** (from C): clicking a card, a queued print or a history row
-  turns the page into C's split, with a back button to the dashboard. The
-  list on the left keeps the context (in progress, queue, history, same
-  filters); the record on the right shows, for a running print, camera, big
-  progress, time per layer, filament per head and timeline; for a finished
-  one, the timelapse, the **Result** card (Success / Failed, note), real
-  against estimated duration, filament, time per feature, Reprint and Open
-  in Prepare.
+- **List**: search (name, file), a segmented filter (All, Active,
+  Finished, Failed), chips per printer and material; groups **In
+  progress**, **Queue** (with its total time and each print's estimated
+  start), **Today**, **Yesterday**, then by day with the filament used.
+  Running rows show a progress line; history rows show printer, time,
+  duration and state.
+- **Record of a running print**: header with Pause / Cancel; camera and a
+  big progress block (percent, layer, remaining, end time, elapsed,
+  temperatures, speed); **time per layer** with the current layer marked;
+  filament per head (the active head marked); timeline.
+- **Record of a finished print**: the timelapse in place of the camera, the
+  **Result** card (Success / Failed, a note), real against estimated
+  duration, filament and cost, settings chips, timeline with pauses, time
+  per feature; **Reprint** and **Open in Prepare** in the header.
 
-A docked right pane over the dashboard was considered for the record; at
-1440 × 900 it left too little of the dashboard readable, while the split's
-list carries the same information in a column.
+### What does not change
 
-## The three first directions (reference)
+- **The sidebar's Prints submenu stays as it is today**: the running prints
+  with their progress (or "pause"), then the queued prints, numbered. The
+  count next to Prints keeps counting running and queued prints.
+
+### What is left out
+
+- **No stats strip on the Prints page.** Period stats (print time,
+  filament per material, cost, success rate) and the busy share per
+  printer leave this page.
+
+## Follow-up (separate pull request): statistics
+
+- **New tabs on the printer page**, with that printer's stats (print time,
+  filament, success rate, busy share) next to what the page shows today.
+- A separate **Statistics page** for all printers, over a period (7 d /
+  30 d / All).
+- Both read the same sums over finished jobs as listed below, and benefit
+  from the Result field and the longer history in *New data*.
+
+## Other directions (reference)
 
 ### A — Dashboard
 
@@ -82,7 +97,7 @@ Time is the axis: for someone who runs a queue over a day.
   camera, progress, end and estimate, then Follow / Slice / Timeline tabs,
   and what comes next on that printer.
 
-### C — List and record (master–detail)
+### C — List and record (master–detail), as first drawn
 
 A mail-style split: for someone who looks back and compares.
 
@@ -97,6 +112,13 @@ A mail-style split: for someone who looks back and compares.
   **Result** card (Success / Failed, a note), real against estimated
   duration, filament, settings chips, timeline with pauses, time per
   feature; Reprint and Open in Prepare.
+
+### D — A + C (superseded)
+
+A's dashboard (stats strip, one live card per busy printer, the queue and a
+Today card) over C's history; a click turned the page into C's split with
+a back button. Superseded by C alone: the stats move to the printer page
+and a Statistics page, and the split is the whole page.
 
 ## What is shown and where it comes from
 
@@ -113,8 +135,8 @@ A mail-style split: for someone who looks back and compares.
 | Camera | printer camera, as in today's record |
 | Estimated start in the queue, "free at" | `pjStartEstimate` (already in `prints.js`) |
 | Real duration, real against estimate | `finished − started` against `print_time_s` |
-| Period stats (time, filament per material, cost, success rate) | sums over finished jobs; success = `complete` against `cancelled` / `error` |
-| Busy share per printer (B) | sum of `started → finished` spans over the day |
+| Period stats (follow-up: printer tabs, Statistics page) | sums over finished jobs; success = `complete` against `cancelled` / `error` |
+| Busy share per printer (B; follow-up) | sum of `started → finished` spans over the day |
 | Timelapse of a finished print (C) | printer files (`printer-files.js`), matched to the job by printer and end time |
 
 ## New data
@@ -133,9 +155,12 @@ A mail-style split: for someone who looks back and compares.
 
 ## Open questions
 
-- D's record: the split (as drawn) or a sheet over the dashboard?
-- Period stats: is 7 d / 30 d / All enough, or per printer too?
 - The Result card: asked at the end of every print (in the "next one?"
   sheet), or only in the record?
 - How long to keep the history, and should the G-code go after a while?
-- The sidebar's per-print entries: keep them as they are?
+- The record when nothing is selected on opening the page: the first
+  running print, else the latest finished one?
+
+Decided: the split page (not a panel over a dashboard); no stats on this
+page, stats per printer go to the printer page in the follow-up; the
+sidebar's Prints submenu unchanged.
