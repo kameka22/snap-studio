@@ -153,6 +153,59 @@ and a Statistics page, and the split is the whole page.
   removing a job from the history deletes its G-code. A job could keep its
   record (stats, thumbnail) without the G-code.
 
+## One camera for the app
+
+The record of a running print first had its own camera (an image loop in
+`prints.js`), next to the printer page's (`printers.js`, with pin, enlarge,
+full size and the pinned window) and Control's (`control.js`, a small one).
+Three loops, three sets of timers and keep-alives, each stopping and
+restarting the printer's camera when the user went from one screen to
+another, and the record without the printer page's controls.
+
+### Decision
+
+One component, `camera.js`, and one element (`#cam-box`, with its bar of
+controls), for every screen:
+
+- A screen that shows a printer declares the camera's **home** there
+  (`camHome(el, printerId, opts)`): the printer page (the Camera section,
+  or the 3D view's corner), the record of a running print, Control's card.
+  Leaving a screen calls `camLeave()`.
+- `camPlace()` puts the box where it shows, decided by the pure
+  `camHostOf` (camera-logic.js, tested): at full size over the content
+  area; at home when the stream is the home's printer (also when off, the
+  box waits there hidden); in the pinned window when the stream is another
+  printer's or no screen shows one; nowhere otherwise, and the stream then
+  ends.
+- The screens keep their own switches and paint them on the `cam-change`
+  event: the Camera section's switch, the 3D view's button, the record's
+  corner switch (on by default, the choice kept), Control's switch.
+- Per screen options: `auto` (the record starts the camera by itself,
+  unless it failed on that printer, or a pinned stream shows another one),
+  `tag` (the record's LIVE / PAUSED badge), `enlarge` (the printer page,
+  where the box has room to grow), `close: false` (the record, whose switch
+  takes the ✕'s corner).
+
+### What it does better
+
+- **One stream, kept across screens**: going from the printer page to the
+  running print's record, or to Control, of the same printer moves the box
+  and keeps the stream; before, each screen stopped and restarted the
+  printer's camera monitor.
+- **Nothing read for nothing**: no frame is asked while the window is
+  hidden (`visibilitychange`), while a site's native view shows the camera
+  (camview.js), or while one is in flight. The printer is held to be gone
+  after three misses and tried again every 3 s; its status from the
+  background tracking (`prints-status`, every printer) and the printer
+  page (`printer-status`) says so at once, wherever the box shows.
+- **The same controls everywhere**: pin, full size (Esc, or a click beside
+  the picture), enlarge where the screen allows it; the camera's notes
+  (starting, a missed frame) and the badge are drawn in the box, over the
+  picture, so every home has them.
+- **A start that fails** is told when the user asked (a switch) and only
+  remembered when a screen asked by itself, so a record redrawn every few
+  seconds does not retry a printer whose camera will not start.
+
 ## Open questions
 
 None left.

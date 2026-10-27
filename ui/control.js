@@ -335,7 +335,6 @@ const CT = {
   step: +localStorage.getItem("snapstudio.ctl.step") || 10,
   timer: 0,
   built: null, // the pid and head count the skeleton was built for
-  cam: { on: false, n: 0, timer: 0, keep: 0, pid: null },
 };
 
 const ctOn = () => window.currentView === "maint" && MT.tab === "control";
@@ -343,12 +342,10 @@ const ctMm = (v) => fmtDec(v, 1);
 
 /* Opens the tab on a printer; `ctx.head` brings that head into view. */
 async function ctShow(pid, ctx = {}) {
-  if (CT.pid !== pid) {
-    ctCamStop();
-    Object.assign(CT, { pid, built: null, homedSeen: false });
-  }
+  if (CT.pid !== pid) Object.assign(CT, { pid, built: null, homedSeen: false });
   CT.head = ctx.head ?? null;
   ctBuild();
+  ctCamHome();
   ctUpdate();
   ctlSpools(pid);
   await ctlRead(pid, true);
@@ -359,7 +356,7 @@ async function ctShow(pid, ctx = {}) {
 function ctLeave() {
   clearTimeout(CT.timer);
   CT.timer = 0;
-  ctCamStop();
+  camLeave();
 }
 
 /* Every 1.5 s while shown; the spools every 30 s. */
@@ -465,7 +462,7 @@ function ctBuild() {
       </section>
       <section class="ct-card ct-cam">
         <div class="ct-card-head">${esc(tr("printers.camera"))}<input type="checkbox" class="sw small" role="switch" id="ct-cam-sw" aria-label="${esc(tr("printers.camera"))}" /></div>
-        <div class="ct-cam-box" id="ct-cam-box"><img id="ct-cam-img" alt="${esc(tr("printers.camera_alt"))}" /><span class="ct-cam-note" id="ct-cam-note">${esc(tr("ctl.cam_off"))}</span></div>
+        <div class="ct-cam-box" id="ct-cam-box"><span class="ct-cam-note">${esc(tr("ctl.cam_off"))}</span></div>
       </section>
     </div>
     <div class="ct-foot">
@@ -559,7 +556,7 @@ $("ct-body").addEventListener("change", (e) => {
     return ctlRun(CT.pid, { kind: r.id === "ct-fan" ? "part_fan" : "chamber_fan", pct: +r.value }, tr("ctl.doing.fan"));
   }
   if (r.id === "ct-purifier") return ctlRun(CT.pid, { kind: "purifier", on: r.checked }, tr("ctl.doing.purifier"));
-  if (r.id === "ct-cam-sw") return r.checked ? ctCamStart() : ctCamStop();
+  if (r.id === "ct-cam-sw") return r.checked ? camStart(CT.pid) : camStop();
 });
 
 /* ------------------------------------------------- material and colour */
@@ -673,61 +670,24 @@ $("cthelp-close").addEventListener("click", () => closeSheet($("cthelp")));
 
 /* ------------------------------------------------------------ camera */
 
-/* The printer's camera, small: the same feed as the printer page (woken by
-   camera_start, a JPEG read again in a loop, kept awake every 10 s). */
-async function ctCamStart() {
-  const pid = CT.pid;
-  if (!pid) return;
-  ctCamStop();
-  // Two quick toggles: only the last start goes on (one keep-alive).
-  const gen = (CT.cam.gen = (CT.cam.gen || 0) + 1);
-  Object.assign(CT.cam, { on: true, pid });
-  $("ct-cam-sw").checked = true;
-  $("ct-cam-note").textContent = tr("printers.cam.starting");
-  $("ct-cam-box").classList.add("on");
-  try {
-    await invoke("camera_start", { printerId: pid });
-  } catch (e) {
-    if (gen !== CT.cam.gen) return;
-    ctCamStop();
-    $("ct-cam-note").textContent = String(e);
-    return;
-  }
-  if (gen !== CT.cam.gen || !CT.cam.on || CT.pid !== pid) return;
-  CT.cam.keep = setInterval(() => invoke("camera_start", { printerId: pid }).catch(() => {}), 10000);
-  ctCamNext();
+/* The printer's camera (camera.js), small, in its card: the same stream
+   as the printer page, moved here. */
+function ctCamHome() {
+  const box = $("ct-cam-box");
+  if (ctOn() && box && CT.pid) camHome(box, CT.pid);
 }
-function ctCamNext() {
-  if (!CT.cam.on) return;
-  $("ct-cam-img").src = schemeUrl("cam", `/f?id=${encodeURIComponent(CT.cam.pid)}&n=${++CT.cam.n}`);
-}
-function ctCamStop() {
-  const c = CT.cam;
-  clearTimeout(c.timer);
-  clearInterval(c.keep);
-  if (c.on && c.pid) invoke("camera_stop", { printerId: c.pid }).catch(() => {});
-  Object.assign(c, { on: false, pid: null, timer: 0, keep: 0 });
+document.addEventListener("cam-change", () => {
   const sw = $("ct-cam-sw");
   if (!sw) return;
-  sw.checked = false;
-  $("ct-cam-box").classList.remove("on");
-  $("ct-cam-img").removeAttribute("src");
-  $("ct-cam-note").textContent = tr("ctl.cam_off");
-}
-$("ct-body").addEventListener("load", (e) => {
-  if (e.target.id !== "ct-cam-img" || !CT.cam.on) return;
-  $("ct-cam-note").textContent = "";
-  CT.cam.timer = setTimeout(ctCamNext, 200);
-}, true);
-$("ct-body").addEventListener("error", (e) => {
-  if (e.target.id !== "ct-cam-img" || !CT.cam.on) return;
-  $("ct-cam-note").textContent = tr("printers.cam.retry");
-  CT.cam.timer = setTimeout(ctCamNext, 1000);
-}, true);
+  const on = CAM.on && CAM.id === CT.pid;
+  sw.checked = on;
+  $("ct-cam-box").classList.toggle("on", on);
+});
 
 window.addEventListener("langchange", () => {
   if (!ctOn()) return;
   CT.built = null;
   ctBuild();
+  ctCamHome();
   ctUpdate();
 });

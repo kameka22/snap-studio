@@ -26,7 +26,9 @@ const PJ = {
   printers: new Set(),
   materials: new Set(),
   q: "",
-  cam: { id: null, on: false, n: 0, timer: 0, keep: 0, want: localStorage.getItem("snapstudio.pjcam") !== "0", failed: null, err: "", el: null },
+  /* The camera (camera.js) in a running print's record: on by default
+     (the choice is kept); its switch, one element kept across redraws. */
+  cam: { want: localStorage.getItem("snapstudio.pjcam") !== "0", el: null },
   /* Timelapses: videos listed per printer (a short cache), jobs already
      looked for this session, the one being looked for, the video element. */
   tl: { videos: {}, tried: new Set(), looking: null, el: null },
@@ -563,7 +565,7 @@ function pjRunningHtml({ job, live }) {
     ? `${pjLayers(job, st.layer)}<div class="pj-two">${pjPanel(tr("prints.heads"), pjFilament(job, st))}${pjTimeline(job, st)}</div>`
     : `<p class="pj-note-muted">${esc(tr("prints.foreign"))}</p>`;
   return `${pjHead(job, name, st.state, kicker, buttons)}
-    <div class="pj-top"><div class="pj-media" id="pj-media"></div>${pjProgress(st)}</div>${body}`;
+    <div class="pj-top"><div class="pj-media pj-cam" id="pj-media"><span class="pj-cam-off">${PJ_ICONS.cam}</span></div>${pjProgress(st)}</div>${body}`;
 }
 
 function pjQueuedHtml({ job, live }) {
@@ -686,12 +688,15 @@ function pjRenderDetail(it) {
   // The camera and the timelapse are kept across redraws: moved, not rebuilt.
   if (active) {
     pjTlStop();
-    slot?.append(pjCamNode());
-    PJ.cam.el.classList.toggle("paused", live.status.state === "paused");
-    if (PJ.cam.want && PJ.cam.id !== live.printer_id && PJ.cam.failed !== live.printer_id) pjCamStart(live.printer_id);
-    else pjCamPaint();
+    if (slot) {
+      // The camera's box goes into the slot (camera.js), the switch over it.
+      camHome(slot, live.printer_id, { auto: PJ.cam.want, tag: live.status.state === "paused" ? "paused" : "live", close: false });
+      const sw = pjCamSwitch();
+      if (sw.parentNode !== slot) slot.append(sw);
+      pjCamPaint();
+    }
   } else {
-    pjCamStop();
+    camHome(null);
     if (job.timelapse && slot) slot.append(pjTlNode(job));
     else pjTlStop();
     if (pjlIsDone(job) && !job.timelapse && job.options?.timelapse) pjFindTimelapse(job);
@@ -868,8 +873,7 @@ async function pjAct(act, el) {
     } else if (act === "cam") {
       PJ.cam.want = el.checked;
       localStorage.setItem("snapstudio.pjcam", PJ.cam.want ? "1" : "0");
-      PJ.cam.failed = null;
-      PJ.cam.want ? pjCamStart(printer) : pjCamStop();
+      PJ.cam.want ? camStart(printer) : camStop();
     } else if (act === "more") {
       const r = el.getBoundingClientRect();
       const done = job && pjlIsDone(job);
@@ -971,92 +975,37 @@ function pjTlStop() {
   PJ.tl.el.remove();
 }
 
-/* Leaving the page or the record: camera and video stop. */
+/* Leaving the page or the record: the camera leaves (camera.js: a pinned
+   one goes on in its window), the video stops. */
 function pjLeave() {
-  pjCamStop();
+  camLeave();
   pjTlStop();
 }
 
 /* ------------------------------------------------------------ camera */
 
-/* The camera of a running print's record: one element for the page,
-   moved from record to record, on by default (the choice is kept). */
-function pjCamNode() {
+/* The camera's switch in the record's corner, one element for the page. */
+function pjCamSwitch() {
   if (!PJ.cam.el) {
-    const el = document.createElement("div");
-    el.className = "pj-media-in pj-cam";
-    el.innerHTML = `<img id="pj-cam-img" alt="" />
-      <span class="pj-tag live"><i></i><span class="l">${esc(tr("prints.live"))}</span><span class="p">${esc(tr("prints.paused_tag"))}</span></span>
-      <span class="pj-shot-note" id="pj-cam-note"></span>
-      <span class="pj-cam-off">${PJ_ICONS.cam}</span>
-      <label class="pj-cam-sw"><span></span><input type="checkbox" id="pj-cam-toggle" class="sw small" role="switch" /></label>`;
+    const el = document.createElement("label");
+    el.className = "pj-cam-sw";
+    el.innerHTML = `<span></span><input type="checkbox" id="pj-cam-toggle" class="sw small" role="switch" />`;
     PJ.cam.el = el;
   }
   return PJ.cam.el;
 }
 
-/* The camera element as the state says: on, off, or failed. */
+/* The switch and the slot as the camera says: on for this record's
+   printer, or off. */
 function pjCamPaint() {
-  const el = PJ.cam.el;
+  const el = PJ.cam.el, slot = $("pj-media");
   if (!el) return;
-  el.classList.toggle("on", PJ.cam.on);
-  el.querySelector(".pj-cam-sw span").textContent = tr("printers.camera");
-  el.querySelector("#pj-cam-toggle").checked = PJ.cam.on;
-  if (!PJ.cam.on) el.querySelector("#pj-cam-note").textContent = PJ.cam.err || "";
+  const on = CAM.on && CAM.id === $("pj-detail").dataset.printer;
+  el.querySelector("span").textContent = tr("printers.camera");
+  el.querySelector("input").checked = on;
+  slot?.classList.toggle("on", on);
 }
-
-async function pjCamStart(id) {
-  if (!id) return;
-  pjCamStop();
-  // Two quick toggles: only the last start goes on (one keep-alive, one
-  // chain of images).
-  const gen = (PJ.cam.gen = (PJ.cam.gen || 0) + 1);
-  Object.assign(PJ.cam, { id, on: true, err: "" });
-  pjCamPaint();
-  try {
-    await invoke("camera_start", { printerId: id });
-  } catch (e) {
-    if (gen !== PJ.cam.gen) return;
-    // Off again, and not asked again for this printer until a click: every
-    // redraw of the record would retry it.
-    pjCamStop();
-    Object.assign(PJ.cam, { failed: id, err: String(e) });
-    pjCamPaint();
-    return;
-  }
-  if (gen !== PJ.cam.gen || !PJ.cam.on) return;
-  PJ.cam.keep = setInterval(() => invoke("camera_start", { printerId: id }).catch(() => {}), 10000);
-  pjCamNext();
-}
-
-function pjCamNext(again) {
-  const img = $("pj-cam-img");
-  if (!PJ.cam.on || !img) return;
-  clearTimeout(PJ.cam.timer);
-  img.onload = () => {
-    PJ.cam.last = img.src;
-    $("pj-cam-note").textContent = "";
-    PJ.cam.timer = setTimeout(pjCamNext, 250);
-  };
-  img.onerror = () => {
-    $("pj-cam-note").textContent = tr("printers.cam.retry");
-    PJ.cam.timer = setTimeout(pjCamNext, 1000);
-  };
-  img.src = again || schemeUrl("cam", `/f?id=${encodeURIComponent(PJ.cam.id)}&n=${++PJ.cam.n}`);
-}
-
-function pjCamStop() {
-  clearTimeout(PJ.cam.timer);
-  clearInterval(PJ.cam.keep);
-  if (PJ.cam.on && PJ.cam.id) invoke("camera_stop", { printerId: PJ.cam.id }).catch(() => {});
-  Object.assign(PJ.cam, { id: null, on: false, timer: 0, keep: 0, last: "" });
-  const img = PJ.cam.el?.querySelector("img");
-  if (img) {
-    img.onload = img.onerror = null;
-    img.removeAttribute("src");
-  }
-  pjCamPaint();
-}
+document.addEventListener("cam-change", pjCamPaint);
 
 /* ------------------------------------------------------------ next */
 
@@ -1198,6 +1147,8 @@ listen("print-send", (e) => {
 
 listen("prints-status", (e) => {
   PJ.live = e.payload || [];
+  // The camera's printer gone: said over the camera, wherever it shows.
+  for (const l of PJ.live) camPrinterStatus(l.printer_id, l.status.online);
   pjTrackLive();
   pjRenderSide();
   pjRefreshDetail();
@@ -1237,10 +1188,6 @@ $("set-history-keep").addEventListener("change", async (e) => {
 tbSet("prints", tr("nav.prints"));
 window.addEventListener("langchange", () => {
   pjRenderSide();
-  if (PJ.cam.el) {
-    PJ.cam.el.querySelector(".pj-tag .l").textContent = tr("prints.live");
-    PJ.cam.el.querySelector(".pj-tag .p").textContent = tr("prints.paused_tag");
-  }
   if (PJ.tl.el) PJ.tl.el.querySelector(".pj-tag").lastChild.textContent = tr("prints.tl.tag");
   pjCamPaint();
   if (window.currentView === "prints") pjRender();

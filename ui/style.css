@@ -2526,6 +2526,17 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 }
 .cam-box.big { max-width: none; }
 .cam-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* In a record's media slot (Prints) or Control's card: the whole slot. */
+.pj-media .cam-box, .ct-cam-box .cam-box { position: absolute; inset: 0; max-width: none; margin: 0; aspect-ratio: auto; }
+/* What the camera says (starting, a missed frame), over the picture. */
+.cam-note { position: absolute; left: 12px; right: 12px; bottom: 10px; font-size: 12px; color: #fff; text-align: center; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.cam-note:empty { display: none; }
+/* Live or paused, top left, where the screen asks for it (Prints). */
+.cam-tag { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; backdrop-filter: blur(6px); pointer-events: none; }
+.cam-tag i { width: 6px; height: 6px; border-radius: 50%; background: #ff453a; }
+.cam-tag .p, .cam-tag.paused .l { display: none; }
+.cam-tag.paused .p { display: inline; }
+.cam-tag.paused i { background: #ff9f0a; }
 
 /* ---------- Prepare view ---------- */
 .prep { flex: 1; display: flex; min-height: 0; }
@@ -3160,20 +3171,17 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
 .pj-shot img { position: absolute; inset: 0; }
 .pj-shot .pj-ph { width: 22%; height: 22%; }
 .pj-shot-note { position: absolute; left: 12px; right: 12px; bottom: 10px; font-size: 12px; color: var(--text-secondary); text-align: center; }
-.pj-cam .pj-shot-note, .pj-video .pj-shot-note { color: #fff; text-shadow: 0 1px 2px #000; }
+.pj-video .pj-shot-note { color: #fff; text-shadow: 0 1px 2px #000; }
 .pj-video.gone video { opacity: 0.25; }
 .pj-tag { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; backdrop-filter: blur(6px); pointer-events: none; }
 .pj-tag i { width: 6px; height: 6px; border-radius: 50%; background: #ff453a; }
-.pj-tag .p, .pj-cam.paused .pj-tag .l { display: none; }
-.pj-cam.paused .pj-tag .p { display: inline; }
-.pj-cam.paused .pj-tag i { background: #ff9f0a; }
 .pj-tag svg { width: 11px; height: 11px; fill: #fff; }
-.pj-cam:not(.on) img, .pj-cam:not(.on) .pj-tag { display: none; }
+/* The camera's slot while off: a quiet icon under the box (camera.js). */
 .pj-cam-off { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 255, 255, 0.35); }
 .pj-cam-off svg { width: 40px; height: 40px; fill: currentColor; }
-.pj-cam.on .pj-cam-off { display: none; }
-/* The camera switch, in a corner: always there when off, on hover when on. */
-.pj-cam-sw { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 7px; padding: 3px 4px 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 11.5px; font-weight: 500; backdrop-filter: blur(6px); transition: opacity 160ms ease; }
+/* The camera switch, in a corner over the box: always there when off, on
+   hover when on. */
+.pj-cam-sw { position: absolute; z-index: 2; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 7px; padding: 3px 4px 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 11.5px; font-weight: 500; backdrop-filter: blur(6px); transition: opacity 160ms ease; }
 .pj-cam.on .pj-cam-sw { opacity: 0; }
 .pj-cam.on:hover .pj-cam-sw, .pj-cam-sw:focus-within { opacity: 1; }
 
@@ -4358,8 +4366,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .ct-empty { font-size: 12.5px; color: var(--text-secondary); }
 /* The camera, small. */
 .ct-cam-box { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, var(--content-bg)); display: grid; place-items: center; }
-.ct-cam-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
-.ct-cam-box.on img[src] { display: block; }
 .ct-cam-note { position: relative; font-size: 12px; color: var(--text-tertiary); }
 .ct-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .ct-adv { margin-left: auto; }

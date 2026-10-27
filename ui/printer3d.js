@@ -113,8 +113,8 @@ function p3dStatus(st) {
 function p3dLayout(on) {
   $("p3d").classList.toggle("hidden", !on);
   $("prn-detail").classList.toggle("p3d-on", on);
-  // The camera follows (or stays pinned, or full size).
-  camPlace();
+  // The camera follows, into the corner or the Camera section.
+  prnCamHome();
   if (!on) p3dTip(null);
 }
 
@@ -282,7 +282,7 @@ function p3dQuick() {
   light.classList.toggle("on", !!cs?.light);
   light.classList.toggle("hidden", !!cfg && !cfg.light);
   light.disabled = !!ctlBusy(pid) || !!ctlWhy("light", cs, cfg);
-  $("p3d-camera").classList.toggle("on", CAM.on);
+  $("p3d-camera").classList.toggle("on", CAM.on && CAM.id === P3.pid);
   $("p3d-help").classList.toggle("on", P3.hint);
   $("p3d-hint").classList.toggle("hidden", !P3.hint);
 }
@@ -444,7 +444,7 @@ $("p3d-light").addEventListener("click", () => {
   ctlRun(pid, { kind: "light", on: !ctlState(pid)?.light }, tr("ctl.doing.light"));
 });
 $("p3d-camera").addEventListener("click", async () => {
-  await (CAM.on ? camStop() : camStart());
+  await (CAM.on && CAM.id === P3.pid ? camStop() : camStart(P3.pid));
   p3dQuick();
 });
 $("p3d-help").addEventListener("click", () => {
