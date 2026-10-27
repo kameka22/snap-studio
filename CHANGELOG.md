@@ -11,6 +11,12 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Fixed
+- AI setup on macOS: launched from its icon, the app found macOS's own
+  Python 3.9 before the one installed with Homebrew (and so did Claude). The
+  folders users install to now come before the system's. A module that is
+  installed but does not import now says why, under the modules' line.
+
 ## [0.16.0] — 2026-10-26
 
 ### Added

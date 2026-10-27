@@ -280,7 +280,7 @@ fn check_python() -> (Vec<Item>, bool) {
     // Its folders too: those under the home are re-opened, read only, to the
     // built-in sandbox, which hides the home (`sandbox_read_paths`).
     let script = format!(
-        "import sys, os, site, sysconfig, importlib\nprint('python', sys.version.split()[0])\nprint('managed', os.path.exists(os.path.join(sysconfig.get_paths()['stdlib'], 'EXTERNALLY-MANAGED')))\nfor m in {MODULES:?}:\n    try:\n        importlib.import_module(m)\n        print(m, 'ok')\n    except Exception:\n        print(m, 'missing')\nfor p in [sys.prefix, sys.base_prefix, site.getusersitepackages()] + sys.path:\n    if p:\n        print('path', os.path.realpath(p))\n"
+        "import sys, os, site, sysconfig, importlib\nprint('python', sys.version.split()[0])\nprint('managed', os.path.exists(os.path.join(sysconfig.get_paths()['stdlib'], 'EXTERNALLY-MANAGED')))\nfor m in {MODULES:?}:\n    try:\n        importlib.import_module(m)\n        print(m, 'ok')\n    except Exception as e:\n        print(m, 'missing', (type(e).__name__ + ': ' + str(e)).replace(chr(10), ' ')[:300])\nfor p in [sys.prefix, sys.base_prefix, site.getusersitepackages()] + sys.path:\n    if p:\n        print('path', os.path.realpath(p))\n"
     );
     let out = probe(&py, &["-c", &script], Duration::from_secs(30)).map(|(_, o)| o).unwrap_or_default();
     *last_python_paths().lock().unwrap() = Some(python_paths(&out));
@@ -338,12 +338,14 @@ fn parse_python(out: &str) -> Vec<Item> {
     }];
     let python_ok = v[0].state == State::Ok;
     for m in MODULES {
-        let st = match line(m) {
-            Some("ok") => State::Ok,
-            _ if !python_ok => State::Skipped,
-            _ => State::Missing,
+        // A module that does not import says why: Python's own error.
+        let (st, why) = match line(m) {
+            Some("ok") => (State::Ok, None),
+            _ if !python_ok => (State::Skipped, None),
+            Some(l) => (State::Missing, l.strip_prefix("missing").map(str::trim).filter(|w| !w.is_empty()).map(String::from)),
+            None => (State::Missing, None),
         };
-        v.push(item(m, st, &modes, None));
+        v.push(item(m, st, &modes, why));
     }
     v
 }
@@ -451,6 +453,12 @@ mod tests {
         assert_eq!(st("trimesh"), State::Ok);
         assert_eq!(st("manifold3d"), State::Missing);
         assert_eq!(v[0].detail.as_deref(), Some("3.12.4"));
+        // Its error says why, when Python gave one.
+        let v = parse_python("python 3.15.0\ntrimesh ok\nmanifold3d missing ImportError: dlopen(manifold3d.so): Library not loaded\nnumpy missing ModuleNotFoundError: No module named 'numpy'\n");
+        let why = |k: &str| v.iter().find(|i| i.key == k).unwrap().detail.clone();
+        assert_eq!(why("manifold3d").as_deref(), Some("ImportError: dlopen(manifold3d.so): Library not loaded"));
+        assert_eq!(why("numpy").as_deref(), Some("ModuleNotFoundError: No module named 'numpy'"));
+        assert_eq!(why("trimesh"), None);
         // Python did not run: the modules could not be checked.
         let none = parse_python("");
         assert!(none[1..].iter().all(|i| i.state == State::Skipped));
