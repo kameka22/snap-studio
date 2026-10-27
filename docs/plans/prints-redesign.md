@@ -162,5 +162,6 @@ page, stats per printer go to the printer page in the follow-up; the
 sidebar's Prints submenu unchanged; on opening the page with nothing
 selected, the record shows the first running print, else the latest
 finished one; the result is set only in the record (never asked at the
-end of a print); the history and its G-code are kept forever, never
-deleted automatically.
+end of a print); the history and its G-code are kept forever by default;
+a setting in Settings (« Supprimer automatiquement l'historique »: Jamais,
+after 30 days, 90 days, 1 year) can turn on auto-deletion, default Jamais.
