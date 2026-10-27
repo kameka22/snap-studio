@@ -91,11 +91,16 @@ function fillLangPickers() {
   }
 }
 
-/* The catalog of `lang`, fetched the first time. */
+/* The catalog of `lang`, fetched the first time; only a catalog is kept
+   (an error page, even in JSON, is not). */
 async function loadCatalog(lang) {
   if (!I18N.catalogs[lang]) {
     try {
-      I18N.catalogs[lang] = await fetch(`i18n/${lang}.json`).then((r) => r.json());
+      const r = await fetch(`i18n/${lang}.json`);
+      if (!r.ok) throw new Error(`i18n/${lang}.json: ${r.status}`);
+      const cat = await r.json();
+      if (!cat || typeof cat !== "object" || Array.isArray(cat)) throw new Error(`i18n/${lang}.json: not a catalog`);
+      I18N.catalogs[lang] = cat;
     } catch (e) {
       console.error(e);
     }
@@ -103,14 +108,29 @@ async function loadCatalog(lang) {
   return !!I18N.catalogs[lang];
 }
 
+/* The last language picked: two quick picks load in any order, only the
+   last one applies. */
+let LANG_WANTED = null;
+
 async function setLanguage(lang, persist = true) {
-  if (!I18N.langs.some((l) => l.code === lang) || !(await loadCatalog(lang))) return;
+  if (!I18N.langs.some((l) => l.code === lang)) return;
+  LANG_WANTED = lang;
+  const ok = await loadCatalog(lang);
+  if (LANG_WANTED !== lang) return;
+  if (!ok) {
+    // Not applied: the pickers say the language shown, not the one asked.
+    fillLangPickers();
+    if (typeof toast === "function") toast(tr("settings.lang_failed"), true);
+    return;
+  }
   if (persist) {
     try {
       await window.__TAURI__.core.invoke("language_set", { lang });
     } catch (e) {
       console.error(e);
     }
+    // Another pick came meanwhile: it applies (and tells Rust) instead.
+    if (LANG_WANTED !== lang) return;
   }
   if (lang === LANG) return;
   LANG = lang;

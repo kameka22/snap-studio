@@ -2427,5 +2427,6 @@
   "prints.det.started": "Lancée",
   "prints.det.finished": "Terminée",
   "prints.det.first_layer_short": "1re couche {t}",
-  "prints.det.layers_n": {"one": "{n} couche", "other": "{n} couches"}
+  "prints.det.layers_n": {"one": "{n} couche", "other": "{n} couches"},
+  "settings.lang_failed": "Cette langue n'a pas pu être chargée : l'interface reste telle quelle."
 }

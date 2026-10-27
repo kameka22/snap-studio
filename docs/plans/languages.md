@@ -70,10 +70,19 @@ tags, plural shape) before merging, in `en.json`'s order.
 - **Kept as is**: product names (Snap Studio, Snapmaker, U1, Orca, Claude
   Code, yolobox, bubblewrap), units, G-code commands, and texts that quote
   another program's own interface.
-- **To review by native speakers** (Weblate): "home" (homing) wording,
-  German *Umrandung* for brim and *Wartung & Einstellung* for Care &
-  Tuning, Portuguese *Torre de preparo* (Orca's choice), Italian *Elabora*
-  for slice (Orca's choice).
+- **Spanish** is neutral, for Spain and Latin America alike: *equipo*,
+  *teléfono*, *costo*, *video*; no *coger*.
+- **Technical review**: each catalog was read again against English and
+  Orca's labels in the same language, for the technical texts (slicing,
+  hardware, calibration, Klipper, engine errors, AI setup): 20 keys changed
+  in German, 52 in Spanish, 30 in Brazilian Portuguese, 44 in Italian
+  (meaning, consistency with Orca, a unit, a few wordings). Kept after that
+  review: "homing" in the four languages, *Umrandung*, *Torre de preparo*,
+  *Elabora*, *Laminar*, *Torre de purga*, *Tesa*. Changed: Care & Tuning in
+  German is *Wartung & Kalibrierung* (*Einstellung* read like *Einstellungen*,
+  Settings, in the same sidebar).
+- **Still to review by native speakers** (Weblate): the catalogs as a
+  whole.
 
 ## Orca's settings
 
@@ -94,7 +103,9 @@ Regenerate with a checkout of that tag:
 python3 scripts/gen-orca-settings.py /path/to/OrcaSlicer
 ```
 
-Labels Orca does not translate keep English. Out of 785 labels: German
+Labels Orca does not translate keep English. Entries Orca marks *fuzzy*
+are kept: in v2.4.0 they are tooltips whose English moved a little, still
+correctly translated. Out of 785 labels: German
 615, Brazilian Portuguese 606, Italian 585, Spanish 538 (French 572).
 
 ## Layout

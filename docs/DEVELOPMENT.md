@@ -77,21 +77,27 @@ when it is chosen in Settings. To add a language:
 1. copy `ui/i18n/en.json` to `ui/i18n/<code>.json` and translate it (keep the
    `{placeholders}`, the HTML tags and the plural forms);
 2. add one entry to `LANGS` in `src-tauri/src/i18n.rs` (code, name in its own
-   language, BCP 47 locale for dates and numbers, catalog); the interface reads
-   the list from there, and `from_locale` maps the system language to it;
+   language and in English, BCP 47 locale for dates and numbers, whether zero
+   counts as singular, catalog): the only list to keep; the interface reads
+   it, `from_locale` maps the system language to it, the AI is told to reply
+   in that language;
 3. add it to `LANGS` in `scripts/gen-orca-settings.py` and run the script
    again (Orca's tabs, from OrcaSlicer's `.po` files), then to
    `CFBundleLocalizations` in `src-tauri/Info.plist` with a
    `src-tauri/locales/<code>.lproj` listed in `tauri.conf.json`;
 4. `python3 scripts/check-i18n.py` reports missing or unused keys, broken
    placeholders or tags, each catalog's completeness and text left
-   hard-coded (`--strict`: a missing key fails for every language).
+   hard-coded; a key missing from a language other than English and French
+   is a warning (`--strict`: an error).
+
+To add or change keys, `scripts/i18n_add.py` edits the catalogs in place
+(see its header): only the entries written change.
 
 ## Layout
 
 ```
 ui/               HTML/CSS/JS interface, one file per view (no build step)
-  i18n/           interface texts, one file per language (en, fr)
+  i18n/           interface texts, one file per language (en, fr, de, es, pt-BR, it)
   speed.js spoolcheck.js pfiles-logic.js ia-list.js ia-trace.js scheme.js
                   pure logic (Speed adjustment, spool check, printer files,
                   AI list, terminal view, protocol URLs), tested by

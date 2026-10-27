@@ -13,8 +13,8 @@ Reports, and exits non-zero on:
 - French left in the UI code outside the catalogs.
 
 The other languages may lag behind English (the missing keys show in
-English): their completeness is printed, and `--strict` makes a missing key
-an error for them too.
+English): their completeness is printed with the missing keys as warnings,
+and `--strict` makes a missing key an error for them too.
 """
 import json
 import re
@@ -61,16 +61,12 @@ def used_keys():
 # Catalogs that must hold every key of en.json.
 COMPLETE = {"en", "fr"}
 
-TAG = re.compile(r"</?([a-z][a-z0-9]*)\b")
+TAG = re.compile(r"</?([a-z][a-z0-9]*)\b", re.I)
 
 
 def tags(v):
     vals = v.values() if isinstance(v, dict) else [v]
-    return sorted(t for s in vals for t in TAG.findall(s))
-
-
-def forms(v):
-    return set(v) if isinstance(v, dict) else None
+    return sorted(t.lower() for s in vals for t in TAG.findall(s))
 
 
 def placeholders(v):
@@ -103,6 +99,14 @@ def main():
         missing = set(en) - set(cat)
         if lang in COMPLETE or strict:
             report(f"missing from {lang}.json", missing)
+        elif missing:
+            # Not an error (English shows), but said: a key added in English
+            # and French only must not go unnoticed.
+            print(f"warning: {len(missing)} keys missing from {lang}.json, shown in English:")
+            for k in sorted(missing)[:20]:
+                print("  ", k)
+            if len(missing) > 20:
+                print(f"   … and {len(missing) - 20} more")
         completeness.append(f"{lang} {100 * (len(en) - len(missing)) / len(en):.1f}%")
         report(f"unknown to en.json, in {lang}.json", set(cat) - set(en))
         report(

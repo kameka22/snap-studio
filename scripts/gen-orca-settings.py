@@ -55,6 +55,10 @@ def literals(text):
 
 
 def load_po(path):
+    """msgid → msgstr. Entries marked `#, fuzzy` are kept on purpose: in
+    Orca's catalogs they are tooltips whose English moved a little since
+    they were translated, and their text still says the same thing (checked
+    for v2.4.0: de 12, es 11, fr 10). Dropping them would show English."""
     tr, msgid, msgstr, cur = {}, None, None, None
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()

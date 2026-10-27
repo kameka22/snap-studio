@@ -12,9 +12,8 @@
 //! it, then to the key itself. French is kept complete by hand; the other
 //! languages may lag behind English while their translations are reviewed.
 //!
-//! Adding a language: its catalog in `ui/i18n/<code>.json`, a row in `LANGS`
-//! (code, name in its own language, locale for dates and numbers), its plural
-//! rule in `plural_form`, its name in English in `english_name`.
+//! Adding a language: its catalog in `ui/i18n/<code>.json` and a row in
+//! `LANGS` (code, names, locale, plural rule): nothing else to keep in step.
 
 use anyhow::{anyhow, Result};
 use serde_json::{Map, Value};
@@ -27,23 +26,32 @@ pub struct Lang {
     pub code: &'static str,
     /// Name in the language itself, for the pickers.
     pub name: &'static str,
+    /// Name in English, for instructions given to an AI.
+    pub english: &'static str,
     /// BCP 47 locale for dates and numbers.
     pub locale: &'static str,
+    /// Zero counts as singular, as one does (`Intl.PluralRules`: French,
+    /// Brazilian Portuguese).
+    zero_is_one: bool,
     raw: &'static str,
 }
 
 /// Supported languages, in the order the pickers show them.
 pub const LANGS: &[Lang] = &[
-    Lang { code: "en", name: "English", locale: "en-US", raw: include_str!("../../ui/i18n/en.json") },
-    Lang { code: "fr", name: "Français", locale: "fr-FR", raw: include_str!("../../ui/i18n/fr.json") },
-    Lang { code: "de", name: "Deutsch", locale: "de-DE", raw: include_str!("../../ui/i18n/de.json") },
-    Lang { code: "es", name: "Español", locale: "es-ES", raw: include_str!("../../ui/i18n/es.json") },
-    Lang { code: "pt-BR", name: "Português (Brasil)", locale: "pt-BR", raw: include_str!("../../ui/i18n/pt-BR.json") },
-    Lang { code: "it", name: "Italiano", locale: "it-IT", raw: include_str!("../../ui/i18n/it.json") },
+    Lang { code: "en", name: "English", english: "English", locale: "en-US", zero_is_one: false, raw: include_str!("../../ui/i18n/en.json") },
+    Lang { code: "fr", name: "Français", english: "French", locale: "fr-FR", zero_is_one: true, raw: include_str!("../../ui/i18n/fr.json") },
+    Lang { code: "de", name: "Deutsch", english: "German", locale: "de-DE", zero_is_one: false, raw: include_str!("../../ui/i18n/de.json") },
+    Lang { code: "es", name: "Español", english: "Spanish", locale: "es-ES", zero_is_one: false, raw: include_str!("../../ui/i18n/es.json") },
+    Lang { code: "pt-BR", name: "Português (Brasil)", english: "Brazilian Portuguese", locale: "pt-BR", zero_is_one: true, raw: include_str!("../../ui/i18n/pt-BR.json") },
+    Lang { code: "it", name: "Italiano", english: "Italian", locale: "it-IT", zero_is_one: false, raw: include_str!("../../ui/i18n/it.json") },
 ];
 
+fn lang_of(code: &str) -> Option<&'static Lang> {
+    LANGS.iter().find(|l| l.code == code)
+}
+
 fn supported(code: &str) -> bool {
-    LANGS.iter().any(|l| l.code == code)
+    lang_of(code).is_some()
 }
 
 fn catalogs() -> &'static [(&'static str, Map<String, Value>)] {
@@ -148,10 +156,11 @@ fn lookup(lang: &str, key: &str) -> Option<&'static Value> {
 }
 
 /// The `one` and `other` forms of `Intl.PluralRules`, enough for the counts
-/// shown here: French and Portuguese count zero as singular, the others only
-/// one. (Spanish and Italian `many`, for millions, falls back to `other`.)
+/// shown here: some languages count zero as singular (`zero_is_one`), the
+/// others only one. (Spanish and Italian `many`, for millions, falls back to
+/// `other`.)
 fn plural_form(lang: &str, n: f64) -> &'static str {
-    let one = if matches!(lang, "fr" | "pt-BR") { n >= 0.0 && n < 2.0 } else { n == 1.0 };
+    let one = if lang_of(lang).is_some_and(|l| l.zero_is_one) { n >= 0.0 && n < 2.0 } else { n == 1.0 };
     if one {
         "one"
     } else {
@@ -216,7 +225,7 @@ pub fn init_script() -> String {
         .iter()
         .map(|l| serde_json::json!({ "code": l.code, "name": l.name, "locale": l.locale }))
         .collect();
-    let raw = |code: &str| LANGS.iter().find(|l| l.code == code).map(|l| l.raw.trim()).unwrap_or("{}");
+    let raw = |code: &str| lang_of(code).map(|l| l.raw.trim()).unwrap_or("{}");
     let mut catalogs = format!("{}:{}", serde_json::to_string("en").unwrap(), raw("en"));
     if lang != "en" {
         catalogs += &format!(",{}:{}", serde_json::to_string(&lang).unwrap(), raw(&lang));
@@ -230,14 +239,7 @@ pub fn init_script() -> String {
 
 /// The current language named in English, for instructions given to an AI.
 pub fn english_name() -> &'static str {
-    match lang().as_str() {
-        "fr" => "French",
-        "de" => "German",
-        "es" => "Spanish",
-        "pt-BR" => "Brazilian Portuguese",
-        "it" => "Italian",
-        _ => "English",
-    }
+    lang_of(&lang()).map_or("English", |l| l.english)
 }
 
 #[cfg(test)]
