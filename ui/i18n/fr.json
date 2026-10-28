@@ -2429,5 +2429,6 @@
   "settings.lang_failed": "Cette langue n'a pas pu être chargée : l'interface reste telle quelle.",
   "send.busy_until": "{name} imprime « {job} », fin prévue vers {time}.",
   "prepare.colour.change_virtual": "Imprimé avec la tête virtuelle {name} · cliquer pour changer",
-  "ctl.offline_hint": "Vérifiez qu'elle est allumée et sur le même réseau : les commandes reviennent dès qu'elle répond."
+  "ctl.offline_hint": "Vérifiez qu'elle est allumée et sur le même réseau : les commandes reviennent dès qu'elle répond.",
+  "pfiles.stale": "{name} ne répond pas : la liste n'est peut-être plus à jour."
 }

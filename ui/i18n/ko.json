@@ -2391,5 +2391,6 @@
   "settings.lang_failed": "이 언어를 불러올 수 없습니다. 인터페이스는 그대로 유지됩니다.",
   "send.busy_until": "{name}에서 ‘{job}’을(를) 출력 중이며, {time}경 끝날 예정입니다.",
   "prepare.colour.change_virtual": "{name} 가상 헤드로 출력 · 클릭해 변경",
-  "ctl.offline_hint": "전원이 켜져 있고 같은 네트워크에 있는지 확인하세요. 응답하면 바로 제어 기능이 다시 표시됩니다."
+  "ctl.offline_hint": "전원이 켜져 있고 같은 네트워크에 있는지 확인하세요. 응답하면 바로 제어 기능이 다시 표시됩니다.",
+  "pfiles.stale": "{name}이(가) 응답하지 않습니다. 목록이 최신이 아닐 수 있습니다."
 }

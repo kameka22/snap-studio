@@ -2471,5 +2471,6 @@
   "settings.lang_failed": "Impossibile caricare questa lingua: l'interfaccia resta com'era.",
   "send.busy_until": "{name} sta stampando “{job}”, dovrebbe finire verso le {time}.",
   "prepare.colour.change_virtual": "Stampato con la testina virtuale {name} · fai clic per cambiare",
-  "ctl.offline_hint": "Verifica che sia accesa e sulla stessa rete: i comandi tornano non appena risponde."
+  "ctl.offline_hint": "Verifica che sia accesa e sulla stessa rete: i comandi tornano non appena risponde.",
+  "pfiles.stale": "{name} non risponde: l'elenco potrebbe non essere aggiornato."
 }

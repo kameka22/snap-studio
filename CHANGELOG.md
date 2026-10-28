@@ -46,6 +46,8 @@ with its packages for macOS, Windows and Linux. What comes next:
   the address it tried, and its controls come back on their own once the
   printer answers. The printer page no longer shows the camera, model and
   address while the printer is offline, and its Details leave the address out.
+  The printer's Files page shows the same card, and its errors (list,
+  download, delete, rename, share) no longer carry an address.
 
 ## [0.16.0] — 2026-10-26
 
