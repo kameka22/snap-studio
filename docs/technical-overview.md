@@ -6,10 +6,10 @@ building and publishing, see [DEVELOPMENT.md](DEVELOPMENT.md); for what each
 version brought, the [CHANGELOG](../CHANGELOG.md). File names point to the
 code under `src-tauri/src/` and `ui/`.
 
-## What Snap Studio adds to multi-material
+## What Snap Studio adds
 
-Two features carry most of the project's own work on the U1's four heads.
-What comes from the engine and what Snap Studio builds is kept apart below.
+Three features carry most of the project's own work for the U1. For each one,
+what is native (engine, firmware) and what Snap Studio builds is kept apart below.
 
 **One prime tower per material** (`ui/pillar-logic.js`, `ui/prepare-pillars.js`, `slice.rs`;
 plan: [plans/prime-tower-per-material.md](plans/prime-tower-per-material.md)).
@@ -50,6 +50,33 @@ plan: [plans/virtual-heads.md](plans/virtual-heads.md)).
   so the preview color matches the slicer. Tests: `scripts/test-virtual.js`,
   and `engine_virtual_head_alternates` in `slice.rs`, which slices with the
   real engine and is ignored in CI.
+
+**Print queue** (`jobs.rs`, `ui/prints.js`, `ui/prints-logic.js`).
+
+- *Native*: Snapmaker Orca's Moonraker connection uploads and starts one
+  print. It has no print queue for the U1: the "Upload to Queue" button
+  of its print-host dialog is commented out, and only PrusaConnect and
+  SimplyPrint declare a queue action. The U1's Moonraker
+  (Snapmaker/u1-moonraker) loads the standard `job_queue` component as a
+  core component, but its `moonraker.conf` has no `[job_queue]` section,
+  so automatic transitions stay off. Snap Studio does not use it.
+- *Snap Studio*: a queue kept on the computer, per printer, in `jobs.json`,
+  with each job's G-code in `jobs/<id>.gcode`, so it survives a restart.
+  Jobs come from the slice sheet or a printer's file (**Add to Queue**).
+  They can be reordered (`job_move`), moved to another printer or given
+  other start options (`job_edit`), or queued again from the history
+  (`job_requeue`). A background task polls the printers every 8 s. A
+  printer counts as free after two passes in a row, and the UI is then
+  asked to **offer** its next job (`queue-next`), once per printer until
+  the next print. Nothing starts without the user: the sheet needs "The bed
+  is clear and clean", then runs the spool check against the spools loaded
+  now (a head remap for that print only, or Edit in Prepare, which
+  re-slices and replaces the queued job). Then come the usual start
+  checks (printer online and idle, every head used has a spool), the
+  upload, and `server.files.start_local_print`. Tests:
+  `scripts/test-prints.js` (queued jobs in the list and timeline), and
+  `jobs.rs` (history kept and pruned, the queue never pruned, pauses
+  tracked).
 
 ## 1. Architecture
 
