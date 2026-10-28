@@ -1868,7 +1868,6 @@
   "ctl.st.paused": "已暂停",
   "ctl.st.busy": "忙碌：{state}",
   "ctl.st.reading": "正在读取…",
-  "ctl.offline_err": "打印机没有响应：{err}",
   "ctl.st.offline": "未连接",
   "ctl.homed": "✓ 已回零",
   "ctl.not_homed_short": "未回零",
@@ -2391,5 +2390,6 @@
   },
   "settings.lang_failed": "无法加载此语言：界面保持不变。",
   "send.busy_until": "{name} 正在打印“{job}”，预计 {time} 左右结束。",
-  "prepare.colour.change_virtual": "使用虚拟打印头 {name} 打印 · 点击更改"
+  "prepare.colour.change_virtual": "使用虚拟打印头 {name} 打印 · 点击更改",
+  "ctl.offline_hint": "请检查它是否已开机并在同一网络中：一旦有响应，控制功能会自动恢复。"
 }

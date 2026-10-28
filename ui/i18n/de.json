@@ -1934,7 +1934,6 @@
   "ctl.st.paused": "Pausiert",
   "ctl.st.busy": "Beschäftigt: {state}",
   "ctl.st.reading": "Wird gelesen …",
-  "ctl.offline_err": "Der Drucker antwortet nicht: {err}",
   "ctl.st.offline": "Nicht verbunden",
   "ctl.homed": "✓ Referenziert",
   "ctl.not_homed_short": "Nicht referenziert",
@@ -2471,5 +2470,6 @@
   },
   "settings.lang_failed": "Diese Sprache konnte nicht geladen werden: Die Oberfläche bleibt unverändert.",
   "send.busy_until": "{name} druckt „{job}“, voraussichtliches Ende gegen {time}.",
-  "prepare.colour.change_virtual": "Gedruckt mit virtuellem Druckkopf {name} · klicken zum Ändern"
+  "prepare.colour.change_virtual": "Gedruckt mit virtuellem Druckkopf {name} · klicken zum Ändern",
+  "ctl.offline_hint": "Prüfen Sie, ob er eingeschaltet und im selben Netzwerk ist: Die Steuerung kehrt zurück, sobald er antwortet."
 }

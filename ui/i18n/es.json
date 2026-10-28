@@ -1934,7 +1934,6 @@
   "ctl.st.paused": "En pausa",
   "ctl.st.busy": "Ocupada: {state}",
   "ctl.st.reading": "Leyendo…",
-  "ctl.offline_err": "La impresora no responde: {err}",
   "ctl.st.offline": "No conectada",
   "ctl.homed": "✓ Homing completado",
   "ctl.not_homed_short": "Sin homing",
@@ -2471,5 +2470,6 @@
   },
   "settings.lang_failed": "No se pudo cargar este idioma: la interfaz se queda como estaba.",
   "send.busy_until": "{name} está imprimiendo “{job}”, debería terminar hacia las {time}.",
-  "prepare.colour.change_virtual": "Impreso con el cabezal virtual {name} · clic para cambiar"
+  "prepare.colour.change_virtual": "Impreso con el cabezal virtual {name} · clic para cambiar",
+  "ctl.offline_hint": "Comprueba que está encendida y en la misma red: los controles vuelven en cuanto responda."
 }

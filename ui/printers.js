@@ -14,6 +14,7 @@ const P = {
   timer: null,
   editing: null,
   busy: false,
+  offErr: "",          // last offline error logged (once per change)
 };
 
 window.currentView = "files";
@@ -219,7 +220,9 @@ function setOffline(mode, st) {
   const on = !!mode;
   card.classList.toggle("hidden", !on);
   card.classList.toggle("connecting", mode === "connecting");
-  for (const id of ["prn-hero", "prn-filaments", "prn-temps"]) $(id).classList.toggle("hidden", on);
+  // Nor the camera, the model or the address (the address stays in the
+  // title bar): nothing to read or watch until the printer answers.
+  for (const id of ["prn-hero", "prn-filaments", "prn-temps", "prn-cam", "prn-info"]) $(id).classList.toggle("hidden", on);
   if (!on) {
     $("cam-toggle").disabled = false;
     return;
@@ -235,7 +238,12 @@ function setOffline(mode, st) {
   // pinned one stays, saying the printer does not answer).
   if (CAM.on && CAM.id === P.sel) CAM.pinned ? camOffline(true) : camStop();
   $("cam-toggle").disabled = true;
-  const err = (!connecting && st?.message) || "";
+  // The raw error under Details, without the address it tried (errNoUrl,
+  // control-logic.js); the whole of it goes to the console.
+  const raw = (!connecting && st?.message) || "";
+  if (raw && raw !== P.offErr) console.warn("printer offline", P.sel, raw);
+  P.offErr = raw;
+  const err = raw && typeof errNoUrl === "function" ? errNoUrl(raw) : "";
   $("prn-offline-err").textContent = err;
   $("prn-offline-details").classList.toggle("hidden", !err);
 }

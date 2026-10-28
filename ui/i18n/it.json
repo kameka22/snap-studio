@@ -1934,7 +1934,6 @@
   "ctl.st.paused": "In pausa",
   "ctl.st.busy": "Occupata: {state}",
   "ctl.st.reading": "Lettura…",
-  "ctl.offline_err": "La stampante non risponde: {err}",
   "ctl.st.offline": "Non connessa",
   "ctl.homed": "✓ Homing eseguito",
   "ctl.not_homed_short": "Homing non eseguito",
@@ -2471,5 +2470,6 @@
   },
   "settings.lang_failed": "Impossibile caricare questa lingua: l'interfaccia resta com'era.",
   "send.busy_until": "{name} sta stampando “{job}”, dovrebbe finire verso le {time}.",
-  "prepare.colour.change_virtual": "Stampato con la testina virtuale {name} · fai clic per cambiare"
+  "prepare.colour.change_virtual": "Stampato con la testina virtuale {name} · fai clic per cambiare",
+  "ctl.offline_hint": "Verifica che sia accesa e sulla stessa rete: i comandi tornano non appena risponde."
 }

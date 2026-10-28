@@ -41,6 +41,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   Python 3.9 before the one installed with Homebrew (and so did Claude). The
   folders users install to now come before the system's. A module that is
   installed but does not import now says why, under the modules' line.
+- A printer that does not answer: Care & Tuning › Control shows one short
+  card (printer not connected, a hint, Retry) in place of a long error with
+  the address it tried, and its controls come back on their own once the
+  printer answers. The printer page no longer shows the camera, model and
+  address while the printer is offline, and its Details leave the address out.
 
 ## [0.16.0] — 2026-10-26
 

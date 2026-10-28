@@ -1931,7 +1931,6 @@
   "ctl.st.paused": "Paused",
   "ctl.st.busy": "Busy: {state}",
   "ctl.st.reading": "Reading…",
-  "ctl.offline_err": "The printer does not answer: {err}",
   "ctl.st.offline": "Not connected",
   "ctl.homed": "✓ Homed",
   "ctl.not_homed_short": "Not homed",
@@ -2426,5 +2425,6 @@
   "prints.det.layers_n": {"one": "{n} layer", "other": "{n} layers"},
   "settings.lang_failed": "This language could not be loaded: the interface stays as it was.",
   "send.busy_until": "{name} is printing “{job}”, expected to end around {time}.",
-  "prepare.colour.change_virtual": "Printed with virtual head {name} · click to change"
+  "prepare.colour.change_virtual": "Printed with virtual head {name} · click to change",
+  "ctl.offline_hint": "Check that it is switched on and on the same network: the controls come back as soon as it answers."
 }

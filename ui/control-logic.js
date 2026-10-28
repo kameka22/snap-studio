@@ -129,5 +129,18 @@ function ctlHeat(temp, target) {
   return Math.abs(temp - target) <= 3 ? "ready" : temp < target ? "heating" : "cooling";
 }
 
+/* A connection error without its addresses: reqwest and the websocket put
+   the URL they tried in their message ("error sending request for url
+   (http://…/server/info)"), which only belongs in the console. */
+function errNoUrl(err) {
+  return String(err ?? "")
+    .replace(/\s*\(\s*(?:https?|wss?):\/\/[^\s)]*\s*\)/gi, "")
+    .replace(/\s*\b(?:for\s+)?url\s*(?=[:,.]|$)/gi, "")
+    .replace(/(?:https?|wss?):\/\/\S+/gi, "")
+    .replace(/\s+([:,.])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 if (typeof module !== "undefined")
-  module.exports = { CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlLoaded, ctlLoadAsks, ctlFilamentPick, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };
+  module.exports = { errNoUrl, CTL_STEPS, CTL_Z_FLOOR, CTL_U1_Y_MAX, ctlLoaded, ctlLoadAsks, ctlFilamentPick, ctlHomed, ctlRange, ctlWhy, ctlStateOf, ctlSpoolInfo, ctlPct, ctlHeat };
