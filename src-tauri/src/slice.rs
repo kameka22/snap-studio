@@ -281,6 +281,10 @@ pub struct Request {
     /// object list, with the engine's tower off (`PILLAR_OVERRIDES`).
     #[serde(default)]
     pub pillars: Vec<crate::plate::Pillar>,
+    /// Smooth mix: with a virtual head, each layer of a mixed region is split
+    /// into sub-layers, one per head (`SMOOTH_MIX_OVERRIDES`). Absent: off.
+    #[serde(default)]
+    pub smooth_mix: bool,
 }
 
 /// What printing pillars needs from the engine: no tower of its own, the
@@ -290,6 +294,43 @@ pub struct Request {
 /// every other setting (the UI sends them too).
 pub const PILLAR_OVERRIDES: [(&str, &str); 3] =
     [("enable_prime_tower", "0"), ("print_order", "as_obj_list"), ("independent_support_layer_height", "0")];
+
+/// Smooth mix, as Snapmaker's guide asks when a whole object uses a mixed
+/// color: "Subdivide Mix Layer", "Full domain" and "Apply subdivision to
+/// infill" (Snapmaker Orca's Color Mixing group). Every layer of a mixed
+/// region is split into sub-layers, one per head, walls and infill alike;
+/// their heights stay within the engine's Local-Z bounds (0.04 to 0.16 mm by
+/// default, not sent).
+pub const SMOOTH_MIX_OVERRIDES: [&str; 3] = ["dithering_local_z_mode", "dithering_local_z_whole_objects", "dithering_local_z_infill"];
+
+/// The settings a request sends on top of the profiles: its simplified
+/// settings, its own overrides (the sheet's differences), the virtual heads'
+/// mixes and smooth mix (a key set by hand wins), then the pillars' keys,
+/// which have the last word.
+pub fn request_overrides(req: &Request) -> Map<String, Value> {
+    let mut overrides = req.simple.clone().unwrap_or_default().to_overrides();
+    for (k, v) in &req.overrides {
+        overrides.insert(k.clone(), v.clone());
+    }
+    // Virtual heads: the engine's command line keeps the mixes from the
+    // process settings (checked by engine_virtual_head_alternates).
+    if !req.virtual_heads.is_empty() {
+        overrides.insert("mixed_filament_definitions".into(), Value::String(mixed_definitions(&req.virtual_heads)));
+        if req.smooth_mix {
+            for k in SMOOTH_MIX_OVERRIDES {
+                if !req.overrides.contains_key(k) {
+                    overrides.insert(k.into(), Value::String("1".into()));
+                }
+            }
+        }
+    }
+    if !req.pillars.is_empty() && !req.scene.is_empty() {
+        for (k, v) in PILLAR_OVERRIDES {
+            overrides.insert(k.into(), Value::String(v.into()));
+        }
+    }
+    overrides
+}
 
 /// A virtual head: two physical heads (from 0) the engine alternates layer
 /// by layer, `pct` the share of `b` (Snapmaker Orca's mixed filament), and
@@ -744,20 +785,7 @@ pub fn run_job(
         let is_cancelled = || !jobs().lock().unwrap().contains_key(&job_id);
         let _ = std::fs::create_dir_all(&work);
 
-        let mut overrides = req.simple.clone().unwrap_or_default().to_overrides();
-        for (k, v) in &req.overrides {
-            overrides.insert(k.clone(), v.clone());
-        }
-        // Virtual heads: the engine's command line keeps the mixes from the
-        // process settings (checked by engine_virtual_head_alternates).
-        if !req.virtual_heads.is_empty() {
-            overrides.insert("mixed_filament_definitions".into(), Value::String(mixed_definitions(&req.virtual_heads)));
-        }
-        if !req.pillars.is_empty() && !req.scene.is_empty() {
-            for (k, v) in PILLAR_OVERRIDES {
-                overrides.insert(k.into(), Value::String(v.into()));
-            }
-        }
+        let overrides = request_overrides(&req);
         let prep = match presets::prepare(
             &idx,
             &work,
@@ -2186,6 +2214,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// Smooth mix: the three keys only with a virtual head and the switch
+    /// on; a value set by hand wins; the pillars' keys still apply.
+    #[test]
+    fn smooth_mix_overrides() {
+        let v = VirtualHead { a: 0, b: 2, pct: 50, color: None };
+        let smooth = |o: &Map<String, Value>| SMOOTH_MIX_OVERRIDES.map(|k| o.get(k).and_then(|x| x.as_str()).map(String::from));
+        let on = [Some("1".to_string()), Some("1".into()), Some("1".into())];
+        let req = |heads: Vec<VirtualHead>, smooth_mix: bool| Request { virtual_heads: heads, smooth_mix, ..Default::default() };
+        assert_eq!(smooth(&request_overrides(&req(vec![v.clone()], true))), on);
+        assert_eq!(smooth(&request_overrides(&req(vec![v.clone()], false))), [None, None, None], "off: nothing sent");
+        assert_eq!(smooth(&request_overrides(&req(vec![], true))), [None, None, None], "no virtual head: nothing sent");
+        let o = request_overrides(&req(vec![], false));
+        assert!(!o.contains_key("mixed_filament_definitions"));
+        assert!(!o.keys().any(|k| k.starts_with("dithering_") || k.starts_with("mixed_filament_height")), "{o:?}");
+        // A key set by hand in Advanced wins.
+        let mut r = req(vec![v.clone()], true);
+        r.overrides.insert("dithering_local_z_infill".into(), Value::String("0".into()));
+        assert_eq!(smooth(&request_overrides(&r)), [Some("1".into()), Some("1".into()), Some("0".into())]);
+        // With per-material pillars: both sets, the pillars' unchanged.
+        r.scene = vec![crate::plate::SceneItem { path: String::new(), item: 0, name: String::new(), pos: [0.0; 2], rot: [0.0; 3], scale: [1.0; 3], extruder_map: vec![], piece: None }];
+        r.pillars = vec![crate::plate::Pillar { name: "p".into(), x: 10.0, y: 10.0, rings: vec![], brim: 0.0 }];
+        r.overrides.insert("enable_prime_tower".into(), Value::String("1".into()));
+        let o = request_overrides(&r);
+        for (k, val) in PILLAR_OVERRIDES {
+            assert_eq!(o.get(k).and_then(|x| x.as_str()), Some(val), "{k}");
+        }
+        assert_eq!(o.get("dithering_local_z_mode").and_then(|x| x.as_str()), Some("1"));
+        assert!(o.get("mixed_filament_definitions").is_some());
+    }
+
     /// The engine's mixed filaments, as Orca serializes them.
     #[test]
     fn mixed_definitions_rows() {
@@ -2440,6 +2498,135 @@ mod tests {
         let st = last.stats.unwrap();
         println!("time {:?} s, filament {:?} g, tools {:?}", g.meta.print_time_s, g.meta.filament_g, st.tools);
         discard("pillars");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Smooth mix reaches the engine: a 30 × 30 × 20 mm box on a 1:1 virtual
+    /// head (T0 + T2) at 0.20 mm. On, the three keys are in the G-code, every
+    /// layer is split into 0.10 mm sub-layers, one per head, walls and
+    /// infill alike, with about twice the tool changes; off, one head per
+    /// layer, as before.
+    /// `SNAPSTUDIO_ENGINE=… cargo test --lib engine_virtual_head_smooth_mix -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn engine_virtual_head_smooth_mix() {
+        let app = engine().expect("SNAPSTUDIO_ENGINE: engine to try out");
+        let machine = "Snapmaker U1 (0.4 nozzle)".to_string();
+        let l = lists(Some(&machine)).expect("profiles");
+        let process = l.processes.iter().find(|p| p.name.starts_with("0.20mm Standard")).expect("a 0.20 mm profile").name.clone();
+        let pla = l.filaments.iter().find(|f| f.name.contains("PLA") && !f.name.contains("Support")).expect("PLA").name.clone();
+        use crate::mesh::{Mat, Tri};
+        let tmp = std::env::temp_dir().join("snapstudio-engine-smooth");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let p = [[0., 0., 0.], [30., 0., 0.], [30., 30., 0.], [0., 30., 0.], [0., 0., 20.], [30., 0., 20.], [30., 30., 20.], [0., 30., 20.]];
+        let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        let tris: Vec<Tri> = f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [120, 120, 120] }).collect();
+        let src = tmp.join("box.3mf");
+        crate::write3mf::write_scene(&src, &[crate::write3mf::SceneObject { name: "box".into(), tris, transform: Mat::IDENTITY, extruder: None }]).unwrap();
+        // One slice: its G-code.
+        let slice = |id: &str, smooth: bool| -> String {
+            let mut overrides = Map::new();
+            overrides.insert("enable_prime_tower".into(), Value::String("0".into()));
+            let seen: Arc<Mutex<Vec<Progress>>> = Default::default();
+            let sink = seen.clone();
+            run_job(
+                binary(&app).unwrap(),
+                index_for(&app).unwrap(),
+                Request {
+                    machine: machine.clone(),
+                    process: process.clone(),
+                    filaments: vec![pla.clone(); 4],
+                    scene: vec![crate::plate::SceneItem {
+                        path: src.to_string_lossy().to_string(), item: 0, name: "box".into(), pos: [135.0, 135.0],
+                        rot: [0.0; 3], scale: [1.0; 3], extruder_map: vec![4], piece: None,
+                    }],
+                    virtual_heads: vec![VirtualHead { a: 0, b: 2, pct: 50, color: None }],
+                    smooth_mix: smooth,
+                    overrides,
+                    name: Some(id.into()),
+                    ..Default::default()
+                },
+                id.into(),
+                &move |p| sink.lock().unwrap().push(p),
+            );
+            let last = seen.lock().unwrap().last().cloned().unwrap();
+            assert_eq!(last.phase, "preview", "slicing failed: {:?}", last.message);
+            let g = std::fs::read_to_string(last.gcode.clone().unwrap()).unwrap();
+            discard(id);
+            g
+        };
+        // Per layer: its top, its height, and the tools printing its walls
+        // and its infill. The tool-change block extrudes before the layer's
+        // first ;TYPE:, so the type starts empty at each layer.
+        struct Layer {
+            z: f32,
+            /// The thinnest ;HEIGHT: in it.
+            h: f32,
+            walls: std::collections::BTreeSet<u8>,
+            infill: std::collections::BTreeSet<u8>,
+        }
+        let read = |g: &str| -> (Vec<Layer>, usize) {
+            let (mut layers, mut tool, mut kind, mut changes) = (Vec::<Layer>::new(), None::<u8>, String::new(), 0usize);
+            for line in g.lines() {
+                if line.starts_with(";LAYER_CHANGE") {
+                    layers.push(Layer { z: 0.0, h: 0.0, walls: Default::default(), infill: Default::default() });
+                    kind.clear();
+                } else if let (Some(v), Some(l)) = (line.strip_prefix(";Z:"), layers.last_mut()) {
+                    l.z = v.trim().parse().unwrap_or(0.0);
+                } else if let (Some(v), Some(l)) = (line.strip_prefix(";HEIGHT:"), layers.last_mut()) {
+                    // A sub-layer's own height: the thinnest of the layer.
+                    let h: f32 = v.trim().parse().unwrap_or(0.0);
+                    l.h = if l.h > 0.0 { l.h.min(h) } else { h };
+                } else if let Some(t) = line.strip_prefix('T').and_then(|t| t.trim().parse::<u8>().ok()) {
+                    if !layers.is_empty() && tool.is_some_and(|x| x != t) {
+                        changes += 1;
+                    }
+                    tool = Some(t);
+                } else if let Some(k) = line.strip_prefix(";TYPE:") {
+                    kind = k.trim().to_string();
+                } else if line.starts_with("G1 ") && line.contains(" E") && line.contains('X') {
+                    if let (Some(l), Some(t)) = (layers.last_mut(), tool) {
+                        if kind.ends_with("wall") {
+                            l.walls.insert(t);
+                        } else if kind.contains("infill") {
+                            l.infill.insert(t);
+                        }
+                    }
+                }
+            }
+            (layers, changes)
+        };
+        let keys = |g: &str| SMOOTH_MIX_OVERRIDES.iter().map(|k| g.contains(&format!("; {k} = 1\n"))).collect::<Vec<_>>();
+
+        let off = slice("smooth-off", false);
+        let (layers_off, changes_off) = read(&off);
+        assert_eq!(keys(&off), [false; 3], "off: none of the keys");
+        assert!(layers_off.iter().all(|l| l.walls.len() <= 1 && l.infill.len() <= 1), "off: one head per layer");
+
+        let on = slice("smooth-on", true);
+        let (layers_on, changes_on) = read(&on);
+        assert_eq!(keys(&on), [true; 3], "on: the three keys reached the engine");
+        let heights: std::collections::BTreeSet<String> = layers_on.iter().skip(1).map(|l| format!("{:.2}", l.h)).collect();
+        println!("off: {} layers, {changes_off} tool changes; on: {} layers, {changes_on} tool changes, heights {heights:?}", layers_off.len(), layers_on.len());
+        // Sub-layers grouped by the 0.20 mm layer they make up (above the
+        // first): both heads print its walls and its infill.
+        let mut by_layer: std::collections::BTreeMap<i32, (std::collections::BTreeSet<u8>, std::collections::BTreeSet<u8>)> = Default::default();
+        let first = layers_on.first().map(|l| l.z).unwrap_or(0.2);
+        for l in layers_on.iter().filter(|l| l.z > first + 0.01) {
+            let e = by_layer.entry(((l.z - first - 0.001) / 0.2).floor() as i32).or_default();
+            e.0.extend(&l.walls);
+            e.1.extend(&l.infill);
+        }
+        let full = by_layer.values().filter(|(w, i)| w.len() == 2 && i.len() == 2).count();
+        println!("on: {full} of {} layers with both heads on walls and infill", by_layer.len());
+        assert!(by_layer.len() > 80);
+        // The top shell may close on one head: the last layers aside.
+        assert!(by_layer.values().take(by_layer.len() - 5).all(|(w, _)| w == &[0u8, 2].into()), "walls by both heads on every layer");
+        assert!(full * 10 >= by_layer.len() * 8, "infill by both heads on most layers: {full} / {}", by_layer.len());
+        assert!(layers_on.iter().skip(1).all(|l| l.h >= 0.04 - 1e-3), "never below the 0.04 mm bound");
+        assert!(heights.contains("0.10"), "0.10 mm sub-layers: {heights:?}");
+        assert!(changes_on as f32 >= changes_off as f32 * 1.7, "about twice the tool changes: {changes_off} → {changes_on}");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

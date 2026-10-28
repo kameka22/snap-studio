@@ -467,6 +467,11 @@ const slMapValues = () => new Set([...document.querySelectorAll("#s-map select")
 
 /* Colors left without a head (a virtual head deleted since): the slice
    waits, Prepare is where to choose one. */
+/* The plate prints with a virtual head. */
+const slMixes = () => vhUsesVirtual(slMapValues(), headsVirtual(currentPrinter()?.id || ""));
+/* Smooth mix applies: a virtual head, the plate's switch on (the default). */
+const slSmooth = () => slMixes() && vhSmoothOn(PR);
+
 const slOrphans = () => [...slMapValues()].filter((h) => vhOrphan(headsVirtual(currentPrinter()?.id || ""), h));
 function slOrphanLine() {
   const n = slOrphans().length;
@@ -492,16 +497,15 @@ function slSummary() {
     $("s-supports").checked && [tr("slice.sum.supports"), heads?.supports].filter(Boolean).join(" "),
     $("s-brim").checked && tr("slice.sum.brim"),
     heads?.others,
+    slSmooth() && tr("slice.sum.smooth"),
     typeof advCount === "function" && advCount() && tr("slice.sum.adv", { n: advCount() }),
   ].filter(Boolean);
   $("s-summary").innerHTML = parts
     .map((p) => (typeof p === "object" ? `<span class="${esc(p.cls)}">${esc(p.text)}</span>` : `<span>${esc(p)}</span>`))
     .join("");
   // A virtual head mixes evenly with thin layers (Snapmaker's advice).
-  const pid = currentPrinter()?.id || "";
-  const mixes = [...slMapValues()].some((h) => vhFind(headsVirtual(pid), h));
   const layer = parseProcess($("s-process").value)?.h;
-  $("s-vlayer").classList.toggle("hidden", !(mixes && layer > 0.12));
+  $("s-vlayer").classList.toggle("hidden", !(slMixes() && layer > 0.12));
   // What goes to the engine changed: the prime tower's materials too, and
   // its place.
   if (typeof advRenderTower === "function") advRenderTower();
@@ -640,6 +644,9 @@ async function startSlice() {
         source: "", scene, name: SL.source.name, machine, process, filaments, simple, colors, virtual_heads,
         // One tower per material: the pillars, generated at every slice.
         pillars: prPillarsRequest(),
+        // Each layer of a virtual head split between its two heads: sent
+        // with virtual heads only (otherwise the request is unchanged).
+        ...(virtual_heads.length && vhSmoothOn(PR) ? { smooth_mix: true } : {}),
         overrides: { ...advOverrides(), ...spdOverrides(), ...prTowerOverrides(), ...(bed ? { curr_bed_type: bed } : {}) },
       },
     });

@@ -71,9 +71,17 @@ const prStored = ({ id, name, path, item, piece, pos, rot, scale, size, plate, e
 
 function prSave() {
   const objects = PR.objects.map(prStored);
-  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, tower: prTowerStored() }));
+  localStorage.setItem("snapstudio.plate", JSON.stringify({ objects, nextId: PR.nextId, colourHeads: PR.colourHeads, tower: prTowerStored(), smoothMix: vhSmoothOn(PR) }));
   prStatus();
   prPruneMeshes();
+}
+
+/* Smooth mix for the plate's virtual heads (the slice sheet's switch):
+   each layer split between the two heads. Kept with the plate. */
+function prSetSmoothMix(on) {
+  PR.smoothMix = !!on;
+  prSave();
+  if (typeof slSummary === "function" && !$("smodal").classList.contains("hidden")) slSummary();
 }
 
 /* Frees the meshes no object uses any more (removed, cleared, undone):
@@ -118,6 +126,8 @@ function prLoadState() {
       PR.colourHeads = s.colourHeads && typeof s.colourHeads === "object" ? s.colourHeads : {};
       // Read by prepare-tower.js (prTowerRestore).
       PR.tower = s.tower;
+      // Smooth mix (virtual heads): on unless the plate says otherwise.
+      PR.smoothMix = vhSmoothOn(s);
     }
   } catch {}
   // The mode is the Settings default at each start, never the file's.
@@ -2192,6 +2202,8 @@ async function prSavePlate() {
       // One tower per material: the choice and the pillars' places, never
       // the pillars themselves.
       snap: PR.tower.kind === "material" || Object.keys(PR.tower.pillars || {}).length ? prPillarsFileData() : null,
+      // Smooth mix, for a plate with a virtual head: Orca's keys, on or off.
+      smooth_mix: prTowerVirtualUsed() ? vhSmoothOn(PR) : null,
       path: dest,
     });
     toast(tr("prepare.saved", { name: dest.split(/[\\/]/).pop() }));
@@ -2520,8 +2532,10 @@ function prEmpty() {
   // A new plate starts in the Settings default mode, with no colour mapped.
   PR.assoc = PRUI.assocDefault;
   PR.colourHeads = {};
-  // Nor a prime tower: a new project starts without one.
+  // Nor a prime tower: a new project starts without one. Smooth mix back
+  // to its default.
   prTowerRestore(null);
+  PR.smoothMix = true;
   PR.towerSel = false;
   prSave();
   prRenderInspector();

@@ -51,6 +51,8 @@ async function prTowerFromFile(path) {
     PR.tower.real = null;
     if (t.ours) PR.tower.on = !!t.on;
   }
+  // Smooth mix as saved (Snap Studio's files only).
+  if (t.smooth_mix != null) PR.smoothMix = !!t.smooth_mix;
   // Snap Studio's own data: one tower per material, its pillars' places.
   const d = t.ours ? t.snap : null;
   if (d && typeof d === "object") {
