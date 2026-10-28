@@ -31,7 +31,7 @@
   read, the colors of a multicolor model are mapped to the heads, and checked
   again before a print starts.
 - **More colors than heads** — mix two spools into a new color, and give
-  materials that do not bond (PLA and PETG…) a prime tower each.
+  materials that do not bond with each other a prime tower each.
 - **Design with AI** — describe a change or a new part; Claude models it,
   you watch it take shape in 3D, version by version.
 - **In nine languages** — English, French, German, Spanish, Brazilian
@@ -115,9 +115,9 @@ Two spools, one new color: Snapmaker Orca's *Full Spectrum*, built in.
 
 ### 🗼 One tower per material
 
-<img align="right" width="48%" hspace="12" src="site/assets/per-material-towers.webp" alt="Prepare: one prime tower per material, PLA on T0 and T2, PETG on T3" />
+<img align="right" width="48%" hspace="12" src="site/assets/per-material-towers.webp" alt="Prepare: one prime tower per material, for two materials that do not bond with each other" />
 
-PLA and PETG on one plate, without a prime tower that comes off.
+Different materials that do not bond with each other on one plate, without a prime tower that comes off.
 
 - A single tower stacks every material; where they do not bond, it can come
   off. Under **Prime tower**, choose **Per material** instead of **One
@@ -187,7 +187,7 @@ ones are changed, with a link to show them.
 - **multi-material**: the prime tower (its own switch, shared with
   Prepare, where it is placed on the plate; its outer wall's head), ooze
   prevention; a warning when the tower would mix materials that do not
-  bond (PLA and PETG, PLA and TPU…), with one-click fixes, one tower per
+  bond with each other, with one-click fixes, one tower per
   material among them.
 
 Then a toolpath preview with duration, filament and cost, sent to the

@@ -138,7 +138,7 @@
             "en": "When the plate’s materials do not bond, choose Per material: one small tower for each group of materials, rebuilt at every slice.",
             "fr": "Quand les matériaux du plateau n’adhèrent pas entre eux, choisissez Par matériau : une petite tour par groupe de matériaux, refaite à chaque découpe."
           },
-          "alt": { "en": "Two prime towers, PLA and PETG, on the plate", "fr": "Deux tours d’amorçage, PLA et PETG, sur le plateau" }
+          "alt": { "en": "Two prime towers on the plate, one per material", "fr": "Deux tours d’amorçage sur le plateau, une par matériau" }
         },
         {
           "id": "slice-levels",

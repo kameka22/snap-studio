@@ -33,7 +33,7 @@
   têtes, et revérifiées avant le lancement d'une impression.
 - **Plus de couleurs que de têtes** — mélangez deux bobines en une
   nouvelle couleur, et donnez une tour d'amorçage à chaque groupe de
-  matériaux qui n'adhèrent pas entre eux (PLA et PETG…).
+  matériaux qui n'adhèrent pas entre eux.
 - **Concevoir avec l'IA** — décrivez une modification ou une nouvelle
   pièce ; Claude la modélise, vous la voyez prendre forme en 3D, version
   après version.
@@ -134,9 +134,9 @@ intégré.
 
 ### 🗼 Une tour par matériau
 
-<img align="right" width="48%" hspace="12" src="site/assets/per-material-towers.webp" alt="Préparer : une tour d'amorçage par matériau, PLA sur T0 et T2, PETG sur T3" />
+<img align="right" width="48%" hspace="12" src="site/assets/per-material-towers.webp" alt="Préparer : une tour d'amorçage par matériau, pour deux matériaux qui n'adhèrent pas entre eux" />
 
-Du PLA et du PETG sur un même plateau, sans tour d'amorçage qui se décolle.
+Des matériaux qui n'adhèrent pas entre eux sur un même plateau, sans tour d'amorçage qui se décolle.
 
 - Une tour unique empile tous les matériaux ; s'ils n'adhèrent pas entre
   eux, elle peut se décoller. Sous **Tour d'amorçage**, choisissez **Par
@@ -213,7 +213,7 @@ réglages avancés sont modifiés, avec un lien pour les afficher :
 - **multimatériau** : la tour d'amorçage (son propre interrupteur, partagé
   avec Préparer, où elle se place sur le plateau ; la tête de son mur
   extérieur), la prévention des coulures ; un avertissement quand la tour mélangerait des
-  matières qui n'adhèrent pas (PLA et PETG, PLA et TPU…), avec des
+  matières qui n'adhèrent pas entre elles, avec des
   corrections en un clic, dont une tour par matériau.
 
 Puis un aperçu des trajectoires avec durée, filament et coût, envoyé à

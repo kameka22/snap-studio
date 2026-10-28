@@ -102,7 +102,7 @@ A welcome assistant then sets up the language, the models folder, the U1 on your
 | Multicolor model: colors mapped to heads, sliced in the app, sent, printed | [TODO: photo of the print + Prints record (real vs estimated time)] |
 | Spool check catching a wrong or empty head, and the one-print remap | [TODO: screenshot of the warning + photo] |
 | Color mixing (virtual head) print | [TODO: photo] |
-| One tower per material, PLA + PETG on one plate | [TODO: photo of the pillars after printing + slice screenshot] |
+| One tower per material, with materials that do not bond with each other on one plate | [TODO: photo of the pillars after printing + slice screenshot] |
 | Camera and timelapse played from the printer's Files | [TODO: screenshot] |
 | Control, bed-mesh measurement and history | [TODO: screenshot of a measured mesh] |
 | U1 firmware version used | [TODO: firmware version] |
