@@ -11,13 +11,20 @@ const EN = () => S.lang === "en";
 const T = (fr, en) => (EN() && en != null ? en : fr);
 const $ = (id) => document.getElementById(id);
 
-/* Spools in the 4 heads (T0..T3). */
+/* Filament declared per head (print_task_config: filament_vendor / _type /
+   _sub_type / _color_rgba). Temperatures and default K come from the
+   firmware's own table for a 0.4 mm standard nozzle
+   (filament_parameters.py, FILAMENT_PARA_CFG_STANDARD_04_DEFAULT). T3 has
+   no declared filament, to show that state. */
 const HEADS = [
-  { n: 0, c: "#2B2B2D", name: "PLA Noir mat", en: "Matte black PLA", k: "0,032", t: 220 },
-  { n: 1, c: "#FF7A1A", name: "PLA Orange", en: "Orange PLA", k: "0,028", t: 220 },
-  { n: 2, c: "#F2F2EF", name: "PETG Blanc", en: "White PETG", k: null, t: 250 },
-  { n: 3, c: "#1E6FD9", name: "PLA Bleu", en: "Blue PLA", k: "0,041", t: 220 },
+  { n: 0, c: "#2B2B2D", name: "PLA Matte noir", en: "Black PLA Matte", vendor: "Snapmaker", type: "PLA", t: 215, kDef: "0,020", kRange: "0,005–0,040", k: "0,031" },
+  { n: 1, c: "#FF7A1A", name: "PLA orange", en: "Orange PLA", vendor: "Generic", type: "PLA", t: 220, kDef: "0,020", kRange: "0,005–0,065", k: "0,020" },
+  { n: 2, c: "#F2F2EF", name: "PETG blanc", en: "White PETG", vendor: "Snapmaker", type: "PETG", t: 255, kDef: "0,050", kRange: "0,020–0,065", k: "0,050" },
+  { n: 3, c: "#C9CBD1", name: "Non déclaré", en: "Not declared", vendor: null, type: null, t: null, kDef: null, kRange: null, k: "0,020", none: true },
 ];
+/* Snapmaker's default print temperatures (same table, generic entries). */
+const PRESETS = [["PLA", 220], ["PETG", 255], ["ABS", 270], ["ASA", 260], ["TPU", 240]];
+const NUM = (v) => (EN() ? String(v).replace(",", ".") : v);
 
 const I = {
   printer: '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/></svg>',
@@ -47,7 +54,7 @@ function headSvg(x, y, h, { hot = false, sel = false, dim = false, scale = 1, la
     ${hot ? `<ellipse cx="0" cy="${H + 14 * scale}" rx="${20 * scale}" ry="${11 * scale}" ${st("fill:var(--heat);opacity:.25")}/>
       <path d="M${-30 * scale} ${18 * scale}q-5 6 0 12t0 12M${30 * scale} ${18 * scale}q5 6 0 12t0 12" ${st("stroke:var(--heat);stroke-width:1.8;fill:none;stroke-linecap:round;opacity:.85")}/>` : ""}
     <rect x="${-w / 2}" y="0" width="${w}" height="${H}" rx="${8 * scale}" ${st("fill:var(--card-bg);stroke:var(--ill-line);stroke-width:1.6")}/>
-    <rect x="${-w / 2 + 5 * scale}" y="${6 * scale}" width="${w - 10 * scale}" height="${9 * scale}" rx="${4 * scale}" style="fill:${h.c};stroke:var(--ill-line);stroke-width:.8"/>
+    <rect x="${-w / 2 + 5 * scale}" y="${6 * scale}" width="${w - 10 * scale}" height="${9 * scale}" rx="${4 * scale}" style="fill:${h.none ? "transparent" : h.c};stroke:var(--ill-line);stroke-width:.8${h.none ? ";stroke-dasharray:3 2" : ""}"/>
     <circle cx="0" cy="${33 * scale}" r="${9 * scale}" ${st("fill:var(--ill-soft);stroke:var(--ill-line);stroke-width:1.2")}/>
     <path d="M${-6 * scale} ${33 * scale}h${12 * scale}M0 ${27 * scale}v${12 * scale}" ${st("stroke:var(--ill-line);stroke-width:1")} transform="rotate(45 0 ${33 * scale})"/>
     <rect x="${-11 * scale}" y="${H}" width="${22 * scale}" height="${9 * scale}" rx="${2 * scale}" style="fill:${hot ? "var(--heat)" : "var(--ill-metal)"};stroke:var(--ill-line);stroke-width:1.2"/>
@@ -58,20 +65,38 @@ function headSvg(x, y, h, { hot = false, sel = false, dim = false, scale = 1, la
 
 /* PID: the four heads parked side by side above the bed; the chosen one
    glows; the bed carries a lock (the firmware blocks its PID). */
-function illPidPick(selN = 1, { compact = false } = {}) {
-  const heads = HEADS.map((h, i) => headSvg(70 + i * 90, 46, h, { hot: i === selN, sel: !compact && i === selN, scale: 1 })).join("");
+function illPidPick(sel = 1, { compact = false, done = [], hot = null } = {}) {
+  const isSel = (i) => sel === "all" || i === sel;
+  const heads = HEADS.map((h, i) => headSvg(70 + i * 90, 46, h, { hot: hot === null ? i === sel : i === hot, sel: !compact && isSel(i), scale: 1 })).join("");
+  const ticks = done.map((i) => `<g transform="translate(${92 + i * 90} 50)"><circle r="9" style="fill:var(--success)"/><path d="m-4 0 3 3 5-6" style="stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round"/></g>`).join("");
   return `<svg class="${compact ? "" : "big"}" viewBox="${compact ? "20 22 360 240" : "0 0 400 300"}" role="img" aria-label="U1">
     ${compact ? "" : `<rect x="14" y="14" width="372" height="272" rx="18" ${st("fill:var(--card-bg);stroke:var(--ill-mid);stroke-width:1.5")}/>`}
     <path d="M30 34h340" ${st("stroke:var(--ill-mid);stroke-width:5;stroke-linecap:round")}/>
     ${[0, 1, 2, 3].map((i) => `<path d="M${55 + i * 90} 34v10M${85 + i * 90} 34v10" ${st("stroke:var(--ill-mid);stroke-width:3;stroke-linecap:round")}/>`).join("")}
-    ${heads}
+    ${heads}${ticks}
     <g ${compact ? "" : 'opacity=".55"'}>
       <rect x="50" y="232" width="300" height="16" rx="4" ${st("fill:var(--ill-soft);stroke:var(--ill-line);stroke-width:1.4")}/>
       <path d="M62 252h276" ${st("stroke:var(--ill-mid);stroke-width:5;stroke-linecap:round")}/>
       ${compact ? "" : `<g transform="translate(200 240)"><circle r="13" ${st("fill:var(--card-bg);stroke:var(--ill-line);stroke-width:1.4")}/>
         <path d="M-5-1v-3a5 5 0 0 1 10 0v3M-7-1h14v9h-14z" ${st("fill:none;stroke:var(--ill-line);stroke-width:1.6;stroke-linejoin:round")}/></g>`}
     </g>
-    ${compact ? "" : `<text x="200" y="274" text-anchor="middle" style="font:500 11px var(--font-ui);fill:var(--text-secondary)">${T("Plateau : réglé en usine, verrouillé par le firmware", "Bed: factory-tuned, locked by the firmware")}</text>`}
+    ${compact ? "" : `<text x="200" y="274" text-anchor="middle" style="font:500 11px var(--font-ui);fill:var(--text-secondary)">${T("Plateau : verrouillé par le firmware, non proposé", "Bed: locked by the firmware, not offered")}</text>`}
+  </svg>`;
+}
+
+/* Dynamic flow, choose step: the four heads with their declared filament;
+   an undeclared head is greyed (FLOW_CALIBRATE refuses it). */
+function illFlowPick(sel = [1, 2]) {
+  const heads = HEADS.map((h, i) => headSvg(70 + i * 90, 46, h, { sel: sel.includes(i), dim: h.none, scale: 1 })).join("");
+  const strands = HEADS.map((h, i) => (h.none || !sel.includes(i) ? "" : `<path d="M${70 + i * 90} 150q0 22 ${(200 - (70 + i * 90)) * 0.45} 44" style="fill:none;stroke:${h.c};stroke-width:5;stroke-linecap:round;stroke-dasharray:2 9;${h.c === "#F2F2EF" ? "filter:drop-shadow(0 0 .8px var(--ill-line))" : ""}"/>`)).join("");
+  return `<svg class="big" viewBox="0 0 400 300" role="img">
+    <rect x="14" y="14" width="372" height="272" rx="18" ${st("fill:var(--card-bg);stroke:var(--ill-mid);stroke-width:1.5")}/>
+    <path d="M30 34h340" ${st("stroke:var(--ill-mid);stroke-width:5;stroke-linecap:round")}/>
+    ${[0, 1, 2, 3].map((i) => `<path d="M${55 + i * 90} 34v10M${85 + i * 90} 34v10" ${st("stroke:var(--ill-mid);stroke-width:3;stroke-linecap:round")}/>`).join("")}
+    ${heads}${strands}
+    <path d="M128 196h144l-16 44h-112z" ${st("fill:var(--ill-soft);stroke:var(--ill-line);stroke-width:1.6;stroke-linejoin:round")}/>
+    <text x="200" y="224" text-anchor="middle" style="font:600 11px var(--font-ui);fill:var(--text-secondary)">${T("bac à déchets", "waste bin")}</text>
+    <text x="200" y="272" text-anchor="middle" style="font:500 11px var(--font-ui);fill:var(--text-secondary)">${T("Les têtes choisies passent au bac, l'une après l'autre", "Chosen heads go to the bin, one after the other")}</text>
   </svg>`;
 }
 
@@ -129,8 +154,8 @@ function illXyz({ compact = false } = {}) {
 
 /* Dynamic flow: a head over the purge chute, extruding; pressure arrows;
    the sensor reading the extrusion. */
-function illFlow() {
-  return `<svg viewBox="0 0 400 300" role="img">
+function illFlow({ big = false } = {}) {
+  return `<svg class="${big ? "big" : ""}" viewBox="0 0 400 300" role="img">
     ${headSvg(200, 40, HEADS[1], { hot: false, scale: 1.4, label: false })}
     <path d="M200 166v54" ${st("stroke:" + HEADS[1].c + ";stroke-width:7;stroke-linecap:round")}/>
     <path d="M150 230h100l-14 40h-72z" ${st("fill:var(--ill-soft);stroke:var(--ill-line);stroke-width:1.6;stroke-linejoin:round")}/>
@@ -149,6 +174,8 @@ const PIC = {
   noise: `<svg class="pic" viewBox="0 0 64 64"><path d="M12 26h8l12-10v32L20 38h-8z" ${st(LINE)}/><path d="M40 24q6 8 0 16M46 18q11 14 0 28" ${st("stroke:var(--accent);stroke-width:2;fill:none;stroke-linecap:round")}/></svg>`,
   bed: `<svg class="pic" viewBox="0 0 64 64"><path d="M8 40 32 28l24 12-24 12z" ${st(LINE)}/><path d="M20 30l-4-8M44 30l4-8M32 22V12" ${st("stroke:var(--success);stroke-width:2;stroke-linecap:round")}/></svg>`,
   home: `<svg class="pic" viewBox="0 0 64 64"><path d="M14 30 32 14l18 16M20 26v22h24V26" ${st(LINE)}/><path d="M30 48V38h4v10" ${st(LINE)}/><path d="M8 54h48" ${st("stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-dasharray:3 4")}/></svg>`,
+  spool: `<svg class="pic" viewBox="0 0 64 64"><circle cx="26" cy="32" r="18" ${st(LINE)}/><circle cx="26" cy="32" r="6" ${st(LINE)}/><path d="M26 14h22v6" ${st("stroke:#FF7A1A;stroke-width:3;fill:none;stroke-linecap:round")}/><path d="M44 40l4 4 8-9" ${st("stroke:var(--success);stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round")}/></svg>`,
+  bin: `<svg class="pic" viewBox="0 0 64 64"><path d="M16 26h32l-4 26H20z" ${st(LINE)}/><path d="M13 26h38" ${st(LINE)}/><path d="M32 8v12" ${st("stroke:#FF7A1A;stroke-width:3;stroke-linecap:round")}/><path d="M26 38q3-4 6 0t6 0" ${st("stroke:#FF7A1A;stroke-width:2;fill:none;stroke-linecap:round")}/></svg>`,
   screen: `<svg class="pic" viewBox="0 0 64 64"><rect x="10" y="14" width="44" height="30" rx="4" ${st(LINE)}/><path d="M26 50h12M32 44v6" ${st(LINE)}/><path d="M22 29h20" ${st("stroke:var(--danger);stroke-width:2.4;stroke-linecap:round")}/><circle cx="32" cy="29" r="10" ${st("fill:none;stroke:var(--danger);stroke-width:2")}/></svg>`,
 };
 
@@ -206,6 +233,34 @@ function chartShaper(axis, f0, { w = 520, h = 190 } = {}) {
     <path d="M${fx(f0)} ${pad.t - 2}V${pad.t + ih}" style="stroke:var(--accent);stroke-width:1.4;stroke-dasharray:4 4"/>
     <text x="${fx(f0) + 6}" y="${pad.t + 10}" style="fill:var(--accent);font-weight:700;font-size:11px;paint-order:stroke;stroke:var(--ill-bg);stroke-width:4">${String(f0).replace(".", T(",", "."))} Hz</text>
     <text x="${w - pad.r}" y="${pad.t + 8}" text-anchor="end" style="font-weight:700;fill:var(--text)">${axis}</text>
+  </svg>`;
+}
+
+/* Dynamic flow: what FLOW_CALIBRATE prints in the console for a standard
+   nozzle (LINEAR_FITTING): extrude at k_min, k_max, the middle, then the
+   estimated zero crossing; "measure area" for each; the K where the fitted
+   line crosses zero is the result ("cali_k"). Values are sample data. */
+function chartFlow({ w = 520, h = 300, pts = [[0.005, 0.62], [0.065, -0.99], [0.035, -0.19], [0.028, 0.02]], shown = 4, res = 0.028, kMax = 0.07 } = {}) {
+  const pad = { l: 44, r: 16, t: 20, b: 34 };
+  const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+  const x = (k) => pad.l + (k / kMax) * iw;
+  const y = (a) => pad.t + ih * (1 - (a + 1) / 2);
+  const grid = [-1, -0.5, 0, 0.5, 1].map((a) => `<path class="${a === 0 ? "axis" : "grid"}" d="M${pad.l} ${y(a)}H${w - pad.r}" ${a === 0 ? 'style="stroke:var(--ill-line);stroke-width:1.4"' : ""}/>`).join("");
+  const xt = [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07].map((k) => `<text x="${x(k)}" y="${h - 14}" text-anchor="middle">${NUM(k.toFixed(2).replace(".", ","))}</text>`).join("");
+  const fitA = (k) => 26.96 * (res - k);
+  const dots = pts.slice(0, shown).map(([k, a], i) => `<g><circle cx="${x(k)}" cy="${y(a)}" r="7" style="fill:var(--card-bg);stroke:var(--accent);stroke-width:2.4"/><text x="${x(k)}" y="${y(a) + 3.5}" text-anchor="middle" style="font-weight:700;fill:var(--accent)">${i + 1}</text></g>`).join("");
+  const done = shown >= pts.length;
+  return `<svg class="chart big" viewBox="0 0 ${w} ${h}">
+    ${grid}${xt}
+    <text x="${pad.l - 8}" y="${y(0.75)}" text-anchor="end">${T("trop", "too")}</text><text x="${pad.l - 8}" y="${y(0.75) + 12}" text-anchor="end">${T("peu", "low")}</text>
+    <text x="${pad.l - 8}" y="${y(-0.75)}" text-anchor="end">${T("trop", "too")}</text><text x="${pad.l - 8}" y="${y(-0.75) + 12}" text-anchor="end">${T("fort", "high")}</text>
+    <text x="${w - pad.r}" y="${h - 1}" text-anchor="end" style="font-weight:600">${T("réglage K testé", "K tested")}</text>
+    <text x="${pad.l - 8}" y="${y(0) + 3}" text-anchor="end" style="font-weight:600">${T("juste", "right")}</text>
+    <path d="M${x(0.002)} ${y(fitA(0.002))}L${x(0.068)} ${y(fitA(0.068))}" style="stroke:var(--ill-mid);stroke-width:2;stroke-dasharray:5 5"/>
+    ${done ? `<path d="M${x(res)} ${pad.t}V${pad.t + ih}" style="stroke:var(--success);stroke-width:1.6;stroke-dasharray:4 4"/>
+      <circle cx="${x(res)}" cy="${y(0)}" r="11" style="fill:none;stroke:var(--success);stroke-width:2.4"/>
+      <text x="${x(res) + 14}" y="${pad.t + 12}" style="fill:var(--success);font-weight:700;font-size:12px">K = ${NUM(String(res.toFixed(3)).replace(".", ","))}</text>` : ""}
+    ${dots}
   </svg>`;
 }
 
@@ -277,11 +332,11 @@ function homeCards(off = false) {
     ${card({ off, ill: illFlow(), title: T("Débit dynamique (K)", "Dynamic flow (K)"),
       badge: `<span class="cb-badge">${T("Aussi au début d'une impression", "Also at print start")}</span>`,
       why: T("Règle la pression d'extrusion pour le filament chargé, tête par tête.", "Tunes extrusion pressure for the loaded filament, head by head."),
-      last: T("Actuel : <b>T0 0,032 · T1 0,028 · T2 défaut · T3 0,041</b>", "Now: <b>T0 0.032 · T1 0.028 · T2 default · T3 0.041</b>"), dur: T("≈ 3 min 30 / tête", "≈ 3.5 min / head") })}
+      last: T("Actuel : <b>T0 0,031 · T1 défaut · T2 défaut · T3 —</b>", "Now: <b>T0 0.031 · T1 default · T2 default · T3 —</b>"), dur: T("≈ 3 min 30 / tête", "≈ 3.5 min / head") })}
     ${card({ off, ill: illXyz({ compact: true }), title: T("Décalage entre les têtes", "Offset between heads"),
       badge: `<span class="cb-badge acc">${T("Lancement depuis l'écran", "Run from the screen")}</span>`,
       why: T("Aligne les 4 têtes entre elles pour des couleurs bien raccord. Snap Studio affiche le résultat.", "Lines the 4 heads up so colours meet cleanly. Snap Studio shows the result."),
-      last: T("Dernière : <b>écart max 0,03 mm</b> · 2 oct.", "Last: <b>max gap 0.03 mm</b> · Oct 2"), dur: "15–20 min", btn: T("Voir", "View"), btnCls: "" })}
+      last: T("Dernière : <b>écart max 0,024 mm</b> · 2 oct.", "Last: <b>max gap 0.024 mm</b> · Oct 2"), dur: "15–20 min", btn: T("Voir", "View"), btnCls: "" })}
     ${card({ off, ill: illPidPick(1, { compact: true }), title: T("PID des buses", "Nozzle PID"),
       badge: `<span class="cb-badge adv">${T("Avancé", "Advanced")}</span>`,
       why: T("Stabilise la température d'une buse. Utile après un changement de hotend ou si elle oscille.", "Keeps a nozzle's temperature steady. Useful after a hotend swap or if it swings."),
@@ -292,7 +347,7 @@ function intro() {
   return `<div class="cb-intro">
     <svg class="ic" viewBox="0 0 24 24" style="fill:var(--accent)"><path d="M12 1 3 5v6c0 5.6 3.8 10.7 9 12 5.2-1.3 9-6.4 9-12V5zm-1.4 15.4-4-4L8 11l2.6 2.6L16 8.2l1.4 1.4z"/></svg>
     <div><b>${T("La U1 se calibre déjà en grande partie toute seule", "The U1 already calibrates most things by itself")}</b>
-      <ul><li>${T("Nivellement avant chaque impression", "Bed mesh before every print")}</li><li>${T("Débit dynamique au début d'une impression (option de l'écran)", "Dynamic flow at print start (screen option)")}</li><li>${T("Résultats gardés dans la mémoire de l'imprimante", "Results kept in the printer's memory")}</li></ul>
+      <ul><li>${T("Nivellement et débit dynamique au début d'une impression (options de l'écran)", "Bed mesh and dynamic flow at print start (screen options)")}</li><li>${T("Résultats gardés dans la mémoire de l'imprimante", "Results kept in the printer's memory")}</li></ul>
       <p>${T("Ces assistants servent après un changement de pièce, un déménagement ou un défaut visible. Ils n'ont pas besoin de redémarrer Klipper.", "Use these assistants after a part swap, a move, or a visible defect. None of them restarts Klipper.")}</p></div>
   </div>`;
 }
@@ -313,22 +368,30 @@ function renderRefused() {
 }
 
 /* ------------------------------------------------------------ PID */
-function headsPicker(sel) {
-  return `<div class="cb-heads">${HEADS.map((h) => `<div class="cb-head${h.n === sel ? " on" : ""}" style="--c:${h.c}"><i></i><b>T${h.n}</b><small>${T(h.name, h.en)}</small></div>`).join("")}</div>`;
+function headsPicker(sel, { flow = false } = {}) {
+  const on = (n) => sel === "all" || (Array.isArray(sel) ? sel.includes(n) : n === sel);
+  return `<div class="cb-heads">${HEADS.map((h) => `<div class="cb-head${on(h.n) ? " on" : ""}${flow && h.none ? " lock" : ""}" style="--c:${h.c}"><i${h.none ? ' class="none"' : ""}></i><b>T${h.n}</b><small>${T(h.name, h.en)}</small></div>`).join("")}</div>`;
 }
-function renderPidChoose() {
+const snapNote = () => `<div class="cb-info warn">${I.warn}<span>${T("<b>Snapmaker ne propose pas de PID sur la U1</b> (FAQ officielle). Snap Studio lance la commande Klipper présente dans la U1 ; le résultat ne peut pas être annulé depuis l'app.", "<b>Snapmaker does not offer PID tuning on the U1</b> (official FAQ). Snap Studio runs the Klipper command present in the U1; the result can't be undone from the app.")}</span></div>`;
+function modeSeg(all) {
+  return `<div class="seg full"><button class="seg-btn${all ? "" : " on"}">${T("Une buse", "One nozzle")}</button><button class="seg-btn${all ? " on" : ""}">${T("Les 4 à la suite", "All 4 in a row")}</button></div>`;
+}
+function renderPidChoose(all = false) {
+  const temps = `<div class="cb-tlist">${HEADS.map((h) => `<div><i style="--c:${h.c}"${h.none ? ' class="none"' : ""}></i><b>T${h.n}</b><span>${h.none ? T("aucun filament déclaré → PLA", "no filament declared → PLA") : `${h.vendor === "Generic" ? "" : h.vendor + " "}${T(h.name, h.en)}`}</span><em>${h.t || 220} °C</em></div>`).join("")}</div>`;
   $("view").innerHTML = page(`${statusBar({ chips: [{ t: T("4 têtes", "4 heads") }] })}${wizard({
     title: T("PID des buses", "Nozzle PID"), steps: PID_STEPS(), on: 0,
-    art: `${illPidPick(1)}<div class="cw-cap">${T("Touche une buse sur le dessin ou dans la liste.", "Tap a nozzle in the drawing or in the list.")}</div>`,
+    art: `${illPidPick(all ? "all" : 1, { hot: all ? -1 : null })}<div class="cw-cap">${all ? T("Les 4 buses, l'une après l'autre. Une seule chauffe à la fois.", "All 4 nozzles, one after the other. Only one heats at a time.") : T("Touche une buse sur le dessin ou dans la liste.", "Tap a nozzle in the drawing or in the list.")}</div>`,
     side: `<h3>${T("Quelle buse calibrer ?", "Which nozzle?")}</h3>
-      <p class="lead">${T("La buse chauffe, puis Klipper coupe et relance la chauffe plusieurs fois pour apprendre comment elle réagit.", "The nozzle heats; Klipper then switches the heater off and on a few times to learn how it reacts.")}</p>
-      <div class="cw-field"><span class="cw-k">${T("Buse", "Nozzle")}</span>${headsPicker(1)}</div>
-      <div class="cw-field"><span class="cw-k">${T("Température de mesure", "Measurement temperature")}</span>
-        <div class="seg full"><button class="seg-btn on">PLA <small>220°</small></button><button class="seg-btn">PETG <small>250°</small></button><button class="seg-btn">ABS·ASA <small>270°</small></button><button class="seg-btn">TPU <small>230°</small></button></div>
-        <div class="cb-range"><input type="range" min="180" max="300" value="220" /><b>220 °C</b></div>
-        <span class="hint">${T("Choisis la température à laquelle tu imprimes le plus avec cette buse. Proposée d'après le filament chargé : PLA Orange.", "Pick the temperature you print at most with this nozzle. Suggested from the loaded filament: Orange PLA.")}</span></div>
-      <label class="cb-switch"><span>${T("Les 4 buses à la suite", "All 4 nozzles in a row")}<small>${T("Une après l'autre, à la même température · ≈ 20 min", "One after the other, same temperature · ≈ 20 min")}</small></span><input type="checkbox" class="sw" role="switch" /></label>`,
-    foot: `<span class="note">${I.info}${T("Le plateau n'est pas proposé : la U1 bloque son PID (réglé en usine).", "The bed is not offered: the U1 locks its PID (factory-tuned).")}</span><span class="grow"></span><button class="btn lg">${T("Annuler", "Cancel")}</button><button class="btn lg primary">${T("Suivant", "Next")}</button>`,
+      <p class="lead">${T("La buse chauffe, puis la U1 coupe et relance la chauffe plusieurs fois pour apprendre comment elle réagit.", "The nozzle heats; the U1 then switches the heater off and on a few times to learn how it reacts.")}</p>
+      <div class="cw-field">${modeSeg(all)}${headsPicker(all ? "all" : 1)}</div>
+      ${all ? `<div class="cw-field"><span class="cw-k">${T("Température de chaque buse", "Temperature of each nozzle")}</span>${temps}
+          <span class="hint">${T("Température d'impression par défaut de Snapmaker pour le filament déclaré sur chaque tête.", "Snapmaker's default print temperature for the filament declared on each head.")}</span></div>`
+        : `<div class="cw-field"><span class="cw-k">${T("Température de mesure", "Measurement temperature")}</span>
+          <div class="seg full">${PRESETS.map(([n, t]) => `<button class="seg-btn${n === "PLA" ? " on" : ""}">${n} <small>${t}°</small></button>`).join("")}</div>
+          <div class="cb-range"><input type="range" min="180" max="290" value="220" /><b>220 °C</b></div>
+          <span class="hint">${T("Températures d'impression par défaut de Snapmaker. Proposée d'après le filament déclaré sur T1 : PLA.", "Snapmaker's default print temperatures. Suggested from the filament declared on T1: PLA.")}</span></div>`}
+      ${snapNote()}`,
+    foot: `<span class="note">${I.clock}${all ? T("≈ 20 min au total", "≈ 20 min in total") : T("≈ 5 min", "≈ 5 min")}</span><span class="grow"></span><button class="btn lg">${T("Annuler", "Cancel")}</button><button class="btn lg primary">${T("Suivant", "Next")}</button>`,
   })}`);
 }
 function check(pic, title, text, state) {
@@ -341,39 +404,43 @@ function pidPrepareSide() {
     <div class="cb-checks">
       ${check("idle", T("Imprimante au repos", "Printer idle"), T("Aucune impression, pause ni procédure en cours.", "No print, pause or routine running."), "auto")}
       ${check("clean", T("Buse propre", "Clean nozzle"), T("Retire le filament collé autour de la buse T1.", "Remove filament stuck around nozzle T1."), "box")}
-      ${check("fan", T("Ventilateur de pièce coupé", "Part fan off"), T("Snap Studio le coupe pendant la mesure, puis le remet comme avant.", "Snap Studio turns it off during the measurement, then restores it."), "auto")}
+      ${check("fan", T("Ventilateur de pièce arrêté", "Part fan stopped"), T("Celui de T1 est à 0 %. Snap Studio n'y touche pas pendant la mesure, comme la commande de la U1.", "T1's is at 0%. Snap Studio leaves it alone during the measurement, like the U1's command."), "auto")}
       ${check("hands", T("Ne touche pas la tête", "Don't touch the head"), T("Elle monte à 220 °C. Ne lance rien sur l'écran tactile en même temps.", "It goes up to 220 °C. Don't start anything on the touchscreen meanwhile."), "todo")}
     </div>`;
 }
 function renderPidPrepare(modal = false) {
   $("view").innerHTML = page(`${statusBar({ chips: [{ t: T("4 têtes", "4 heads") }] })}${wizard({
     title: T("PID des buses", "Nozzle PID"), steps: PID_STEPS(), on: 1,
-    art: `${illPidPick(1)}<div class="cw-cap">${T("T1 chauffera seule, dans son support. Les autres têtes restent froides.", "T1 heats alone, in its dock. The other heads stay cold.")}</div>`,
+    art: `${illPidPick(1)}<div class="cw-cap">${T("T1 chauffe seule, dans son support : pas de mouvement. Les autres têtes restent froides.", "T1 heats alone, in its dock: no motion. The other heads stay cold.")}</div>`,
     side: pidPrepareSide(),
     foot: `${idleNote()}<span class="grow"></span><button class="btn lg">${T("Retour", "Back")}</button><button class="btn lg primary">${T("Lancer la calibration", "Start calibration")}</button>`,
   })}`);
   $("modal").innerHTML = modal ? `<div class="modal static"><div class="modal-box">
       <div class="cb-mhead"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" style="fill:color-mix(in srgb, var(--heat) 16%, transparent)"/><path d="M20 12h8v15a7 7 0 1 1-8 0z" style="fill:none;stroke:var(--heat);stroke-width:2.4;stroke-linejoin:round"/><circle cx="24" cy="32" r="3.5" style="fill:var(--heat)"/></svg>
         <div><h3>${T("Lancer la calibration PID de T1 ?", "Start the PID calibration of T1?")}</h3><p style="margin-top:4px">${T("T1 va chauffer à 220 °C et osciller autour pendant environ 5 minutes.", "T1 will heat to 220 °C and swing around it for about 5 minutes.")}</p></div></div>
-      <div class="cb-info warn">${I.warn}<span>${T("<b>Le résultat remplace aussitôt les réglages actuels de T1</b> dans la mémoire de l'imprimante. Snap Studio garde les anciennes valeurs pour te les montrer, mais ne peut pas les remettre lui-même.", "<b>The result immediately replaces T1's current settings</b> in the printer's memory. Snap Studio keeps the old values to show them, but cannot put them back itself.")}</span></div>
-      <ul><li>${T("Pas de redémarrage de Klipper.", "Klipper does not restart.")}</li><li>${T("Tu peux annuler à tout moment : les anciens réglages restent alors en place.", "You can cancel at any time: the old settings then stay.")}</li></ul>
+      <div class="cb-info warn">${I.warn}<span>${T("<b>Le résultat remplace aussitôt les réglages actuels de T1</b> dans la U1. Il n'y a <b>pas de retour arrière</b> depuis Snap Studio : la U1 n'a pas de commande pour remettre d'anciennes valeurs.", "<b>The result immediately replaces T1's current settings</b> in the U1. There is <b>no undo</b> from Snap Studio: the U1 has no command to put old values back.")}</span></div>
+      <ul><li>${T("Snap Studio lit et garde d'abord les valeurs actuelles (Kp 33,540 · Ki 9,317 · Kd 30,186) pour les comparer.", "Snap Studio first reads and keeps the current values (Kp 33.540 · Ki 9.317 · Kd 30.186) to compare.")}</li><li>${T("Pas de redémarrage de Klipper.", "Klipper does not restart.")}</li><li>${T("Si tu annules pendant la mesure, les réglages actuels restent en place.", "If you cancel during the measurement, the current settings stay.")}</li></ul>
       <div class="modal-actions"><button class="btn">${T("Annuler", "Cancel")}</button><button class="btn primary">${T("Lancer", "Start")}</button></div>
     </div></div>` : "";
 }
-function renderPidRun() {
-  $("view").innerHTML = page(`${statusBar({ state: "busy", label: T("Calibration", "Calibrating"), busy: T("PID de T1 à 220 °C…", "T1 PID at 220 °C…") })}${wizard({
+function pidQueue() {
+  const st = ["done", "now", "", ""];
+  return `<div class="cb-queue">${HEADS.map((h, i) => `<div class="${st[i]}"><i style="--c:${h.c}"${h.none ? ' class="none"' : ""}></i><b>T${h.n}</b><span>${h.t || 220} °C</span><em>${st[i] === "done" ? T("✓ fait · 5 min 02", "✓ done · 5 min 02") : st[i] === "now" ? T("en cours", "running") : T("en attente", "waiting")}</em></div>`).join("")}</div>`;
+}
+function renderPidRun(all = false) {
+  $("view").innerHTML = page(`${statusBar({ state: "busy", label: T("Calibration", "Calibrating"), busy: all ? T("PID 2/4 · T1 à 220 °C…", "PID 2/4 · T1 at 220 °C…") : T("PID de T1 à 220 °C…", "T1 PID at 220 °C…") })}${wizard({
     title: T("PID des buses", "Nozzle PID"), steps: PID_STEPS(), on: 2,
     art: `${chartPid()}<div class="cw-cap">${T("Température de T1 en direct. Les vagues autour de la cible sont normales : c'est la mesure.", "T1's live temperature. The waves around the target are expected: that is the measurement.")}</div>`,
-    side: `<h3>${T("Calibration de T1 en cours", "Calibrating T1")}</h3>
-      <div class="cb-live"><b>221,4 °C</b><span>${T("cible 220 °C", "target 220 °C")}</span></div>
-      <div class="cb-prog"><i style="width:62%"></i></div>
-      <div class="cb-facts"><div><small>${T("Écoulé", "Elapsed")}</small><b>3 min 06</b></div><div><small>${T("Reste environ", "About")}</small><b>${T("2 min", "2 min left")}</b></div><div><small>${T("Cycles", "Cycles")}</small><b>3 / 6</b></div></div>
-      <div class="cb-phases">
+    side: `<h3>${all ? T("Buse 2 sur 4 : T1", "Nozzle 2 of 4: T1") : T("Calibration de T1 en cours", "Calibrating T1")}</h3>
+      <div class="cb-live"><b>${T("221,4 °C", "221.4 °C")}</b><span>${T("cible 220 °C", "target 220 °C")}</span></div>
+      <div class="cb-prog"><i style="width:${all ? 40 : 62}%"></i></div>
+      <div class="cb-facts"><div><small>${T("Écoulé", "Elapsed")}</small><b>${all ? "8 min 08" : "3 min 06"}</b></div><div><small>${T("Reste environ", "About")}</small><b>${all ? T("12 min", "12 min left") : T("2 min", "2 min left")}</b></div><div><small>${T("Cycles de T1", "T1 cycles")}</small><b>3 / 6</b></div></div>
+      ${all ? pidQueue() : `<div class="cb-phases">
         <div class="done"><i>✓</i>${T("Chauffe jusqu'à 220 °C", "Heat to 220 °C")}</div>
         <div class="now"><i></i>${T("Cycles de mesure autour de la cible", "Measurement cycles around the target")}</div>
         <div><i></i>${T("Calcul et enregistrement des réglages", "Compute and store the settings")}</div>
-      </div>
-      <div class="cb-info">${I.info}<span>${T("Tu peux quitter cet onglet : la mesure continue sur l'imprimante et le résultat t'attendra ici.", "You can leave this tab: the measurement goes on in the printer and the result will wait for you here.")}</span></div>`,
+      </div>`}
+      <div class="cb-info">${I.info}<span>${all ? T("Chaque buse est enregistrée dès qu'elle est finie. Si tu annules, les buses déjà faites gardent leur nouveau réglage.", "Each nozzle is saved as soon as it is done. If you cancel, the nozzles already done keep their new setting.") : T("Tu peux quitter cet onglet : la mesure continue sur l'imprimante et le résultat t'attendra ici.", "You can leave this tab: the measurement goes on in the printer and the result will wait for you here.")}</span></div>`,
     foot: `${idleNote()}<span class="grow"></span><button class="btn lg danger">${T("Annuler la calibration", "Cancel calibration")}</button>`,
   })}`);
 }
@@ -381,16 +448,88 @@ function renderPidResult() {
   $("view").innerHTML = page(`${statusBar({ chips: [{ t: T("T1 refroidit · 84 °C", "T1 cooling · 84 °C") }] })}${wizard({
     title: T("PID des buses", "Nozzle PID"), steps: PID_STEPS(), on: 3,
     art: `${chartPid({ at: 1 })}<div class="cw-cap">${T("Mesure terminée en 5 min 12 · 6 cycles", "Measured in 5 min 12 s · 6 cycles")}</div>`,
-    side: `<div class="cb-ok"><i>✓</i><div><b>${T("Nouveaux réglages de T1 enregistrés", "New T1 settings saved")}</b><small>${T("Déjà actifs dans l'imprimante · aucun redémarrage", "Already active in the printer · no restart")}</small></div></div>
-      <p class="cb-plain">${T("T1 réagit <b>un peu plus doucement</b> qu'avant : sa température devrait rester à <b>±1 °C</b> de la cible pendant l'impression, sans dépasser.", "T1 now reacts <b>a little more gently</b>: its temperature should stay within <b>±1 °C</b> of the target while printing, without overshooting.")}</p>
+    side: `<div class="cb-ok"><i>✓</i><div><b>${T("Nouveaux réglages de T1 enregistrés", "New T1 settings saved")}</b><small>${T("Déjà actifs dans la U1 · aucun redémarrage", "Already active in the U1 · no restart")}</small></div></div>
+      <p class="cb-plain">${T("T1 réagit <b>un peu plus doucement</b> qu'avant. Vérifie à la prochaine impression que sa température reste stable.", "T1 now reacts <b>a little more gently</b>. Check at the next print that its temperature stays steady.")}</p>
       <div class="cb-table">
         <div class="r"><span>${T("Réglage", "Setting")}</span><span class="num">${T("Avant", "Before")}</span><span class="num">${T("Nouveau", "New")}</span><span class="cb-delta">${T("Écart", "Change")}</span></div>
         <div class="r"><span><b>Kp</b><small>${T("Force de la réaction", "Reaction strength")}</small></span><span class="num">${T("33,540", "33.540")}</span><span class="num"><b>${T("31,822", "31.822")}</b></span><span class="cb-delta">−5 %</span></div>
         <div class="r"><span><b>Ki</b><small>${T("Correction de l'écart dans la durée", "Correction over time")}</small></span><span class="num">${T("9,317", "9.317")}</span><span class="num"><b>${T("8,904", "8.904")}</b></span><span class="cb-delta">−4 %</span></div>
         <div class="r"><span><b>Kd</b><small>${T("Anticipation des variations", "Anticipation of changes")}</small></span><span class="num">${T("30,186", "30.186")}</span><span class="num"><b>${T("28,431", "28.431")}</b></span><span class="cb-delta">−6 %</span></div>
       </div>
-      <span class="hint">${T("« Avant » : valeurs d'usine lues dans la configuration de la U1, gardées dans l'historique de Snap Studio.", "“Before”: factory values read from the U1's configuration, kept in Snap Studio's history.")}</span>`,
+      <span class="hint">${T("« Avant » : lu dans la U1 juste avant la mesure, gardé dans l'historique de Snap Studio. Pas de bouton pour y revenir : la U1 ne le permet pas.", "“Before”: read from the U1 just before the measurement, kept in Snap Studio's history. No button to go back: the U1 doesn't allow it.")}</span>`,
     foot: `<span class="note">${I.save}${T("Pas besoin de SAVE_CONFIG : la U1 garde ce réglage elle-même.", "No SAVE_CONFIG needed: the U1 keeps this setting itself.")}</span><span class="grow"></span><button class="btn lg">${T("Calibrer une autre buse", "Calibrate another nozzle")}</button><button class="btn lg primary">${T("Terminer", "Done")}</button>`,
+  })}`);
+}
+
+/* ------------------------------------------------------------ dynamic flow */
+const FLOW_STEPS = () => [T("Choisir", "Choose"), T("Préparer", "Prepare"), T("Mesurer", "Measure"), T("Résultat", "Result")];
+function flowRows(sel) {
+  return `<div class="cb-ktable">
+    <div class="r"><span>${T("Tête", "Head")}</span><span>${T("Filament déclaré", "Declared filament")}</span><span class="num">${T("K actuel", "Current K")}</span><span class="num">${T("Chauffe", "Heat")}</span></div>
+    ${HEADS.map((h) => `<div class="r${h.none ? " off" : ""}${sel.includes(h.n) ? " on" : ""}"><span><input type="checkbox" ${sel.includes(h.n) ? "checked" : ""} ${h.none ? "disabled" : ""}/><i style="--c:${h.c}"${h.none ? ' class="none"' : ""}></i><b>T${h.n}</b></span>
+      <span>${h.none ? `<em>${T("Aucun : à déclarer sur l'écran de la U1", "None: declare it on the U1 screen")}</em>` : `${h.vendor === "Generic" ? T("Générique", "Generic") : h.vendor} ${T(h.name, h.en)}`}</span>
+      <span class="num">${h.none ? "—" : `${NUM(h.k)}${h.k === h.kDef ? `<small>${T("défaut", "default")}</small>` : `<small>${T("calibré", "calibrated")}</small>`}`}</span><span class="num">${h.none ? "—" : `${h.t} °C`}</span></div>`).join("")}
+  </div>`;
+}
+function renderFlowChoose() {
+  const sel = [1, 2];
+  $("view").innerHTML = page(`${statusBar({ chips: [{ t: T("4 têtes", "4 heads") }, { t: T("Origine faite", "Homed") }] })}${wizard({
+    title: T("Débit dynamique (K)", "Dynamic flow (K)"), steps: FLOW_STEPS(), on: 0,
+    art: `${illFlowPick(sel)}<div class="cw-cap">${T("K règle l'avance de pression : la buse pousse un peu plus tôt et relâche un peu plus tôt, pour des coins nets et sans bavure.", "K sets pressure advance: the nozzle pushes and eases off slightly earlier, for clean corners without blobs.")}</div>`,
+    side: `<h3>${T("Quelles têtes mesurer ?", "Which heads?")}</h3>
+      <p class="lead">${T("Le réglage dépend du filament chargé. Mesure les têtes dont tu viens de changer le filament.", "The setting depends on the loaded filament. Measure the heads whose filament you just changed.")}</p>
+      ${flowRows(sel)}
+      <span class="hint">${T("Température et plage de mesure : valeurs de Snapmaker pour chaque filament, choisies par la U1.", "Temperature and measuring range: Snapmaker's values for each filament, chosen by the U1.")}</span>
+      <div class="cb-info">${I.screen}<span>${T("Même mesure que l'option <b>Calibration du débit dynamique</b> avant une impression sur l'écran. Ici, sans lancer d'impression.", "Same measurement as the <b>Dynamic Flow Calibration</b> option before a print on the screen. Here, without starting a print.")}</span></div>`,
+    foot: `<span class="note">${I.clock}${T("2 têtes · ≈ 7 min", "2 heads · ≈ 7 min")}</span><span class="grow"></span><button class="btn lg">${T("Annuler", "Cancel")}</button><button class="btn lg primary">${T("Suivant", "Next")}</button>`,
+  })}`);
+}
+function renderFlowPrepare() {
+  $("view").innerHTML = page(`${statusBar({ chips: [{ t: T("4 têtes", "4 heads") }] })}${wizard({
+    title: T("Débit dynamique (K)", "Dynamic flow (K)"), steps: FLOW_STEPS(), on: 1,
+    art: `${illFlow({ big: true })}<div class="cw-cap">${T("La tête va au-dessus du bac à déchets, chauffe, puis extrude à plusieurs réglages pendant que son capteur mesure la pression.", "The head moves over the waste bin, heats, then extrudes at several settings while its sensor measures the pressure.")}</div>`,
+    side: `<h3>${T("Avant de lancer", "Before you start")}</h3>
+      <p class="lead">${T("T1 puis T2 · ≈ 3 min 30 par tête.", "T1 then T2 · ≈ 3.5 min per head.")}</p>
+      <div class="cb-checks">
+        ${check("idle", T("Imprimante au repos", "Printer idle"), T("Aucune impression, pause ni procédure en cours.", "No print, pause or routine running."), "auto")}
+        ${check("spool", T("Filament chargé et déclaré", "Filament loaded and declared"), T("Détecté dans T1 et T2, type connu de la U1 (PLA, PETG).", "Detected in T1 and T2, type known to the U1 (PLA, PETG)."), "auto")}
+        ${check("bin", T("Bac à déchets en place", "Waste bin in place"), T("Un peu de filament y tombe à chaque tête. Vide-le s'il est plein.", "A little filament falls into it for each head. Empty it if full."), "box")}
+        ${check("home", T("Origine X/Y et tête", "X/Y homing and head"), T("La U1 fait l'origine si besoin ; Snap Studio prend la tête (T1, puis T2).", "The U1 homes if needed; Snap Studio picks the head (T1, then T2)."), "auto")}
+      </div>
+      <div class="cb-info">${I.info}<span>${T("Le résultat est <b>enregistré tout de suite</b> par la U1 et servira aux prochaines impressions.", "The result is <b>saved at once</b> by the U1 and used for the next prints.")}</span></div>`,
+    foot: `${idleNote()}<span class="grow"></span><button class="btn lg">${T("Retour", "Back")}</button><button class="btn lg primary">${T("Lancer · ≈ 7 min", "Start · ≈ 7 min")}</button>`,
+  })}`);
+}
+function renderFlowRun() {
+  $("view").innerHTML = page(`${statusBar({ state: "busy", label: T("Calibration", "Calibrating"), busy: T("Débit dynamique · T1 · mesure 3", "Dynamic flow · T1 · measure 3") })}${wizard({
+    title: T("Débit dynamique (K)", "Dynamic flow (K)"), steps: FLOW_STEPS(), on: 2,
+    art: `${chartFlow({ shown: 3 })}<div class="cw-cap">${T("Chaque point : la U1 extrude avec un réglage K et mesure si la pression est en retard (trop peu) ou en avance (trop fort). Le bon K est là où la ligne passe par zéro.", "Each point: the U1 extrudes with one K and measures whether pressure lags (too low) or leads (too high). The right K is where the line crosses zero.")}</div>`,
+    side: `<h3>${T("Tête 1 sur 2 : T1", "Head 1 of 2: T1")}</h3>
+      <div class="cb-live"><b>${T("Mesure 3", "Measure 3")}</b><span>${T("PLA orange · 220 °C", "orange PLA · 220 °C")}</span></div>
+      <div class="cb-prog"><i style="width:34%"></i></div>
+      <div class="cb-facts"><div><small>${T("Écoulé", "Elapsed")}</small><b>2 min 21</b></div><div><small>${T("Reste environ", "About")}</small><b>${T("4 min 40", "4 min 40 left")}</b></div><div><small>${T("Têtes", "Heads")}</small><b>1 / 2</b></div></div>
+      <div class="cb-phases">
+        <div class="done"><i>✓</i>${T("Origine X/Y, tête au-dessus du bac", "X/Y homing, head over the bin")}</div>
+        <div class="done"><i>✓</i>${T("Chauffe à 220 °C", "Heat to 220 °C")}</div>
+        <div class="now"><i></i>${T("Extrusions de mesure (4 ou 5 réglages K)", "Measuring extrusions (4 or 5 K settings)")}</div>
+        <div><i></i>${T("Calcul, enregistrement, retour au repos", "Compute, save, back to rest")}</div>
+      </div>`,
+    foot: `${idleNote()}<span class="grow"></span><button class="btn lg danger">${T("Annuler la calibration", "Cancel calibration")}</button>`,
+  })}`);
+}
+function renderFlowResult() {
+  $("view").innerHTML = page(`${statusBar({ chips: [{ t: T("T2 refroidit · 96 °C", "T2 cooling · 96 °C") }] })}${wizard({
+    title: T("Débit dynamique (K)", "Dynamic flow (K)"), steps: FLOW_STEPS(), on: 3,
+    art: `${chartFlow()}<div class="cw-cap">${T("Mesures de T1 : 4 extrusions, la ligne passe par zéro à K = 0,028.", "T1's measurements: 4 extrusions, the line crosses zero at K = 0.028.")}</div>`,
+    side: `<div class="cb-ok"><i>✓</i><div><b>${T("Résultats enregistrés dans la U1", "Results saved in the U1")}</b><small>${T("Utilisés dès la prochaine impression · aucun redémarrage", "Used from the next print · no restart")}</small></div></div>
+      <div class="cb-ktable res">
+        <div class="r"><span>${T("Tête", "Head")}</span><span>${T("Filament", "Filament")}</span><span class="num">${T("Avant", "Before")}</span><span class="num">${T("Nouveau", "New")}</span></div>
+        <div class="r"><span><i style="--c:${HEADS[1].c}"></i><b>T1</b></span><span>${T("PLA orange", "Orange PLA")}</span><span class="num">${NUM("0,020")}<small>${T("défaut", "default")}</small></span><span class="num"><b>${NUM("0,028")}</b><small class="ok">${T("mesuré", "measured")}</small></span></div>
+        <div class="r"><span><i style="--c:${HEADS[2].c}"></i><b>T2</b></span><span>${T("PETG blanc", "White PETG")}</span><span class="num">${NUM("0,050")}<small>${T("défaut", "default")}</small></span><span class="num"><b>${NUM("0,050")}</b><small class="warn">${T("hors plage → défaut", "out of range → default")}</small></span></div>
+      </div>
+      <div class="cb-info warn">${I.warn}<span>${T("<b>T2 :</b> la mesure est sortie de la plage prévue pour ce PETG (0,020–0,065). La U1 a appliqué la valeur par défaut de Snapmaker pour ce filament. Tu peux relancer la mesure de T2.", "<b>T2:</b> the measurement fell outside the range expected for this PETG (0.020–0.065). The U1 applied Snapmaker's default for this filament. You can measure T2 again.")}</span></div>
+      <div class="cb-info">${I.info}<span>${T("Le réglage suit la <b>tête</b>, pas la bobine : il revient à la valeur par défaut quand tu changes le filament de la tête.", "The setting follows the <b>head</b>, not the spool: it goes back to the default when you change the head's filament.")}</span></div>`,
+    foot: `<span class="grow"></span><button class="btn lg">${T("Remettre T1 par défaut", "Reset T1 to default")}</button><button class="btn lg primary">${T("Terminer", "Done")}</button>`,
   })}`);
 }
 
@@ -429,28 +568,33 @@ function renderIsResult() {
 
 /* ------------------------------------------------------------ XYZ */
 function renderXyz() {
-  const rows = [[0, "0,000", "0,000", "0,000"], [1, "+0,012", "−0,021", "+0,008"], [2, "−0,018", "+0,009", "−0,004"], [3, "+0,027", "+0,014", "+0,011"]];
+  /* extruderN.extruder_offset: X/Y from the centre of the four heads, Z from T0 (extruder.py get_center_base_position). */
+  const rows = [[0, "−0,012", "+0,009", "0,000"], [1, "+0,006", "−0,011", "+0,008"], [2, "−0,004", "+0,011", "−0,004"], [3, "+0,012", "−0,009", "+0,011"]];
   $("view").innerHTML = page(`${statusBar({ chips: [{ t: T("4 têtes", "4 heads") }] })}${wizard({
     title: T("Décalage entre les têtes", "Offset between heads"), steps: [T("Résultat actuel", "Current result")], on: 0,
-    art: `${illXyz()}<div class="cw-cap">${T("Le capteur de contact de chaque tête sent quand la buse touche ; la U1 en déduit sa position par rapport à T0.", "Each head\'s contact sensor feels when the nozzle touches; the U1 works out its position relative to T0.")}</div>`,
-    side: `<h3>${T("Têtes alignées", "Heads aligned")} <span class="cb-badge ok" style="vertical-align:3px">${T("écart max 0,03 mm", "max gap 0.03 mm")}</span></h3>
-      <p class="lead">${T("Dernière calibration le 2 oct. Écart par rapport à T0, en millimètres :", "Last calibrated Oct 2. Offset from T0, in millimetres:")}</p>
-      <div class="cb-off"><div>${T("Tête", "Head")}</div><div>X</div><div>Y</div><div>Z</div>${rows.map(([n, x, y, z]) => `<div><i style="--c:${HEADS[n].c}"></i>T${n}</div><div>${x}</div><div>${y}</div><div>${z}</div>`).join("")}</div>
+    art: `${illXyz()}<div class="cw-cap">${T("Chaque buse touche le repère en 10 points ; le capteur de sa tête sent le contact. La U1 en déduit la position exacte de chaque tête.", "Each nozzle touches the reference at 10 points; its head's sensor feels the contact. The U1 works out each head's exact position.")}</div>`,
+    side: `<h3>${T("Têtes alignées", "Heads aligned")} <span class="cb-badge ok" style="vertical-align:3px">${T("écart max 0,024 mm", "max gap 0.024 mm")}</span></h3>
+      <p class="lead">${T("Dernière calibration le 2 oct. Décalage appliqué à chaque tête, en mm (X et Y par rapport au centre des 4 têtes, Z par rapport à T0) :", "Last calibrated Oct 2. Offset applied to each head, in mm (X and Y from the centre of the 4 heads, Z from T0):")}</p>
+      <div class="cb-off"><div>${T("Tête", "Head")}</div><div>X</div><div>Y</div><div>Z</div>${rows.map(([n, x, y, z]) => `<div><i style="--c:${HEADS[n].c}"></i>T${n}</div><div>${NUM(x)}</div><div>${NUM(y)}</div><div>${NUM(z)}</div>`).join("")}</div>
+      <div class="cw-field"><span class="cw-k">${T("Pourquoi la lancer depuis l'écran", "Why run it from the screen")}</span>
+        <div class="cb-vs">
+          <div><b>${T("Assistant de l'écran", "Screen assistant")}</b><ul><li>${T("chauffe et nettoie chaque buse", "heats and wipes each nozzle")}</li><li>${T("la laisse refroidir à 130 °C", "lets it cool to 130 °C")}</li><li>${T("vérifie le plateau", "checks the plate")}</li><li>${T("mesure et enregistre", "measures and saves")}</li></ul></div>
+          <div><b>${T("Commande seule", "Bare command")}</b><ul><li class="no">${T("buses mesurées telles quelles", "nozzles measured as they are")}</li><li class="no">${T("pas de vérification du plateau", "no plate check")}</li><li>${T("mesure et enregistre", "measures and saves")}</li></ul></div>
+        </div></div>
       <div class="cw-field"><span class="cw-k">${T("Pour recalibrer (15–20 min)", "To recalibrate (15–20 min)")}</span>
         <ol class="cb-steps-list">
-          <li><span>${T("Retire le filament des 4 têtes et nettoie le bout des buses.", "Unload all 4 heads and clean the nozzle tips.")}</span></li>
+          <li><span>${T("Retire le filament des 4 têtes et vérifie qu'aucun reste n'est collé sous les buses.", "Unload all 4 heads and check no residue is stuck under the nozzles.")}</span></li>
           <li><span>${T("Sur l'écran de la U1 : <b>Réglages › Calibration de l'appareil › Calibration du décalage multi-têtes</b>.", "On the U1 screen: <b>Settings › Device Calibration › Multi-toolhead Offset Calibration</b>.")}</span></li>
-          <li><span>${T("Snap Studio affichera le nouveau résultat ici.", "Snap Studio will show the new result here.")}</span></li>
-        </ol></div>
-      <div class="cb-info">${I.info}<span>${T("L'écran chauffe, nettoie et vérifie chaque buse avant de mesurer. Snap Studio ne lance pas cette mesure pour ne pas sauter ces étapes.", "The screen heats, cleans and checks each nozzle before measuring. Snap Studio doesn't start it, so none of those steps is skipped.")}</span></div>`,
-    foot: `<span class="note">${I.info}${T("Recommandée après un changement de hotend ou un choc de buse.", "Recommended after a hotend swap or a nozzle crash.")}</span><span class="grow"></span><button class="btn lg primary">${T("Fermer", "Close")}</button>`,
+        </ol></div>`,
+    foot: `<span class="note">${I.info}${T("Snap Studio affichera le nouveau résultat ici. Recommandée après un changement de hotend ou un choc de buse.", "Snap Studio will show the new result here. Recommended after a hotend swap or a nozzle crash.")}</span><span class="grow"></span><button class="btn lg primary">${T("Fermer", "Close")}</button>`,
   })}`);
 }
 
 /* ------------------------------------------------------------ switcher */
 const VIEWS = {
-  home: [renderHome, "Accueil"], "pid-choose": [renderPidChoose, "PID 1"], "pid-prepare": [() => renderPidPrepare(false), "PID 2"],
-  "pid-confirm": [() => renderPidPrepare(true), "PID 2 + confirmation"], "pid-run": [renderPidRun, "PID 3"], "pid-result": [renderPidResult, "PID 4"],
+  home: [renderHome, "Accueil"], "pid-choose": [() => renderPidChoose(false), "PID 1"], "pid-choose-all": [() => renderPidChoose(true), "PID 1 (×4)"], "pid-prepare": [() => renderPidPrepare(false), "PID 2"],
+  "pid-confirm": [() => renderPidPrepare(true), "PID 2 + confirmation"], "pid-run": [() => renderPidRun(false), "PID 3"], "pid-run-all": [() => renderPidRun(true), "PID 3 (×4)"], "pid-result": [renderPidResult, "PID 4"],
+  "flow-choose": [renderFlowChoose, "Débit 1"], "flow-prepare": [renderFlowPrepare, "Débit 2"], "flow-run": [renderFlowRun, "Débit 3"], "flow-result": [renderFlowResult, "Débit 4"],
   "is-prepare": [renderIsPrepare, "Vibrations 1"], "is-result": [renderIsResult, "Vibrations 3"], xyz: [renderXyz, "Décalage XYZ"], refused: [renderRefused, "Refus (impression)"],
 };
 function render() {

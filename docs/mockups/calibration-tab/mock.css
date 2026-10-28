@@ -176,3 +176,44 @@ svg.chart .axis { stroke: var(--ill-mid); stroke-width: 1; }
 .modal-box .cb-mhead { display: flex; gap: 12px; align-items: flex-start; }
 .modal-box .cb-mhead svg { width: 46px; height: 46px; flex: none; }
 .modal-box ul { margin: 0; padding-left: 18px; color: var(--text-secondary); font-size: 12.5px; line-height: 1.55; }
+
+/* undeclared filament */
+.cb-head i.none, .cb-tlist i.none, .cb-queue i.none, .cb-ktable i.none { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-tertiary); border: 0; }
+/* per-head temperature list (PID, 4 in a row) */
+.cb-tlist { display: flex; flex-direction: column; border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; font-size: 12.5px; }
+.cb-tlist > div { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-top: 1px solid var(--separator); }
+.cb-tlist > div:first-child { border-top: 0; }
+.cb-tlist i, .cb-queue i, .cb-ktable i { width: 11px; height: 11px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); flex: none; }
+.cb-tlist span { flex: 1; color: var(--text-secondary); }
+.cb-tlist em { font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* queue (PID, 4 in a row) */
+.cb-queue { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.cb-queue > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--control-bg); font-size: 12px; }
+.cb-queue > div b { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.cb-queue > div > i { display: none; }
+.cb-queue span { color: var(--text-secondary); }
+.cb-queue em { font-style: normal; font-size: 11px; color: var(--text-tertiary); }
+.cb-queue .done em { color: var(--success-text); font-weight: 600; }
+.cb-queue .now { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cb-queue .now em { color: var(--accent); font-weight: 600; }
+/* K table (flow) */
+.cb-ktable { border-radius: 10px; border: 1px solid var(--card-border); overflow: hidden; font-size: 12.5px; }
+.cb-ktable .r { display: grid; grid-template-columns: 82px 1fr 92px 64px; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--separator); }
+.cb-ktable.res .r { grid-template-columns: 62px 1fr 84px 128px; }
+.cb-ktable .r:first-child { border-top: 0; font-size: 11px; color: var(--text-secondary); font-weight: 600; background: color-mix(in srgb, var(--text) 3%, transparent); }
+.cb-ktable .r > span:first-child { display: inline-flex; align-items: center; gap: 7px; }
+.cb-ktable .r.on { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.cb-ktable .r.off { color: var(--text-tertiary); }
+.cb-ktable .r em { font-style: normal; font-size: 11.5px; color: var(--text-secondary); }
+.cb-ktable .num { text-align: right; font-variant-numeric: tabular-nums; }
+.cb-ktable small { display: block; font-size: 10.5px; color: var(--text-tertiary); }
+.cb-ktable small.ok { color: var(--success-text); font-weight: 600; }
+.cb-ktable small.warn { color: var(--warning-text); font-weight: 600; }
+.cb-ktable input[type=checkbox] { margin: 0; accent-color: var(--accent); }
+/* xyz: why the touchscreen */
+.cb-vs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11.5px; }
+.cb-vs > div { padding: 9px 11px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--control-bg); }
+.cb-vs b { display: block; font-size: 12px; margin-bottom: 4px; }
+.cb-vs ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; color: var(--text-secondary); }
+.cb-vs li::before { content: "✓ "; color: var(--success); font-weight: 700; }
+.cb-vs li.no::before { content: "✕ "; color: var(--danger); }
