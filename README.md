@@ -576,7 +576,7 @@ with its pull request (drafts, approved or under discussion):
 | **Several plates in Prepare** — plate tabs, auto-arrange across plates, slice them all and queue them; multi-plate 3MF files kept as such | [#18](https://github.com/kameka22/snap-studio/pull/18) |
 | **Print by object** — one object after the other, with collision checks for the U1's head and an adjustable order | [#22](https://github.com/kameka22/snap-studio/pull/22) |
 | **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
-| **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#17](https://github.com/kameka22/snap-studio/pull/17) |
+| **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
@@ -591,6 +591,8 @@ Bugs, ideas, code or translations: see [CONTRIBUTING.md](CONTRIBUTING.md).
 From the app, **Settings → About** (or the **Help** menu) opens a bug report
 with the version and system already filled in. Building, publishing, the
 code layout: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+**Technical overview** — architecture, how the app talks to the U1, parameter
+sources, error handling, tests: [docs/technical-overview.md](docs/technical-overview.md).
 
 ## License and credits
 
