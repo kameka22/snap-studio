@@ -59,6 +59,9 @@ async function ctlRead(pid, config = false) {
     if (r.config) d.cfg = r.config;
     d.err = null;
   } catch (e) {
+    // The raw error (with the address tried) stays in the console; the
+    // tab only says the printer does not answer.
+    if (!d.err) console.warn("control_read", pid, String(e));
     d.err = String(e);
   } finally {
     d.reading = false;
@@ -102,7 +105,8 @@ async function ctlRun(pid, action, label) {
     await invoke("control_run", { printerId: pid, action });
   } catch (e) {
     ok = false;
-    toast(String(e), true);
+    console.warn("control_run", action.kind, String(e));
+    toast(errNoUrl(e) || tr("ctl.offline"), true);
   } finally {
     if (!stop) CTL.busy.delete(pid);
     await ctlRead(pid);
@@ -494,11 +498,20 @@ function ctUpdate() {
   $("ct-active").textContent = st?.active != null ? tr("ctl.active_head", { n: st.active }) : "";
   $("ct-busy").classList.toggle("hidden", !busy);
   $("ct-busy-t").textContent = busy || "";
-  // Reading the printer, or it does not answer: said plainly, with a retry.
+  // Reading the printer, or it does not answer: said in a line, with a
+  // retry, as Maintenance says it (the raw error, with the address it
+  // tried, stays in the console).
   const conn = $("ct-conn");
   conn.classList.toggle("hidden", state !== "reading" && state !== "offline");
   if (state === "reading") conn.innerHTML = `<span class="spinner"></span><span>${esc(tr("ctl.reading"))}</span>`;
-  else if (state === "offline") conn.innerHTML = `<span class="mt-stale-dot"></span><span>${esc(tr("ctl.offline_err", { err: d.err }))}</span><button class="btn small" data-ct-retry>${esc(tr("printers.offline.retry"))}</button>`;
+  else if (state === "offline") {
+    // No answer, or an answer that is an error (Klipper shut down, HTTP
+    // 503): the error is said then, without its address, as it calls for
+    // something else than checking the network.
+    const name = printerName(pid);
+    const said = d.err && !errUnreachable(d.err) ? tr("ctl.read_err", { err: errNoUrl(d.err) }) : name ? tr("printers.no_answer", { name }) : tr("ctl.offline");
+    conn.innerHTML = offlineLine(said, "data-ct-retry", true);
+  }
   root.querySelector(".ct-empty")?.replaceChildren(tr(state === "offline" ? "ctl.offline" : "ctl.reading"));
   // Printing or a U1 procedure: what stays possible is said.
   const lock = state === "printing" || state === "paused" ? "ctl.lock.printing" : state === "busy" ? "ctl.lock.busy" : "";

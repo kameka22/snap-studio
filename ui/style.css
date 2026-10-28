@@ -3995,6 +3995,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .prn-offline { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 28px 20px; margin-bottom: 14px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--card-bg); }
 .prn-offline-ico { width: 36px; height: 36px; fill: var(--text-tertiary); margin-bottom: 4px; }
 .prn-offline-title { font-size: 16px; font-weight: 600; }
+/* Offline (not while connecting): Control's red dot before the title, as on
+   the printer's other screens (offlineLine). The title's text is rewritten
+   by printers.js: the dot is drawn, not in the markup. */
+.prn-offline:not(.connecting) .prn-offline-title::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: var(--danger); vertical-align: 0.1em; }
 .prn-offline-hint { color: var(--text-secondary, var(--text-tertiary)); font-size: 13px; }
 .prn-offline-seen { color: var(--text-tertiary); font-size: 11px; }
 .prn-offline .btn { margin-top: 8px; }
@@ -4164,7 +4168,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .mt-stale > span:not(.spinner):not(.mt-stale-dot) { flex: 1; }
 .mt-stale .spinner { width: 12px; height: 12px; }
 .mt-stale-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); flex: none; }
-.mt-offline { margin: 8px 0 14px; }
 .mt-mini i.full { width: 100%; }
 
 /* ---------- Care & Tuning: tabs, on the left after the title ---------- */
@@ -4278,6 +4281,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .ct-state.idle i { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
 .ct-state.printing i, .ct-state.paused i, .ct-state.busy i { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 22%, transparent); }
 .ct-state.offline i { background: var(--danger); }
+/* The same status where a printer's other screens say it is offline
+   (offlineLine, printers.js): the dot, then why, then the retry. */
+.off-status { margin-bottom: 12px; }
+.off-why { flex: 1; min-width: 0; font-size: 12px; color: var(--text-secondary); }
 .ct-chip { font-size: 12px; color: var(--text-secondary); padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); }
 .ct-chip:empty { display: none; }
 .ct-chip.warn { color: var(--warning-text, var(--warning)); background: color-mix(in srgb, var(--warning) 14%, transparent); }
@@ -4734,18 +4741,6 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .pfl { flex: 1; display: flex; min-height: 0; position: relative; }
 .pfl-main { flex: 1; min-width: 0; overflow-y: auto; position: relative; padding: 10px 22px 72px; }
 .pfl-main.busy { opacity: 0.6; transition: opacity 120ms; }
-.pfl-note {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--control-bg-hover);
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.pfl-note.err { color: var(--danger); }
 .pfl-ph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--text-tertiary); }
 .pfl-ph svg { width: 40%; height: 40%; max-width: 56px; max-height: 56px; }
 .pfl-tag {

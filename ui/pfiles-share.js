@@ -103,7 +103,8 @@ async function pfsDo(kind, tile) {
       pfsShowQr(s);
     }
   } catch (e) {
-    pfsMsg(String(e.message || e), "err");
+    console.warn("share", String(e.message || e));
+    pfsMsg(errNoUrl(e.message || e), "err");
   } finally {
     pfsBusy(false);
   }

@@ -196,15 +196,11 @@ function mtRender() {
   const box = $("mt-body");
   const u = MT.usage;
   if (!u) {
-    // Never read: the printer page's offline block, and the log, which is ours.
+    // Never read: said in one line, as on the printer's other screens, then
+    // the log, which is ours.
     box.innerHTML = MT.loading
       ? `<p class="hv-note">${esc(tr("maint.loading"))}</p>`
-      : `<div class="prn-offline mt-offline" role="status">
-          <svg class="prn-offline-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-3.4-3.4H6.5A4.5 4.5 0 0 1 5 10.2a6.9 6.9 0 0 1 1.2-2.6zM12 4a7 7 0 0 1 6.7 5A4.5 4.5 0 0 1 21 17.2l-1.5-1.5A2.5 2.5 0 0 0 18 11h-1l-.3-1A5 5 0 0 0 9.4 6.6L8 5.2A7 7 0 0 1 12 4"/></svg>
-          <div class="prn-offline-title">${esc(tr("printers.offline.title"))}</div>
-          <div class="prn-offline-hint">${esc(tr("maint.offline_hint"))}</div>
-          <button class="btn" data-mt-retry>${esc(tr("printers.offline.retry"))}</button>
-        </div>${mtHistory()}`;
+      : `${offlineLine(tr("printers.no_answer", { name: p.name || p.host }), "data-mt-retry")}${mtHistory()}`;
     return;
   }
   const order = { due: 0, soon: 1, ok: 2 };
@@ -298,7 +294,7 @@ function mtRender() {
   const notice = MT.loading && MT.stale
     ? `<div class="mt-stale"><span class="spinner"></span>${esc(tr("maint.connecting"))}</div>`
     : MT.stale
-      ? `<div class="mt-stale"><span class="mt-stale-dot"></span><span>${esc(tr("maint.stale", { name: p.name || p.host, d: mtDateTime(MT.stale) }))}</span><button class="btn small" data-mt-retry>${esc(tr("printers.offline.retry"))}</button></div>`
+      ? offlineLine(tr("maint.stale", { name: p.name || p.host, d: mtDateTime(MT.stale) }), "data-mt-retry")
       : "";
   box.innerHTML = `${notice}${banner}
     <div class="mt-strip">${strip}</div>

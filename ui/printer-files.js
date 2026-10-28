@@ -51,7 +51,13 @@ const PFL_LAST = {
 const PFL_ICON_FILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M6 2.75h8.25L19 7.5v12.25a1.5 1.5 0 0 1-1.5 1.5h-11.5a1.5 1.5 0 0 1-1.5-1.5V4.25A1.5 1.5 0 0 1 6 2.75z"/><path d="M14 2.75V7.5h5"/><path d="M12 10.5l-3.75 2.1v4.2L12 18.9l3.75-2.1v-4.2zM8.25 12.6 12 14.7l3.75-2.1M12 14.7v4.2"/></svg>';
 const PFL_ICON_FILM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 4.5v15M17 4.5v15M3 8.5h4M3 12h4M3 15.5h4M17 8.5h4M17 12h4M17 15.5h4"/><path d="M10.5 9.75v4.5l3.75-2.25z" fill="currentColor"/></svg>';
 const PFL_PH = { file: PFL_ICON_FILE, film: PFL_ICON_FILM };
-const PFL_ICON_OFF = '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zm-2 6h14a2 2 0 0 1 2 2v5h-4v-3H7v3H3v-5a2 2 0 0 1 2-2m2 6h10v6H7z"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+/* An error said on this page: without the URLs it carries (errNoUrl,
+   control-logic.js); the raw one goes to the console. */
+function pflErr(e, what) {
+  const raw = String(e?.message || e || "");
+  console.warn("printer files", what, raw);
+  return errNoUrl(raw);
+}
 const PFL_ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
 const PFL_ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M7 5h4v14H7zm6 0h4v14h-4z"/></svg>';
 
@@ -98,7 +104,9 @@ async function pflLoad() {
     if (PFL.player && !keys.has(PFL.player)) pflClosePlayer();
   } catch (e) {
     if (seq !== PFL.seq) return;
-    PFL.err = String(e);
+    // No answer, or an answer that is an error: said apart (pflRender).
+    PFL.err = String(e?.message || e || "error");
+    console.warn("printer files", "pf_overview", PFL.err);
   } finally {
     if (seq === PFL.seq) PFL.loading = false;
   }
@@ -137,7 +145,6 @@ function pflSideCounts() {
 /* ------------------------------------------------------------ rendering */
 
 function pflHeader() {
-  const p = pflPrinter();
   const list = pflList();
   let sub = "";
   if (PFL.data) {
@@ -145,7 +152,7 @@ function pflHeader() {
     sub = tr(PFL.tab === "files" ? "pfiles.summary.files" : "pfiles.summary.videos", { n: s.count, size: fmtSize(s.bytes) });
     if (s.free != null) sub += " · " + tr("pfiles.summary.free", { size: fmtSize(s.free) });
   }
-  tbSet("pfiles", `${p ? p.name || p.host : ""} › ${tr("pfiles.title")}`, sub);
+  tbSet("pfiles", `${printerName(PFL.pid)} › ${tr("pfiles.title")}`, sub);
   document.querySelectorAll("#pfl-tabs .seg-btn").forEach((b) => {
     b.classList.toggle("on", b.dataset.tab === PFL.tab);
     b.setAttribute("aria-pressed", String(b.dataset.tab === PFL.tab));
@@ -170,11 +177,11 @@ function pflRender() {
   if (!PFL.pid) return;
   pflHeader();
   const main = $("pfl-main");
-  const p = pflPrinter();
   if (!PFL.data) {
-    const title = tr("pfiles.offline.title", { name: p ? p.name || p.host : "" });
+    // The printer does not answer, or answered with an error (said without
+    // its address): one line, as on the printer's other screens.
     main.innerHTML = PFL.err
-      ? pflState(PFL_ICON_OFF, title, tr("pfiles.offline.hint"), { id: "retry", label: tr("common.retry") }, PFL.err.trim() === title ? "" : PFL.err)
+      ? offlineLine(errUnreachable(PFL.err) ? tr("printers.no_answer", { name: printerName(PFL.pid) }) : tr("pfiles.load_err", { err: errNoUrl(PFL.err) }), 'data-act="retry"')
       : `<div class="loading"><div class="spinner"></div>${esc(tr("pfiles.loading"))}</div>`;
     pflRenderDetail();
     pflRenderSelbar();
@@ -183,7 +190,11 @@ function pflRender() {
   const all = pflList();
   const shown = pflShown();
   let html = "";
-  if (PFL.err) html += `<div class="pfl-note err">${esc(PFL.err)} <button class="btn small" data-act="retry">${esc(tr("common.retry"))}</button></div>`;
+  // A refresh that failed: the list shown is the last one read.
+  if (PFL.err) {
+    const note = errUnreachable(PFL.err) ? tr("pfiles.stale", { name: printerName(PFL.pid) }) : tr("pfiles.stale_err", { err: errNoUrl(PFL.err) });
+    html += offlineLine(note, 'data-act="retry"');
+  }
   if (!all.length) {
     html += PFL.tab === "files"
       ? pflState(PFL_ICON_FILE, tr("pfiles.empty.files"), tr("pfiles.empty.files_hint"))
@@ -419,10 +430,10 @@ async function pflDownload(files) {
   try {
     const saved = await invoke("pf_download", { printerId: PFL.pid, root, paths: files.map((f) => f.path), dir });
     const where = dir || saved[0]?.replace(/[\\/][^\\/]*$/, "") || "";
-    toast(tr("pfiles.saved", { n: saved.length, folder: baseName(where) }), false, saved[0] ? { label: tr("pfiles.reveal"), run: () => invoke("reveal", { path: saved[0] }).catch((e) => toast(String(e), true)) } : null);
+    toast(tr("pfiles.saved", { n: saved.length, folder: baseName(where) }), false, saved[0] ? { label: tr("pfiles.reveal"), run: () => invoke("reveal", { path: saved[0] }).catch((e) => toast(pflErr(e, "reveal"), true)) } : null);
     if (dir && dir === state.dir) refresh();
   } catch (e) {
-    toast(String(e), true);
+    toast(pflErr(e, "files"), true);
   } finally {
     PFL.busy = false;
     pflRenderDetail();
@@ -458,10 +469,12 @@ async function pflDelete(files) {
         if (err) failed.push(err);
       }
     }
-    if (failed.length === 1) toast(failed[0], true);
-    else if (failed.length) toast(tr("pfiles.del.failed", { n: failed.length, err: failed[0] }), true);
+    // Every failure to the console; the first one said.
+    const first = failed.map((e) => pflErr(e, "pf_delete"))[0] || "";
+    if (failed.length === 1) toast(first, true);
+    else if (failed.length) toast(tr("pfiles.del.failed", { n: failed.length, err: first }), true);
   } catch (e) {
-    toast(String(e), true);
+    toast(pflErr(e, "files"), true);
   } finally {
     PFL.busy = false;
   }
@@ -503,7 +516,7 @@ async function pflRenameGo() {
     PFL.sel = "gcodes/" + dest;
     await pflLoad();
   } catch (e) {
-    $("pflren-msg").textContent = String(e);
+    $("pflren-msg").textContent = pflErr(e, "pf_rename");
     $("pflren-msg").className = "pf-test err";
     $("pflren-go").disabled = false;
   }

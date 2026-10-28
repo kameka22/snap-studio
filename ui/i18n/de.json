@@ -1349,7 +1349,6 @@
   "maint.t.plate.s1": "Die Magnetplatte abnehmen.",
   "maint.t.plate.s2": "Mit warmem Wasser und Spülmittel waschen.",
   "maint.t.plate.s3": "Mit einem fusselfreien Tuch trocknen, ohne die Oberfläche zu berühren.",
-  "maint.offline_hint": "Schalten Sie ihn ein und prüfen Sie, ob er im selben Netzwerk ist: Seine Zähler erscheinen dann hier. Was Sie eingetragen haben, bleibt unten.",
   "maint.stale": "{name} antwortet nicht · Werte gelesen am {d}",
   "maint.connecting": "Zähler des Druckers werden gelesen …",
   "update.badge": "Eine neue Version ist verfügbar: installieren",
@@ -1534,7 +1533,7 @@
   "pfiles.rename_title": "Auf dem Drucker umbenennen",
   "pfiles.rename_name": "Neuer Name",
   "pfiles.why.printing": "Diese Datei wird gedruckt: Sie kann erst nach Ende des Drucks geändert oder gelöscht werden.",
-  "pfiles.offline.title": "{name} antwortet nicht",
+  "printers.no_answer": "{name} antwortet nicht",
   "pfiles.empty.files": "Keine Druckdateien auf dem Drucker",
   "pfiles.empty.files_hint": "Aus Snap Studio oder einem anderen Slicer gesendete Drucke erscheinen hier.",
   "pfiles.empty.videos": "Noch keine Zeitraffer",
@@ -1584,7 +1583,6 @@
   "pfiles.err.printing": "Diese Datei wird gedruckt: Sie kann erst nach Ende des Drucks geändert oder gelöscht werden.",
   "pfiles.err.bad_name": "Dieser Name kann auf dem Drucker nicht verwendet werden.",
   "pfiles.err.no_folder": "Der Zielordner wurde nicht gefunden.",
-  "pfiles.offline.hint": "Prüfen Sie, ob er eingeschaltet und im selben Netzwerk ist, und versuchen Sie es erneut.",
   "pfiles.del.title_files": {
     "one": "{n} Datei vom Drucker löschen?",
     "other": "{n} Dateien vom Drucker löschen?"
@@ -1843,7 +1841,7 @@
   "bm.measure.go": "Messen",
   "bm.newest": "Neueste Messung",
   "bm.offline": "Drucker nicht erreichbar",
-  "bm.offline_hist": "Drucker nicht erreichbar: Der von Snap Studio gespeicherte Verlauf wird angezeigt.",
+  "bm.offline_hist": "{name} antwortet nicht · von Snap Studio gespeicherter Verlauf",
   "bm.open": "Öffnen",
   "bm.reading": "Bettnetz wird gelesen …",
   "bm.relief": "Überhöhung ×",
@@ -1934,7 +1932,6 @@
   "ctl.st.paused": "Pausiert",
   "ctl.st.busy": "Beschäftigt: {state}",
   "ctl.st.reading": "Wird gelesen …",
-  "ctl.offline_err": "Der Drucker antwortet nicht: {err}",
   "ctl.st.offline": "Nicht verbunden",
   "ctl.homed": "✓ Referenziert",
   "ctl.not_homed_short": "Nicht referenziert",
@@ -2471,5 +2468,9 @@
   },
   "settings.lang_failed": "Diese Sprache konnte nicht geladen werden: Die Oberfläche bleibt unverändert.",
   "send.busy_until": "{name} druckt „{job}“, voraussichtliches Ende gegen {time}.",
-  "prepare.colour.change_virtual": "Gedruckt mit virtuellem Druckkopf {name} · klicken zum Ändern"
+  "prepare.colour.change_virtual": "Gedruckt mit virtuellem Druckkopf {name} · klicken zum Ändern",
+  "pfiles.stale": "{name} antwortet nicht: Die Liste ist möglicherweise nicht mehr aktuell.",
+  "ctl.read_err": "Der Drucker hat mit einem Fehler geantwortet: {err}",
+  "pfiles.load_err": "Die Dateien des Druckers konnten nicht gelesen werden: {err}",
+  "pfiles.stale_err": "Die Liste konnte nicht aktualisiert werden: {err}"
 }

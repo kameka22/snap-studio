@@ -1346,7 +1346,6 @@
   "maint.t.plate.s1": "Remove the magnetic plate.",
   "maint.t.plate.s2": "Wash it with warm water and dish soap.",
   "maint.t.plate.s3": "Dry with a lint-free cloth, without touching the surface.",
-  "maint.offline_hint": "Switch it on and check that it is on the same network: its counters will show here. What you logged stays below.",
   "maint.stale": "{name} does not answer · values read on {d}",
   "maint.connecting": "Reading the printer's counters…",
   "update.badge": "A new version is available: install it",
@@ -1531,7 +1530,7 @@
   "pfiles.rename_title": "Rename on the Printer",
   "pfiles.rename_name": "New name",
   "pfiles.why.printing": "This file is printing: it cannot be changed or deleted until the print ends.",
-  "pfiles.offline.title": "{name} does not answer",
+  "printers.no_answer": "{name} does not answer",
   "pfiles.empty.files": "No print files on the printer",
   "pfiles.empty.files_hint": "Prints sent from Snap Studio or another slicer appear here.",
   "pfiles.empty.videos": "No timelapses yet",
@@ -1581,7 +1580,6 @@
   "pfiles.err.printing": "This file is printing: it cannot be changed or deleted until the print ends.",
   "pfiles.err.bad_name": "This name cannot be used on the printer.",
   "pfiles.err.no_folder": "The destination folder cannot be found.",
-  "pfiles.offline.hint": "Check that it is switched on and on the same network, then try again.",
   "pfiles.del.title_files": {
     "one": "Delete {n} file from the printer?",
     "other": "Delete {n} files from the printer?"
@@ -1840,7 +1838,7 @@
   "bm.measure.go": "Measure",
   "bm.newest": "Latest Measurement",
   "bm.offline": "Printer unreachable",
-  "bm.offline_hist": "Printer unreachable: the history stored by Snap Studio is shown.",
+  "bm.offline_hist": "{name} does not answer · history stored by Snap Studio",
   "bm.open": "Open",
   "bm.reading": "Reading the bed mesh…",
   "bm.relief": "Relief ×",
@@ -1931,7 +1929,6 @@
   "ctl.st.paused": "Paused",
   "ctl.st.busy": "Busy: {state}",
   "ctl.st.reading": "Reading…",
-  "ctl.offline_err": "The printer does not answer: {err}",
   "ctl.st.offline": "Not connected",
   "ctl.homed": "✓ Homed",
   "ctl.not_homed_short": "Not homed",
@@ -2426,5 +2423,9 @@
   "prints.det.layers_n": {"one": "{n} layer", "other": "{n} layers"},
   "settings.lang_failed": "This language could not be loaded: the interface stays as it was.",
   "send.busy_until": "{name} is printing “{job}”, expected to end around {time}.",
-  "prepare.colour.change_virtual": "Printed with virtual head {name} · click to change"
+  "prepare.colour.change_virtual": "Printed with virtual head {name} · click to change",
+  "pfiles.stale": "{name} does not answer: the list may be out of date.",
+  "ctl.read_err": "The printer answered with an error: {err}",
+  "pfiles.load_err": "The printer's files could not be read: {err}",
+  "pfiles.stale_err": "The list could not be refreshed: {err}"
 }

@@ -1349,7 +1349,6 @@
   "maint.t.plate.s1": "Retirer le plateau magnétique.",
   "maint.t.plate.s2": "Laver à l'eau chaude et au liquide vaisselle.",
   "maint.t.plate.s3": "Sécher avec un chiffon non pelucheux, sans toucher la surface.",
-  "maint.offline_hint": "Allumez-la et vérifiez qu'elle est sur le même réseau : ses compteurs s'afficheront ici. Ce que vous avez noté reste ci-dessous.",
   "maint.stale": "{name} ne répond pas · valeurs relevées le {d}",
   "maint.connecting": "Lecture des compteurs de l'imprimante…",
   "update.badge": "Une nouvelle version est disponible : l’installer",
@@ -1534,7 +1533,7 @@
   "pfiles.rename_title": "Renommer sur l'imprimante",
   "pfiles.rename_name": "Nouveau nom",
   "pfiles.why.printing": "Ce fichier est en cours d'impression : il ne peut être modifié ni supprimé avant la fin.",
-  "pfiles.offline.title": "{name} ne répond pas",
+  "printers.no_answer": "{name} ne répond pas",
   "pfiles.empty.files": "Aucun fichier d'impression sur l'imprimante",
   "pfiles.empty.files_hint": "Les impressions envoyées depuis Snap Studio ou un autre trancheur apparaissent ici.",
   "pfiles.empty.videos": "Aucun timelapse pour l'instant",
@@ -1584,7 +1583,6 @@
   "pfiles.err.printing": "Ce fichier est en cours d'impression : il ne peut être modifié ni supprimé avant la fin.",
   "pfiles.err.bad_name": "Ce nom ne peut pas être utilisé sur l'imprimante.",
   "pfiles.err.no_folder": "Le dossier de destination est introuvable.",
-  "pfiles.offline.hint": "Vérifiez qu'elle est allumée et sur le même réseau, puis réessayez.",
   "pfiles.del.title_files": {
     "one": "Supprimer {n} fichier de l'imprimante ?",
     "other": "Supprimer {n} fichiers de l'imprimante ?"
@@ -1843,7 +1841,7 @@
   "bm.measure.go": "Mesurer",
   "bm.newest": "Dernière mesure",
   "bm.offline": "Imprimante injoignable",
-  "bm.offline_hist": "Imprimante injoignable : l'historique enregistré par Snap Studio est affiché.",
+  "bm.offline_hist": "{name} ne répond pas · historique enregistré par Snap Studio",
   "bm.open": "Ouvrir",
   "bm.reading": "Lecture du maillage du plateau…",
   "bm.relief": "Relief ×",
@@ -1934,7 +1932,6 @@
   "ctl.st.paused": "En pause",
   "ctl.st.busy": "Occupée : {state}",
   "ctl.st.reading": "Lecture…",
-  "ctl.offline_err": "L'imprimante ne répond pas : {err}",
   "ctl.st.offline": "Non connectée",
   "ctl.homed": "✓ Origine faite",
   "ctl.not_homed_short": "Origine non faite",
@@ -2429,5 +2426,9 @@
   "prints.det.layers_n": {"one": "{n} couche", "other": "{n} couches"},
   "settings.lang_failed": "Cette langue n'a pas pu être chargée : l'interface reste telle quelle.",
   "send.busy_until": "{name} imprime « {job} », fin prévue vers {time}.",
-  "prepare.colour.change_virtual": "Imprimé avec la tête virtuelle {name} · cliquer pour changer"
+  "prepare.colour.change_virtual": "Imprimé avec la tête virtuelle {name} · cliquer pour changer",
+  "pfiles.stale": "{name} ne répond pas : la liste n'est peut-être plus à jour.",
+  "ctl.read_err": "L'imprimante a répondu par une erreur : {err}",
+  "pfiles.load_err": "Impossible de lire les fichiers de l'imprimante : {err}",
+  "pfiles.stale_err": "La liste n'a pas pu être actualisée : {err}"
 }

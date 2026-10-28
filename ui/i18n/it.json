@@ -1349,7 +1349,6 @@
   "maint.t.plate.s1": "Rimuovi il piatto magnetico.",
   "maint.t.plate.s2": "Lavalo con acqua tiepida e detersivo per piatti.",
   "maint.t.plate.s3": "Asciugalo con un panno che non lascia pelucchi, senza toccare la superficie.",
-  "maint.offline_hint": "Accendila e verifica che sia sulla stessa rete: i suoi contatori appariranno qui. Ciò che hai registrato resta sotto.",
   "maint.stale": "{name} non risponde · valori letti il {d}",
   "maint.connecting": "Lettura dei contatori della stampante…",
   "update.badge": "È disponibile una nuova versione: installala",
@@ -1534,7 +1533,7 @@
   "pfiles.rename_title": "Rinomina sulla stampante",
   "pfiles.rename_name": "Nuovo nome",
   "pfiles.why.printing": "Questo file è in stampa: non può essere modificato né eliminato finché la stampa non termina.",
-  "pfiles.offline.title": "{name} non risponde",
+  "printers.no_answer": "{name} non risponde",
   "pfiles.empty.files": "Nessun file di stampa sulla stampante",
   "pfiles.empty.files_hint": "Le stampe inviate da Snap Studio o da un altro slicer compaiono qui.",
   "pfiles.empty.videos": "Ancora nessun timelapse",
@@ -1584,7 +1583,6 @@
   "pfiles.err.printing": "Questo file è in stampa: non può essere modificato né eliminato finché la stampa non termina.",
   "pfiles.err.bad_name": "Questo nome non può essere usato sulla stampante.",
   "pfiles.err.no_folder": "La cartella di destinazione non è stata trovata.",
-  "pfiles.offline.hint": "Verifica che sia accesa e sulla stessa rete, poi riprova.",
   "pfiles.del.title_files": {
     "one": "Eliminare {n} file dalla stampante?",
     "other": "Eliminare {n} file dalla stampante?"
@@ -1843,7 +1841,7 @@
   "bm.measure.go": "Misura",
   "bm.newest": "Ultima misurazione",
   "bm.offline": "Stampante non raggiungibile",
-  "bm.offline_hist": "Stampante non raggiungibile: viene mostrata la cronologia salvata da Snap Studio.",
+  "bm.offline_hist": "{name} non risponde · cronologia salvata da Snap Studio",
   "bm.open": "Apri",
   "bm.reading": "Lettura della mesh del piatto…",
   "bm.relief": "Rilievo ×",
@@ -1934,7 +1932,6 @@
   "ctl.st.paused": "In pausa",
   "ctl.st.busy": "Occupata: {state}",
   "ctl.st.reading": "Lettura…",
-  "ctl.offline_err": "La stampante non risponde: {err}",
   "ctl.st.offline": "Non connessa",
   "ctl.homed": "✓ Homing eseguito",
   "ctl.not_homed_short": "Homing non eseguito",
@@ -2471,5 +2468,9 @@
   },
   "settings.lang_failed": "Impossibile caricare questa lingua: l'interfaccia resta com'era.",
   "send.busy_until": "{name} sta stampando “{job}”, dovrebbe finire verso le {time}.",
-  "prepare.colour.change_virtual": "Stampato con la testina virtuale {name} · fai clic per cambiare"
+  "prepare.colour.change_virtual": "Stampato con la testina virtuale {name} · fai clic per cambiare",
+  "pfiles.stale": "{name} non risponde: l'elenco potrebbe non essere aggiornato.",
+  "ctl.read_err": "La stampante ha risposto con un errore: {err}",
+  "pfiles.load_err": "Impossibile leggere i file della stampante: {err}",
+  "pfiles.stale_err": "Impossibile aggiornare l'elenco: {err}"
 }

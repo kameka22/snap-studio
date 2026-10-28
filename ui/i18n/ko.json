@@ -1309,7 +1309,6 @@
   "maint.t.plate.s1": "자석 플레이트를 분리합니다.",
   "maint.t.plate.s2": "따뜻한 물과 주방 세제로 씻습니다.",
   "maint.t.plate.s3": "표면을 만지지 말고 보풀 없는 천으로 말립니다.",
-  "maint.offline_hint": "전원을 켜고 같은 네트워크에 있는지 확인하세요. 카운터가 여기에 표시됩니다. 기록한 내용은 아래에 남습니다.",
   "maint.stale": "{name}이(가) 응답하지 않음 · {d}에 읽은 값",
   "maint.connecting": "프린터 카운터를 읽는 중…",
   "update.badge": "새 버전이 있습니다: 설치하기",
@@ -1485,7 +1484,7 @@
   "pfiles.rename_title": "프린터에서 이름 변경",
   "pfiles.rename_name": "새 이름",
   "pfiles.why.printing": "이 파일은 출력 중입니다. 출력이 끝날 때까지 변경하거나 삭제할 수 없습니다.",
-  "pfiles.offline.title": "{name}이(가) 응답하지 않습니다",
+  "printers.no_answer": "{name}이(가) 응답하지 않습니다",
   "pfiles.empty.files": "프린터에 출력 파일이 없습니다",
   "pfiles.empty.files_hint": "Snap Studio나 다른 슬라이서에서 보낸 출력이 여기에 표시됩니다.",
   "pfiles.empty.videos": "아직 타임랩스가 없습니다",
@@ -1533,7 +1532,6 @@
   "pfiles.err.printing": "이 파일은 출력 중입니다. 출력이 끝날 때까지 변경하거나 삭제할 수 없습니다.",
   "pfiles.err.bad_name": "이 이름은 프린터에서 사용할 수 없습니다.",
   "pfiles.err.no_folder": "대상 폴더를 찾을 수 없습니다.",
-  "pfiles.offline.hint": "전원이 켜져 있고 같은 네트워크에 있는지 확인한 뒤 다시 시도하세요.",
   "pfiles.del.title_files": {
     "other": "파일 {n}개를 프린터에서 삭제할까요?"
   },
@@ -1777,7 +1775,7 @@
   "bm.measure.go": "측정",
   "bm.newest": "최근 측정",
   "bm.offline": "프린터에 연결할 수 없음",
-  "bm.offline_hist": "프린터에 연결할 수 없습니다. Snap Studio가 저장한 기록을 표시합니다.",
+  "bm.offline_hist": "{name}이(가) 응답하지 않습니다 · Snap Studio가 저장한 기록",
   "bm.open": "열기",
   "bm.reading": "베드 메시를 읽는 중…",
   "bm.relief": "기복 ×",
@@ -1868,7 +1866,6 @@
   "ctl.st.paused": "일시 정지됨",
   "ctl.st.busy": "작업 중: {state}",
   "ctl.st.reading": "읽는 중…",
-  "ctl.offline_err": "프린터가 응답하지 않습니다: {err}",
   "ctl.st.offline": "연결 안 됨",
   "ctl.homed": "✓ 원점 복귀됨",
   "ctl.not_homed_short": "원점 복귀 안 됨",
@@ -2391,5 +2388,9 @@
   },
   "settings.lang_failed": "이 언어를 불러올 수 없습니다. 인터페이스는 그대로 유지됩니다.",
   "send.busy_until": "{name}에서 ‘{job}’을(를) 출력 중이며, {time}경 끝날 예정입니다.",
-  "prepare.colour.change_virtual": "{name} 가상 헤드로 출력 · 클릭해 변경"
+  "prepare.colour.change_virtual": "{name} 가상 헤드로 출력 · 클릭해 변경",
+  "pfiles.stale": "{name}이(가) 응답하지 않습니다. 목록이 최신이 아닐 수 있습니다.",
+  "ctl.read_err": "프린터가 오류를 반환했습니다: {err}",
+  "pfiles.load_err": "프린터의 파일을 읽을 수 없습니다: {err}",
+  "pfiles.stale_err": "목록을 새로 고칠 수 없습니다: {err}"
 }

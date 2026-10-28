@@ -208,11 +208,9 @@ function camPlace() {
   camChanged();
 }
 
-/* The stream's printer, as named in Printers. */
-function camPrinterName() {
-  const p = typeof P !== "undefined" ? P.list.find((x) => x.id === CAM.id) : null;
-  return p ? p.name || p.host : "";
-}
+/* The stream's printer, as named in Printers (printers.js, loaded after:
+   called only once the app runs). */
+const camPrinterName = () => printerName(CAM.id);
 
 function camPin(on) {
   CAM.pinned = on;

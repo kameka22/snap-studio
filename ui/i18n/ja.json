@@ -1309,7 +1309,6 @@
   "maint.t.plate.s1": "マグネットプレートを取り外します。",
   "maint.t.plate.s2": "ぬるま湯と食器用洗剤で洗います。",
   "maint.t.plate.s3": "表面に触れないように、糸くずの出ない布で乾かします。",
-  "maint.offline_hint": "電源を入れ、同じネットワークにあるか確認してください。カウンターがここに表示されます。記録した内容は下に残ります。",
   "maint.stale": "{name} が応答しません · {d} に読み取った値",
   "maint.connecting": "プリンターのカウンターを読み取り中…",
   "update.badge": "新しいバージョンがあります：インストールする",
@@ -1485,7 +1484,7 @@
   "pfiles.rename_title": "プリンター上で名前を変更",
   "pfiles.rename_name": "新しい名前",
   "pfiles.why.printing": "このファイルは造形中です。造形が終わるまで変更や削除はできません。",
-  "pfiles.offline.title": "{name} が応答しません",
+  "printers.no_answer": "{name} が応答しません",
   "pfiles.empty.files": "プリンターに造形ファイルはありません",
   "pfiles.empty.files_hint": "Snap Studio やほかのスライサーから送信した造形がここに表示されます。",
   "pfiles.empty.videos": "タイムラプスはまだありません",
@@ -1533,7 +1532,6 @@
   "pfiles.err.printing": "このファイルは造形中です。造形が終わるまで変更や削除はできません。",
   "pfiles.err.bad_name": "この名前はプリンターでは使用できません。",
   "pfiles.err.no_folder": "保存先フォルダが見つかりません。",
-  "pfiles.offline.hint": "電源が入っていて同じネットワークにあるか確認してから、もう一度お試しください。",
   "pfiles.del.title_files": {
     "other": "{n} 個のファイルをプリンターから削除しますか？"
   },
@@ -1777,7 +1775,7 @@
   "bm.measure.go": "測定",
   "bm.newest": "最新の測定",
   "bm.offline": "プリンターに接続できません",
-  "bm.offline_hist": "プリンターに接続できません：Snap Studio が保存した履歴を表示しています。",
+  "bm.offline_hist": "{name} が応答しません · Snap Studio が保存した履歴",
   "bm.open": "開く",
   "bm.reading": "ベッドメッシュを読み取り中…",
   "bm.relief": "起伏 ×",
@@ -1868,7 +1866,6 @@
   "ctl.st.paused": "一時停止中",
   "ctl.st.busy": "処理中：{state}",
   "ctl.st.reading": "読み取り中…",
-  "ctl.offline_err": "プリンターが応答しません：{err}",
   "ctl.st.offline": "未接続",
   "ctl.homed": "✓ 原点復帰済み",
   "ctl.not_homed_short": "原点未復帰",
@@ -2391,5 +2388,9 @@
   },
   "settings.lang_failed": "この言語を読み込めませんでした：表示は変わりません。",
   "send.busy_until": "{name} は「{job}」を造形中です（{time} ごろ終了予定）。",
-  "prepare.colour.change_virtual": "仮想ヘッド {name} で造形 · クリックで変更"
+  "prepare.colour.change_virtual": "仮想ヘッド {name} で造形 · クリックで変更",
+  "pfiles.stale": "{name} が応答しません。一覧が最新でない可能性があります。",
+  "ctl.read_err": "プリンターがエラーを返しました：{err}",
+  "pfiles.load_err": "プリンターのファイルを読み込めませんでした：{err}",
+  "pfiles.stale_err": "一覧を更新できませんでした：{err}"
 }
