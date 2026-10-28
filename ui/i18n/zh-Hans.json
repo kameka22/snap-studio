@@ -1485,7 +1485,7 @@
   "pfiles.rename_title": "在打印机上重命名",
   "pfiles.rename_name": "新名称",
   "pfiles.why.printing": "此文件正在打印：打印结束前无法修改或删除。",
-  "pfiles.offline.title": "{name} 没有响应",
+  "printers.no_answer": "{name} 没有响应",
   "pfiles.empty.files": "打印机上没有打印文件",
   "pfiles.empty.files_hint": "从 Snap Studio 或其他切片软件发送的打印会显示在这里。",
   "pfiles.empty.videos": "还没有延时摄影",
@@ -2391,5 +2391,8 @@
   "settings.lang_failed": "无法加载此语言：界面保持不变。",
   "send.busy_until": "{name} 正在打印“{job}”，预计 {time} 左右结束。",
   "prepare.colour.change_virtual": "使用虚拟打印头 {name} 打印 · 点击更改",
-  "pfiles.stale": "{name} 没有响应：列表可能不是最新的。"
+  "pfiles.stale": "{name} 没有响应：列表可能不是最新的。",
+  "ctl.read_err": "打印机返回了错误：{err}",
+  "pfiles.load_err": "无法读取打印机上的文件",
+  "pfiles.stale_err": "无法刷新列表：{err}"
 }

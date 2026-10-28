@@ -51,8 +51,9 @@ const PFL_LAST = {
 const PFL_ICON_FILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M6 2.75h8.25L19 7.5v12.25a1.5 1.5 0 0 1-1.5 1.5h-11.5a1.5 1.5 0 0 1-1.5-1.5V4.25A1.5 1.5 0 0 1 6 2.75z"/><path d="M14 2.75V7.5h5"/><path d="M12 10.5l-3.75 2.1v4.2L12 18.9l3.75-2.1v-4.2zM8.25 12.6 12 14.7l3.75-2.1M12 14.7v4.2"/></svg>';
 const PFL_ICON_FILM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 4.5v15M17 4.5v15M3 8.5h4M3 12h4M3 15.5h4M17 8.5h4M17 12h4M17 15.5h4"/><path d="M10.5 9.75v4.5l3.75-2.25z" fill="currentColor"/></svg>';
 const PFL_PH = { file: PFL_ICON_FILE, film: PFL_ICON_FILM };
-/* The no-connection icon of the printer page's and Control's offline card. */
-const PFL_ICON_NOCONN = '<svg class="prn-offline-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-3.4-3.4H6.5A4.5 4.5 0 0 1 5 10.2a6.9 6.9 0 0 1 1.2-2.6zM12 4a7 7 0 0 1 6.7 5A4.5 4.5 0 0 1 21 17.2l-1.5-1.5A2.5 2.5 0 0 0 18 11h-1l-.3-1A5 5 0 0 0 9.4 6.6L8 5.2A7 7 0 0 1 12 4"/></svg>';
+/* The no-connection icon, taken from the printer page's offline card
+   (index.html) rather than copied. */
+const pflNoConnIcon = () => $("prn-offline-ico").outerHTML.replace(/\sid="[^"]*"/, "");
 /* An error said on this page: without the URLs it carries (errNoUrl,
    control-logic.js); the raw one goes to the console. */
 function pflErr(e, what) {
@@ -106,8 +107,9 @@ async function pflLoad() {
     if (PFL.player && !keys.has(PFL.player)) pflClosePlayer();
   } catch (e) {
     if (seq !== PFL.seq) return;
-    // Only its being set counts: the page says the printer does not answer.
-    PFL.err = pflErr(e, "pf_overview") || "error";
+    // No answer, or an answer that is an error: said apart (pflRender).
+    PFL.err = String(e?.message || e || "error");
+    console.warn("printer files", "pf_overview", PFL.err);
   } finally {
     if (seq === PFL.seq) PFL.loading = false;
   }
@@ -146,7 +148,6 @@ function pflSideCounts() {
 /* ------------------------------------------------------------ rendering */
 
 function pflHeader() {
-  const p = pflPrinter();
   const list = pflList();
   let sub = "";
   if (PFL.data) {
@@ -154,7 +155,7 @@ function pflHeader() {
     sub = tr(PFL.tab === "files" ? "pfiles.summary.files" : "pfiles.summary.videos", { n: s.count, size: fmtSize(s.bytes) });
     if (s.free != null) sub += " · " + tr("pfiles.summary.free", { size: fmtSize(s.free) });
   }
-  tbSet("pfiles", `${p ? p.name || p.host : ""} › ${tr("pfiles.title")}`, sub);
+  tbSet("pfiles", `${printerName(PFL.pid)} › ${tr("pfiles.title")}`, sub);
   document.querySelectorAll("#pfl-tabs .seg-btn").forEach((b) => {
     b.classList.toggle("on", b.dataset.tab === PFL.tab);
     b.setAttribute("aria-pressed", String(b.dataset.tab === PFL.tab));
@@ -179,13 +180,14 @@ function pflRender() {
   if (!PFL.pid) return;
   pflHeader();
   const main = $("pfl-main");
-  const p = pflPrinter();
   if (!PFL.data) {
-    const title = tr("pfiles.offline.title", { name: p ? p.name || p.host : "" });
-    // The printer does not answer: the offline card of the printer page
-    // and of Control, without the raw error.
+    // The printer does not answer: the printer page's offline card. It
+    // answered with an error: that error, without its address.
+    const down = errUnreachable(PFL.err);
+    const title = down ? tr("printers.no_answer", { name: printerName(PFL.pid) }) : tr("pfiles.load_err");
+    const hint = down ? tr("pfiles.offline.hint") : errNoUrl(PFL.err);
     main.innerHTML = PFL.err
-      ? `<div class="prn-offline pfl-off" role="status">${PFL_ICON_NOCONN}<div class="prn-offline-title">${esc(title)}</div><div class="prn-offline-hint">${esc(tr("pfiles.offline.hint"))}</div><button class="btn" data-act="retry">${esc(tr("common.retry"))}</button></div>`
+      ? `<div class="prn-offline pfl-off" role="status">${pflNoConnIcon()}<div class="prn-offline-title">${esc(title)}</div><div class="prn-offline-hint">${esc(hint)}</div><button class="btn" data-act="retry">${esc(tr("common.retry"))}</button></div>`
       : `<div class="loading"><div class="spinner"></div>${esc(tr("pfiles.loading"))}</div>`;
     pflRenderDetail();
     pflRenderSelbar();
@@ -195,7 +197,10 @@ function pflRender() {
   const shown = pflShown();
   let html = "";
   // A refresh that failed: the list shown is the last one read.
-  if (PFL.err) html += `<div class="pfl-note err">${esc(tr("pfiles.stale", { name: p ? p.name || p.host : "" }))} <button class="btn small" data-act="retry">${esc(tr("common.retry"))}</button></div>`;
+  if (PFL.err) {
+    const note = errUnreachable(PFL.err) ? tr("pfiles.stale", { name: printerName(PFL.pid) }) : tr("pfiles.stale_err", { err: errNoUrl(PFL.err) });
+    html += `<div class="pfl-note err">${esc(note)} <button class="btn small" data-act="retry">${esc(tr("common.retry"))}</button></div>`;
+  }
   if (!all.length) {
     html += PFL.tab === "files"
       ? pflState(PFL_ICON_FILE, tr("pfiles.empty.files"), tr("pfiles.empty.files_hint"))
@@ -470,7 +475,8 @@ async function pflDelete(files) {
         if (err) failed.push(err);
       }
     }
-    const first = failed.length ? pflErr(failed[0], "pf_delete") : "";
+    // Every failure to the console; the first one said.
+    const first = failed.map((e) => pflErr(e, "pf_delete"))[0] || "";
     if (failed.length === 1) toast(first, true);
     else if (failed.length) toast(tr("pfiles.del.failed", { n: failed.length, err: first }), true);
   } catch (e) {

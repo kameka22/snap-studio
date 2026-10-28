@@ -195,6 +195,21 @@ function current() {
   return P.list.find((p) => p.id === P.sel) || null;
 }
 
+/* A printer as the user named it (its address when it has no name); empty
+   when unknown. */
+function printerName(id) {
+  const p = P.list.find((x) => x.id === id);
+  return p ? p.name || p.host : "";
+}
+
+/* The Camera section while the printer does not answer: hidden, unless a
+   pinned stream of this printer shows there (it says the printer does not
+   answer, camera.js). */
+function prnCamSection() {
+  const off = !$("prn-offline").classList.contains("hidden");
+  $("prn-cam").classList.toggle("hidden", off && !(CAM.on && CAM.id === P.sel));
+}
+
 function prnRenderDetail() {
   const p = current();
   $("prn-empty").classList.toggle("hidden", !!p);
@@ -220,9 +235,11 @@ function setOffline(mode, st) {
   const on = !!mode;
   card.classList.toggle("hidden", !on);
   card.classList.toggle("connecting", mode === "connecting");
-  // Nor the camera, the model or the address (the address stays in the
-  // title bar): nothing to read or watch until the printer answers.
-  for (const id of ["prn-hero", "prn-filaments", "prn-temps", "prn-cam", "prn-info"]) $(id).classList.toggle("hidden", on);
+  // Nor the model or the address (the address stays in the title bar), nor
+  // the camera unless a pinned stream shows it: nothing to read or watch
+  // until the printer answers.
+  for (const id of ["prn-hero", "prn-filaments", "prn-temps", "prn-info"]) $(id).classList.toggle("hidden", on);
+  prnCamSection();
   if (!on) {
     $("cam-toggle").disabled = false;
     return;
@@ -238,12 +255,13 @@ function setOffline(mode, st) {
   // pinned one stays, saying the printer does not answer).
   if (CAM.on && CAM.id === P.sel) CAM.pinned ? camOffline(true) : camStop();
   $("cam-toggle").disabled = true;
+  prnCamSection();
   // The raw error under Details, without the address it tried (errNoUrl,
   // control-logic.js); the whole of it goes to the console.
   const raw = (!connecting && st?.message) || "";
   if (raw && raw !== P.offErr) console.warn("printer offline", P.sel, raw);
   P.offErr = raw;
-  const err = raw && typeof errNoUrl === "function" ? errNoUrl(raw) : "";
+  const err = errNoUrl(raw);
   $("prn-offline-err").textContent = err;
   $("prn-offline-details").classList.toggle("hidden", !err);
 }
@@ -850,6 +868,7 @@ function prnCamHome() {
 // The Camera section's switch, and the 3D view's button, say its state.
 document.addEventListener("cam-change", () => {
   $("cam-toggle").checked = CAM.on && CAM.id === P.sel;
+  prnCamSection();
   if (window.currentView === "printers" && typeof p3dQuick === "function" && typeof P3 !== "undefined" && P3.pid) p3dQuick();
 });
 $("cam-toggle").addEventListener("change", () => ($("cam-toggle").checked ? camStart(P.sel) : camStop()));

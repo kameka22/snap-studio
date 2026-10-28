@@ -1534,7 +1534,7 @@
   "pfiles.rename_title": "Renombrar en la impresora",
   "pfiles.rename_name": "Nuevo nombre",
   "pfiles.why.printing": "Este archivo se está imprimiendo: no se puede cambiar ni eliminar hasta que termine la impresión.",
-  "pfiles.offline.title": "{name} no responde",
+  "printers.no_answer": "{name} no responde",
   "pfiles.empty.files": "No hay archivos de impresión en la impresora",
   "pfiles.empty.files_hint": "Las impresiones enviadas desde Snap Studio u otro laminador aparecen aquí.",
   "pfiles.empty.videos": "Aún no hay timelapses",
@@ -2471,5 +2471,8 @@
   "settings.lang_failed": "No se pudo cargar este idioma: la interfaz se queda como estaba.",
   "send.busy_until": "{name} está imprimiendo “{job}”, debería terminar hacia las {time}.",
   "prepare.colour.change_virtual": "Impreso con el cabezal virtual {name} · clic para cambiar",
-  "pfiles.stale": "{name} no responde: puede que la lista no esté actualizada."
+  "pfiles.stale": "{name} no responde: puede que la lista no esté actualizada.",
+  "ctl.read_err": "La impresora respondió con un error: {err}",
+  "pfiles.load_err": "No se pudieron leer los archivos de la impresora",
+  "pfiles.stale_err": "No se pudo actualizar la lista: {err}"
 }

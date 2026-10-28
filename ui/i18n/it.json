@@ -1534,7 +1534,7 @@
   "pfiles.rename_title": "Rinomina sulla stampante",
   "pfiles.rename_name": "Nuovo nome",
   "pfiles.why.printing": "Questo file è in stampa: non può essere modificato né eliminato finché la stampa non termina.",
-  "pfiles.offline.title": "{name} non risponde",
+  "printers.no_answer": "{name} non risponde",
   "pfiles.empty.files": "Nessun file di stampa sulla stampante",
   "pfiles.empty.files_hint": "Le stampe inviate da Snap Studio o da un altro slicer compaiono qui.",
   "pfiles.empty.videos": "Ancora nessun timelapse",
@@ -2471,5 +2471,8 @@
   "settings.lang_failed": "Impossibile caricare questa lingua: l'interfaccia resta com'era.",
   "send.busy_until": "{name} sta stampando “{job}”, dovrebbe finire verso le {time}.",
   "prepare.colour.change_virtual": "Stampato con la testina virtuale {name} · fai clic per cambiare",
-  "pfiles.stale": "{name} non risponde: l'elenco potrebbe non essere aggiornato."
+  "pfiles.stale": "{name} non risponde: l'elenco potrebbe non essere aggiornato.",
+  "ctl.read_err": "La stampante ha risposto con un errore: {err}",
+  "pfiles.load_err": "Impossibile leggere i file della stampante",
+  "pfiles.stale_err": "Impossibile aggiornare l'elenco: {err}"
 }

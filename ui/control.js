@@ -502,11 +502,16 @@ function ctUpdate() {
   // retry, as Maintenance says it (the raw error, with the address it
   // tried, stays in the console).
   const conn = $("ct-conn");
-  const p = P.list.find((x) => x.id === pid);
-  const name = p ? p.name || p.host : "";
   conn.classList.toggle("hidden", state !== "reading" && state !== "offline");
   if (state === "reading") conn.innerHTML = `<span class="spinner"></span><span>${esc(tr("ctl.reading"))}</span>`;
-  else if (state === "offline") conn.innerHTML = `<span class="mt-stale-dot"></span><span>${esc(tr("pfiles.offline.title", { name }))}</span><button class="btn small" data-ct-retry>${esc(tr("printers.offline.retry"))}</button>`;
+  else if (state === "offline") {
+    // No answer, or an answer that is an error (Klipper shut down, HTTP
+    // 503): the error is said then, without its address, as it calls for
+    // something else than checking the network.
+    const name = printerName(pid);
+    const said = d.err && !errUnreachable(d.err) ? tr("ctl.read_err", { err: errNoUrl(d.err) }) : name ? tr("printers.no_answer", { name }) : tr("ctl.offline");
+    conn.innerHTML = `<span class="mt-stale-dot"></span><span>${esc(said)}</span><button class="btn small" data-ct-retry>${esc(tr("printers.offline.retry"))}</button>`;
+  }
   root.querySelector(".ct-empty")?.replaceChildren(tr(state === "offline" ? "ctl.offline" : "ctl.reading"));
   // Printing or a U1 procedure: what stays possible is said.
   const lock = state === "printing" || state === "paused" ? "ctl.lock.printing" : state === "busy" ? "ctl.lock.busy" : "";

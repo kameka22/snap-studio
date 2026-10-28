@@ -1485,7 +1485,7 @@
   "pfiles.rename_title": "プリンター上で名前を変更",
   "pfiles.rename_name": "新しい名前",
   "pfiles.why.printing": "このファイルは造形中です。造形が終わるまで変更や削除はできません。",
-  "pfiles.offline.title": "{name} が応答しません",
+  "printers.no_answer": "{name} が応答しません",
   "pfiles.empty.files": "プリンターに造形ファイルはありません",
   "pfiles.empty.files_hint": "Snap Studio やほかのスライサーから送信した造形がここに表示されます。",
   "pfiles.empty.videos": "タイムラプスはまだありません",
@@ -2391,5 +2391,8 @@
   "settings.lang_failed": "この言語を読み込めませんでした：表示は変わりません。",
   "send.busy_until": "{name} は「{job}」を造形中です（{time} ごろ終了予定）。",
   "prepare.colour.change_virtual": "仮想ヘッド {name} で造形 · クリックで変更",
-  "pfiles.stale": "{name} が応答しません。一覧が最新でない可能性があります。"
+  "pfiles.stale": "{name} が応答しません。一覧が最新でない可能性があります。",
+  "ctl.read_err": "プリンターがエラーを返しました：{err}",
+  "pfiles.load_err": "プリンターのファイルを読み込めませんでした",
+  "pfiles.stale_err": "一覧を更新できませんでした：{err}"
 }

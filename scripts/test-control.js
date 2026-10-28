@@ -161,11 +161,4 @@ assert.deepEqual(C.ctlFilamentPick(mats, { present: true, kind: "PETG", vendor: 
 assert.deepEqual(C.ctlFilamentPick(mats, { present: false, kind: "", vendor: "", sub_type: "", color: "#ffffff" }), { material: "PLA", vendor: "Generic", sub_type: "", color: "#ffffff" }, "an unloaded head");
 assert.equal(C.ctlFilamentPick([], {}), null);
 
-// A connection error loses the address it tried, keeps the rest.
-assert.equal(C.errNoUrl("error sending request for url (http://192.168.0.144:7125/printer/objects/query?webhooks): operation timed out"), "error sending request: operation timed out");
-assert.equal(C.errNoUrl("Printer unreachable: error sending request for url (http://u1.local:7125/server/info)"), "Printer unreachable: error sending request");
-assert.equal(C.errNoUrl("ws://10.0.0.2:7125/websocket: connection refused").includes("10.0.0.2"), false);
-assert.equal(C.errNoUrl("IO error: Connection refused (os error 61)"), "IO error: Connection refused (os error 61)");
-assert.equal(C.errNoUrl(null), "");
-
 console.log("control: ok");

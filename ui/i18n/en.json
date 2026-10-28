@@ -1531,7 +1531,7 @@
   "pfiles.rename_title": "Rename on the Printer",
   "pfiles.rename_name": "New name",
   "pfiles.why.printing": "This file is printing: it cannot be changed or deleted until the print ends.",
-  "pfiles.offline.title": "{name} does not answer",
+  "printers.no_answer": "{name} does not answer",
   "pfiles.empty.files": "No print files on the printer",
   "pfiles.empty.files_hint": "Prints sent from Snap Studio or another slicer appear here.",
   "pfiles.empty.videos": "No timelapses yet",
@@ -2426,5 +2426,8 @@
   "settings.lang_failed": "This language could not be loaded: the interface stays as it was.",
   "send.busy_until": "{name} is printing “{job}”, expected to end around {time}.",
   "prepare.colour.change_virtual": "Printed with virtual head {name} · click to change",
-  "pfiles.stale": "{name} does not answer: the list may be out of date."
+  "pfiles.stale": "{name} does not answer: the list may be out of date.",
+  "ctl.read_err": "The printer answered with an error: {err}",
+  "pfiles.load_err": "The printer's files could not be read",
+  "pfiles.stale_err": "The list could not be refreshed: {err}"
 }

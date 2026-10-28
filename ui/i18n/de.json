@@ -1534,7 +1534,7 @@
   "pfiles.rename_title": "Auf dem Drucker umbenennen",
   "pfiles.rename_name": "Neuer Name",
   "pfiles.why.printing": "Diese Datei wird gedruckt: Sie kann erst nach Ende des Drucks geändert oder gelöscht werden.",
-  "pfiles.offline.title": "{name} antwortet nicht",
+  "printers.no_answer": "{name} antwortet nicht",
   "pfiles.empty.files": "Keine Druckdateien auf dem Drucker",
   "pfiles.empty.files_hint": "Aus Snap Studio oder einem anderen Slicer gesendete Drucke erscheinen hier.",
   "pfiles.empty.videos": "Noch keine Zeitraffer",
@@ -2471,5 +2471,8 @@
   "settings.lang_failed": "Diese Sprache konnte nicht geladen werden: Die Oberfläche bleibt unverändert.",
   "send.busy_until": "{name} druckt „{job}“, voraussichtliches Ende gegen {time}.",
   "prepare.colour.change_virtual": "Gedruckt mit virtuellem Druckkopf {name} · klicken zum Ändern",
-  "pfiles.stale": "{name} antwortet nicht: Die Liste ist möglicherweise nicht mehr aktuell."
+  "pfiles.stale": "{name} antwortet nicht: Die Liste ist möglicherweise nicht mehr aktuell.",
+  "ctl.read_err": "Der Drucker hat mit einem Fehler geantwortet: {err}",
+  "pfiles.load_err": "Die Dateien des Druckers konnten nicht gelesen werden",
+  "pfiles.stale_err": "Die Liste konnte nicht aktualisiert werden: {err}"
 }

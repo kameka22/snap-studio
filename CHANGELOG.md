@@ -46,7 +46,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   the address it tried. The printer page no longer shows the camera, model and
   address while the printer is offline, and its Details leave the address out.
   The printer's Files page shows the same card, and its errors (list,
-  download, delete, rename, share) no longer carry an address.
+  download, delete, rename, share) no longer carry an address. A printer that
+  answers with an error (Klipper shut down, HTTP 503) says that error rather
+  than "does not answer"; a pinned camera stays on its printer's page.
 
 ## [0.16.0] — 2026-10-26
 
