@@ -334,7 +334,6 @@ function ctlBind(root) {
 
 const CT = {
   pid: null,
-  retrying: false, // Retry pressed on the offline card: a read under way
   head: null, // the head the opening asked for (ctlOpen)
   homedSeen: false, // homed earlier in this visit: a loss is Klipper's standby
   step: +localStorage.getItem("snapstudio.ctl.step") || 10,
@@ -408,12 +407,6 @@ function ctBuild() {
       ${ctlEstopHtml()}
     </div>
     <div class="mt-stale hidden" id="ct-conn" role="status"></div>
-    <div class="prn-offline ct-off hidden" id="ct-off" role="status">
-      <svg class="prn-offline-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-3.4-3.4H6.5A4.5 4.5 0 0 1 5 10.2a6.9 6.9 0 0 1 1.2-2.6zM12 4a7 7 0 0 1 6.7 5A4.5 4.5 0 0 1 21 17.2l-1.5-1.5A2.5 2.5 0 0 0 18 11h-1l-.3-1A5 5 0 0 0 9.4 6.6L8 5.2A7 7 0 0 1 12 4"/></svg>
-      <div class="prn-offline-title">${esc(tr("printers.offline.title"))}</div>
-      <div class="prn-offline-hint">${esc(tr("ctl.offline_hint"))}</div>
-      <button class="btn" id="ct-off-retry" data-ct-retry></button>
-    </div>
     <div class="ct-lock hidden" id="ct-lock" role="status"></div>
     <div class="ct-top">
       <section class="ct-card ct-move">
@@ -505,18 +498,15 @@ function ctUpdate() {
   $("ct-active").textContent = st?.active != null ? tr("ctl.active_head", { n: st.active }) : "";
   $("ct-busy").classList.toggle("hidden", !busy);
   $("ct-busy-t").textContent = busy || "";
-  // Reading the printer: said in a line. It does not answer: one card in
-  // place of the controls, with a retry; the polling brings them back as
-  // soon as it answers (the raw error stays in the console).
+  // Reading the printer, or it does not answer: said in a line, with a
+  // retry, as Maintenance says it (the raw error, with the address it
+  // tried, stays in the console).
   const conn = $("ct-conn");
-  conn.classList.toggle("hidden", state !== "reading");
+  const p = P.list.find((x) => x.id === pid);
+  const name = p ? p.name || p.host : "";
+  conn.classList.toggle("hidden", state !== "reading" && state !== "offline");
   if (state === "reading") conn.innerHTML = `<span class="spinner"></span><span>${esc(tr("ctl.reading"))}</span>`;
-  const off = state === "offline";
-  root.classList.toggle("off", off);
-  $("ct-off").classList.toggle("hidden", !off);
-  const retry = $("ct-off-retry");
-  retry.disabled = CT.retrying;
-  retry.textContent = tr(CT.retrying ? "printers.offline.connecting" : "printers.offline.retry");
+  else if (state === "offline") conn.innerHTML = `<span class="mt-stale-dot"></span><span>${esc(tr("pfiles.offline.title", { name }))}</span><button class="btn small" data-ct-retry>${esc(tr("printers.offline.retry"))}</button>`;
   root.querySelector(".ct-empty")?.replaceChildren(tr(state === "offline" ? "ctl.offline" : "ctl.reading"));
   // Printing or a U1 procedure: what stays possible is said.
   const lock = state === "printing" || state === "paused" ? "ctl.lock.printing" : state === "busy" ? "ctl.lock.busy" : "";
@@ -549,15 +539,9 @@ ctlBind($("ct-body"));
 $("ct-body").addEventListener("click", (e) => {
   if (e.target.closest("[data-ct-help]")) return ctHelp();
   if (e.target.closest("[data-ct-retry]")) {
-    // The card stays until the printer answers: no flash of the controls.
-    if (CT.retrying) return;
-    const pid = CT.pid;
-    CT.retrying = true;
+    ctlData(CT.pid).err = null;
     ctUpdate();
-    return ctlRead(pid, true).finally(() => {
-      CT.retrying = false;
-      if (CT.pid === pid && ctOn()) ctUpdate();
-    });
+    return ctlRead(CT.pid, true);
   }
   const step = e.target.closest("[data-step-pick]");
   if (step) {

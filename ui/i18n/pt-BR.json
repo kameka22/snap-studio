@@ -2471,6 +2471,5 @@
   "settings.lang_failed": "Não foi possível carregar este idioma: a interface continua como estava.",
   "send.busy_until": "{name} está imprimindo “{job}”, deve terminar por volta das {time}.",
   "prepare.colour.change_virtual": "Impresso com o cabeçote virtual {name} · clique para mudar",
-  "ctl.offline_hint": "Verifique se ela está ligada e na mesma rede: os controles voltam assim que ela responder.",
   "pfiles.stale": "{name} não responde: a lista pode estar desatualizada."
 }

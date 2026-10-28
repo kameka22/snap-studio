@@ -2391,6 +2391,5 @@
   "settings.lang_failed": "无法加载此语言：界面保持不变。",
   "send.busy_until": "{name} 正在打印“{job}”，预计 {time} 左右结束。",
   "prepare.colour.change_virtual": "使用虚拟打印头 {name} 打印 · 点击更改",
-  "ctl.offline_hint": "请检查它是否已开机并在同一网络中：一旦有响应，控制功能会自动恢复。",
   "pfiles.stale": "{name} 没有响应：列表可能不是最新的。"
 }

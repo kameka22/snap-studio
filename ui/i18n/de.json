@@ -2471,6 +2471,5 @@
   "settings.lang_failed": "Diese Sprache konnte nicht geladen werden: Die Oberfläche bleibt unverändert.",
   "send.busy_until": "{name} druckt „{job}“, voraussichtliches Ende gegen {time}.",
   "prepare.colour.change_virtual": "Gedruckt mit virtuellem Druckkopf {name} · klicken zum Ändern",
-  "ctl.offline_hint": "Prüfen Sie, ob er eingeschaltet und im selben Netzwerk ist: Die Steuerung kehrt zurück, sobald er antwortet.",
   "pfiles.stale": "{name} antwortet nicht: Die Liste ist möglicherweise nicht mehr aktuell."
 }

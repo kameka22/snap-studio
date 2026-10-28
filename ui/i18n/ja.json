@@ -2391,6 +2391,5 @@
   "settings.lang_failed": "この言語を読み込めませんでした：表示は変わりません。",
   "send.busy_until": "{name} は「{job}」を造形中です（{time} ごろ終了予定）。",
   "prepare.colour.change_virtual": "仮想ヘッド {name} で造形 · クリックで変更",
-  "ctl.offline_hint": "電源が入っていて同じネットワークにあるか確認してください。応答があり次第、操作が再び使えるようになります。",
   "pfiles.stale": "{name} が応答しません。一覧が最新でない可能性があります。"
 }

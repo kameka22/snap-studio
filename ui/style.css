@@ -4421,10 +4421,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .ct-switch .sw { margin-left: auto; }
 .ct-note { font-size: 11.5px; color: var(--text-tertiary); }
 .ct-empty { font-size: 12.5px; color: var(--text-secondary); }
-/* The printer does not answer: the offline card alone, in place of the controls. */
-.ct.off > :not(.ct-off) { display: none; }
-.ct-off { padding: 48px 20px; }
-.ct-off .prn-offline-hint { max-width: 420px; }
 .pfl-off { margin: 48px auto; max-width: 460px; padding: 40px 24px; }
 /* The camera, small. */
 .ct-cam-box { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, var(--content-bg)); display: grid; place-items: center; }
