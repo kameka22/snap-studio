@@ -634,6 +634,7 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Alertes plateau et matière** — un plateau et un filament incompatibles signalés avant d'imprimer, et un conseil quand la colle est recommandée | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
+| **Bibliothèque de filaments** — la gestion complète des filaments : marques, types et couleurs, profils personnalisés et par bobine, liés aux bobines de la U1 (RFID) et utilisés dans Préparer ; périmètre à définir | [#79](https://github.com/kameka22/snap-studio/pull/79) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **D'autres agents IA** — OpenCode à côté de Claude Code (OpenAI, Google, Mistral, modèles locaux…), un seul actif à la fois | [plan](docs/plans/ai-agents.md) |
 

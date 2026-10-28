@@ -6,6 +6,51 @@ building and publishing, see [DEVELOPMENT.md](DEVELOPMENT.md); for what each
 version brought, the [CHANGELOG](../CHANGELOG.md). File names point to the
 code under `src-tauri/src/` and `ui/`.
 
+## What Snap Studio adds to multi-material
+
+Two features carry most of the project's own work on the U1's four heads.
+What comes from the engine and what Snap Studio builds is kept apart below.
+
+**One prime tower per material** (`ui/pillar-logic.js`, `ui/prepare-pillars.js`, `slice.rs`;
+plan: [plans/prime-tower-per-material.md](plans/prime-tower-per-material.md)).
+
+- *Engine*: Snapmaker Orca, like upstream OrcaSlicer, builds **one prime
+  tower per plate** (`Print::m_wipe_tower_data`, one `wipe_tower_x/y` per
+  plate). Every head primes on it, so materials that don't bond with each
+  other are stacked and the tower can come off. Separate towers are an open
+  request upstream ([OrcaSlicer #8474](https://github.com/SoftFever/OrcaSlicer/issues/8474)).
+- *Snap Studio*: groups the plate's heads into cliques of materials that
+  bond (`pmGroups`, bonding table in `ui/spoolcheck.js`), and generates one
+  pillar per group, with one concentric ring per head (2 mm rings, an 8 mm
+  core, a 15 mm tube for a single head). Pillars are as tall as their
+  head's last layer and are written into the 3MF sent to the engine as
+  ordinary walls-only objects, first in the list, with
+  `enable_prime_tower = 0` and `print_order = as_obj_list`. They are placed
+  in a free spot, can be moved in Prepare, and are rebuilt at every slice,
+  never saved in the user's project. The feature is only offered when two of
+  the plate's materials don't bond, and the engine's single tower stays the
+  default. Tests: `scripts/test-pillars.js`.
+
+**Virtual heads (color mixing)** (`ui/virtual-logic.js`, `ui/virtual.js`, `slice.rs`, `mixcolor.rs`;
+plan: [plans/virtual-heads.md](plans/virtual-heads.md)).
+
+- *Engine*: the mixing is Snapmaker Orca's **Full Spectrum** (2.3.6 and
+  later). A *mixed filament* of two physical filaments gets a virtual ID
+  after the physical ones, and the engine resolves it to one real head per
+  layer (`MixedFilamentManager::resolve`), so the G-code only contains
+  `T0`…`T3`.
+- *Snap Studio*: the U1-side workflow. A virtual head is created in the
+  printer's Heads and spools from **two spools loaded on the U1** and one
+  ratio slider (4:1 to 1:4), up to 8 per printer. It is offered next to
+  T0–T3 in Prepare's head pickers and sent to the engine as
+  `mixed_filament_definitions`. Mixing materials that don't bond is refused.
+  When one of its spools is unloaded, the virtual head is deleted and what
+  used it waits for a new head before slicing. The swatch uses Snapmaker
+  Orca's pigment mixer (`filament_mixer_model.h`, MIT), ported to Rust as is
+  so the preview color matches the slicer. Tests: `scripts/test-virtual.js`,
+  and `engine_virtual_head_alternates` in `slice.rs`, which slices with the
+  real engine and is ignored in CI.
+
 ## 1. Architecture
 
 | Layer | What | Where |
@@ -119,4 +164,4 @@ Since 2026-10-28, the opening of the Snapmaker Innovation Fund Phase 2. Updated 
 - Explore: 8 model libraries ([#76](https://github.com/kameka22/snap-studio/pull/76)).
 - Consistent offline states for an unreachable printer, with no addresses in errors ([#74](https://github.com/kameka22/snap-studio/pull/74)), and a fix for the AI setup's Python detection on macOS ([#69](https://github.com/kameka22/snap-studio/pull/69)).
 
-**Next:** the calibration assistants ([#38](https://github.com/kameka22/snap-studio/pull/38)), being checked on the U1.
+**Next:** the calibration assistants ([#38](https://github.com/kameka22/snap-studio/pull/38)), being checked on the U1, and complete filament management with a filament library ([#79](https://github.com/kameka22/snap-studio/pull/79), scope being defined).

@@ -578,6 +578,7 @@ with its pull request (drafts, approved or under discussion):
 | **Plate and material warnings** — an incompatible plate and filament flagged before printing, and a tip when glue is advised | [#16](https://github.com/kameka22/snap-studio/pull/16) |
 | **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
+| **Filament library** — complete filament management: brands, types and colors, custom and per-spool profiles, linked to the U1's spools (RFID) and used in Prepare; scope to define | [#79](https://github.com/kameka22/snap-studio/pull/79) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
 
