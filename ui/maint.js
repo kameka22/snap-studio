@@ -326,8 +326,8 @@ function mtHistory() {
     <div class="group">${log || `<div class="mt-hrow"><span class="mt-empty">${esc(tr("maint.log.empty"))}</span></div>`}</div></details>`;
 }
 
-const mtDateTime = (ms) => new Date(ms).toLocaleString(document.documentElement.lang || undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const mtDate = (at) => new Date(at * 1000).toLocaleDateString(document.documentElement.lang || undefined, { day: "numeric", month: "short", year: "numeric" });
+const mtDateTime = (ms) => new Date(ms).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const mtDate = (at) => new Date(at * 1000).toLocaleDateString(locale(), { day: "numeric", month: "short", year: "numeric" });
 
 /* Logs tasks as done now; the toast offers to undo. */
 async function mtMarkDone(ids) {

@@ -10,6 +10,10 @@
   color-scheme: light;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* Letter spacing of the small labels in capitals, a factor: 0 where the
+     script has no case (Japanese, Chinese, Korean). A new tracked label
+     writes its spacing as calc(<em> * var(--caps-track)). */
+  --caps-track: 1;
   --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
 
   --accent: #007aff;
@@ -158,6 +162,36 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .hidden { display: none !important; }
 svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+
+/* ---------- Japanese, Chinese, Korean ---------- */
+/* The Latin stack holds none of their characters, and the font each system
+   falls back to varies (a Chinese one for Japanese, a bitmap one on some
+   Linux): their own system fonts, macOS, then Windows, then Linux (Noto CJK).
+   The theme previews (data-scheme) redefine --font-ui: same here. Latin
+   text (numbers, units, names) takes the Latin stack's own font first on
+   every system (macOS: the system font; Windows and Linux: Arial), the CJK
+   font only for the characters it lacks. */
+:root:lang(ja), :lang(ja) [data-scheme] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+}
+:root:lang(zh-Hans), :lang(zh-Hans) [data-scheme] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
+}
+:root:lang(ko), :lang(ko) [data-scheme] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", sans-serif;
+}
+/* Lines break between any two characters in Japanese and Chinese: the
+   strict rules keep small kana and closing punctuation off a line's start.
+   Korean puts spaces between words and breaks there, as Latin does; a word
+   longer than its box still breaks, and does not widen a narrow box
+   (anywhere, unlike break-word, lowers the box's minimum width). */
+:root:lang(ja), :root:lang(zh-Hans) { line-break: strict; }
+:root:lang(ko) { word-break: keep-all; overflow-wrap: anywhere; }
+/* The small labels in capitals: these scripts have no case, and their
+   characters spaced out read badly (--caps-track); under 11 px they are
+   hard to read. */
+:root:is(:lang(ja), :lang(zh-Hans), :lang(ko)) { --caps-track: 0; }
+:root:is(:lang(ja), :lang(zh-Hans), :lang(ko)) :is(.picker-section, .p3d-tag, .ct-padcap, .cam-tag) { font-size: 11px; }
 
 /* ---------- shared controls ---------- */
 .btn {
@@ -535,7 +569,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: calc(0.04em * var(--caps-track));
   border-bottom: 1px solid var(--separator);
   margin-bottom: 4px;
 }
@@ -693,7 +727,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 /* "On the network" list: printers found by the mDNS search. */
 .disc { display: flex; flex-direction: column; gap: 6px; }
 .disc-head { display: flex; align-items: center; gap: 8px; min-height: 22px; }
-.disc-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+.disc-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: calc(0.04em * var(--caps-track)); color: var(--text-secondary); }
 .disc-state { flex: 1; font-size: 12px; color: var(--text-tertiary); }
 .disc-list { display: flex; flex-direction: column; border-radius: var(--radius-control); overflow: hidden; }
 .disc-list:not(:empty) { border: 1px solid var(--separator); background: var(--control-bg); }
@@ -1491,7 +1525,7 @@ body:has(#view-prepare:not(.hidden)) .toast.out { transform: translateY(-12px); 
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: calc(0.04em * var(--caps-track));
   color: var(--text-secondary);
 }
 .set-section:first-of-type { margin-top: 0; }
@@ -1721,7 +1755,7 @@ body.no-toolbar .toolbar { display: none; }
 
 /* Home: cards tinted with each site's colour, Snapmaker Space wide. */
 .ex-home { max-width: 960px; margin: 0 auto; padding: 28px 28px 40px; display: flex; flex-direction: column; gap: 32px; }
-.ex-section h2, .ex-picker h2 { margin: 0 0 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary); }
+.ex-section h2, .ex-picker h2 { margin: 0 0 12px; font-size: 12px; font-weight: 700; letter-spacing: calc(0.05em * var(--caps-track)); text-transform: uppercase; color: var(--text-secondary); }
 .ex-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ex-head h2, .ex-head h3 { margin: 0 0 12px; }
 .ex-snap { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr); gap: 12px; align-items: stretch; }
@@ -2485,7 +2519,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: calc(0.04em * var(--caps-track));
   color: var(--text-secondary);
 }
 .vp-section:first-child { margin-top: 0; }
@@ -2535,7 +2569,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .cam-note:empty { display: none; }
 /* A pill top left over a picture: LIVE or PAUSED on the camera where the
    screen asks for it, "Timelapse" on a record's video. */
-.cam-tag { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; backdrop-filter: blur(6px); pointer-events: none; }
+.cam-tag { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 10.5px; font-weight: 600; letter-spacing: calc(0.03em * var(--caps-track)); backdrop-filter: blur(6px); pointer-events: none; }
 .cam-tag i { width: 6px; height: 6px; border-radius: 50%; background: #ff453a; }
 .cam-tag svg { width: 11px; height: 11px; fill: #fff; }
 .cam-tag .p, .cam-tag.paused .l { display: none; }
@@ -2582,7 +2616,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: calc(0.04em * var(--caps-track));
   color: var(--text-secondary);
 }
 .p-float-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2602,7 +2636,7 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
    sliced). The second one also takes objects dropped from the plate. */
 .p-grp { display: flex; flex-direction: column; gap: 4px; }
 .p-grp-head { display: flex; align-items: center; gap: 6px; min-height: 22px; font-size: 11px; color: var(--text-secondary); }
-.p-grp-head .k { flex: 1; min-width: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.p-grp-head .k { flex: 1; min-width: 0; font-weight: 600; text-transform: uppercase; letter-spacing: calc(0.04em * var(--caps-track)); }
 .p-grp-head .sub { font-size: 11px; }
 .p-grp-head .btn { min-height: 20px; padding: 1px 8px; font-size: 11px; }
 .p-off .group { opacity: 0.6; }
@@ -3106,7 +3140,7 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
 
 .pj-rows { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 16px; }
 .pj-rows:focus { outline: none; }
-.pj-g { display: flex; align-items: baseline; gap: 6px; margin: 12px 8px 5px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+.pj-g { display: flex; align-items: baseline; gap: 6px; margin: 12px 8px 5px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: calc(0.04em * var(--caps-track)); color: var(--text-secondary); }
 .pj-g em { margin-left: auto; font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 .pj-row {
   width: 100%;
@@ -3240,7 +3274,7 @@ fieldset.group.adv-off { margin: 0; padding: 0; border: 0; min-width: 0; opacity
 .pj-chev { flex: none; width: 14px; height: 14px; fill: var(--text-secondary); transition: transform 150ms ease; }
 .pj-det.open .pj-chev { transform: rotate(90deg); }
 .pj-det-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 24px; padding: 4px 16px 14px; }
-.pj-det-body h4 { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); }
+.pj-det-body h4 { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: calc(0.04em * var(--caps-track)); text-transform: uppercase; color: var(--text-secondary); }
 .pj-det-body .pj-kv b { max-width: 60%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 @container (max-width: 720px) { .pj-det-body { grid-template-columns: minmax(0, 1fr); } }
 
@@ -3739,7 +3773,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    margins to a 100 % width, and the field stuck out of the picker). */
 .picker .field { flex: none; margin: 8px; width: calc(100% - 16px); }
 .picker-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 6px; }
-.picker-section { padding: 8px 8px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); }
+.picker-section { padding: 8px 8px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: calc(0.05em * var(--caps-track)); color: var(--text-tertiary); }
 .picker-item {
   width: 100%;
   display: flex;
@@ -3848,7 +3882,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: calc(0.04em * var(--caps-track));
   color: var(--text-secondary);
 }
 .ais-tag { padding: 1px 7px; border-radius: 999px; font-size: 10px; letter-spacing: 0; text-transform: none; }
@@ -4021,7 +4055,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .sp-info { font-size: 12px; color: var(--text-secondary); }
 /* One row per color: expected → loaded spool. */
 .sp-cols, .sp-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1.25fr); align-items: center; column-gap: 8px; }
-.sp-cols { padding: 0 12px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
+.sp-cols { padding: 0 12px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: calc(0.04em * var(--caps-track)); color: var(--text-tertiary); }
 .sp-list { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; max-height: 48vh; overflow: auto; }
 .sp-row { row-gap: 6px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; }
 .sp-exp { display: flex; align-items: center; gap: 9px; min-width: 0; font-size: 13px; font-weight: 500; }
@@ -4249,7 +4283,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .ct-chip.warn { color: var(--warning-text, var(--warning)); background: color-mix(in srgb, var(--warning) 14%, transparent); }
 .ct-busy { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--accent); font-weight: 500; }
 .ct-busy .spinner { margin: 0; }
-.ct-estop { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; border: 0; font: inherit; font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; background: var(--danger); box-shadow: 0 2px 10px color-mix(in srgb, var(--danger) 40%, transparent); cursor: pointer; }
+.ct-estop { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; border: 0; font: inherit; font-size: 12.5px; font-weight: 700; letter-spacing: calc(0.04em * var(--caps-track)); text-transform: uppercase; color: #fff; background: var(--danger); box-shadow: 0 2px 10px color-mix(in srgb, var(--danger) 40%, transparent); cursor: pointer; }
 .ct-estop svg { width: 16px; height: 16px; fill: currentColor; }
 .ct-estop:hover { filter: brightness(1.08); }
 .ct-estop:disabled { opacity: 0.5; cursor: default; }
@@ -4258,7 +4292,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .ct-bottom { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 14px; }
 @media (max-width: 1180px) { .ct-top, .ct-bottom { grid-template-columns: 1fr; } }
 .ct-card { padding: 14px 16px; border-radius: var(--radius-card); background: var(--card-bg); border: 1px solid var(--card-border); box-shadow: var(--card-shadow); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.ct-card-head { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+.ct-card-head { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 600; letter-spacing: calc(0.06em * var(--caps-track)); text-transform: uppercase; color: var(--text-secondary); }
 .ct-card-head .sw { margin-left: auto; }
 /* A head the opening asked for (ctlOpen { head }): marked a moment. */
 .ct-head.focus { animation: ctl-focus 1.8s ease-out; }
@@ -4317,7 +4351,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    it, each captioned; the buttons well apart. */
 .ct-move-body { display: flex; align-items: flex-start; justify-content: center; gap: 34px; padding: 8px 0 4px; }
 .ct-padwrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.ct-padcap { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.ct-padcap { font-size: 10.5px; font-weight: 600; letter-spacing: calc(0.08em * var(--caps-track)); text-transform: uppercase; color: var(--text-tertiary); }
 .ct-pad, .ct-zpad { display: grid; gap: 12px; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--text) 3%, transparent), color-mix(in srgb, var(--text) 7%, transparent)); box-shadow: inset 0 0 0 1px var(--separator); }
 .ct-pad { grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(3, 54px); padding: 16px; border-radius: 50%; }
 .ct-zpad { grid-template-rows: repeat(3, 54px); padding: 16px 12px; border-radius: 999px; }
@@ -4427,7 +4461,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .bm-diag-foot span { flex: 1; color: var(--text-secondary); font-size: 12px; }
 /* History and comparison, folded under the view. */
 .bm-more { margin-top: 14px; }
-.bm-more > summary { cursor: pointer; padding: 6px 2px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; list-style-position: inside; }
+.bm-more > summary { cursor: pointer; padding: 6px 2px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: calc(0.04em * var(--caps-track)); list-style-position: inside; }
 .bm-more > summary:hover { color: var(--text); }
 .bm-more > summary:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 .bm-more .bm-trend-card { margin-top: 6px; }
@@ -4584,7 +4618,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: calc(0.04em * var(--caps-track));
   color: var(--text-secondary);
 }
 .ia-group:first-child { margin-top: 0; }
@@ -4748,7 +4782,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: calc(0.04em * var(--caps-track));
   border-bottom: 1px solid var(--separator);
   margin-bottom: 4px;
 }
@@ -5091,7 +5125,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 /* The print's status, top centre, between the heads card and the panel. */
 .p3d-status { left: 50%; transform: translateX(-50%); width: max-content; min-width: 260px; max-width: min(440px, calc(100% - 2 * 374px)); padding: 8px 12px; gap: 6px; }
 .p3d-status-top { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; }
-.p3d-state { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+.p3d-state { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: calc(0.06em * var(--caps-track)); text-transform: uppercase; color: var(--text-secondary); }
 .p3d-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
 .p3d-state.ok i { background: var(--success); }
 .p3d-state.busy i { background: var(--accent); }
@@ -5126,7 +5160,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 .p3d-sub:empty { display: none; }
 .p3d-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p3d-row.no-spool .p3d-name { color: var(--text-tertiary); }
-.p3d-tag { flex: none; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
+.p3d-tag { flex: none; font-size: 10px; font-weight: 600; letter-spacing: calc(0.04em * var(--caps-track)); text-transform: uppercase; color: var(--text-tertiary); }
 .p3d-tag:empty { display: none; }
 .p3d-tag.accent { color: var(--accent); }
 .p3d-t { flex: none; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 12px; }

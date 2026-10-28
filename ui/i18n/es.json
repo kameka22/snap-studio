@@ -760,8 +760,7 @@
   "send.add_queue": "Añadir a la cola",
   "send.querying": "Consultando la impresora…",
   "send.no_answer": "{name} no responde: la impresión puede esperar en la cola.",
-  "send.ends_at": "debería terminar hacia las {time}",
-  "send.busy": "{name} está imprimiendo “{job}”{end}.",
+  "send.busy": "{name} está imprimiendo “{job}”.",
   "send.missing": "El cabezal {heads} no tiene bobina en {name}.",
   "send.ready": "{name} está lista.",
   "send.queueing": "Añadiendo a la cola…",
@@ -2470,5 +2469,7 @@
     "one": "{n} capa",
     "other": "{n} capas"
   },
-  "settings.lang_failed": "No se pudo cargar este idioma: la interfaz se queda como estaba."
+  "settings.lang_failed": "No se pudo cargar este idioma: la interfaz se queda como estaba.",
+  "send.busy_until": "{name} está imprimiendo “{job}”, debería terminar hacia las {time}.",
+  "prepare.colour.change_virtual": "Impreso con el cabezal virtual {name} · clic para cambiar"
 }

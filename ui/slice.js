@@ -872,9 +872,12 @@ async function checkSendPrinter() {
     return;
   }
   if (["printing", "paused"].includes(st.state)) {
-    const end = st.remaining_s ? " — " + tr("send.ends_at", { time: fmtClock(Date.now() + st.remaining_s * 1000) }) : "";
+    // The end time inside the sentence, worded by each language.
+    const job = (st.job || "").replace(/\.gcode$/, "");
     el.className = "pf-test warn";
-    el.textContent = tr("send.busy", { name: p.name, job: (st.job || "").replace(/\.gcode$/, ""), end });
+    el.textContent = st.remaining_s
+      ? tr("send.busy_until", { name: p.name, job, time: fmtClock(Date.now() + st.remaining_s * 1000) })
+      : tr("send.busy", { name: p.name, job });
     setSendMode("queue");
     $("snd-go").disabled = false;
     return;

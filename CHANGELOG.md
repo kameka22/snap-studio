@@ -16,6 +16,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   Italian, for the whole interface, the menus and Orca's settings; a fresh
   account starts in the system's language. Dates and numbers follow the
   chosen language, and a text not yet translated shows in English (#72).
+- **Japanese, Simplified Chinese and Korean**, with the system's Chinese,
+  Japanese or Korean fonts; Traditional Chinese systems start in English
+  for now (#73).
 
 ### Changed
 - **A new Prints page**: the prints on the left (search, filters, printer

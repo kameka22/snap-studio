@@ -68,21 +68,23 @@ Work plans in progress and ideas for later: [`docs/plans/`](plans/).
 ## Languages
 
 English is the reference language; French is a complete translation, and
-German, Spanish, Brazilian Portuguese and Italian follow. Texts live in
-`ui/i18n/<lang>.json`, shared by the interface and Rust (menus, messages). A
-key missing from a catalog falls back to English. The window starts with the
+German, Spanish, Brazilian Portuguese, Italian, Japanese, Simplified Chinese
+and Korean follow. Texts live in `ui/i18n/<lang>.json`, shared by the
+interface and Rust (menus, messages). A key missing from a catalog falls back
+to English. The window starts with the
 English catalog and the current one; another language's catalog is fetched
 when it is chosen in Settings. To add a language:
 
 1. copy `ui/i18n/en.json` to `ui/i18n/<code>.json` and translate it (keep the
    `{placeholders}`, the HTML tags and the plural forms);
 2. add one entry to `LANGS` in `src-tauri/src/i18n.rs` (code, name in its own
-   language and in English, BCP 47 locale for dates and numbers, whether zero
-   counts as singular, catalog): the only list to keep; the interface reads
+   language and in English, BCP 47 locale for dates and numbers, plural rule:
+   `One`, `ZeroOne` or `Never`, catalog): the only list to keep; the interface reads
    it, `from_locale` maps the system language to it, the AI is told to reply
    in that language;
 3. add it to `LANGS` in `scripts/gen-orca-settings.py` and run the script
-   again (Orca's tabs, from OrcaSlicer's `.po` files), then to
+   again (Orca's tabs, from OrcaSlicer's `.po` files; `PO_DIRS` when Orca's
+   folder has another name, like `zh_CN`), then to
    `CFBundleLocalizations` in `src-tauri/Info.plist` with a
    `src-tauri/locales/<code>.lproj` listed in `tauri.conf.json`;
 4. `python3 scripts/check-i18n.py` reports missing or unused keys, broken
@@ -97,7 +99,7 @@ To add or change keys, `scripts/i18n_add.py` edits the catalogs in place
 
 ```
 ui/               HTML/CSS/JS interface, one file per view (no build step)
-  i18n/           interface texts, one file per language (en, fr, de, es, pt-BR, it)
+  i18n/           interface texts, one file per language (en, fr, de, es, pt-BR, it, ja, zh-Hans, ko)
   speed.js spoolcheck.js pfiles-logic.js ia-list.js ia-trace.js scheme.js
                   pure logic (Speed adjustment, spool check, printer files,
                   AI list, terminal view, protocol URLs), tested by

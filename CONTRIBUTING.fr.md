@@ -51,11 +51,12 @@ et les idées à discuter, il y a les [Discussions](https://github.com/kameka22/
 ## Traduire Snap Studio
 
 L'anglais est la référence ; le français, l'allemand, l'espagnol, le
-portugais du Brésil et l'italien sont des traductions. Chaque langue est un
-fichier, `ui/i18n/<langue>.json`, avec les mêmes clés que `ui/i18n/en.json` ;
-une clé manquante s'affiche en anglais. Gardez les `{paramètres}`, les balises
-HTML et les formes du pluriel (`one`, `other`…), et les mots de la communauté
-des trancheurs (les traductions d'OrcaSlicer sont un bon guide). Avant une
+portugais du Brésil, l'italien, le japonais, le chinois simplifié et le
+coréen sont des traductions. Chaque langue est un fichier,
+`ui/i18n/<langue>.json`, avec les mêmes clés que `ui/i18n/en.json` ; une clé
+manquante s'affiche en anglais. Gardez les `{paramètres}`, les balises HTML et
+les formes du pluriel (`one`, `other`… ; le japonais, le chinois et le coréen
+n'ont que `other`), et les mots de la communauté des trancheurs (les traductions d'OrcaSlicer sont un bon guide). Avant une
 pull request, lancez `python3 scripts/check-i18n.py` : il vérifie tous les
 catalogues et indique où en est chacun. Une relecture dans
 [Weblate](https://weblate.org/) est prévue ; d'ici là, une pull request sur

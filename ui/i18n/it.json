@@ -760,8 +760,7 @@
   "send.add_queue": "Aggiungi alla coda",
   "send.querying": "Interrogazione della stampante…",
   "send.no_answer": "{name} non risponde: la stampa può attendere in coda.",
-  "send.ends_at": "dovrebbe finire verso le {time}",
-  "send.busy": "{name} sta stampando “{job}”{end}.",
+  "send.busy": "{name} sta stampando “{job}”.",
   "send.missing": "La testina {heads} non ha bobina su {name}.",
   "send.ready": "{name} è pronta.",
   "send.queueing": "Aggiunta alla coda…",
@@ -2470,5 +2469,7 @@
     "one": "{n} strato",
     "other": "{n} strati"
   },
-  "settings.lang_failed": "Impossibile caricare questa lingua: l'interfaccia resta com'era."
+  "settings.lang_failed": "Impossibile caricare questa lingua: l'interfaccia resta com'era.",
+  "send.busy_until": "{name} sta stampando “{job}”, dovrebbe finire verso le {time}.",
+  "prepare.colour.change_virtual": "Stampato con la testina virtuale {name} · fai clic per cambiare"
 }

@@ -760,8 +760,7 @@
   "send.add_queue": "Zur Warteschlange hinzufügen",
   "send.querying": "Drucker wird abgefragt …",
   "send.no_answer": "{name} antwortet nicht: Der Druck kann in der Warteschlange warten.",
-  "send.ends_at": "voraussichtliches Ende gegen {time}",
-  "send.busy": "{name} druckt „{job}“{end}.",
+  "send.busy": "{name} druckt „{job}“.",
   "send.missing": "Druckkopf {heads} hat keine Spule auf {name}.",
   "send.ready": "{name} ist bereit.",
   "send.queueing": "Wird zur Warteschlange hinzugefügt …",
@@ -2470,5 +2469,7 @@
     "one": "{n} Schicht",
     "other": "{n} Schichten"
   },
-  "settings.lang_failed": "Diese Sprache konnte nicht geladen werden: Die Oberfläche bleibt unverändert."
+  "settings.lang_failed": "Diese Sprache konnte nicht geladen werden: Die Oberfläche bleibt unverändert.",
+  "send.busy_until": "{name} druckt „{job}“, voraussichtliches Ende gegen {time}.",
+  "prepare.colour.change_virtual": "Gedruckt mit virtuellem Druckkopf {name} · klicken zum Ändern"
 }

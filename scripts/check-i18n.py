@@ -8,7 +8,8 @@ Reports, and exits non-zero on:
   ui/i18n/en.json;
 - keys of en.json missing from fr.json (kept complete by hand), keys of
   another catalog unknown to en.json;
-- placeholders ({name}), HTML tags or plural forms that differ from English;
+- placeholders ({name}), HTML tags or plural forms that differ from English
+  (Japanese, Chinese and Korean have one form only, `other`);
 - keys no code uses (keys built at run time are listed in DYNAMIC);
 - French left in the UI code outside the catalogs.
 
@@ -60,6 +61,12 @@ def used_keys():
 
 # Catalogs that must hold every key of en.json.
 COMPLETE = {"en", "fr"}
+
+# Languages without a singular (Intl.PluralRules gives `other` for every
+# count): a `one` form there would never show. Read from LANGS in
+# src-tauri/src/i18n.rs (`plural: Plural::Never`), the one list of languages.
+OTHER_ONLY = set(re.findall(r'code:\s*"([\w-]+)"[^}]*plural:\s*Plural::Never', (SRC / "i18n.rs").read_text()))
+assert OTHER_ONLY, "no Plural::Never language found in src-tauri/src/i18n.rs"
 
 TAG = re.compile(r"</?([a-z][a-z0-9]*)\b", re.I)
 
@@ -120,6 +127,11 @@ def main():
             f"plural without an 'other' form in {lang}.json",
             {k for k, v in cat.items() if isinstance(v, dict) and "other" not in v},
         )
+        if lang in OTHER_ONLY:
+            report(
+                f"plural with a form other than 'other' in {lang}.json",
+                {k for k, v in cat.items() if isinstance(v, dict) and set(v) != {"other"}},
+            )
     report("unused keys", {k for k in en if k not in used and not k.startswith(DYNAMIC)})
 
     residue = []

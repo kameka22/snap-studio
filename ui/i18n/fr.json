@@ -760,8 +760,7 @@
   "send.add_queue": "Ajouter à la file d'attente",
   "send.querying": "Interrogation de l'imprimante…",
   "send.no_answer": "{name} ne répond pas : l'impression peut attendre dans la file.",
-  "send.ends_at": "fin prévue vers {time}",
-  "send.busy": "{name} imprime « {job} »{end}.",
+  "send.busy": "{name} imprime « {job} ».",
   "send.missing": "Tête {heads} sans bobine sur {name}.",
   "send.ready": "{name} est prête.",
   "send.queueing": "Ajout à la file d'attente…",
@@ -2428,5 +2427,7 @@
   "prints.det.finished": "Terminée",
   "prints.det.first_layer_short": "1re couche {t}",
   "prints.det.layers_n": {"one": "{n} couche", "other": "{n} couches"},
-  "settings.lang_failed": "Cette langue n'a pas pu être chargée : l'interface reste telle quelle."
+  "settings.lang_failed": "Cette langue n'a pas pu être chargée : l'interface reste telle quelle.",
+  "send.busy_until": "{name} imprime « {job} », fin prévue vers {time}.",
+  "prepare.colour.change_virtual": "Imprimé avec la tête virtuelle {name} · cliquer pour changer"
 }

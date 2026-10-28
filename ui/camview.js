@@ -8,6 +8,8 @@ const CV = window.__CAM__ || { id: "", name: "", texts: {} };
 const $ = (id) => document.getElementById(id);
 const act = (what) => window.__TAURI__.core.invoke("cam_view_action", { what }).catch(() => {});
 
+// The interface's language: its fonts and line breaking (camview.html).
+if (CV.lang) document.documentElement.lang = CV.lang;
 $("name").textContent = CV.name || "";
 for (const [id, key] of [["unpin", "unpin"], ["close", "close"]]) {
   $(id).title = CV.texts[key] || "";

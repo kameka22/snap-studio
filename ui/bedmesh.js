@@ -150,13 +150,13 @@ const bmSigned = (v, n = 3) => {
 function bmWhen(at) {
   const d = new Date(at * 1000);
   const year = d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {};
-  return d.toLocaleString(document.documentElement.lang || undefined, { day: "numeric", month: "short", ...year, hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(locale(), { day: "numeric", month: "short", ...year, hour: "2-digit", minute: "2-digit" });
 }
 /* "15 Oct"; another year: "15 Oct 2025". */
 function bmDay(at) {
   const d = new Date(at * 1000);
   const year = d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {};
-  return d.toLocaleDateString(document.documentElement.lang || undefined, { day: "numeric", month: "short", ...year });
+  return d.toLocaleDateString(locale(), { day: "numeric", month: "short", ...year });
 }
 const bmPrinter = (pid) => P.list.find((x) => x.id === pid);
 const bmPrinting = (pid) => ["printing", "paused"].includes(P.status.get(pid)?.state) || ["printing", "paused"].includes(BM.live.get(pid)?.state);
