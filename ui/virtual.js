@@ -179,6 +179,8 @@ function vsRender() {
   const dup = vhDuplicate(headsVirtual(pid), vsMix(), VS.uid);
   const block = bond === false ? tr("heads.virtual.no_bond", { ka, kb }) : dup ? tr("heads.virtual.same", { name: vhName(headsVirtual(pid), vhValue(dup.uid)) }) : "";
   const hint = !block && bond && spMaterialFamily(ka) === spMaterialFamily(kb) && ka.trim().toUpperCase() !== kb.trim().toUpperCase() ? tr("heads.virtual.finish", { ka, kb }) : "";
+  // Far apart in light: the print darker and more striped than the swatch.
+  $("vh-contrast").classList.toggle("hidden", !vhContrastWarn(ca, cb));
   $("vh-warn").textContent = block || hint;
   $("vh-warn").classList.toggle("hidden", !(block || hint));
   $("vh-warn").classList.toggle("bad", !!block);

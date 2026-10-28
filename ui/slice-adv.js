@@ -462,9 +462,19 @@ function advRenderPanel() {
       return `<div class="set-section">${esc(tr(g.t))}</div><div class="group">${rows}</div>`;
     })
     .join("");
+  // Smooth mix, with a virtual head on the plate: the plate's switch, not
+  // a profile's setting.
+  const smooth =
+    ADV.cat === "mm" && slMixes()
+      ? `<div class="group sl-mix"><div class="grow-row adv-row">
+          <span class="k"><label for="s-smooth-mix">${esc(tr("slice.mix.smooth"))}</label><small class="sl-mix-hint">${esc(tr("slice.mix.smooth_hint"))}</small></span>
+          <input type="checkbox" id="s-smooth-mix" class="sw" role="switch"${vhSmoothOn(PR) ? " checked" : ""}${SL.job ? " disabled" : ""} />
+        </div></div>`
+      : "";
   // A head popover opened on a field about to be redrawn goes with it.
   if (PK.grid && $("s-adv-body").contains(PK.anchor)) closePicker();
-  $("s-adv-body").innerHTML = (note ? `<div class="sl-adv-note">${esc(note)}</div>` : "") + groups;
+  // Smooth mix first: the note above the groups is about the tower.
+  $("s-adv-body").innerHTML = smooth + (note ? `<div class="sl-adv-note">${esc(note)}</div>` : "") + groups;
   advEnhance();
   steppersIn($("s-adv-body"));
 }
@@ -680,6 +690,7 @@ function advForgetHeads() {
 }
 
 $("s-adv-body").addEventListener("change", (e) => {
+  if (e.target.id === "s-smooth-mix") return prSetSmoothMix(e.target.checked);
   const el = e.target.closest("[data-k]");
   if (!el) return;
   const k = el.dataset.k;

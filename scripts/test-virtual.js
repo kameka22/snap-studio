@@ -96,4 +96,30 @@ assert.strictEqual(V.vhMixLinear("#0000ff", "#ffff00", 0), "#0000ff");
 assert.strictEqual(V.vhMixLinear("#0000ff", "#ffff00", 1), "#ffff00");
 assert.match(V.vhMixLinear("#002185", "#fcd300", 0.5), /^#[0-9a-f]{6}$/);
 
+// Contrast: relative luminance apart (WCAG), from 0.5 on a warning.
+assert.strictEqual(V.VH_CONTRAST_WARN, 0.5);
+assert.strictEqual(V.vhContrast("#000000", "#ffffff"), 1, "black and white: the most");
+assert.strictEqual(V.vhContrastWarn("#ffffff", "#000000"), true);
+assert.strictEqual(V.vhContrastWarn("#FFFFFF", "#d3d3d3"), false, "white and light gray mix well");
+assert.strictEqual(V.vhContrast("#3a6ea5", "#3a6ea5"), 0, "the same color");
+assert.strictEqual(V.vhContrastWarn("#3a6ea5", "#3a6ea5"), false);
+assert.ok(V.vhContrast("#ff0000", "#ffff00") > 0.5 && V.vhContrastWarn("#ff0000", "#ffff00"), "red and yellow: far apart in light");
+assert.ok(!V.vhContrastWarn("#00aeef", "#e4007c"), "cyan and magenta: close enough");
+for (const bad of ["", null, undefined, "#fff", "#12345g", "rgb(0,0,0)"]) {
+  assert.strictEqual(V.vhContrast(bad, "#000000"), null, String(bad));
+  assert.strictEqual(V.vhContrastWarn("#ffffff", bad), false, "a color not read never warns: " + bad);
+}
+
+// Smooth mix: the plate's switch, on unless it says otherwise; it matters
+// only with a virtual head on the plate.
+assert.strictEqual(V.vhSmoothOn(null), true, "a new plate");
+assert.strictEqual(V.vhSmoothOn({}), true, "an older plate, saved before");
+assert.strictEqual(V.vhSmoothOn({ smoothMix: true }), true);
+assert.strictEqual(V.vhSmoothOn({ smoothMix: false }), false);
+assert.strictEqual(V.vhSmoothOn(JSON.parse(JSON.stringify({ smoothMix: V.vhSmoothOn({ smoothMix: false }) }))), false, "saved and read back");
+assert.strictEqual(V.vhUsesVirtual(new Set([0, 2]), list), false, "physical heads only");
+assert.strictEqual(V.vhUsesVirtual(new Set([0, 103]), list), true);
+assert.strictEqual(V.vhUsesVirtual(new Set([104]), list), false, "an orphan is no virtual head");
+assert.strictEqual(V.vhUsesVirtual(null, list), false);
+
 console.log("virtual: ok");

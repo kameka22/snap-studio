@@ -113,6 +113,31 @@ function vhEngine(values, list, n) {
   return { heads, index: (h) => (vhIs(h) ? at.get(+h) ?? null : +h) };
 }
 
+/* Two spools far apart in light: with opaque filaments a dark layer hides
+   the light one under it, so the print looks darker and more striped than
+   the swatch. The difference of the colors' relative luminance (WCAG, from
+   sRGB `#rrggbb`), 0 to 1 (black and white: 1); null for a color not read.
+   The sheet warns from VH_CONTRAST_WARN on, never blocking. */
+const VH_CONTRAST_WARN = 0.5;
+function vhLuminance(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const lin = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+}
+function vhContrast(a, b) {
+  const la = vhLuminance(a), lb = vhLuminance(b);
+  return la == null || lb == null ? null : Math.abs(la - lb);
+}
+const vhContrastWarn = (a, b) => (vhContrast(a, b) ?? 0) >= VH_CONTRAST_WARN;
+
+/* Smooth mix (each layer of a virtual head split between its two heads)
+   is a plate's switch, on unless the plate says otherwise; it matters only
+   when the plate prints with a virtual head (`values`: its head values). */
+const vhSmoothOn = (plate) => plate?.smoothMix !== false;
+const vhUsesVirtual = (values, list) => [...(values || [])].some((h) => !!vhFind(list, h));
+
 /* A color mixed in linear light: the swatch's stand-in until the engine's
    mixer (mix_colors) answers. */
 function vhMixLinear(a, b, t) {
@@ -130,5 +155,5 @@ function vhMixLinear(a, b, t) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { VH_BASE, VH_MAX, VH_PCTS, vhIs, vhUid, vhValue, vhFind, vhOrphan, vhName, vhPct, vhNotch, vhCadence, vhShare, vhRatio, vhPhysical, vhDuplicate, vhCanAdd, vhLoaded, vhUnloaded, vhEngine, vhMixLinear };
+  module.exports = { VH_BASE, VH_MAX, VH_PCTS, VH_CONTRAST_WARN, vhLuminance, vhContrast, vhContrastWarn, vhSmoothOn, vhUsesVirtual, vhIs, vhUid, vhValue, vhFind, vhOrphan, vhName, vhPct, vhNotch, vhCadence, vhShare, vhRatio, vhPhysical, vhDuplicate, vhCanAdd, vhLoaded, vhUnloaded, vhEngine, vhMixLinear };
 }

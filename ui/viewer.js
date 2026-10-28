@@ -137,17 +137,23 @@ out vec4 frag;
 void main() { frag = vec4(vCol, uAlpha); }`;
 
 /* Extrusions as ribbons: each segment (one instance) becomes a quad facing
-   the screen, at the real extrusion width, shaded like a cylinder — light in
-   the middle, dark at the edges. The lines' position and color buffers are
-   used as is (no copy). */
+   the camera, shaded like a cylinder — light in the middle, dark at the
+   edges. Its size is the extrusion's cross-section, as Snapmaker Orca draws
+   it: an ellipse `w` wide and `h` high (the layer's or sub-layer's height),
+   its top at the segment's Z. The quad spans that ellipse's outline as seen
+   from the eye, so a line seen from the side is as tall as its layer, never
+   as tall as it is wide: the alternating layers of a virtual head show as
+   thin bands, not overlapping strips. One pixel wide at least. The lines'
+   position and color buffers are used as is (no copy). */
 const RIB_VS = `#version 300 es
 in vec3 aA;
 in vec3 aB;
 in vec3 aCol;
 in float aW;
+in float aH;
 uniform mat4 uMVP;
 uniform vec2 uViewport;
-uniform float uPxPerMm;
+uniform vec3 uEye;
 out vec3 vCol;
 out float vSide;
 void main() {
@@ -155,18 +161,36 @@ void main() {
   int id = gl_VertexID;
   float t = (id == 1 || id == 2 || id == 4) ? 1.0 : 0.0;
   float s = (id == 2 || id == 4 || id == 5) ? 1.0 : -1.0;
-  vec4 pa = uMVP * vec4(aA, 1.0);
-  vec4 pb = uMVP * vec4(aB, 1.0);
-  vec2 sa = pa.xy / pa.w * uViewport, sb = pb.xy / pb.w * uViewport;
-  vec2 dir = sb - sa;
-  dir = length(dir) > 1e-4 ? normalize(dir) : vec2(1.0, 0.0);
-  vec2 nrm = vec2(-dir.y, dir.x);
-  vec4 p = mix(pa, pb, t);
-  // Half-width in pixels at this depth; one pixel at least.
-  float hw = max(0.5, 0.5 * aW * uPxPerMm / p.w);
-  // Ends stick out by a half-width: joints overlap.
-  vec2 off = nrm * s * hw + dir * (t * 2.0 - 1.0) * hw;
-  p.xy += off / uViewport * p.w;
+  vec3 seg = aB - aA;
+  float len = length(seg);
+  vec3 d = len > 1e-6 ? seg / len : vec3(1.0, 0.0, 0.0);
+  // The cross-section's axes: n across (horizontal), u up.
+  vec3 n = cross(d, vec3(0.0, 0.0, 1.0));
+  n = length(n) > 1e-4 ? normalize(n) : vec3(1.0, 0.0, 0.0);
+  vec3 u = cross(n, d);
+  float hw = 0.5 * aW;
+  // A height not known: as tall as wide (the round line of before).
+  float hh = 0.5 * (aH > 0.0 ? aH : aW);
+  // Its top at the segment's Z, its ends past the segment by a half-width
+  // along it (joints overlap).
+  vec3 c = mix(aA, aB, t) - u * hh + d * (t * 2.0 - 1.0) * hw;
+  // The ellipse's outline seen from the eye: the point of the ellipse
+  // furthest along e, across the line and the view.
+  vec3 e = cross(d, uEye - c);
+  e = length(e) > 1e-6 ? normalize(e) : n;
+  float en = dot(e, n), eu = dot(e, u);
+  vec3 off = (hw * hw * en * n + hh * hh * eu * u) / max(1e-6, sqrt(hw * hw * en * en + hh * hh * eu * eu));
+  vec4 pc = uMVP * vec4(c, 1.0);
+  vec4 p = uMVP * vec4(c + off * s, 1.0);
+  // One pixel wide at least: a line far away does not vanish.
+  vec2 px = (p.xy / p.w - pc.xy / pc.w) * uViewport;
+  if (length(px) < 0.5) {
+    vec4 pa = uMVP * vec4(aA, 1.0), pb = uMVP * vec4(aB, 1.0);
+    vec2 dir = pb.xy / pb.w - pa.xy / pa.w;
+    dir = length(dir) > 1e-6 ? normalize(dir * uViewport) : vec2(1.0, 0.0);
+    vec2 side = length(px) > 1e-4 ? normalize(px) : vec2(-dir.y, dir.x) * s;
+    p = vec4((pc.xy / pc.w + side * 0.5 / uViewport) * p.w, p.z, p.w);
+  }
   gl_Position = p;
   vCol = aCol;
   vSide = s;
@@ -187,6 +211,8 @@ void main() {
 const RIBBON_MAX = 2_500_000;
 /* Width assumed when the G-code does not say (mm). */
 const DEFAULT_WIDTH = 0.42;
+/* The encoded heights' step (mm, gcode.rs HEIGHT_STEP). */
+const HEIGHT_STEP = 0.005;
 
 /* Feature keys and colors, the same as the thumbnails computed in Rust. */
 const FEATURES = [
@@ -289,12 +315,14 @@ function decodeGcode(buf) {
   const max = [dv.getFloat32(28, true), dv.getFloat32(32, true), dv.getFloat32(36, true)];
   const pos = new Float32Array(buf, 40, n * 6);
   const attrs = new Uint8Array(buf, 40 + n * 24, n * 4);
-  // Version 2: width per segment, then filament colors.
+  // Version 2: width per segment, then filament colors; version 3: the
+  // height per segment between them (steps of 0.005 mm, gcode.rs).
   const version = dv.getUint8(4);
   const widths = version >= 2 ? new Uint8Array(buf, 40 + n * 28, n) : null;
+  const heights = version >= 3 ? new Uint8Array(buf, 40 + n * 29, n) : null;
   const fileColors = [];
   if (version >= 2) {
-    let o = 40 + n * 29;
+    let o = 40 + n * (heights ? 30 : 29);
     const k = dv.getUint8(o++);
     for (let i = 0; i < k; i++, o += 4) {
       fileColors.push(dv.getUint8(o) ? [dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3)] : null);
@@ -311,6 +339,8 @@ function decodeGcode(buf) {
       feat: new Uint8Array(count.e),
       tool: new Uint8Array(count.e),
       width: new Float32Array(count.e),
+      // 0: not known (the shader draws the line round).
+      height: new Float32Array(count.e),
       ends: new Int32Array(layers + 1),
     },
     t: { pos: new Float32Array(count.t * 6), col: new Float32Array(count.t * 6), ends: new Int32Array(layers + 1) },
@@ -330,6 +360,7 @@ function decodeGcode(buf) {
       out.e.feat[k] = Math.min(feat, FEATURES.length - 1);
       out.e.tool[k] = attrs[i * 4 + 3] >> 4;
       out.e.width[k] = widths && widths[i] ? widths[i] / 100 : DEFAULT_WIDTH;
+      out.e.height[k] = heights ? heights[i] * HEIGHT_STEP : 0;
     }
     const c = travel ? [96, 104, 126] : FEATURES[Math.min(feat, FEATURES.length - 1)][1];
     for (let v = 0; v < 2; v++) {
@@ -444,7 +475,7 @@ function buildPathBuffers(gl, prog, part) {
 }
 
 /* Ribbons: one instance per segment, read from the line buffers (positions
-   a then b, color of the first vertex), plus the width. */
+   a then b, color of the first vertex), plus the width and the height. */
 function buildRibbons(gl, prog, part, lines) {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -468,8 +499,15 @@ function buildRibbons(gl, prog, part, lines) {
   gl.enableVertexAttribArray(aW);
   gl.vertexAttribPointer(aW, 1, gl.FLOAT, false, 0, 0);
   gl.vertexAttribDivisor(aW, 1);
+  const hb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, hb);
+  gl.bufferData(gl.ARRAY_BUFFER, part.height, gl.STATIC_DRAW);
+  const aH = gl.getAttribLocation(prog, "aH");
+  gl.enableVertexAttribArray(aH);
+  gl.vertexAttribPointer(aH, 1, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(aH, 1);
   gl.bindVertexArray(null);
-  return { vao, widthBuf: wb };
+  return { vao, widthBuf: wb, heightBuf: hb };
 }
 
 function buildPaths(gl, data) {
@@ -883,9 +921,9 @@ function draw() {
       const r = p.ribbons;
       gl.useProgram(r.prog);
       gl.uniformMatrix4fv(gl.getUniformLocation(r.prog, "uMVP"), false, mvp);
-      // Pixels per normalized screen unit, and per millimeter at distance 1.
+      // Pixels per normalized screen unit, and the eye: the lines' outline.
       gl.uniform2f(gl.getUniformLocation(r.prog, "uViewport"), w / 2, h / 2);
-      gl.uniform1f(gl.getUniformLocation(r.prog, "uPxPerMm"), proj[5] * h / 2);
+      gl.uniform3fv(gl.getUniformLocation(r.prog, "uEye"), eye);
       gl.bindVertexArray(r.vao);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, p.extr.ends[upto]);
     } else {
@@ -942,6 +980,7 @@ function disposeScene() {
     if (p.ribbons) {
       gl.deleteVertexArray(p.ribbons.vao);
       gl.deleteBuffer(p.ribbons.widthBuf);
+      gl.deleteBuffer(p.ribbons.heightBuf);
       gl.deleteProgram(p.ribbons.prog);
     }
     gl.deleteProgram(p.prog);

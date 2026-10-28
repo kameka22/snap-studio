@@ -112,4 +112,39 @@ assert.strictEqual(A.sliceLevelValid(null) || A.sliceLevelValid("full"), false);
   assert.ok(b.classes.has("info"));
 }
 
+// Smooth mix in the Multi-material panel (advRenderPanel, run as written
+// with stand-ins): shown only with a virtual head on the plate, on by
+// default, off once the plate says so; the toggle goes to the plate.
+{
+  const V = require("../ui/virtual-logic.js");
+  const body = src.slice(src.indexOf("function advRenderPanel()"), src.indexOf("\n}\n", src.indexOf("function advRenderPanel()")) + 3);
+  const panel = ({ cat = "mm", mixes, plate }) => {
+    const el = {};
+    const $ = (id) => (el[id] ||= { textContent: "", innerHTML: "", classList: { toggle() {} }, contains: () => false });
+    const ctx = {
+      $, ADV: { cat }, SL: {}, PK: {}, PR: plate, ADV_WHEN: {}, esc: (x) => String(x), tr: (k) => k,
+      ADV_CATS: { mm: { title: "mm", groups: [] }, support: { title: "support", groups: [] } },
+      advCountOf: () => 0, slLevel: () => "basic", advLevelShows: () => true, advField: () => "", prPillarsShown: () => false,
+      slMixes: () => mixes, vhSmoothOn: V.vhSmoothOn, closePicker() {}, advEnhance() {}, steppersIn() {},
+      spdRenderPanel() {}, advOn: () => true,
+    };
+    ctx.$("s-supports").checked = true;
+    ctx.$("s-brim").checked = true;
+    vm.runInNewContext(body + ";advRenderPanel();", ctx);
+    return ctx.$("s-adv-body").innerHTML;
+  };
+  assert.ok(!panel({ mixes: false, plate: {} }).includes("s-smooth-mix"), "no virtual head: no toggle");
+  assert.ok(!panel({ cat: "support", mixes: true, plate: {} }).includes("s-smooth-mix"), "another panel: no toggle");
+  let html = panel({ mixes: true, plate: {} });
+  assert.ok(html.includes('id="s-smooth-mix"') && html.includes("slice.mix.smooth") && html.includes("slice.mix.smooth_hint"));
+  assert.ok(/id="s-smooth-mix"[^>]* checked/.test(html), "on by default");
+  html = panel({ mixes: true, plate: { smoothMix: false } });
+  assert.ok(!/id="s-smooth-mix"[^>]* checked/.test(html), "off when the plate says so");
+  const handler = src.slice(src.indexOf('$("s-adv-body").addEventListener("change"'), src.indexOf("advSet(k, v);", src.indexOf('$("s-adv-body").addEventListener("change"')));
+  assert.ok(handler.includes('e.target.id === "s-smooth-mix") return prSetSmoothMix(e.target.checked)'), "the toggle goes to the plate");
+  // The request carries the plate's switch (slice.js).
+  const slice = fs.readFileSync(require("path").join(__dirname, "../ui/slice.js"), "utf8");
+  assert.ok(slice.includes("...(virtual_heads.length && vhSmoothOn(PR) ? { smooth_mix: true } : {})"), "smooth_mix in the request, with virtual heads only");
+}
+
 console.log("adv: ok");

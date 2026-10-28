@@ -47,6 +47,21 @@ pub struct Seg {
     pub travel: bool,
     /// Extrusion width in hundredths of a mm (`;WIDTH:`), 0 if unknown.
     pub width: u8,
+    /// Extrusion height (layer or sub-layer) in steps of 0.005 mm
+    /// (`;HEIGHT:`, else the Z step), 0 if unknown.
+    pub height: u8,
+}
+
+/// The step of `Seg::height`, mm: fine enough for 0.04 mm sub-layers.
+pub const HEIGHT_STEP: f32 = 0.005;
+
+/// A height in mm as `Seg::height` keeps it.
+fn height_steps(h: f32) -> u8 {
+    if h > 0.0 {
+        (h / HEIGHT_STEP).round().clamp(1.0, 255.0) as u8
+    } else {
+        0
+    }
 }
 
 #[derive(Default, Clone, serde::Serialize)]
@@ -208,6 +223,10 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     let mut feature: u8 = 0;
     let mut tool: u8 = 0;
     let mut width: u8 = 0;
+    // `;HEIGHT:` as written, and the step between the `;Z:` of two layers
+    // when the slicer does not write it.
+    let mut height: u8 = 0;
+    let (mut z_step, mut layer_z) = (0u8, None::<f32>);
     let mut seen_layer_marker = false;
     let mut last_z = f32::MIN;
     let mut truncated = false;
@@ -244,6 +263,18 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
             } else if rl.starts_with("width:") {
                 // Orca, PrusaSlicer: `;WIDTH:0.42`, width of the extrusions that follow.
                 width = r[6..].trim().parse::<f32>().map(|w| (w * 100.0).round().clamp(0.0, 255.0) as u8).unwrap_or(0);
+            } else if rl.starts_with("height:") {
+                // Orca, PrusaSlicer: `;HEIGHT:0.08`, height of the extrusions
+                // that follow (a sub-layer's own, with subdivided mixing).
+                height = r[7..].trim().parse::<f32>().map(height_steps).unwrap_or(0);
+            } else if rl.starts_with("z:") {
+                // `;Z:3.40` at each layer: the step from the previous one.
+                if let Ok(v) = r[2..].trim().parse::<f32>() {
+                    if let Some(prev) = layer_z.filter(|p| v > *p) {
+                        z_step = height_steps(v - prev);
+                    }
+                    layer_z = Some(v);
+                }
             } else if rl == "layer_change" {
                 layer = layer.saturating_add(1);
                 seen_layer_marker = true;
@@ -447,6 +478,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                     tool,
                     travel: de <= 0.0,
                     width,
+                    height: if height > 0 { height } else { z_step },
                 });
             }
             _ => {}
@@ -619,7 +651,8 @@ pub fn tower_box(d: &GcodeData, at: [f32; 2], angle: f32) -> Option<TowerBox> {
 /// `"3MFG"` | version u8 | flags u8 (bit 0: truncated) | reserved u8×2 |
 /// segment count u32 | layer count u32 | min f32×3 | max f32×3 |
 /// positions (6 f32 per segment) | attributes (layer u16, feature u8,
-/// tool on the 4 high bits + travel on bit 0).
+/// tool on the 4 high bits + travel on bit 0) | widths (u8, 0.01 mm, 0
+/// unknown) | heights (u8, `HEIGHT_STEP`, 0 unknown; version 3) | colors.
 ///
 /// Segments are sorted by layer: the viewer shows layers up to a given rank
 /// with a single draw call.
@@ -628,10 +661,11 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
     order.sort_by_key(|s| (s.layer, s.travel));
     let n = order.len();
 
-    let mut out = Vec::with_capacity(40 + n * 28);
+    let mut out = Vec::with_capacity(40 + n * 30 + 65);
     out.extend_from_slice(b"3MFG");
-    // Version 2: width per segment and filament colors after it.
-    out.push(2);
+    // Version 2: width per segment and filament colors after it; version 3:
+    // the height per segment between them.
+    out.push(3);
     out.push(if data.truncated { 1 } else { 0 });
     out.extend_from_slice(&[0, 0]);
     out.extend_from_slice(&(n as u32).to_le_bytes());
@@ -651,6 +685,11 @@ pub fn encode(data: &GcodeData) -> Vec<u8> {
     }
     for s in &order {
         out.push(s.width);
+    }
+    // A height not written nor stepped: the profile's layer height.
+    let fallback = data.meta.layer_height.map(height_steps).unwrap_or(0);
+    for s in &order {
+        out.push(if s.height > 0 { s.height } else { fallback });
     }
     // Colors: their count, then per head a flag (1 known, 0 unknown) and the
     // three RGB components.
@@ -807,10 +846,11 @@ G1 X30 Y30 F9000
         let n = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
         assert_eq!(n, d.segs.len());
         assert_eq!(u32::from_le_bytes(b[12..16].try_into().unwrap()), 3, "layers 0 to 2");
-        // 40-byte header, positions, attributes, widths, then the colors (their
-        // count, 4 bytes each).
+        // 40-byte header, positions, attributes, widths, heights, then the
+        // colors (their count, 4 bytes each).
         let colors = d.meta.colors.len();
-        assert_eq!(b.len(), 40 + n * 24 + n * 4 + n + 1 + colors * 4);
+        assert_eq!(b[4], 3, "version 3");
+        assert_eq!(b.len(), 40 + n * 24 + n * 4 + n + n + 1 + colors * 4);
         // Layers are increasing in the attribute buffer.
         let base = 40 + n * 24;
         let mut prev = 0u16;
@@ -858,12 +898,39 @@ G1 X30 Y30 F9000
         let w: Vec<u8> = d.segs.iter().filter(|s| !s.travel).map(|s| s.width).collect();
         assert_eq!(w, vec![45, 62]);
         let bin = encode(&d);
-        assert_eq!(bin[4], 2, "version 2");
+        assert_eq!(bin[4], 3, "version 3");
         // End of the buffer: 3 colors × 4 bytes, preceded by their count.
         let tail = &bin[bin.len() - 13..];
         assert_eq!(tail[0], 3);
         assert_eq!(&tail[1..5], &[1, 0xff, 0x88, 0x00]);
         assert_eq!(&tail[9..13], &[0, 0, 0, 0], "unknown color");
+    }
+
+    /// Heights: `;HEIGHT:` per extrusion (sub-layers of 0.04 mm kept
+    /// apart from 0.08 mm layers), else the `;Z:` step, else the profile's
+    /// layer height; encoded after the widths, in 0.005 mm steps.
+    #[test]
+    fn reads_and_encodes_heights() {
+        let g = ";LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\nG1 Z0.2\nG1 X10 Y0 E1\n\
+;LAYER_CHANGE\n;Z:0.28\n;HEIGHT:0.08\nG1 Z0.28\nG1 X10 Y10 E2\n\
+;HEIGHT:0.04\nG1 X0 Y10 E3\n";
+        let d = parse(g.as_bytes()).unwrap();
+        let h: Vec<u8> = d.segs.iter().filter(|s| !s.travel).map(|s| s.height).collect();
+        assert_eq!(h, vec![40, 16, 8], "0.2, 0.08 and 0.04 mm");
+        // No ;HEIGHT: — the Z step between layers.
+        let g = ";LAYER_CHANGE\n;Z:0.2\nG1 Z0.2\nG1 X10 Y0 E1\n;LAYER_CHANGE\n;Z:0.32\nG1 Z0.32\nG1 X10 Y10 E2\n";
+        let d = parse(g.as_bytes()).unwrap();
+        let h: Vec<u8> = d.segs.iter().filter(|s| !s.travel).map(|s| s.height).collect();
+        assert_eq!(h, vec![0, 24], "the first layer unknown, then 0.12 mm");
+        // Neither: the profile's layer height, at encoding.
+        let d = parse("G1 X10 Y0 E1\n; layer_height = 0.16\n".as_bytes()).unwrap();
+        assert_eq!(d.segs[0].height, 0);
+        let b = encode(&d);
+        let n = d.segs.len();
+        let heights = &b[40 + n * 29..40 + n * 30];
+        assert!(heights.iter().all(|&x| x == 32), "{heights:?}");
+        assert_eq!(height_steps(0.0), 0);
+        assert_eq!(height_steps(2.0), 255, "clamped");
     }
 
     #[test]
