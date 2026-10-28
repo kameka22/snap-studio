@@ -46,12 +46,12 @@
 [Fichiers](#-fichiers) · [Préparer](#-préparer) ·
 [Mélange de couleurs](#-mélange-de-couleurs) ·
 [Une tour par matériau](#-une-tour-par-matériau) · [Créer](#-créer) ·
-[Découpe](#️-découpe) · [Vérification des bobines](#-vérification-des-bobines) ·
+[Découpe](#️-découpe) · [Aperçu G-code](#-aperçu-g-code) · [Vérification des bobines](#-vérification-des-bobines) ·
 [Impressions](#-impressions) · [Caméra](#-caméra)<br>
 **Votre imprimante :** [Vue 3D](#-votre-imprimante-en-3d) ·
 [Contrôle](#-contrôle) · [Entretien](#-entretien) · [Nivellement](#-nivellement) ·
-[Fichiers de l'imprimante](#-fichiers-et-timelapses-de-limprimante) · et
-l'[Affichage](#-affichage)
+[Fichiers de l'imprimante](#-fichiers-et-timelapses-de-limprimante) ·
+l'[Affichage](#-affichage) et les [Langues](#-langues)
 
 ### 🧭 Explorer
 
@@ -180,7 +180,7 @@ Le moteur Snapmaker Orca, intégré : inutile d'installer Snapmaker Orca.
 - Qualité, remplissage, parois, surfaces et plus, avec des styles (supports,
   bordure, couture, motifs) choisis en images.
 - Une barre de progression qui suit le travail du moteur, étape par étape.
-- Un aperçu des trajectoires, puis l'envoi à l'imprimante ou un G-code
+- Un [aperçu des trajectoires](#-aperçu-g-code), puis l'envoi à l'imprimante ou un G-code
   enregistré.
 
 <details>
@@ -221,6 +221,21 @@ l'imprimante — avec son image sur l'écran de l'imprimante — ou enregistré 
 G-code.
 
 </details>
+
+<br clear="both">
+
+### 🔍 Aperçu G-code
+
+<img align="left" width="48%" hspace="12" src="docs/screenshots/gcode-preview.png" alt="L'aperçu G-code : les trajectoires, le curseur de couches, la répartition du temps et le filament" />
+
+Ce que l'imprimante va faire, avant qu'elle le fasse.
+
+- Les trajectoires en 3D, par matière, type de trajectoire ou filament ; un
+  curseur pour avancer couche par couche.
+- La durée estimée, sa répartition par type (parois, remplissage, surfaces,
+  déplacements) et le filament par tête, avec son coût.
+- Puis **Envoyer à l'imprimante**, **Enregistrer le G-code** ou retour aux
+  réglages.
 
 <br clear="both">
 
@@ -486,6 +501,20 @@ Tahoe, en verre). Avec les couleurs adaptées au daltonisme, les états ne se
 distinguent jamais par le seul rouge / vert.
 
 </details>
+
+<br clear="both">
+
+### 🌍 Langues
+
+<img align="right" width="48%" hspace="12" src="docs/screenshots/languages.png" alt="Réglages › Application : le choix de la langue avec les neuf langues" />
+
+Réglages → Application : neuf langues, avec leur drapeau et une recherche.
+
+- Français, anglais, allemand, espagnol, portugais du Brésil, italien,
+  japonais, chinois simplifié et coréen.
+- Toute l'interface, les menus et les réglages d'Orca ; les dates et les
+  nombres suivent la langue.
+- Une nouvelle installation démarre dans la langue du système.
 
 <br clear="both">
 

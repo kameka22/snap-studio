@@ -41,11 +41,11 @@
 
 **From file to print:** [Explore](#-explore) · [Files](#-files) ·
 [Prepare](#-prepare) · [Color mixing](#-color-mixing) ·
-[One tower per material](#-one-tower-per-material) · [Create](#-create) · [Slicing](#️-slicing) ·
+[One tower per material](#-one-tower-per-material) · [Create](#-create) · [Slicing](#️-slicing) · [G-code preview](#-g-code-preview) ·
 [Spool check](#-spool-check) · [Prints](#-prints) · [Camera](#-camera)<br>
 **Your printer:** [3D view](#-your-printer-in-3d) · [Control](#-control) ·
 [Care](#-care) · [Bed Leveling](#-bed-leveling) ·
-[Printer files](#-printer-files-and-timelapses) · and the [Display](#-display)
+[Printer files](#-printer-files-and-timelapses) · the [Display](#-display) and [Languages](#-languages)
 
 ### 🧭 Explore
 
@@ -158,7 +158,7 @@ The Snapmaker Orca engine, built in: you do not need Snapmaker Orca installed.
 - Quality, infill, walls, surfaces and more, with styles (supports, brim,
   seam, patterns) chosen from pictures.
 - A progress bar that follows the engine's work, stage by stage.
-- A toolpath preview, then sent to the printer or saved as G-code.
+- A [toolpath preview](#-g-code-preview), then sent to the printer or saved as G-code.
 
 <details>
 <summary>More details</summary>
@@ -194,6 +194,20 @@ Then a toolpath preview with duration, filament and cost, sent to the
 printer — with its picture on the printer's screen — or saved as G-code.
 
 </details>
+
+<br clear="both">
+
+### 🔍 G-code preview
+
+<img align="left" width="48%" hspace="12" src="docs/screenshots/gcode-preview.png" alt="The G-code preview: the toolpaths, the layer slider, the time breakdown and the filament" />
+
+What the printer will do, before it does it.
+
+- The toolpaths in 3D, by material, path type or filament; a slider to go
+  layer by layer.
+- The estimated time, its breakdown by type (walls, infill, surfaces,
+  travel) and the filament per head, with its cost.
+- Then **Send to Printer**, **Save G-code** or back to the settings.
 
 <br clear="both">
 
@@ -438,6 +452,20 @@ color of the spool on T0) and macOS (a Tahoe-style layout in glass). With
 color-blind safe colors, states are never told apart by red and green alone.
 
 </details>
+
+<br clear="both">
+
+### 🌍 Languages
+
+<img align="right" width="48%" hspace="12" src="docs/screenshots/languages.png" alt="Settings › Application: the language picker with the nine languages" />
+
+Settings → Application: nine languages, with their flags and a search.
+
+- English, French, German, Spanish, Brazilian Portuguese, Italian,
+  Japanese, Simplified Chinese and Korean.
+- The whole interface, the menus and Orca's settings; dates and numbers
+  follow the language.
+- A fresh install starts in the system's language.
 
 <br clear="both">
 

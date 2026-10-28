@@ -33,8 +33,8 @@
           "icon": "camera",
           "color": "#ff9f0a",
           "edge": "linear-gradient(90deg, #ff9f0a, #ffd60a)",
-          "image": "../assets/printer-camera.webp",
-          "position": "100% 50%",
+          "image": "../assets/one-camera.webp",
+          "position": "0% 0%",
           "tag": { "en": "Camera", "fr": "Caméra" },
           "chip": {
             "en": "One camera", "fr": "Une seule caméra", "de": "Eine Kamera", "es": "Una sola cámara", "pt-BR": "Uma só câmera",
@@ -45,7 +45,7 @@
             "en": "The printer page, Prints and Control show the same camera, with the same controls. The stream keeps going from one screen to the next.",
             "fr": "La page de l’imprimante, Impressions et Contrôle montrent la même caméra, avec les mêmes commandes. Le flux continue d’un écran à l’autre."
           },
-          "alt": { "en": "The printer’s camera, pinned in a corner", "fr": "La caméra de l’imprimante, épinglée dans un coin" }
+          "alt": { "en": "The live camera in a running print’s record", "fr": "La caméra en direct dans la fiche d’une impression en cours" }
         },
         {
           "id": "languages",
@@ -53,7 +53,7 @@
           "color": "#bf5af2",
           "edge": "linear-gradient(90deg, #bf5af2, #ff375f)",
           "image": "../assets/languages.webp",
-          "position": "50% 50%",
+          "position": "100% 0%",
           "tag": { "en": "Languages", "fr": "Langues" },
           "chip": {
             "en": "9 languages", "fr": "9 langues", "de": "9 Sprachen", "es": "9 idiomas", "pt-BR": "9 idiomas",
@@ -64,7 +64,7 @@
             "en": "German, Spanish, Brazilian Portuguese, Italian, Japanese, Simplified Chinese and Korean join English and French. The app starts in your system’s language.",
             "fr": "Allemand, espagnol, portugais du Brésil, italien, japonais, chinois simplifié et coréen rejoignent l’anglais et le français. L’app démarre dans la langue du système."
           },
-          "alt": { "en": "The nine languages of Snap Studio", "fr": "Les neuf langues de Snap Studio" }
+          "alt": { "en": "The language picker in Settings › Application", "fr": "Le choix de la langue dans Réglages › Application" }
         },
         {
           "id": "eight-libraries",
