@@ -510,7 +510,7 @@ function ctUpdate() {
     // something else than checking the network.
     const name = printerName(pid);
     const said = d.err && !errUnreachable(d.err) ? tr("ctl.read_err", { err: errNoUrl(d.err) }) : name ? tr("printers.no_answer", { name }) : tr("ctl.offline");
-    conn.innerHTML = `<span class="mt-stale-dot"></span><span>${esc(said)}</span><button class="btn small" data-ct-retry>${esc(tr("printers.offline.retry"))}</button>`;
+    conn.innerHTML = offlineLine(said, "data-ct-retry", true);
   }
   root.querySelector(".ct-empty")?.replaceChildren(tr(state === "offline" ? "ctl.offline" : "ctl.reading"));
   // Printing or a U1 procedure: what stays possible is said.

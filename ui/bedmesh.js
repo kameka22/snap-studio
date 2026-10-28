@@ -190,7 +190,10 @@ function bmRender() {
   const shown = bmShownMesh(pid);
   const notices = [];
   if (BM.loading && !live) notices.push(`<div class="mt-stale"><span class="spinner"></span>${esc(tr("bm.reading"))}</div>`);
-  else if (err) notices.push(`<div class="mt-stale"><span class="mt-stale-dot"></span><span>${esc(hist.length ? tr("bm.offline_hist") : tr("bm.offline"))}</span><button class="btn small" data-bm-retry>${esc(tr("printers.offline.retry"))}</button></div>`);
+  else if (err) {
+    const name = printerName(pid);
+    notices.push(offlineLine(hist.length ? tr("bm.offline_hist", { name }) : tr("printers.no_answer", { name }), "data-bm-retry"));
+  }
   if (live && !live.supported) notices.push(`<div class="bm-notice">${esc(tr("bm.unsupported"))}</div>`);
   if (live?.mesh?.partial && !shown?.live) {
     const m = live.mesh;

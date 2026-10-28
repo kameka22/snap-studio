@@ -41,12 +41,13 @@ with its packages for macOS, Windows and Linux. What comes next:
   Python 3.9 before the one installed with Homebrew (and so did Claude). The
   folders users install to now come before the system's. A module that is
   installed but does not import now says why, under the modules' line.
-- A printer that does not answer: Care & Tuning › Control says so in one
-  short line with Retry, as Maintenance does, in place of a long error with
-  the address it tried. The printer page no longer shows the camera, model and
+- A printer that does not answer: Care & Tuning (Control, Care, Bed
+  Leveling) and the printer's Files page say so the same way, in one short
+  line with its name and Retry, in place of a long error with the address it
+  tried or a large card. The printer page no longer shows the camera, model and
   address while the printer is offline, and its Details leave the address out.
-  The printer's Files page shows the same card, and its errors (list,
-  download, delete, rename, share) no longer carry an address. A printer that
+  The printer's Files page's errors (list, download, delete, rename, share)
+  no longer carry an address. A printer that
   answers with an error (Klipper shut down, HTTP 503) says that error rather
   than "does not answer"; a pinned camera stays on its printer's page.
 

@@ -1349,7 +1349,6 @@
   "maint.t.plate.s1": "Retira la bandeja magnética.",
   "maint.t.plate.s2": "Lávala con agua tibia y jabón para platos.",
   "maint.t.plate.s3": "Sécala con un paño sin pelusa, sin tocar la superficie.",
-  "maint.offline_hint": "Enciéndela y comprueba que está en la misma red: sus contadores aparecerán aquí. Lo que registraste sigue abajo.",
   "maint.stale": "{name} no responde · valores leídos el {d}",
   "maint.connecting": "Leyendo los contadores de la impresora…",
   "update.badge": "Hay una nueva versión disponible: instálala",
@@ -1584,7 +1583,6 @@
   "pfiles.err.printing": "Este archivo se está imprimiendo: no se puede cambiar ni eliminar hasta que termine la impresión.",
   "pfiles.err.bad_name": "Este nombre no se puede usar en la impresora.",
   "pfiles.err.no_folder": "No se encuentra la carpeta de destino.",
-  "pfiles.offline.hint": "Comprueba que está encendida y en la misma red, y vuelve a intentarlo.",
   "pfiles.del.title_files": {
     "one": "¿Eliminar {n} archivo de la impresora?",
     "other": "¿Eliminar {n} archivos de la impresora?"
@@ -1843,7 +1841,7 @@
   "bm.measure.go": "Medir",
   "bm.newest": "Última medición",
   "bm.offline": "Impresora inaccesible",
-  "bm.offline_hist": "Impresora inaccesible: se muestra el historial guardado por Snap Studio.",
+  "bm.offline_hist": "{name} no responde · historial guardado por Snap Studio",
   "bm.open": "Abrir",
   "bm.reading": "Leyendo la malla de la cama…",
   "bm.relief": "Relieve ×",
@@ -2473,6 +2471,6 @@
   "prepare.colour.change_virtual": "Impreso con el cabezal virtual {name} · clic para cambiar",
   "pfiles.stale": "{name} no responde: puede que la lista no esté actualizada.",
   "ctl.read_err": "La impresora respondió con un error: {err}",
-  "pfiles.load_err": "No se pudieron leer los archivos de la impresora",
+  "pfiles.load_err": "No se pudieron leer los archivos de la impresora: {err}",
   "pfiles.stale_err": "No se pudo actualizar la lista: {err}"
 }

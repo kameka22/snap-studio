@@ -1346,7 +1346,6 @@
   "maint.t.plate.s1": "Remove the magnetic plate.",
   "maint.t.plate.s2": "Wash it with warm water and dish soap.",
   "maint.t.plate.s3": "Dry with a lint-free cloth, without touching the surface.",
-  "maint.offline_hint": "Switch it on and check that it is on the same network: its counters will show here. What you logged stays below.",
   "maint.stale": "{name} does not answer · values read on {d}",
   "maint.connecting": "Reading the printer's counters…",
   "update.badge": "A new version is available: install it",
@@ -1581,7 +1580,6 @@
   "pfiles.err.printing": "This file is printing: it cannot be changed or deleted until the print ends.",
   "pfiles.err.bad_name": "This name cannot be used on the printer.",
   "pfiles.err.no_folder": "The destination folder cannot be found.",
-  "pfiles.offline.hint": "Check that it is switched on and on the same network, then try again.",
   "pfiles.del.title_files": {
     "one": "Delete {n} file from the printer?",
     "other": "Delete {n} files from the printer?"
@@ -1840,7 +1838,7 @@
   "bm.measure.go": "Measure",
   "bm.newest": "Latest Measurement",
   "bm.offline": "Printer unreachable",
-  "bm.offline_hist": "Printer unreachable: the history stored by Snap Studio is shown.",
+  "bm.offline_hist": "{name} does not answer · history stored by Snap Studio",
   "bm.open": "Open",
   "bm.reading": "Reading the bed mesh…",
   "bm.relief": "Relief ×",
@@ -2428,6 +2426,6 @@
   "prepare.colour.change_virtual": "Printed with virtual head {name} · click to change",
   "pfiles.stale": "{name} does not answer: the list may be out of date.",
   "ctl.read_err": "The printer answered with an error: {err}",
-  "pfiles.load_err": "The printer's files could not be read",
+  "pfiles.load_err": "The printer's files could not be read: {err}",
   "pfiles.stale_err": "The list could not be refreshed: {err}"
 }

@@ -202,6 +202,16 @@ function printerName(id) {
   return p ? p.name || p.host : "";
 }
 
+/* A printer that does not answer (or answers with an error), said the same
+   on each of its screens (Control, Care, Bed Leveling, its Files): one line,
+   with a retry. `retry` is the button's attribute, which the screen
+   listens to; `inner` gives the line's content alone, for a box that is
+   already one (Control's). */
+function offlineLine(text, retry, inner = false) {
+  const body = `<span class="mt-stale-dot"></span><span>${esc(text)}</span><button class="btn small" ${retry}>${esc(tr("printers.offline.retry"))}</button>`;
+  return inner ? body : `<div class="mt-stale" role="status">${body}</div>`;
+}
+
 /* The Camera section while the printer does not answer: hidden, unless a
    pinned stream of this printer shows there (it says the printer does not
    answer, camera.js). */

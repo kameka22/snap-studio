@@ -1309,7 +1309,6 @@
   "maint.t.plate.s1": "取下磁性打印板。",
   "maint.t.plate.s2": "用温水和洗洁精清洗。",
   "maint.t.plate.s3": "用无绒布擦干，不要触碰表面。",
-  "maint.offline_hint": "请开机并检查它是否在同一网络中：计数器会显示在这里。你记录的内容保留在下方。",
   "maint.stale": "{name} 没有响应 · 数值读取于 {d}",
   "maint.connecting": "正在读取打印机计数器…",
   "update.badge": "有新版本可用：立即安装",
@@ -1533,7 +1532,6 @@
   "pfiles.err.printing": "此文件正在打印：打印结束前无法修改或删除。",
   "pfiles.err.bad_name": "此名称不能在打印机上使用。",
   "pfiles.err.no_folder": "找不到目标文件夹。",
-  "pfiles.offline.hint": "请检查它是否已开机并在同一网络中，然后重试。",
   "pfiles.del.title_files": {
     "other": "从打印机删除 {n} 个文件？"
   },
@@ -1777,7 +1775,7 @@
   "bm.measure.go": "测量",
   "bm.newest": "最新测量",
   "bm.offline": "无法连接打印机",
-  "bm.offline_hist": "无法连接打印机：显示 Snap Studio 保存的历史记录。",
+  "bm.offline_hist": "{name} 没有响应 · Snap Studio 保存的历史记录",
   "bm.open": "打开",
   "bm.reading": "正在读取热床网格…",
   "bm.relief": "起伏 ×",
@@ -2393,6 +2391,6 @@
   "prepare.colour.change_virtual": "使用虚拟打印头 {name} 打印 · 点击更改",
   "pfiles.stale": "{name} 没有响应：列表可能不是最新的。",
   "ctl.read_err": "打印机返回了错误：{err}",
-  "pfiles.load_err": "无法读取打印机上的文件",
+  "pfiles.load_err": "无法读取打印机上的文件：{err}",
   "pfiles.stale_err": "无法刷新列表：{err}"
 }

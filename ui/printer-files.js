@@ -51,9 +51,6 @@ const PFL_LAST = {
 const PFL_ICON_FILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M6 2.75h8.25L19 7.5v12.25a1.5 1.5 0 0 1-1.5 1.5h-11.5a1.5 1.5 0 0 1-1.5-1.5V4.25A1.5 1.5 0 0 1 6 2.75z"/><path d="M14 2.75V7.5h5"/><path d="M12 10.5l-3.75 2.1v4.2L12 18.9l3.75-2.1v-4.2zM8.25 12.6 12 14.7l3.75-2.1M12 14.7v4.2"/></svg>';
 const PFL_ICON_FILM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 4.5v15M17 4.5v15M3 8.5h4M3 12h4M3 15.5h4M17 8.5h4M17 12h4M17 15.5h4"/><path d="M10.5 9.75v4.5l3.75-2.25z" fill="currentColor"/></svg>';
 const PFL_PH = { file: PFL_ICON_FILE, film: PFL_ICON_FILM };
-/* The no-connection icon, taken from the printer page's offline card
-   (index.html) rather than copied. */
-const pflNoConnIcon = () => $("prn-offline-ico").outerHTML.replace(/\sid="[^"]*"/, "");
 /* An error said on this page: without the URLs it carries (errNoUrl,
    control-logic.js); the raw one goes to the console. */
 function pflErr(e, what) {
@@ -181,13 +178,10 @@ function pflRender() {
   pflHeader();
   const main = $("pfl-main");
   if (!PFL.data) {
-    // The printer does not answer: the printer page's offline card. It
-    // answered with an error: that error, without its address.
-    const down = errUnreachable(PFL.err);
-    const title = down ? tr("printers.no_answer", { name: printerName(PFL.pid) }) : tr("pfiles.load_err");
-    const hint = down ? tr("pfiles.offline.hint") : errNoUrl(PFL.err);
+    // The printer does not answer, or answered with an error (said without
+    // its address): one line, as on the printer's other screens.
     main.innerHTML = PFL.err
-      ? `<div class="prn-offline pfl-off" role="status">${pflNoConnIcon()}<div class="prn-offline-title">${esc(title)}</div><div class="prn-offline-hint">${esc(hint)}</div><button class="btn" data-act="retry">${esc(tr("common.retry"))}</button></div>`
+      ? offlineLine(errUnreachable(PFL.err) ? tr("printers.no_answer", { name: printerName(PFL.pid) }) : tr("pfiles.load_err", { err: errNoUrl(PFL.err) }), 'data-act="retry"')
       : `<div class="loading"><div class="spinner"></div>${esc(tr("pfiles.loading"))}</div>`;
     pflRenderDetail();
     pflRenderSelbar();
@@ -199,7 +193,7 @@ function pflRender() {
   // A refresh that failed: the list shown is the last one read.
   if (PFL.err) {
     const note = errUnreachable(PFL.err) ? tr("pfiles.stale", { name: printerName(PFL.pid) }) : tr("pfiles.stale_err", { err: errNoUrl(PFL.err) });
-    html += `<div class="pfl-note err">${esc(note)} <button class="btn small" data-act="retry">${esc(tr("common.retry"))}</button></div>`;
+    html += offlineLine(note, 'data-act="retry"');
   }
   if (!all.length) {
     html += PFL.tab === "files"
