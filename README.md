@@ -51,9 +51,10 @@
 
 The Snapmaker ecosystem and the model sites you use, inside the app.
 
-- A home with Snapmaker Space, Store, Wiki, Forum and Account, a few
-  products featured from the Store, and the libraries: MakerWorld,
-  Printables, Thingiverse and Cults3D. Each opens in a tab, sessions kept.
+- A home with Snapmaker Space, Store, Wiki, Forum and Account, and eight
+  model libraries: MakerWorld, Printables, Thingiverse, Cults3D,
+  MyMiniFactory, Thangs, Yeggi and GrabCAD. Each opens in a tab, sessions
+  kept. Explore only shows the sites' own pages: nothing is read from them.
 - No address bar: Back, Forward and Reload float over the page.
 - Pin any site to the sidebar, under Snapmaker Space; Favorites there too.
 - A model downloaded from any tab goes straight to [Prepare](#-prepare);

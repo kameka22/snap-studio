@@ -37,6 +37,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   read while the window is hidden, and the pinned window follows as before.
 - **Settings → About** and the credits also name three.js and the U1 3D
   model of the printer view, made by kameka22 (#75).
+- **Explore: eight model libraries, no Store products**: MyMiniFactory,
+  Thangs, Yeggi and GrabCAD join MakerWorld, Printables, Thingiverse and
+  Cults3D, two rows of four. The block of Store products, read from the
+  shop's catalogue, is gone: the Store stays one click away in the
+  Snapmaker cards, and Explore reads nothing from the sites but their icon.
 
 ### Fixed
 - AI setup on macOS: launched from its icon, the app found macOS's own
