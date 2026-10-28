@@ -37,6 +37,8 @@
 - **Concevoir avec l'IA** — décrivez une modification ou une nouvelle
   pièce ; Claude la modélise, vous la voyez prendre forme en 3D, version
   après version.
+- **En neuf langues** — français, anglais, allemand, espagnol, portugais
+  du Brésil, italien, japonais, chinois simplifié et coréen.
 
 ## Fonctions
 
@@ -53,7 +55,7 @@ l'[Affichage](#-affichage)
 
 ### 🧭 Explorer
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Accueil Explorer : Space, Store, Wiki, Forum, Compte, bibliothèques et coups de cœur Store" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Accueil Explorer : Space, Store, Wiki, Forum, Compte et huit bibliothèques de modèles" />
 
 L'écosystème Snapmaker et les sites de modèles que vous utilisez, dans
 l'app.
@@ -251,13 +253,19 @@ La vérification se désactive dans Réglages → Préparer.
 
 ### ⏱ Impressions
 
-<img align="left" width="48%" hspace="12" src="docs/screenshots/print-job.png" alt="Une impression en cours" />
+<img align="left" width="48%" hspace="12" src="docs/screenshots/print-job.png" alt="La page Impressions : la liste des impressions et la fiche d'une impression" />
 
-Impressions en cours et file d'attente.
+Toutes les impressions, en cours, en attente ou terminées.
 
+- À gauche, les impressions : recherche, filtres, en cours, file d'attente,
+  puis jour par jour.
+- À droite, la fiche : caméra, progression et temps par couche pendant
+  l'impression ; timelapse, résultat et durée réelle contre estimée une
+  fois terminée, avec Réimprimer et Ouvrir dans Préparer.
 - Quand l'une se termine, Snap Studio propose la suivante (jamais seul), sur
   l'imprimante de votre choix.
-- Progression, résumé de découpe, températures, pause, annulation.
+- L'historique est gardé pour toujours, ou 30 jours, 90 jours ou un an
+  (Réglages → Impressions).
 - Avant le lancement, les [bobines sont vérifiées](#-vérification-des-bobines).
 
 <br clear="both">
@@ -266,9 +274,11 @@ Impressions en cours et file d'attente.
 
 <img align="right" width="48%" hspace="12" src="docs/screenshots/printer-camera.png" alt="La caméra de l'imprimante, épinglée dans un coin, avec son ✕" />
 
-La caméra de l'imprimante, en direct.
+La caméra de l'imprimante, en direct : une seule caméra pour toute l'app.
 
-- Depuis la page de l'imprimante et depuis chaque impression.
+- La page de l'imprimante, la fiche d'une impression en cours et Contrôle
+  montrent la même caméra, avec les mêmes commandes ; le flux continue
+  d'un écran à l'autre.
 - Trois tailles : une vignette, agrandie, ou en plein écran sur l'app
   (Échap ou un clic à côté de l'image pour en sortir) ; un ✕ l'éteint.
 - **Épinglée** : une petite fenêtre qui reste sur tous les écrans pendant
@@ -495,7 +505,7 @@ Windows : « Informations complémentaires » → « Exécuter quand même ».
 
 Ce que chaque version a apporté : [CHANGELOG.md](CHANGELOG.md) (en anglais).
 
-Un **assistant de bienvenue** règle tout : langue, dossier de modèles,
+Un **assistant de bienvenue** règle tout : langue (parmi neuf), dossier de modèles,
 imprimante sur le réseau, moteur de découpe et IA. Ensuite, **l'app se met
 à jour toute seule** (sous Linux, l'AppImage).
 
@@ -596,7 +606,6 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
-| **Une nouvelle page Impressions** — les impressions à gauche (recherche, filtres, en cours, file d'attente, puis jour par jour), la fiche à droite : caméra et progression pendant l'impression, timelapse, résultat et durée réelle contre estimée une fois terminée | [#65](https://github.com/kameka22/snap-studio/pull/65) |
 | **D'autres agents IA** — OpenCode à côté de Claude Code (OpenAI, Google, Mistral, modèles locaux…), un seul actif à la fois | [plan](docs/plans/ai-agents.md) |
 
 Les travaux en cours, ce qui reste à vérifier sur une vraie imprimante et les
