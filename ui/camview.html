@@ -10,6 +10,10 @@
      would otherwise cover. Same look as that window (style.css .cam-pip). */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #fff; -webkit-user-select: none; user-select: none; }
+  /* The interface's language (camview.js): its own fonts, as style.css. */
+  :lang(ja) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, "Noto Sans CJK JP", sans-serif; line-break: strict; }
+  :lang(zh-Hans) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; line-break: strict; }
+  :lang(ko) body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif; word-break: keep-all; overflow-wrap: anywhere; }
   .pip { display: flex; flex-direction: column; height: 100%; border-radius: 12px; overflow: hidden; background: #000; box-sizing: border-box; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
   .head { display: flex; align-items: center; gap: 4px; padding: 5px 6px 5px 10px; background: rgba(28, 28, 30, 0.96); }
   .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }

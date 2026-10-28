@@ -63,8 +63,10 @@ def used_keys():
 COMPLETE = {"en", "fr"}
 
 # Languages without a singular (Intl.PluralRules gives `other` for every
-# count): a `one` form there would never show.
-OTHER_ONLY = {"ja", "zh-Hans", "ko"}
+# count): a `one` form there would never show. Read from LANGS in
+# src-tauri/src/i18n.rs (`plural: Plural::Never`), the one list of languages.
+OTHER_ONLY = set(re.findall(r'code:\s*"([\w-]+)"[^}]*plural:\s*Plural::Never', (SRC / "i18n.rs").read_text()))
+assert OTHER_ONLY, "no Plural::Never language found in src-tauri/src/i18n.rs"
 
 TAG = re.compile(r"</?([a-z][a-z0-9]*)\b", re.I)
 

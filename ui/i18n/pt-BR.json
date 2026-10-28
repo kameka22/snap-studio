@@ -760,8 +760,7 @@
   "send.add_queue": "Adicionar à fila",
   "send.querying": "Consultando a impressora…",
   "send.no_answer": "{name} não responde: a impressão pode esperar na fila.",
-  "send.ends_at": "deve terminar por volta das {time}",
-  "send.busy": "{name} está imprimindo “{job}”{end}.",
+  "send.busy": "{name} está imprimindo “{job}”.",
   "send.missing": "O cabeçote {heads} não tem carretel em {name}.",
   "send.ready": "{name} está pronta.",
   "send.queueing": "Adicionando à fila…",
@@ -2470,5 +2469,7 @@
     "one": "{n} camada",
     "other": "{n} camadas"
   },
-  "settings.lang_failed": "Não foi possível carregar este idioma: a interface continua como estava."
+  "settings.lang_failed": "Não foi possível carregar este idioma: a interface continua como estava.",
+  "send.busy_until": "{name} está imprimindo “{job}”, deve terminar por volta das {time}.",
+  "prepare.colour.change_virtual": "Impresso com o cabeçote virtual {name} · clique para mudar"
 }

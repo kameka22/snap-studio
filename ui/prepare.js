@@ -1251,7 +1251,7 @@ function prRenderInspector() {
         // A virtual head, or one deleted since: no head until one is chosen.
         const v = vhFind(headsVirtual(pid), o.pick);
         pickUi = v
-          ? vhToken({ name: vhName(headsVirtual(pid), o.pick), color: headsColorOf(pid, o.pick), ca: hdSpoolColor(pid, v.a), cb: hdSpoolColor(pid, v.b), tag: "button", cls: " p-chip", attrs: ` type="button" data-pick="${o.id}"`, title: tr("prepare.colour.change", { h: vhName(headsVirtual(pid), o.pick) }) })
+          ? vhToken({ name: vhName(headsVirtual(pid), o.pick), color: headsColorOf(pid, o.pick), ca: hdSpoolColor(pid, v.a), cb: hdSpoolColor(pid, v.b), tag: "button", cls: " p-chip", attrs: ` type="button" data-pick="${o.id}"`, title: tr("prepare.colour.change_virtual", { name: vhName(headsVirtual(pid), o.pick) }) })
           : `<button type="button" class="p-chip p-choose" data-pick="${o.id}">${esc(tr("prepare.choose_head"))}</button><span class="tag warn">${esc(tr("prepare.no_head"))}</span>`;
       } else {
         const s = slots.find((x) => x.index === o.pick);

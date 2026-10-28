@@ -13,7 +13,10 @@ language of the app (LANGS).
 
 Run again when Orca changes:
 
-    python3 scripts/gen-orca-settings.py [path/to/OrcaSlicer]
+    python3 scripts/gen-orca-settings.py [path/to/OrcaSlicer] [--untranslated]
+
+A label Orca's .po leaves untranslated shows in English: `--untranslated`
+lists them per language, to fill the worst gaps in FIXES.
 """
 
 import json
@@ -22,7 +25,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ORCA = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "OrcaSlicer"
+ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+ORCA = Path(ARGS[0]) if ARGS else ROOT / "OrcaSlicer"
+UNTRANSLATED = "--untranslated" in sys.argv
 OUT = ROOT / "ui" / "assets"
 
 # Languages of the app; English is Orca's source language.
@@ -32,7 +37,8 @@ LANGS = ["en", "fr", "de", "es", "pt-BR", "it", "ja", "zh-Hans", "ko"]
 PO_DIRS = {"pt-BR": "pt_BR", "zh-Hans": "zh_CN"}
 
 # Texts the .po file leaves untranslated (an empty msgstr), for the settings
-# the app shows: without these the French catalog would show English.
+# the app shows: without these the catalog would show English. French only
+# so far; `--untranslated` lists what the other languages lack.
 FIXES = {
     "fr": {
         "Aligned back": "Alignée à l'arrière",
@@ -225,6 +231,9 @@ def generate(lang):
     )
     if missing:
         print("  without a definition:", ", ".join(missing))
+    if table and UNTRANSLATED:
+        left = sorted({k["label"] for k in keys.values() if k["label"] and k["label"] not in table.values()})
+        print(f"  {len(left)} labels in English:", "; ".join(left))
 
 
 for lang in LANGS:

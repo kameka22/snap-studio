@@ -36,7 +36,7 @@ pub struct Lang {
 }
 
 /// The counts a language says in the singular (`Intl.PluralRules`' `one`).
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 enum Plural {
     /// One only: English, German, Spanish, Italian.
     One,
@@ -111,9 +111,9 @@ fn system() -> String {
 /// Language of the app for a system locale (`de_AT.UTF-8`, `pt-PT`, `fr`):
 /// matched on the language alone; any Portuguese reads Brazilian Portuguese,
 /// the only one there is. Chinese reads Simplified Chinese when written in
-/// it (`zh-Hans-*`, `zh-CN`, `zh-SG`, `zh`), English when written in
-/// Traditional Chinese (`zh-Hant-*`, `zh-TW`, `zh-HK`, `zh-MO`), which has
-/// no catalog yet.
+/// it (`zh-Hans-*`, `zh-CN`, `zh-SG`, `zh`, Windows' old `zh-CHS`), English
+/// when written in Traditional Chinese (`zh-Hant-*`, `zh-TW`, `zh-HK`,
+/// `zh-MO`, `zh-CHT`), which has no catalog yet.
 fn from_locale(loc: &str) -> String {
     let loc = loc.split('.').next().unwrap_or("").to_lowercase();
     let mut parts = loc.split(['-', '_']);
@@ -122,9 +122,11 @@ fn from_locale(loc: &str) -> String {
         "pt" => "pt-BR".into(),
         "zh" => {
             let rest: Vec<&str> = parts.collect();
+            // The script first (Hans, Hant; Windows' old CHS, CHT), else the
+            // region.
             let traditional = match rest.first() {
-                Some(&"hans") => false,
-                Some(&"hant") => true,
+                Some(&("hans" | "chs")) => false,
+                Some(&("hant" | "cht")) => true,
                 _ => rest.iter().any(|p| matches!(*p, "tw" | "hk" | "mo")),
             };
             if traditional { "en" } else { "zh-Hans" }.into()
@@ -309,6 +311,9 @@ mod tests {
         assert_eq!(from_locale("zh-Hant-TW"), "en");
         assert_eq!(from_locale("zh_TW"), "en");
         assert_eq!(from_locale("zh-HK"), "en");
+        // Windows' old neutral names.
+        assert_eq!(from_locale("zh-CHT"), "en");
+        assert_eq!(from_locale("zh-CHS"), "zh-Hans");
         assert_eq!(from_locale("nl-NL"), "en");
         assert_eq!(from_locale(""), "en");
     }

@@ -245,6 +245,7 @@ function camOverlay(name = camPrinterName()) {
     ? JSON.stringify({
         id: CAM.id,
         name,
+        lang: LANG,
         texts: { unpin: tr("printers.cam.unpin"), close: tr("printers.cam.close"), offline: tr("printers.cam.offline"), open: tr("printers.cam.open") },
       })
     : "";

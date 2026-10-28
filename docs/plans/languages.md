@@ -99,13 +99,20 @@ tags, plural shape) before merging, in `en.json`'s order.
   (the root's `lang` follows the chosen language): Hiragino Sans / Yu
   Gothic UI / Meiryo for Japanese, PingFang SC / Microsoft YaHei for
   Chinese, Apple SD Gothic Neo / Malgun Gothic for Korean, then Noto CJK on
-  Linux. No font is bundled.
+  Linux. Latin text (numbers, units, names) keeps the Latin stack's font
+  (Arial on Windows and Linux), the CJK font only for what it lacks. The
+  pinned camera over a site (`camview.html`) gets the interface's language
+  and the same fonts. No font is bundled.
 - **Line breaking**: `line-break: strict` for Japanese and Chinese (no line
   starting with a small kana or closing punctuation), `word-break: keep-all`
-  for Korean (breaks at spaces, like the language itself).
+  for Korean (breaks at spaces, like the language itself), with
+  `overflow-wrap: anywhere` so that a long word wraps instead of widening a
+  narrow box.
 - **Uppercase labels**: section heads use `text-transform: uppercase` and
-  letter spacing; CJK has no case, so the spacing is reset to 0 for these
-  three languages, and the two 10px labels (picker sections, 3D tags) go to
+  letter spacing; CJK has no case, so the spacing is a factor of
+  `--caps-track`, 0 for these three languages (a new tracked label writes
+  `calc(<em> * var(--caps-track))`), and the labels under 11px (picker
+  sections, 3D tags, Control's pad captions, the camera's badge) go to
   11px, the smallest size where kanji stay legible. No text relies on
   italics.
 - **Flags**: inline SVG for Japan, China and South Korea (no ids, so they can
@@ -132,14 +139,26 @@ only `other`).
     교정, 압출량 (flow).
 - **Register**: Japanese です/ます; Chinese 你; Korean 합니다/하세요.
 - **Punctuation**: full-width `：？！（）` in Japanese and Chinese, ASCII in
-  Korean (as Korean writes it).
+  Korean (as Korean writes it). Parentheses: Chinese full-width everywhere,
+  keyboard shortcuts included (`（⌘1）`); Japanese full-width when they hold
+  Japanese, ASCII around a shortcut, a placeholder alone or Latin text
+  (`(⌘1)`, `({n})`, `(HTTP {code})`). Percent sign attached to the number
+  in Chinese and Korean (`{p}%`).
 - **macOS words**: the system's own (Finder: 访达, Trash: 废纸篓, copy: 拷贝;
   フォルダ, ゴミ箱).
-- **To review by native speakers**: Japanese 造形 against プリント and 積層
-  against レイヤー (Orca's Japanese mixes them); Chinese 擦拭塔, Brim kept in
-  English, 打印板 against 热床 in the bed types, 回零; Korean 채우기 against
-  내부 채움, 재봉선, 교정 against 캘리브레이션, 후퇴 (retract); bed type
-  names, which Orca's Japanese and Korean leave in English.
+- **Technical review**: each catalog read again against English and Orca's
+  labels in the same language: 128 keys changed in Japanese, 70 in Chinese,
+  48 in Korean. Common to the three: picking a head up is mounting it
+  (ピックアップ / 装着, 取用, 장착), not grabbing or fetching. Japanese: queued
+  is キュー待ち (not 待機中, idle), レイヤー on its own with 層 as the
+  counter, ツールチェンジ for tool change. Chinese: 打印路径 for toolpaths (刀路
+  is machining), 吐料 for the printer's purge. Korean: no fixed particle
+  after a placeholder (rewordings or `(이)라는`, `을(를)`), Orca's 부드러운
+  for smooth plates.
+- **Kept after that review**: 造形 and 積層ピッチ, translated bed types;
+  擦拭塔, Brim in English, 打印板 / 热床, 回零; 채우기, 재봉선, 교정, 후퇴.
+- **Still to review by native speakers** (Weblate): the catalogs as a
+  whole; 回零 against 回原点 against the U1's own Chinese screen.
 
 ## Orca's settings
 
@@ -160,7 +179,8 @@ Regenerate with a checkout of that tag:
 python3 scripts/gen-orca-settings.py /path/to/OrcaSlicer
 ```
 
-Labels Orca does not translate keep English. Entries Orca marks *fuzzy*
+Labels Orca does not translate keep English (`--untranslated` lists
+them). Entries Orca marks *fuzzy*
 are kept: in v2.4.0 they are tooltips whose English moved a little, still
 correctly translated. Out of 785 labels: Simplified
 Chinese 627, German 615, Brazilian Portuguese 606, Italian 585, Korean 575,
