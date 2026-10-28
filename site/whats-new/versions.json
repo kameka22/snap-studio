@@ -1,12 +1,112 @@
 {
-  "current": "0.16",
+  "current": "0.17",
   "versions": [
     {
+      "version": "0.17",
+      "date": "2026-10-28",
+      "tagline": {
+        "en": "A new Prints page, one camera, and nine languages.",
+        "fr": "Une nouvelle page Impressions, une seule caméra, et neuf langues."
+      },
+      "features": [
+        {
+          "id": "prints-page",
+          "icon": "progress",
+          "color": "#0a84ff",
+          "edge": "linear-gradient(90deg, #0a84ff, #30d158)",
+          "image": "../assets/print-job.webp",
+          "position": "50% 0%",
+          "tag": { "en": "Prints", "fr": "Impressions" },
+          "chip": {
+            "en": "Prints page", "fr": "Page Impressions", "de": "Seite Drucke", "es": "Página Impresiones", "pt-BR": "Página Impressões",
+            "it": "Pagina Stampe", "ja": "造形ページ", "zh-Hans": "打印记录页面", "ko": "출력 페이지"
+          },
+          "title": { "en": "Every print, and its story", "fr": "Chaque impression, et son histoire" },
+          "text": {
+            "en": "Prints on the left, by day. On the right, the record: camera and layers while it prints; timelapse, result and real time once done, with Reprint. History kept as long as you like.",
+            "fr": "Les impressions à gauche, jour par jour. À droite, la fiche : caméra et couches pendant l’impression ; timelapse, résultat et durée réelle une fois terminée, avec Réimprimer. Un historique gardé aussi longtemps que vous voulez."
+          },
+          "alt": { "en": "The Prints page: the list and a print’s record", "fr": "La page Impressions : la liste et la fiche d’une impression" }
+        },
+        {
+          "id": "one-camera",
+          "icon": "camera",
+          "color": "#ff9f0a",
+          "edge": "linear-gradient(90deg, #ff9f0a, #ffd60a)",
+          "image": "../assets/one-camera.webp",
+          "position": "0% 0%",
+          "tag": { "en": "Camera", "fr": "Caméra" },
+          "chip": {
+            "en": "One camera", "fr": "Une seule caméra", "de": "Eine Kamera", "es": "Una sola cámara", "pt-BR": "Uma só câmera",
+            "it": "Una sola videocamera", "ja": "カメラを統一", "zh-Hans": "统一摄像头", "ko": "하나의 카메라"
+          },
+          "title": { "en": "One camera, everywhere", "fr": "Une seule caméra, partout" },
+          "text": {
+            "en": "The printer page, Prints and Control show the same camera, with the same controls. The stream keeps going from one screen to the next.",
+            "fr": "La page de l’imprimante, Impressions et Contrôle montrent la même caméra, avec les mêmes commandes. Le flux continue d’un écran à l’autre."
+          },
+          "alt": { "en": "The live camera in a running print’s record", "fr": "La caméra en direct dans la fiche d’une impression en cours" }
+        },
+        {
+          "id": "languages",
+          "icon": "sparkle",
+          "color": "#bf5af2",
+          "edge": "linear-gradient(90deg, #bf5af2, #ff375f)",
+          "image": "../assets/languages.webp",
+          "position": "100% 0%",
+          "tag": { "en": "Languages", "fr": "Langues" },
+          "chip": {
+            "en": "9 languages", "fr": "9 langues", "de": "9 Sprachen", "es": "9 idiomas", "pt-BR": "9 idiomas",
+            "it": "9 lingue", "ja": "9言語", "zh-Hans": "9 种语言", "ko": "9개 언어"
+          },
+          "title": { "en": "Nine languages", "fr": "Neuf langues" },
+          "text": {
+            "en": "German, Spanish, Brazilian Portuguese, Italian, Japanese, Simplified Chinese and Korean join English and French. The app starts in your system’s language.",
+            "fr": "Allemand, espagnol, portugais du Brésil, italien, japonais, chinois simplifié et coréen rejoignent l’anglais et le français. L’app démarre dans la langue du système."
+          },
+          "alt": { "en": "The language picker in Settings › Application", "fr": "Le choix de la langue dans Réglages › Application" }
+        },
+        {
+          "id": "eight-libraries",
+          "icon": "explore",
+          "color": "#30d158",
+          "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
+          "image": "../assets/library.webp",
+          "position": "50% 50%",
+          "tag": { "en": "Explore", "fr": "Explorer" },
+          "chip": {
+            "en": "8 libraries", "fr": "8 bibliothèques", "de": "8 Bibliotheken", "es": "8 bibliotecas", "pt-BR": "8 bibliotecas",
+            "it": "8 librerie", "ja": "8つのライブラリ", "zh-Hans": "8 个模型库", "ko": "8개 라이브러리"
+          },
+          "title": { "en": "Eight model libraries", "fr": "Huit bibliothèques de modèles" },
+          "text": {
+            "en": "MyMiniFactory, Thangs, Yeggi and GrabCAD join MakerWorld, Printables, Thingiverse and Cults3D. The Store stays one click away.",
+            "fr": "MyMiniFactory, Thangs, Yeggi et GrabCAD rejoignent MakerWorld, Printables, Thingiverse et Cults3D. Le Store reste à un clic."
+          },
+          "alt": { "en": "Explore with eight model libraries", "fr": "Explorer avec huit bibliothèques de modèles" }
+        }
+      ],
+      "small": [
+        {
+          "icon": "printer", "color": "#64d2ff",
+          "title": { "en": "Printer offline", "fr": "Imprimante hors ligne" },
+          "text": { "en": "A printer that does not answer now says so in one short line, with Retry.", "fr": "Une imprimante qui ne répond pas le dit maintenant en une ligne, avec Réessayer." }
+        },
+        {
+          "icon": "check", "color": "#30d158",
+          "title": { "en": "Fixes", "fr": "Corrections" },
+          "text": { "en": "On macOS, the AI setup finds Homebrew’s Python, not the system’s. Settings › About credits three.js and the U1 3D model.", "fr": "Sous macOS, l’installation de l’IA trouve le Python de Homebrew, pas celui du système. Réglages › À propos crédite three.js et le modèle 3D de la U1." }
+        }
+      ]
+    },
+    {
       "version": "0.16",
+      "date": "2026-10-26",
       "tagline": {
         "en": "Mixed colours, one tower per material, and a lighter slice sheet.",
         "fr": "Des couleurs mélangées, une tour par matériau, et une découpe plus légère."
       },
+      "summary": { "en": "Virtual heads, a tower per material, Basic / Advanced", "fr": "Têtes virtuelles, tour d’amorçage par matériau, Essentiel / Avancé" },
       "features": [
         {
           "id": "virtual-heads",

@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-28
+
 ### Added
 - **Four more languages**: German, Spanish, Brazilian Portuguese and
   Italian, for the whole interface, the menus and Orca's settings; a fresh
@@ -29,25 +31,27 @@ with its packages for macOS, Windows and Linux. What comes next:
   layer or per type) and a Details card (slice, profile, files and dates),
   folded to one line, on every record. The history and its G-code are kept
   forever, unless Settings → Prints deletes them after 30 days, 90 days or
-  a year.
+  a year (#65).
 - **One camera for the app**: the printer page, the record of a running
   print and Control's card show the same camera, with the same controls
   everywhere (pin, enlarge where there is room, full size, Esc). Going from
   one screen to another of the same printer keeps the stream, nothing is
-  read while the window is hidden, and the pinned window follows as before.
+  read while the window is hidden, and the pinned window follows as before
+  (#65).
 - **Settings → About** and the credits also name three.js and the U1 3D
   model of the printer view, made by kameka22 (#75).
 - **Explore: eight model libraries, no Store products**: MyMiniFactory,
   Thangs, Yeggi and GrabCAD join MakerWorld, Printables, Thingiverse and
   Cults3D, two rows of four. The block of Store products, read from the
   shop's catalogue, is gone: the Store stays one click away in the
-  Snapmaker cards, and Explore reads nothing from the sites but their icon.
+  Snapmaker cards, and Explore reads nothing from the sites but their icon
+  (#76).
 
 ### Fixed
 - AI setup on macOS: launched from its icon, the app found macOS's own
   Python 3.9 before the one installed with Homebrew (and so did Claude). The
   folders users install to now come before the system's. A module that is
-  installed but does not import now says why, under the modules' line.
+  installed but does not import now says why, under the modules' line (#69).
 - A printer that does not answer: Care & Tuning (Control, Care, Bed
   Leveling) and the printer's Files page say so the same way, in one short
   line with its name and Retry, in place of a long error with the address it
@@ -56,7 +60,7 @@ with its packages for macOS, Windows and Linux. What comes next:
   The printer's Files page's errors (list, download, delete, rename, share)
   no longer carry an address. A printer that
   answers with an error (Klipper shut down, HTTP 503) says that error rather
-  than "does not answer"; a pinned camera stays on its printer's page.
+  than "does not answer"; a pinned camera stays on its printer's page (#74).
 
 ## [0.16.0] — 2026-10-26
 
@@ -630,7 +634,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/kameka22/snap-studio/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/kameka22/snap-studio/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/kameka22/snap-studio/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/kameka22/snap-studio/compare/v0.14.1...v0.14.2

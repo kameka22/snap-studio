@@ -34,20 +34,22 @@
   materials that do not bond (PLA and PETG…) a prime tower each.
 - **Design with AI** — describe a change or a new part; Claude models it,
   you watch it take shape in 3D, version by version.
+- **In nine languages** — English, French, German, Spanish, Brazilian
+  Portuguese, Italian, Japanese, Simplified Chinese and Korean.
 
 ## Features
 
 **From file to print:** [Explore](#-explore) · [Files](#-files) ·
 [Prepare](#-prepare) · [Color mixing](#-color-mixing) ·
-[One tower per material](#-one-tower-per-material) · [Create](#-create) · [Slicing](#️-slicing) ·
+[One tower per material](#-one-tower-per-material) · [Create](#-create) · [Slicing](#️-slicing) · [G-code preview](#-g-code-preview) ·
 [Spool check](#-spool-check) · [Prints](#-prints) · [Camera](#-camera)<br>
 **Your printer:** [3D view](#-your-printer-in-3d) · [Control](#-control) ·
 [Care](#-care) · [Bed Leveling](#-bed-leveling) ·
-[Printer files](#-printer-files-and-timelapses) · and the [Display](#-display)
+[Printer files](#-printer-files-and-timelapses) · the [Display](#-display) and [Languages](#-languages)
 
 ### 🧭 Explore
 
-<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Explore home: Space, Store, Wiki, Forum, Account, libraries and Store picks" />
+<img align="right" width="48%" hspace="12" src="docs/screenshots/library.png" alt="Explore home: Space, Store, Wiki, Forum, Account and eight model libraries" />
 
 The Snapmaker ecosystem and the model sites you use, inside the app.
 
@@ -156,7 +158,7 @@ The Snapmaker Orca engine, built in: you do not need Snapmaker Orca installed.
 - Quality, infill, walls, surfaces and more, with styles (supports, brim,
   seam, patterns) chosen from pictures.
 - A progress bar that follows the engine's work, stage by stage.
-- A toolpath preview, then sent to the printer or saved as G-code.
+- A [toolpath preview](#-g-code-preview), then sent to the printer or saved as G-code.
 
 <details>
 <summary>More details</summary>
@@ -195,6 +197,20 @@ printer — with its picture on the printer's screen — or saved as G-code.
 
 <br clear="both">
 
+### 🔍 G-code preview
+
+<img align="left" width="48%" hspace="12" src="docs/screenshots/gcode-preview.png" alt="The G-code preview: the toolpaths, the layer slider, the time breakdown and the filament" />
+
+What the printer will do, before it does it.
+
+- The toolpaths in 3D, by material, path type or filament; a slider to go
+  layer by layer.
+- The estimated time, its breakdown by type (walls, infill, surfaces,
+  travel) and the filament per head, with its cost.
+- Then **Send to Printer**, **Save G-code** or back to the settings.
+
+<br clear="both">
+
 ### 🎨 Spool check
 
 Before a print starts, each color of the model is compared with the spool
@@ -222,13 +238,19 @@ The check can be turned off in Settings → Prepare.
 
 ### ⏱ Prints
 
-<img align="left" width="48%" hspace="12" src="docs/screenshots/print-job.png" alt="A print in progress" />
+<img align="left" width="48%" hspace="12" src="docs/screenshots/print-job.png" alt="The Prints page: the list of prints and a print's record" />
 
-Running prints and a queue.
+Every print, running, queued or done.
 
+- On the left, the prints: search, filters, in progress, the queue, then
+  day by day.
+- On the right, the record: camera, progress and time per layer while it
+  prints; timelapse, result and real against estimated time once done,
+  with Reprint and Open in Prepare.
 - When one ends, Snap Studio offers the next (never on its own), on the
   printer you pick.
-- Progress, slicing summary, temperatures, pause, cancel.
+- The history is kept forever, or 30 days, 90 days or a year (Settings →
+  Prints).
 - Before a print starts, the [spools are checked](#-spool-check).
 
 <br clear="both">
@@ -237,9 +259,11 @@ Running prints and a queue.
 
 <img align="right" width="48%" hspace="12" src="docs/screenshots/printer-camera.png" alt="The printer's camera, pinned in a corner, with its ✕" />
 
-The printer's camera, live.
+The printer's camera, live: one camera for the whole app.
 
-- From the printer's page and from each print.
+- The printer's page, a running print's record and Control show the same
+  camera, with the same controls; the stream keeps going from one screen
+  to the next.
 - Three sizes: a thumbnail, enlarged, or full size over the app (Esc or a
   click beside the picture to leave); a ✕ turns it off.
 - **Pinned**: a small window that stays on every screen while you prepare
@@ -431,6 +455,20 @@ color-blind safe colors, states are never told apart by red and green alone.
 
 <br clear="both">
 
+### 🌍 Languages
+
+<img align="right" width="48%" hspace="12" src="docs/screenshots/languages.png" alt="Settings › Application: the language picker with the nine languages" />
+
+Settings → Application: nine languages, with their flags and a search.
+
+- English, French, German, Spanish, Brazilian Portuguese, Italian,
+  Japanese, Simplified Chinese and Korean.
+- The whole interface, the menus and Orca's settings; dates and numbers
+  follow the language.
+- A fresh install starts in the system's language.
+
+<br clear="both">
+
 ## Download
 
 | System | File, from the [latest release](https://github.com/kameka22/snap-studio/releases/latest) |
@@ -447,7 +485,7 @@ Windows: "More info" → "Run anyway".
 
 What each version brought: [CHANGELOG.md](CHANGELOG.md).
 
-A **welcome assistant** sets everything up: language, models folder, the
+A **welcome assistant** sets everything up: language (nine of them), models folder, the
 printer on your network, the slicing engine and the AI. Afterwards **the
 app updates itself** (on Linux, the AppImage).
 
@@ -541,7 +579,6 @@ with its pull request (drafts, approved or under discussion):
 | **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#17](https://github.com/kameka22/snap-studio/pull/17) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
-| **A new Prints page** — the prints on the left (search, filters, in progress, queue, then day by day), the record on the right: camera and progress while it prints, timelapse, result and real against estimated duration once done | [#65](https://github.com/kameka22/snap-studio/pull/65) |
 | **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
 
 Work in progress, what remains to check on a real printer and ideas for later
