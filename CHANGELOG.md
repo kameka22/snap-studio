@@ -77,7 +77,7 @@ with its packages for macOS, Windows and Linux. What comes next:
   is deleted when one of its spools is unloaded, and what used it waits for
   a new head before slicing.
 - **One prime tower per material**: on a plate whose materials do not
-  bond (PLA and PETG…), Prepare's prime tower can be « Per material »: small
+  bond with each other, Prepare's prime tower can be « Per material »: small
   pillars, one per group of materials that bond, with one ring per head,
   instead of one shared tower that would come off. They are placed in a
   free spot, can be moved one by one or split into one pillar per head, and
@@ -120,8 +120,7 @@ with its packages for macOS, Windows and Linux. What comes next:
   a Free Spot" fix, and a saved 3MF keeps it where Orca does.
 - **Prime tower and materials that do not bond**: the slice sheet warns,
   above the Slice button, when the prime tower would mix materials that do
-  not stick to each other (PLA and PETG, PLA and TPU, PETG and TPU…) among
-  the heads the plate prints with — the tower may come off or collapse —
+  not stick to each other among the heads the plate prints with — the tower may come off or collapse —
   with one-click fixes: no tower, or the tower's outer wall in one of the
   materials. The prime tower gets its own switch on the slice sheet (its
   Multi-material row, now above Seam); the Multi-material panel gains the

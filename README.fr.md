@@ -33,7 +33,7 @@
   têtes, et revérifiées avant le lancement d'une impression.
 - **Plus de couleurs que de têtes** — mélangez deux bobines en une
   nouvelle couleur, et donnez une tour d'amorçage à chaque groupe de
-  matériaux qui n'adhèrent pas entre eux (PLA et PETG…).
+  matériaux qui n'adhèrent pas entre eux.
 - **Concevoir avec l'IA** — décrivez une modification ou une nouvelle
   pièce ; Claude la modélise, vous la voyez prendre forme en 3D, version
   après version.
@@ -134,9 +134,9 @@ intégré.
 
 ### 🗼 Une tour par matériau
 
-<img align="right" width="48%" hspace="12" src="site/assets/per-material-towers.webp" alt="Préparer : une tour d'amorçage par matériau, PLA sur T0 et T2, PETG sur T3" />
+<img align="right" width="48%" hspace="12" src="site/assets/per-material-towers.webp" alt="Préparer : une tour d'amorçage par matériau, pour deux matériaux qui n'adhèrent pas entre eux" />
 
-Du PLA et du PETG sur un même plateau, sans tour d'amorçage qui se décolle.
+Des matériaux qui n'adhèrent pas entre eux sur un même plateau, sans tour d'amorçage qui se décolle.
 
 - Une tour unique empile tous les matériaux ; s'ils n'adhèrent pas entre
   eux, elle peut se décoller. Sous **Tour d'amorçage**, choisissez **Par
@@ -213,7 +213,7 @@ réglages avancés sont modifiés, avec un lien pour les afficher :
 - **multimatériau** : la tour d'amorçage (son propre interrupteur, partagé
   avec Préparer, où elle se place sur le plateau ; la tête de son mur
   extérieur), la prévention des coulures ; un avertissement quand la tour mélangerait des
-  matières qui n'adhèrent pas (PLA et PETG, PLA et TPU…), avec des
+  matières qui n'adhèrent pas entre elles, avec des
   corrections en un clic, dont une tour par matériau.
 
 Puis un aperçu des trajectoires avec durée, filament et coût, envoyé à
@@ -632,8 +632,9 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Plusieurs plateaux dans Préparer** — onglets de plateaux, agencement automatique sur plusieurs plateaux, tout découper et l'envoyer dans la file ; les 3MF multi-plateaux gardés tels quels | [#18](https://github.com/kameka22/snap-studio/pull/18) |
 | **Impression objet par objet** — un objet après l'autre, avec contrôle de collision pour la tête de la U1 et un ordre réglable | [#22](https://github.com/kameka22/snap-studio/pull/22) |
 | **Alertes plateau et matière** — un plateau et un filament incompatibles signalés avant d'imprimer, et un conseil quand la colle est recommandée | [#16](https://github.com/kameka22/snap-studio/pull/16) |
-| **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#17](https://github.com/kameka22/snap-studio/pull/17) |
+| **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
+| **Bibliothèque de filaments** — la gestion complète des filaments : marques, types et couleurs, profils personnalisés et par bobine, liés aux bobines de la U1 (RFID) et utilisés dans Préparer ; périmètre à définir | [#79](https://github.com/kameka22/snap-studio/pull/79) |
 | **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **D'autres agents IA** — OpenCode à côté de Claude Code (OpenAI, Google, Mistral, modèles locaux…), un seul actif à la fois | [plan](docs/plans/ai-agents.md) |
 
@@ -647,7 +648,9 @@ Bugs, idées, code ou traductions : voir [CONTRIBUTING.fr.md](CONTRIBUTING.fr.md
 Depuis l'app, **Réglages → À propos** (ou le menu **Aide**) ouvre un
 signalement de bug avec la version et le système déjà remplis. Compiler,
 publier, l'organisation du code : [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
-(en anglais).
+(en anglais). **Vue d'ensemble technique** — architecture, dialogue avec le U1,
+origine des paramètres, gestion des erreurs, tests :
+[docs/technical-overview.md](docs/technical-overview.md) (en anglais).
 
 ## Licence et remerciements
 
