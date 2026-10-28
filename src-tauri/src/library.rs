@@ -32,6 +32,10 @@ pub const SITES: &[Site] = &[
     Site { id: "printables", name: "Printables", url: "https://www.printables.com/", hub: "library" },
     Site { id: "thingiverse", name: "Thingiverse", url: "https://www.thingiverse.com/", hub: "library" },
     Site { id: "cults3d", name: "Cults3D", url: "https://cults3d.com/fr", hub: "library" },
+    Site { id: "myminifactory", name: "MyMiniFactory", url: "https://www.myminifactory.com/", hub: "library" },
+    Site { id: "thangs", name: "Thangs", url: "https://thangs.com/", hub: "library" },
+    Site { id: "yeggi", name: "Yeggi", url: "https://www.yeggi.com/", hub: "library" },
+    Site { id: "grabcad", name: "GrabCAD", url: "https://grabcad.com/library", hub: "library" },
     Site { id: "space", name: "Space", url: "https://space.snapmaker.com/", hub: "snapmaker" },
     Site { id: "store", name: "Store", url: "https://shop.snapmaker.com/", hub: "snapmaker" },
     Site { id: "wiki", name: "Wiki", url: "https://wiki.snapmaker.com/", hub: "snapmaker" },
@@ -744,6 +748,16 @@ mod domain_tests {
         assert!(under("api.printables.com", "printables.com"));
         assert!(!under("notprintables.com", "printables.com"));
         assert!(!under("printables.community", "printables.com"));
+        // Every site's own pages, and its sign-in subdomains, share its cookies.
+        for (url, sub) in [
+            ("https://www.myminifactory.com/", "accounts.myminifactory.com"),
+            ("https://thangs.com/", "api.thangs.com"),
+            ("https://www.yeggi.com/", "www.yeggi.com"),
+            ("https://grabcad.com/library", "accounts.grabcad.com"),
+        ] {
+            let host = url::Url::parse(url).unwrap().host_str().unwrap().to_string();
+            assert!(under(sub, &registrable(&host)), "{sub} under {host}");
+        }
     }
 }
 

@@ -22,7 +22,6 @@ mod presets;
 mod printers;
 mod printer_files;
 mod share;
-mod snapmaker;
 mod orient;
 mod paint;
 mod plate;
@@ -298,12 +297,6 @@ fn open_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
 #[tauri::command]
 fn lib_sites() -> Vec<library::Site> {
     library::sites()
-}
-
-/// Explore's home: a few products of the Snapmaker Store.
-#[tauri::command]
-async fn snap_store_highlights(limit: Option<usize>) -> Result<Vec<snapmaker::Product>, String> {
-    snapmaker::highlights(limit.unwrap_or(6).clamp(1, 12)).await.map_err(|e| e.to_string())
 }
 
 /// The floating navigation's buttons: on the tab shown.
@@ -2108,7 +2101,6 @@ pub fn run() {
             camera_start,
             camera_stop,
             lib_sites,
-            snap_store_highlights,
             lib_nav,
             cam_view_set,
             cam_view_action,

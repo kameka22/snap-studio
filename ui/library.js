@@ -8,8 +8,9 @@
    view of ours on top of the site's).
 
    Two pinned pages come first: Home, the places to open — the Snapmaker
-   ecosystem, the Store's picks, the model libraries — and Favorites, the
-   models set aside. A site may be open in several tabs. */
+   ecosystem and the model libraries — and Favorites, the models set aside.
+   A site may be open in several tabs. Nothing is read from the sites
+   themselves but their favicon: each one is only shown, in its own view. */
 
 const LIB = {
   sites: [],
@@ -236,7 +237,7 @@ onMenu("tab", async (arg) => {
 /* Brand icon: rounded square in the site's color, white or dark initial
    depending on the background luminance. Color derived from the name when
    unknown. The fallback of `siteIcon`, which prefers the site's favicon. */
-const BRAND = { makerworld: "#00AE42", printables: "#FA6831", thingiverse: "#248BFB", cults3d: "#7B3FE4", space: "#1F6FEB", store: "#FF6B00", wiki: "#5856D6", forum: "#34C759", account: "#8E8E93" };
+const BRAND = { makerworld: "#00AE42", printables: "#FA6831", thingiverse: "#248BFB", cults3d: "#7B3FE4", myminifactory: "#00C4A6", thangs: "#FFBC00", grabcad: "#E63B2D", space: "#1F6FEB", store: "#FF6B00", wiki: "#5856D6", forum: "#34C759", account: "#8E8E93" };
 const IOS_PALETTE = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#00C7BE", "#30B0C7", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#A2845E"];
 function brandColor(name) {
   const key = String(name || "?").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -567,9 +568,9 @@ onMenu("expin", (arg) => {
   if (what === "pin" || what === "unpin") togglePin(id);
 });
 
-/* Home: the Snapmaker ecosystem (Space wide, the four others beside), the
-   Store's picks, then the model libraries. The "+" picker lists the same
-   cards, smaller. */
+/* Home: the Snapmaker ecosystem (Space wide, the four others beside), then
+   the model libraries, in rows. The "+" picker lists the same cards,
+   smaller. */
 function renderHome() {
   const snap = LIB.sites.filter((s) => s.hub === "snapmaker");
   const libs = LIB.sites.filter((s) => s.hub === "library");
@@ -621,42 +622,6 @@ $("lib-picker").addEventListener("keydown", (e) => {
 });
 $("lib-picker-close").addEventListener("click", () => closeSheet($("lib-picker")));
 
-/* "Featured on the Store": a few products of the shop's public catalogue,
-   each opening its page in a Store tab. Hidden until they arrive, and if
-   they do not. */
-async function renderStore() {
-  const store = LIB.sites.find((s) => s.id === "store");
-  const box = $("ex-products");
-  if (!store || !box) return;
-  let products;
-  try {
-    products = await invoke("snap_store_highlights", { limit: 6 });
-  } catch {
-    products = [];
-  }
-  $("ex-store").classList.toggle("hidden", !products.length);
-  box.innerHTML = "";
-  for (const p of products) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "snap-product";
-    b.title = p.title;
-    let price = "";
-    try {
-      if (p.price) price = new Intl.NumberFormat(locale(), { style: "currency", currency: p.currency || "USD" }).format(+p.price);
-    } catch {
-      price = p.price ? `${p.price} ${p.currency || ""}` : "";
-    }
-    b.innerHTML = `${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" />` : `<span class="snap-noimg"></span>`}<span class="t">${esc(p.title)}</span><span class="p">${esc(price)}</span>`;
-    b.onclick = () => openSite(store, p.url);
-    box.appendChild(b);
-  }
-}
-$("ex-store-more").addEventListener("click", () => {
-  const store = LIB.sites.find((s) => s.id === "store");
-  if (store) openSite(store);
-});
-
 (async () => {
   try {
     LIB.sites = await invoke("lib_sites");
@@ -668,7 +633,6 @@ $("ex-store-more").addEventListener("click", () => {
   renderTabs();
   await loadFavs();
   loadIcons();
-  renderStore();
 })();
 
 window.addEventListener("langchange", () => {

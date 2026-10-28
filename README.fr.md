@@ -59,9 +59,10 @@ L'écosystème Snapmaker et les sites de modèles que vous utilisez, dans
 l'app.
 
 - Une page d'accueil avec Snapmaker Space, Store, Wiki, Forum et Compte,
-  quelques produits à la une sur le Store, et les bibliothèques :
-  MakerWorld, Printables, Thingiverse et Cults3D. Chacun s'ouvre dans un
-  onglet, sessions conservées.
+  et huit bibliothèques de modèles : MakerWorld, Printables, Thingiverse,
+  Cults3D, MyMiniFactory, Thangs, Yeggi et GrabCAD. Chacun s'ouvre dans un
+  onglet, sessions conservées. Explorer n'affiche que les pages des sites
+  eux-mêmes : rien n'en est lu.
 - Pas de barre d'adresse : Précédent, Suivant et Recharger flottent sur
   la page.
 - Épinglez n'importe quel site dans la barre latérale, sous Snapmaker

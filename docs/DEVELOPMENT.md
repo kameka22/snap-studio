@@ -128,7 +128,6 @@ src-tauri/src/
   gcode_thumbs.rs the print's pictures for the printer's screen, in the G-code
   render.rs       software 3D thumbnails       thumbs.rs     thumbnail cache
   library.rs      Explore: sites, tabs (native views), floating navigation, favicons
-  snapmaker.rs    Explore: the Store's picks (Shopify catalogue)
   favorites.rs    favorites
   ia.rs pty.rs    AI conversations, terminal   slicers.rs    installed slicers
   ia_tools/       what Claude gets in each workspace: mf.py (3MF), export.py,
