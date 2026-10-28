@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-10-28
+
 ### Added
 - **Smooth mix for virtual heads**: each layer of a mixed color is split
   between its two heads (Snapmaker Orca's Subdivide Mix Layer), on by
@@ -645,7 +647,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/kameka22/snap-studio/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/kameka22/snap-studio/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/kameka22/snap-studio/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/kameka22/snap-studio/compare/v0.14.2...v0.15.0
