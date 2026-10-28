@@ -1,25 +1,53 @@
 {
-  "version": "0.16",
+  "version": "0.17",
   "highlights": [
     {
-      "id": "virtual-heads",
-      "en": "Virtual heads",
-      "fr": "Têtes virtuelles"
+      "id": "prints-page",
+      "en": "Prints page",
+      "fr": "Page Impressions",
+      "de": "Seite Drucke",
+      "es": "Página Impresiones",
+      "pt-BR": "Página Impressões",
+      "it": "Pagina Stampe",
+      "ja": "造形ページ",
+      "zh-Hans": "打印记录页面",
+      "ko": "출력 페이지"
     },
     {
-      "id": "per-material-towers",
-      "en": "Tower per material",
-      "fr": "Tour par matériau"
+      "id": "one-camera",
+      "en": "One camera",
+      "fr": "Une seule caméra",
+      "de": "Eine Kamera",
+      "es": "Una sola cámara",
+      "pt-BR": "Uma só câmera",
+      "it": "Una sola videocamera",
+      "ja": "カメラを統一",
+      "zh-Hans": "统一摄像头",
+      "ko": "하나의 카메라"
     },
     {
-      "id": "slice-levels",
-      "en": "Basic / Advanced",
-      "fr": "Essentiel / Avancé"
+      "id": "languages",
+      "en": "9 languages",
+      "fr": "9 langues",
+      "de": "9 Sprachen",
+      "es": "9 idiomas",
+      "pt-BR": "9 idiomas",
+      "it": "9 lingue",
+      "ja": "9言語",
+      "zh-Hans": "9 种语言",
+      "ko": "9개 언어"
     },
     {
-      "id": "ai-sandbox",
-      "en": "AI sandbox",
-      "fr": "Bac à sable IA"
+      "id": "eight-libraries",
+      "en": "8 libraries",
+      "fr": "8 bibliothèques",
+      "de": "8 Bibliotheken",
+      "es": "8 bibliotecas",
+      "pt-BR": "8 bibliotecas",
+      "it": "8 librerie",
+      "ja": "8つのライブラリ",
+      "zh-Hans": "8 个模型库",
+      "ko": "8개 라이브러리"
     }
   ]
 }
