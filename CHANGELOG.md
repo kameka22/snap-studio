@@ -17,6 +17,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   default in the Multi-material settings, for a more even color; and a
   warning when the two colors are too far apart to mix well.
 
+### Fixed
+- Slice preview: each line is drawn as tall as its layer (or sub-layer),
+  as Snapmaker Orca draws it, instead of as tall as it is wide. A virtual
+  head's alternating layers now show as thin clean bands, not a noisy
+  checkerboard; the print itself was never affected.
+
 ## [0.17.0] — 2026-10-28
 
 ### Added
