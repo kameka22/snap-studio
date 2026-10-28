@@ -4277,6 +4277,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .ct-state.idle i { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
 .ct-state.printing i, .ct-state.paused i, .ct-state.busy i { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 22%, transparent); }
 .ct-state.offline i { background: var(--danger); }
+/* The same status where a printer's other screens say it is offline
+   (offlineLine, printers.js): the dot, then why, then the retry. */
+.off-status { margin-bottom: 12px; }
+.off-why { flex: 1; min-width: 0; font-size: 12px; color: var(--text-secondary); }
 .ct-chip { font-size: 12px; color: var(--text-secondary); padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); }
 .ct-chip:empty { display: none; }
 .ct-chip.warn { color: var(--warning-text, var(--warning)); background: color-mix(in srgb, var(--warning) 14%, transparent); }

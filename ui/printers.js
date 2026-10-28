@@ -203,13 +203,14 @@ function printerName(id) {
 }
 
 /* A printer that does not answer (or answers with an error), said the same
-   on each of its screens (Control, Care, Bed Leveling, its Files): one line,
-   with a retry. `retry` is the button's attribute, which the screen
-   listens to; `inner` gives the line's content alone, for a box that is
-   already one (Control's). */
+   on each of its screens: Control's status, its red dot and "Not
+   connected", then why and a retry. `retry` is the button's attribute,
+   which the screen listens to. `inner` gives the line alone, for Control,
+   whose status card already shows the dot. */
 function offlineLine(text, retry, inner = false) {
-  const body = `<span class="mt-stale-dot"></span><span>${esc(text)}</span><button class="btn small" ${retry}>${esc(tr("printers.offline.retry"))}</button>`;
-  return inner ? body : `<div class="mt-stale" role="status">${body}</div>`;
+  const button = `<button class="btn small" ${retry}>${esc(tr("printers.offline.retry"))}</button>`;
+  if (inner) return `<span class="mt-stale-dot"></span><span>${esc(text)}</span>${button}`;
+  return `<div class="ct-status off-status" role="status"><span class="ct-state offline"><i></i><b>${esc(tr("ctl.st.offline"))}</b></span><span class="off-why">${esc(text)}</span>${button}</div>`;
 }
 
 /* The Camera section while the printer does not answer: hidden, unless a
