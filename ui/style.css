@@ -3995,6 +3995,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .prn-offline { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 28px 20px; margin-bottom: 14px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--card-bg); }
 .prn-offline-ico { width: 36px; height: 36px; fill: var(--text-tertiary); margin-bottom: 4px; }
 .prn-offline-title { font-size: 16px; font-weight: 600; }
+/* Offline (not while connecting): Control's red dot before the title, as on
+   the printer's other screens (offlineLine). The title's text is rewritten
+   by printers.js: the dot is drawn, not in the markup. */
+.prn-offline:not(.connecting) .prn-offline-title::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: var(--danger); vertical-align: 0.1em; }
 .prn-offline-hint { color: var(--text-secondary, var(--text-tertiary)); font-size: 13px; }
 .prn-offline-seen { color: var(--text-tertiary); font-size: 11px; }
 .prn-offline .btn { margin-top: 8px; }
