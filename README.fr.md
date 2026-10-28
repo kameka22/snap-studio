@@ -585,6 +585,9 @@ ou ultérieure. Construit avec [Tauri](https://tauri.app) et Rust.
 - Bibliothèques de l'interface : [marked](https://github.com/markedjs/marked),
   [DOMPurify](https://github.com/cure53/DOMPurify),
   [xterm.js](https://github.com/xtermjs/xterm.js) — voir `ui/vendor/NOTICE.md`.
+- Vue 3D de l'imprimante : [three.js](https://github.com/mrdoob/three.js) (MIT) ;
+  le modèle paramétrique de la U1 (`ui/printer3d/`) a été créé par kameka22
+  pour Snap Studio (GPL-3.0) — voir `ui/vendor/NOTICE.md`.
 
 Snap Studio est un projet indépendant, ni affilié ni approuvé par
 Snapmaker. Snapmaker et U1 sont des marques de leurs propriétaires.

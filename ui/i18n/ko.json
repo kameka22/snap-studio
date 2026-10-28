@@ -1216,7 +1216,7 @@
   "about.github.sub": "github.com/kameka22/snap-studio",
   "about.search_first": "신고하기 전에 같은 내용이 열린 이슈에 이미 있는지 확인하세요.",
   "about.issues": "열린 이슈 ↗",
-  "about.license": "GNU GPL v3 자유 소프트웨어. 슬라이싱 엔진: Snapmaker Orca (AGPL-3.0), 라이브러리: marked, DOMPurify, xterm.js.",
+  "about.license": "GNU GPL v3 자유 소프트웨어. 슬라이싱 엔진: Snapmaker Orca (AGPL-3.0), 라이브러리: marked, DOMPurify, xterm.js, three.js, U1 3D 모델: kameka22.",
   "about.licenses": "라이선스 ↗",
   "menu.help.bug": "버그 신고…",
   "menu.help.idea": "아이디어 제안…",

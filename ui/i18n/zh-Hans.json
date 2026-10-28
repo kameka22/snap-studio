@@ -1216,7 +1216,7 @@
   "about.github.sub": "github.com/kameka22/snap-studio",
   "about.search_first": "报告前，请先检查该问题是否已在未关闭的 issue 中。",
   "about.issues": "未关闭的 issue ↗",
-  "about.license": "基于 GNU GPL v3 的自由软件。切片引擎：Snapmaker Orca（AGPL-3.0）；库：marked、DOMPurify、xterm.js。",
+  "about.license": "基于 GNU GPL v3 的自由软件。切片引擎：Snapmaker Orca（AGPL-3.0）；库：marked、DOMPurify、xterm.js、three.js；U1 3D 模型：kameka22。",
   "about.licenses": "许可证 ↗",
   "menu.help.bug": "报告 Bug…",
   "menu.help.idea": "提出想法…",

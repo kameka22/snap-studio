@@ -1249,7 +1249,7 @@
   "about.github.sub": "github.com/kameka22/snap-studio",
   "about.search_first": "Before reporting, check whether the subject is already among the open issues.",
   "about.issues": "Open issues ↗",
-  "about.license": "Free software under the GNU GPL v3. Slicing engine: Snapmaker Orca (AGPL-3.0); libraries: marked, DOMPurify, xterm.js.",
+  "about.license": "Free software under the GNU GPL v3. Slicing engine: Snapmaker Orca (AGPL-3.0); libraries: marked, DOMPurify, xterm.js, three.js; U1 3D model: kameka22.",
   "about.licenses": "Licenses ↗",
   "menu.help.bug": "Report a Bug…",
   "menu.help.idea": "Suggest an Idea…",

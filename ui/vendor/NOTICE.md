@@ -12,6 +12,16 @@ Copied from npm without change.
 [claude-chat-panel](https://github.com/simscorpbs/claude-chat-panel)
 (MIT License, Copyright (c) 2026 simscorpbs).
 
+`three/` is [three.js](https://github.com/mrdoob/three.js) r186 (MIT,
+`three/LICENSE`); what was taken and changed is in `three/README.md`.
+
+## U1 3D model
+
+`ui/printer3d/u1-model.js` and `ui/printer3d/u1-materials.js` (the 3D
+printer view) are the parametric three.js model of the Snapmaker U1 made by
+kameka22 for Snap Studio, GPL-3.0 like the rest of the app. Not a
+third-party component: listed here so its origin is clear.
+
 ## Icons
 
 `ui/assets/slice-icons/orca/` (and their copies in the generated

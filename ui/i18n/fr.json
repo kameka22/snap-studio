@@ -1252,7 +1252,7 @@
   "about.github.sub": "github.com/kameka22/snap-studio",
   "about.search_first": "Avant de signaler, regardez si le sujet existe déjà dans les issues ouvertes.",
   "about.issues": "Issues ouvertes ↗",
-  "about.license": "Logiciel libre sous GNU GPL v3. Moteur de découpe : Snapmaker Orca (AGPL-3.0) ; bibliothèques : marked, DOMPurify, xterm.js.",
+  "about.license": "Logiciel libre sous GNU GPL v3. Moteur de découpe : Snapmaker Orca (AGPL-3.0) ; bibliothèques : marked, DOMPurify, xterm.js, three.js ; modèle 3D de la U1 : kameka22.",
   "about.licenses": "Licences ↗",
   "menu.help.bug": "Signaler un bug…",
   "menu.help.idea": "Proposer une idée…",

@@ -536,6 +536,9 @@ or later. Built with [Tauri](https://tauri.app) and Rust.
 - Interface libraries: [marked](https://github.com/markedjs/marked),
   [DOMPurify](https://github.com/cure53/DOMPurify),
   [xterm.js](https://github.com/xtermjs/xterm.js) — see `ui/vendor/NOTICE.md`.
+- 3D printer view: [three.js](https://github.com/mrdoob/three.js) (MIT); the
+  parametric U1 model (`ui/printer3d/`) was made by kameka22 for Snap Studio
+  (GPL-3.0) — see `ui/vendor/NOTICE.md`.
 
 Snap Studio is an independent project, not affiliated with or endorsed by
 Snapmaker. Snapmaker and U1 are trademarks of their owners.
