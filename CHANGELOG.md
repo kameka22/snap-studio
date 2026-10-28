@@ -11,6 +11,12 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Smooth mix for virtual heads**: each layer of a mixed color is split
+  between its two heads (Snapmaker Orca's Subdivide Mix Layer), on by
+  default in the Multi-material settings, for a more even color; and a
+  warning when the two colors are too far apart to mix well.
+
 ## [0.17.0] — 2026-10-28
 
 ### Added
