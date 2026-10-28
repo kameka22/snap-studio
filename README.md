@@ -30,13 +30,16 @@
 - **Made for the U1's four heads** — the spools loaded on the printer are
   read, the colors of a multicolor model are mapped to the heads, and checked
   again before a print starts.
+- **More colors than heads** — mix two spools into a new color, and give
+  materials that do not bond (PLA and PETG…) a prime tower each.
 - **Design with AI** — describe a change or a new part; Claude models it,
   you watch it take shape in 3D, version by version.
 
 ## Features
 
 **From file to print:** [Explore](#-explore) · [Files](#-files) ·
-[Prepare](#-prepare) · [Create](#-create) · [Slicing](#️-slicing) ·
+[Prepare](#-prepare) · [Color mixing](#-color-mixing) ·
+[One tower per material](#-one-tower-per-material) · [Create](#-create) · [Slicing](#️-slicing) ·
 [Spool check](#-spool-check) · [Prints](#-prints) · [Camera](#-camera)<br>
 **Your printer:** [3D view](#-your-printer-in-3d) · [Control](#-control) ·
 [Care](#-care) · [Bed Leveling](#-bed-leveling) ·
@@ -87,14 +90,40 @@ The U1 plate as in Orca — then slice.
   tower on the plate as a grey box, in a free corner. Move and turn it like
   a part; its size is estimated, then the real one after slicing. A tower
   on a part or off the plate is flagged, with a fix.
-- **One tower per material**: when the plate's materials do not bond (PLA
-  and PETG…), choose **Per material** instead of **One tower**: small
-  pillars, one per group of materials that bond, with one ring per head (or
-  one pillar per head). Sizes are automatic; they are rebuilt at every
-  slice and never saved in the 3MF.
-- **Virtual heads** (Snapmaker Orca's *Full Spectrum*): mix two loaded
-  spools into a new color, offered in the head pickers like a real head.
-  See [Heads and spools](#-your-printer-in-3d).
+- [One tower per material](#-one-tower-per-material) when the materials do
+  not bond, and [virtual heads](#-color-mixing) in the head pickers.
+
+<br clear="both">
+
+### 🌈 Color mixing
+
+<img align="left" width="40%" hspace="12" src="site/assets/virtual-heads.webp" alt="New virtual head: white and black PLA (T0, T1) mixed into V1, one layer of each" />
+
+Two spools, one new color: Snapmaker Orca's *Full Spectrum*, built in.
+
+- In Heads and spools, pick two loaded spools and set the mix with one
+  slider, from 4:1 to 1:4: the heads alternate layer by layer.
+- The new **virtual head** (V1, V2…, up to 8 per printer) is offered in
+  Prepare's head pickers like a real one.
+- Materials that do not bond cannot be mixed. Unload one of its spools and
+  the virtual head goes; what used it waits for a new head before slicing.
+
+<br clear="both">
+
+### 🗼 One tower per material
+
+<img align="right" width="48%" hspace="12" src="site/assets/per-material-towers.webp" alt="Prepare: one prime tower per material, PLA on T0 and T2, PETG on T3" />
+
+PLA and PETG on one plate, without a prime tower that comes off.
+
+- A single tower stacks every material; where they do not bond, it can come
+  off. Under **Prime tower**, choose **Per material** instead of **One
+  tower**: small pillars, one per group of materials that bond, with one
+  ring per head (or one pillar per head).
+- Offered only when two of the plate's materials do not bond, and on the
+  slice sheet's tower warning; the single tower stays the default.
+- Placed in a free spot and moved one by one; sizes are automatic. Rebuilt
+  at every slice, never saved in the 3MF.
 
 <br clear="both">
 
@@ -536,6 +565,9 @@ or later. Built with [Tauri](https://tauri.app) and Rust.
 - Interface libraries: [marked](https://github.com/markedjs/marked),
   [DOMPurify](https://github.com/cure53/DOMPurify),
   [xterm.js](https://github.com/xtermjs/xterm.js) — see `ui/vendor/NOTICE.md`.
+- 3D printer view: [three.js](https://github.com/mrdoob/three.js) (MIT); the
+  parametric U1 model (`ui/printer3d/`) was made by kameka22 for Snap Studio
+  (GPL-3.0) — see `ui/vendor/NOTICE.md`.
 
 Snap Studio is an independent project, not affiliated with or endorsed by
 Snapmaker. Snapmaker and U1 are trademarks of their owners.

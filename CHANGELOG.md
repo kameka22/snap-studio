@@ -35,6 +35,8 @@ with its packages for macOS, Windows and Linux. What comes next:
   everywhere (pin, enlarge where there is room, full size, Esc). Going from
   one screen to another of the same printer keeps the stream, nothing is
   read while the window is hidden, and the pinned window follows as before.
+- **Settings → About** and the credits also name three.js and the U1 3D
+  model of the printer view, made by kameka22 (#75).
 
 ### Fixed
 - AI setup on macOS: launched from its icon, the app found macOS's own

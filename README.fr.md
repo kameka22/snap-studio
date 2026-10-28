@@ -31,6 +31,9 @@
 - **Pensé pour les quatre têtes de la U1** — les bobines chargées sont lues
   sur l'imprimante, les couleurs d'un modèle multicolore sont associées aux
   têtes, et revérifiées avant le lancement d'une impression.
+- **Plus de couleurs que de têtes** — mélangez deux bobines en une
+  nouvelle couleur, et donnez une tour d'amorçage à chaque groupe de
+  matériaux qui n'adhèrent pas entre eux (PLA et PETG…).
 - **Concevoir avec l'IA** — décrivez une modification ou une nouvelle
   pièce ; Claude la modélise, vous la voyez prendre forme en 3D, version
   après version.
@@ -38,7 +41,9 @@
 ## Fonctions
 
 **Du fichier à l'impression :** [Explorer](#-explorer) ·
-[Fichiers](#-fichiers) · [Préparer](#-préparer) · [Créer](#-créer) ·
+[Fichiers](#-fichiers) · [Préparer](#-préparer) ·
+[Mélange de couleurs](#-mélange-de-couleurs) ·
+[Une tour par matériau](#-une-tour-par-matériau) · [Créer](#-créer) ·
 [Découpe](#️-découpe) · [Vérification des bobines](#-vérification-des-bobines) ·
 [Impressions](#-impressions) · [Caméra](#-caméra)<br>
 **Votre imprimante :** [Vue 3D](#-votre-imprimante-en-3d) ·
@@ -100,14 +105,45 @@ Le plateau U1 comme dans Orca — puis découper.
   et pivote comme une pièce ; sa taille est estimée, puis réelle après la
   découpe. Une tour sur une pièce ou hors du plateau est signalée, avec une
   correction.
-- **Une tour par matériau** : quand les matériaux du plateau n'adhèrent pas
-  entre eux (PLA et PETG…), choisissez **Par matériau** plutôt que **Une
-  tour** : de petits piliers, un par groupe de matériaux qui adhèrent, avec
-  un anneau par tête (ou un pilier par tête). Leur taille est automatique ;
-  ils sont refaits à chaque découpe et jamais enregistrés dans le 3MF.
-- **Têtes virtuelles** (le *Full Spectrum* de Snapmaker Orca) : deux bobines
-  chargées mélangées en une nouvelle couleur, proposée dans les choix de
-  tête comme une vraie. Voir [Têtes et bobines](#-votre-imprimante-en-3d).
+- [Une tour par matériau](#-une-tour-par-matériau) quand les matériaux
+  n'adhèrent pas entre eux, et les [têtes virtuelles](#-mélange-de-couleurs)
+  dans les choix de tête.
+
+<br clear="both">
+
+### 🌈 Mélange de couleurs
+
+<img align="left" width="40%" hspace="12" src="site/assets/virtual-heads.webp" alt="Nouvelle tête virtuelle : PLA blanc et noir (T0, T1) mélangés en V1, une couche de chaque" />
+
+Deux bobines, une nouvelle couleur : le *Full Spectrum* de Snapmaker Orca,
+intégré.
+
+- Dans Têtes et bobines, choisissez deux bobines chargées et réglez le
+  mélange avec un seul curseur, de 4:1 à 1:4 : les têtes alternent couche
+  par couche.
+- La nouvelle **tête virtuelle** (V1, V2…, jusqu'à 8 par imprimante) est
+  proposée dans les choix de tête de Préparer, comme une vraie.
+- Des matériaux qui n'adhèrent pas entre eux ne se mélangent pas. Si l'une
+  de ses bobines est déchargée, la tête virtuelle disparaît ; ce qui
+  l'utilisait attend une nouvelle tête avant la découpe.
+
+<br clear="both">
+
+### 🗼 Une tour par matériau
+
+<img align="right" width="48%" hspace="12" src="site/assets/per-material-towers.webp" alt="Préparer : une tour d'amorçage par matériau, PLA sur T0 et T2, PETG sur T3" />
+
+Du PLA et du PETG sur un même plateau, sans tour d'amorçage qui se décolle.
+
+- Une tour unique empile tous les matériaux ; s'ils n'adhèrent pas entre
+  eux, elle peut se décoller. Sous **Tour d'amorçage**, choisissez **Par
+  matériau** plutôt que **Une tour** : de petits piliers, un par groupe de
+  matériaux qui adhèrent, avec un anneau par tête (ou un pilier par tête).
+- Proposé seulement quand deux matériaux du plateau n'adhèrent pas entre
+  eux, et dans l'alerte de tour de la fenêtre de découpe ; la tour unique
+  reste le choix par défaut.
+- Placés dans un espace libre et déplacés un par un ; tailles
+  automatiques. Refaits à chaque découpe, jamais enregistrés dans le 3MF.
 
 <br clear="both">
 
@@ -585,6 +621,9 @@ ou ultérieure. Construit avec [Tauri](https://tauri.app) et Rust.
 - Bibliothèques de l'interface : [marked](https://github.com/markedjs/marked),
   [DOMPurify](https://github.com/cure53/DOMPurify),
   [xterm.js](https://github.com/xtermjs/xterm.js) — voir `ui/vendor/NOTICE.md`.
+- Vue 3D de l'imprimante : [three.js](https://github.com/mrdoob/three.js) (MIT) ;
+  le modèle paramétrique de la U1 (`ui/printer3d/`) a été créé par kameka22
+  pour Snap Studio (GPL-3.0) — voir `ui/vendor/NOTICE.md`.
 
 Snap Studio est un projet indépendant, ni affilié ni approuvé par
 Snapmaker. Snapmaker et U1 sont des marques de leurs propriétaires.

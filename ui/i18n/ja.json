@@ -1216,7 +1216,7 @@
   "about.github.sub": "github.com/kameka22/snap-studio",
   "about.search_first": "報告する前に、同じ内容がすでに未解決の Issue にないか確認してください。",
   "about.issues": "未解決の Issue ↗",
-  "about.license": "GNU GPL v3 のフリーソフトウェア。スライスエンジン：Snapmaker Orca (AGPL-3.0)、ライブラリ：marked、DOMPurify、xterm.js。",
+  "about.license": "GNU GPL v3 のフリーソフトウェア。スライスエンジン：Snapmaker Orca (AGPL-3.0)、ライブラリ：marked、DOMPurify、xterm.js、three.js、U1 の 3D モデル：kameka22。",
   "about.licenses": "ライセンス ↗",
   "menu.help.bug": "バグを報告…",
   "menu.help.idea": "アイデアを提案…",
