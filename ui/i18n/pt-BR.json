@@ -2479,5 +2479,11 @@
   "pfiles.stale": "{name} não responde: a lista pode estar desatualizada.",
   "ctl.read_err": "A impressora respondeu com um erro: {err}",
   "pfiles.load_err": "Não foi possível ler os arquivos da impressora: {err}",
-  "pfiles.stale_err": "Não foi possível atualizar a lista: {err}"
+  "pfiles.stale_err": "Não foi possível atualizar a lista: {err}",
+  "window.minimize": "Minimizar",
+  "window.maximize": "Maximizar",
+  "window.restore": "Restaurar",
+  "window.close": "Fechar",
+  "display.system_titlebar": "Usar a barra de título do sistema",
+  "display.system_titlebar.sub": "A barra de título e os botões de janela da área de trabalho, no lugar dos do Snap Studio"
 }

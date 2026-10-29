@@ -2399,5 +2399,11 @@
   "pfiles.stale": "{name}이(가) 응답하지 않습니다. 목록이 최신이 아닐 수 있습니다.",
   "ctl.read_err": "프린터가 오류를 반환했습니다: {err}",
   "pfiles.load_err": "프린터의 파일을 읽을 수 없습니다: {err}",
-  "pfiles.stale_err": "목록을 새로 고칠 수 없습니다: {err}"
+  "pfiles.stale_err": "목록을 새로 고칠 수 없습니다: {err}",
+  "window.minimize": "최소화",
+  "window.maximize": "최대화",
+  "window.restore": "이전 크기로 복원",
+  "window.close": "닫기",
+  "display.system_titlebar": "시스템 제목 표시줄 사용",
+  "display.system_titlebar.sub": "Snap Studio의 것 대신 데스크톱의 제목 표시줄과 창 버튼을 사용합니다"
 }

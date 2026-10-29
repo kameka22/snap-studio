@@ -2399,5 +2399,11 @@
   "pfiles.stale": "{name} 没有响应：列表可能不是最新的。",
   "ctl.read_err": "打印机返回了错误：{err}",
   "pfiles.load_err": "无法读取打印机上的文件：{err}",
-  "pfiles.stale_err": "无法刷新列表：{err}"
+  "pfiles.stale_err": "无法刷新列表：{err}",
+  "window.minimize": "最小化",
+  "window.maximize": "最大化",
+  "window.restore": "向下还原",
+  "window.close": "关闭",
+  "display.system_titlebar": "使用系统标题栏",
+  "display.system_titlebar.sub": "使用桌面环境自带的标题栏和窗口按钮，而不是 Snap Studio 的"
 }

@@ -2479,5 +2479,11 @@
   "pfiles.stale": "{name} antwortet nicht: Die Liste ist möglicherweise nicht mehr aktuell.",
   "ctl.read_err": "Der Drucker hat mit einem Fehler geantwortet: {err}",
   "pfiles.load_err": "Die Dateien des Druckers konnten nicht gelesen werden: {err}",
-  "pfiles.stale_err": "Die Liste konnte nicht aktualisiert werden: {err}"
+  "pfiles.stale_err": "Die Liste konnte nicht aktualisiert werden: {err}",
+  "window.minimize": "Minimieren",
+  "window.maximize": "Maximieren",
+  "window.restore": "Verkleinern",
+  "window.close": "Schließen",
+  "display.system_titlebar": "Titelleiste des Systems verwenden",
+  "display.system_titlebar.sub": "Titelleiste und Fensterknöpfe der Arbeitsumgebung statt der von Snap Studio"
 }

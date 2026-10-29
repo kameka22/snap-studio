@@ -1149,6 +1149,56 @@ body:has(#view-prepare:not(.hidden)) .toast.out { transform: translateY(-12px); 
 :root:not(.mac) .sidebar .titlebar { height: 10px; }
 :root:not(.mac) .v-bar { padding-left: 16px; }
 
+/* Window buttons drawn by the interface (window-controls.js): Windows and
+   Linux without the system title bar. Fixed over the 52 px band, above the
+   sheets; the bars at the top keep clear of them (--wc-left, --wc-right:
+   the width of the buttons on each side). */
+:root { --wc-left: 0px; --wc-right: 0px; }
+.wc {
+  position: fixed;
+  top: 0;
+  z-index: 200;
+  height: var(--titlebar-height);
+  display: flex;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wc-side-left { left: 0; }
+.wc-side-right { right: 0; }
+.wc-btn {
+  appearance: none;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+.wc-btn svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; overflow: visible; }
+/* Windows 11: flat 46 px buttons over the whole band height, close in red
+   on hover. */
+:root[data-wc-os="windows"] .wc-btn { width: 46px; height: var(--titlebar-height); transition: background 80ms linear; }
+:root[data-wc-os="windows"] .wc-btn:hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
+:root[data-wc-os="windows"] .wc-btn:active { background: color-mix(in srgb, var(--text) 6%, transparent); color: color-mix(in srgb, var(--text) 70%, transparent); }
+:root[data-wc-os="windows"] .wc-close:hover { background: #c42b1c; color: #fff; }
+:root[data-wc-os="windows"] .wc-close:active { background: #c84031; color: rgba(255, 255, 255, 0.8); }
+/* GNOME (libadwaita): round 24 px buttons, a faint disc, no red. */
+:root[data-wc-os="linux"] .wc { gap: 10px; padding: 0 14px; }
+:root[data-wc-os="linux"] .wc-btn { width: 24px; height: 24px; border-radius: 50%; background: color-mix(in srgb, var(--text) 10%, transparent); }
+:root[data-wc-os="linux"] .wc-btn:hover { background: color-mix(in srgb, var(--text) 15%, transparent); }
+:root[data-wc-os="linux"] .wc-btn:active { background: color-mix(in srgb, var(--text) 25%, transparent); }
+:root[data-wc-os="linux"] .wc-btn svg { width: 8px; height: 8px; stroke-width: 1.4; }
+/* Room for the buttons. On the left they sit where macOS puts its traffic
+   lights: the sidebar keeps the whole band, as on macOS. */
+:root .toolbar { padding-right: calc(16px + var(--wc-right)); }
+#view-library .lib-actions { margin-right: var(--wc-right); }
+:root .v-bar { padding-right: calc(16px + var(--wc-right)); }
+:root.wc-left:not(.mac) .sidebar .titlebar { height: var(--titlebar-height); }
+:root.wc-left:not(.mac) .v-bar { padding-left: calc(16px + var(--wc-left)); }
+
 /* ---------- Printers view ---------- */
 .prn { flex: 1; display: flex; min-height: 0; }
 .led { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); flex: none; }
@@ -5325,6 +5375,7 @@ mark.ia-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); co
 }
 :root[data-theme="macos"] .sidebar .titlebar { height: calc(var(--titlebar-height) - var(--mt-gap)); }
 :root[data-theme="macos"]:not(.mac) .sidebar .titlebar { height: 12px; }
+:root[data-theme="macos"].wc-left:not(.mac) .sidebar .titlebar { height: calc(var(--titlebar-height) - var(--mt-gap)); }
 :root[data-theme="macos"] .side-nav { gap: 3px; padding: 0 8px; }
 :root[data-theme="macos"] .side-item { padding: 7px 10px; border-radius: 999px; }
 /* Selection: a translucent capsule tinted with the accent; the icon takes

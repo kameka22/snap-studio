@@ -2479,5 +2479,11 @@
   "pfiles.stale": "{name} non risponde: l'elenco potrebbe non essere aggiornato.",
   "ctl.read_err": "La stampante ha risposto con un errore: {err}",
   "pfiles.load_err": "Impossibile leggere i file della stampante: {err}",
-  "pfiles.stale_err": "Impossibile aggiornare l'elenco: {err}"
+  "pfiles.stale_err": "Impossibile aggiornare l'elenco: {err}",
+  "window.minimize": "Riduci a icona",
+  "window.maximize": "Ingrandisci",
+  "window.restore": "Ripristina",
+  "window.close": "Chiudi",
+  "display.system_titlebar": "Usa la barra del titolo di sistema",
+  "display.system_titlebar.sub": "La barra del titolo e i pulsanti della finestra del desktop, al posto di quelli di Snap Studio"
 }

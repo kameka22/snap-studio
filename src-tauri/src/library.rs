@@ -554,6 +554,8 @@ mod gtk_layer {
             w.set_halign(gtk::Align::Start);
             w.set_valign(gtk::Align::Start);
             overlay.add_overlay(&w);
+            // Over the window's right and bottom edges: resizes from there.
+            crate::titlebar::edge_resize::attach(&w);
         });
     }
 

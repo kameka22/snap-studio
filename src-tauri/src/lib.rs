@@ -33,6 +33,7 @@ mod slice;
 mod slicers;
 mod stl;
 mod thumbs;
+mod titlebar;
 mod update;
 mod util;
 mod write3mf;
@@ -2011,9 +2012,13 @@ pub fn run() {
             // The main window is declared with `create: false` so that it can
             // receive the translation catalogs before any of its scripts run.
             if let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == "main") {
-                tauri::WebviewWindowBuilder::from_config(app.handle(), cfg)?
-                    .initialization_script(i18n::init_script())
-                    .build()?;
+                let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), cfg)?
+                    .initialization_script(i18n::init_script());
+                // Linux: the system title bar when the user prefers it
+                // (titlebar.rs); the interface draws its own otherwise.
+                #[cfg(target_os = "linux")]
+                let builder = builder.decorations(titlebar::system_bar());
+                builder.build()?;
             }
             if let Some(window) = app.get_webview_window("main") {
                 // Whole window vibrant: the CSS makes the content area opaque and leaves
@@ -2028,6 +2033,12 @@ pub fn run() {
                         None,
                     );
                 }
+                // Linux: resizing from the edges without decorations.
+                #[cfg(target_os = "linux")]
+                let _ = window.with_webview(|pw| {
+                    use gtk::prelude::*;
+                    titlebar::edge_resize::attach(pw.inner().upcast_ref());
+                });
                 // Created invisible to avoid the white flash before the first render.
                 // Showing it does not bring the app forward on macOS: focus it too.
                 let _ = window.show();
@@ -2037,6 +2048,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             language_set,
+            titlebar::titlebar_info,
+            titlebar::titlebar_system_set,
             update::app_version,
             update::system_name,
             update::update_check,

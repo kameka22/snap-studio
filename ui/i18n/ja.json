@@ -2399,5 +2399,11 @@
   "pfiles.stale": "{name} が応答しません。一覧が最新でない可能性があります。",
   "ctl.read_err": "プリンターがエラーを返しました：{err}",
   "pfiles.load_err": "プリンターのファイルを読み込めませんでした：{err}",
-  "pfiles.stale_err": "一覧を更新できませんでした：{err}"
+  "pfiles.stale_err": "一覧を更新できませんでした：{err}",
+  "window.minimize": "最小化",
+  "window.maximize": "最大化",
+  "window.restore": "元に戻す (縮小)",
+  "window.close": "閉じる",
+  "display.system_titlebar": "システムのタイトルバーを使用",
+  "display.system_titlebar.sub": "Snap Studio のものの代わりに、デスクトップのタイトルバーとウィンドウボタンを使います"
 }
