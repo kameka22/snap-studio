@@ -2033,12 +2033,19 @@ pub fn run() {
                         None,
                     );
                 }
-                // Linux: resizing from the edges without decorations.
+                // Linux, without decorations: resizing from the edges,
+                // rounded corners.
                 #[cfg(target_os = "linux")]
                 let _ = window.with_webview(|pw| {
                     use gtk::prelude::*;
                     titlebar::edge_resize::attach(pw.inner().upcast_ref());
+                    titlebar::round_corners::attach(pw.inner().upcast_ref());
                 });
+                #[cfg(target_os = "linux")]
+                if let Ok(gw) = window.gtk_window() {
+                    use gtk::prelude::*;
+                    titlebar::round_corners::attach_window(gw.upcast_ref());
+                }
                 // Created invisible to avoid the white flash before the first render.
                 // Showing it does not bring the app forward on macOS: focus it too.
                 let _ = window.show();

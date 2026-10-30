@@ -2,10 +2,10 @@
 /* Window buttons on Windows and Linux (src-tauri/src/titlebar.rs). The
    window has no system decorations: its buttons are drawn here, in the 52 px
    band where macOS puts its traffic lights. Windows: top right, its own
-   style. Linux: the side(s) and buttons of the desktop's layout, GNOME style;
-   the system title bar can be put back from Settings › Display. The bars at
-   the top (sidebar, toolbar, Library tabs, 3D viewer) keep them clear through
-   --wc-left / --wc-right. */
+   style. Linux: the three buttons on the side of the desktop's layout, GNOME
+   style; the system title bar can be put back from Settings › Display. The
+   bars at the top (sidebar, toolbar, Library tabs, 3D viewer) keep them clear
+   through --wc-left / --wc-right. */
 
 const WC_WINDOW = window.__TAURI__.window.getCurrentWindow();
 

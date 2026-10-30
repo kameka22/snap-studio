@@ -556,6 +556,8 @@ mod gtk_layer {
             overlay.add_overlay(&w);
             // Over the window's right and bottom edges: resizes from there.
             crate::titlebar::edge_resize::attach(&w);
+            // Over the window's corners: rounds them there too.
+            crate::titlebar::round_corners::attach(&w);
         });
     }
 
