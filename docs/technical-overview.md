@@ -184,7 +184,7 @@ A welcome assistant then sets up the language, the models folder, the U1 on your
 
 Since 2026-10-28, the opening of the Snapmaker Innovation Fund Phase 2. Updated with each release; full details are in the [CHANGELOG](../CHANGELOG.md).
 
-**0.18.0, 2026-10-31**
+**0.18.0, 2026-10-31** ([#85](https://github.com/kameka22/snap-studio/pull/85))
 - STL and 3MF models in AI conversations: attached when creating a conversation or during one (dropped, chosen or pasted), copied into the conversation's folder, with a conversation that can start from a single model ([#83](https://github.com/kameka22/snap-studio/pull/83)).
 - An integrated title bar on Windows and Linux, as on macOS, with the system's title bar still available on Linux ([#27](https://github.com/kameka22/snap-studio/pull/27)).
 - Printer › Files: Ctrl/Cmd-click and Shift-click to pick several files, and right-click → Delete deleting every picked file ([#84](https://github.com/kameka22/snap-studio/pull/84)).
