@@ -1397,7 +1397,12 @@ function iaRenderStats(s) {
    first one again for as many chips as fit. */
 function iaFitDock() {
   const dock = $("ia-dock");
-  if (!dock || !dock.offsetWidth) return;
+  if (!dock) return;
+  // An empty zone folds away. Not with `:has(:empty)` in the CSS: WebKit
+  // does not always restyle it when the zone fills, and the versions stayed
+  // hidden until something else (Terminal and back) restyled the bar.
+  for (const id of ["ia-versions", "ia-stats"]) $(id).parentElement.classList.toggle("empty", !$(id).childElementCount);
+  if (!dock.offsetWidth) return;
   const stats = $("ia-stats");
   const chips = [...stats.children];
   const more = $("ia-more");

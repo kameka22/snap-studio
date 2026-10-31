@@ -34,6 +34,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   and size (#83).
 
 ### Fixed
+- **AI versions sometimes missing**: the versions (v1, v2…) at the bottom
+  left of an AI conversation could stay hidden until switching to Terminal
+  and back; they now show as soon as they are read.
 - **Files dropped on the AI view or its creation sheet were ignored**: they
   are now attached; a file that can't be (wrong type, too large, unreadable,
   too many) says why instead of being skipped silently (#83).

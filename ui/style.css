@@ -2440,14 +2440,14 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 }
 .ia-zone-lead { flex: none; }
 /* No version yet (an object still being created): no empty first zone. */
-.ia-zone-lead:has(> .ia-versions:empty) { display: none; }
-.ia-zone-lead:has(> .ia-versions:empty) + .ia-zone { margin-left: 0; padding-left: 0; }
-.ia-zone-lead:has(> .ia-versions:empty) + .ia-zone::before { display: none; }
+.ia-zone-lead.empty { display: none; }
+.ia-zone-lead.empty + .ia-zone { margin-left: 0; padding-left: 0; }
+.ia-zone-lead.empty + .ia-zone::before { display: none; }
 .ia-zone-stats { flex: 1 1 auto; min-width: 0; justify-content: center; }
 .ia-zone-actions { flex: none; }
 /* Nothing measured (waiting, unreadable): no empty zone between two lines. */
-.ia-zone-stats:has(> .ia-stats:empty) { visibility: hidden; }
-.ia-zone-stats:has(> .ia-stats:empty) + .ia-zone-actions::before { display: none; }
+.ia-zone-stats.empty { visibility: hidden; }
+.ia-zone-stats.empty + .ia-zone-actions::before { display: none; }
 /* Versions: the app's segmented control while short, a menu beyond. */
 .ia-versions { display: flex; align-items: center; }
 .ia-versions:empty { display: none; }
