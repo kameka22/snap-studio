@@ -68,7 +68,7 @@ function traceEvent(ev, st, t) {
     case "user": {
       const content = ev.message?.content;
       const blocks = typeof content === "string" ? [{ type: "text", text: content }] : content || [];
-      let out = "", text = "", images = 0;
+      let out = "", text = "", images = 0, models = 0;
       for (const b of blocks) {
         if (b.type === "tool_result") {
           const lines = traceResultText(b.content).split(/\r?\n/).filter((l, k, all) => l.trim() || k < all.length - 1);
@@ -77,11 +77,14 @@ function traceEvent(ev, st, t) {
           out += shown.map((l, k) => `${color}${k ? "    " : "  ⎿ "}${l}${C.off}\r\n`).join("") || `${color}  ⎿ ${C.off}\r\n`;
           if (lines.length > shown.length) out += `${C.dim}    ${t("trace.more", { n: lines.length - shown.length })}${C.off}\r\n`;
         } else if (b.type === "attachment" || b.type === "image") images++;
+        else if (b.type === "model") models++;
         else if (b.type === "text" && b.text.trim() && !b.text.startsWith("[Request interrupted")) text += b.text;
       }
-      if (text || images) {
+      // A message of models only (STL/3MF, no text) is still a message.
+      if (text || images || models) {
         const pics = images ? ` ${C.dim}${t("trace.images", { n: images })}${C.off}` : "";
-        out = `\r\n${C.user}❯${C.off} ${C.bold}${traceNl(text)}${C.off}${pics}\r\n` + out;
+        const mods = models ? ` ${C.dim}${t("trace.models", { n: models })}${C.off}` : "";
+        out = `\r\n${C.user}❯${C.off} ${C.bold}${traceNl(text)}${C.off}${pics}${mods}\r\n` + out;
       }
       return out;
     }

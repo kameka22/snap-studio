@@ -563,8 +563,10 @@ installer ce qui manque ; un mode s'ouvre dès que tout est prêt.
 
 **Une conversation**, à partir d'un fichier (« Modifier avec l'IA » dans
 Fichiers) ou de zéro : décrivez ce que vous voulez — des idées sont
-proposées — ajoutez des images (croquis, photos : déposées, collées ou
-choisies), choisissez où elle tourne et le modèle Claude. L'aperçu 3D et la
+proposées — ajoutez des images (croquis, photos) ou des modèles 3D (STL,
+3MF) que Claude modifie ou dont il part : déposés, collés ou choisis. Avec
+un seul modèle, la conversation peut partir de lui, comme « Modifier avec
+l'IA ». Choisissez où elle tourne et le modèle Claude. L'aperçu 3D et la
 discussion sont côte à côte : chaque version exportée par Claude est gardée,
 mesurée (taille, poids, étanchéité) et peut être réaffichée ;
 **Enregistrer** met la version affichée dans vos fichiers, **Découper**

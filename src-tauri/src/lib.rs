@@ -10,6 +10,7 @@ mod gcode;
 mod gcode_thumbs;
 mod i18n;
 mod ia;
+mod ia_attach;
 mod jobs;
 mod library;
 mod maintenance;
@@ -1482,16 +1483,33 @@ fn ia_chat_history(id: String) -> Vec<serde_json::Value> {
     chat::history(&id)
 }
 
-/// Sends a message (and its images), starting Claude when needed. Slow
-/// enough (process start, image writing) to stay off the main thread.
+/// Sends a message (and its images and models), starting Claude when
+/// needed. Slow enough (process start, image writing, model conversion) to
+/// stay off the main thread. `models`: paths of STL or 3MF files.
 #[tauri::command]
-async fn ia_chat_send(app: tauri::AppHandle, id: String, text: String, images: Vec<chat::Attachment>) -> Result<(), String> {
+async fn ia_chat_send(
+    app: tauri::AppHandle,
+    id: String,
+    text: String,
+    images: Vec<chat::Attachment>,
+    models: Option<Vec<String>>,
+) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let c = ia::get(&id).map_err(ui_err)?;
-        chat::send(&app, &c, &text, &images).map_err(ui_err)
+        let models: Vec<PathBuf> = models.unwrap_or_default().into_iter().map(PathBuf::from).collect();
+        chat::send(&app, &c, &text, &images, &models).map_err(ui_err)
     })
     .await
     .map_err(ui_err)?
+}
+
+/// Checks files the user wants to attach to an AI message (dropped, chosen
+/// or pasted): images come back in base64, models with what their chip
+/// shows, the others with the reason they are refused. A big model takes a
+/// while to read: off the main thread.
+#[tauri::command]
+async fn ia_attach_files(paths: Vec<String>) -> Result<Vec<ia_attach::Staged>, String> {
+    off_main(move || Ok(paths.iter().map(|p| ia_attach::inspect(Path::new(p))).collect())).await
 }
 
 #[tauri::command]
@@ -2042,6 +2060,7 @@ pub fn run() {
             ia_stats,
             ia_chat_history,
             ia_chat_send,
+            ia_attach_files,
             ia_chat_stop,
             ia_chat_answer,
             ia_chat_model,

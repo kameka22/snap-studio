@@ -23,7 +23,8 @@ const IA = {
   source: null,
   /* "edit" from Files, "create" from the ＋ button. */
   mode: "edit",
-  /* Images dropped in the sheet: they leave with the initial request. */
+  /* Images and models added in the sheet: they leave with the initial
+     request. */
   attach: [],
   /* Conversation open on screen, or null on the list. */
   open: null,
@@ -607,6 +608,7 @@ function iaSheet(mode) {
   $("ia-new-icon").innerHTML = IA_GLYPH;
   $("ia-prompt").value = "";
   IA.attach = [];
+  $("ia-from-model").checked = true;
   iaRenderAttach();
   $("ia-msg").textContent = "";
   $("ia-msg").className = "pf-test";
@@ -691,43 +693,56 @@ $("ia-bed-fill").addEventListener("click", iaBedFill);
 
 $("ia-prompt").addEventListener("input", iaPromptFit);
 
-/* Images for the initial request, as in the conversation: dropped anywhere
-   on the sheet, pasted in the request, or chosen. */
+/* Images and models for the initial request, as in the conversation:
+   dropped anywhere on the window while the sheet is open (app.js), pasted
+   in the request, or chosen. */
 function iaRenderAttach() {
   chatRenderThumbs($("ia-attach"), IA.attach, iaRenderAttach);
+  // One model in a creation sheet: the conversation may start from it.
+  const models = IA.attach.filter((a) => a.kind === "model");
+  const one = IA.mode === "create" && models.length === 1;
+  $("ia-from-row").classList.toggle("hidden", !one);
+  if (one) $("ia-from-sub").textContent = tr("ia.new.from_model_sub", { name: models[0].name });
+  // Started from a model, the folder and size of a new object do not apply.
+  $("ia-cfields").classList.toggle("hidden", IA.mode !== "create" || !!iaFromModel());
 }
-async function iaAddFiles(files) {
-  await chatReadImages(files, IA.attach);
+/* The model the conversation starts from, when the switch says so. */
+function iaFromModel() {
+  const models = IA.attach.filter((a) => a.kind === "model");
+  return IA.mode === "create" && models.length === 1 && $("ia-from-model").checked ? models[0] : null;
+}
+$("ia-prompt").addEventListener("paste", (e) => chatPaste(e, () => IA.attach, iaRenderAttach));
+$("ia-from-model").addEventListener("change", iaRenderAttach);
+$("ia-drop-add").addEventListener("click", async () => {
+  const paths = await chatPickFiles();
+  if (!paths.length || $("iamodal").classList.contains("hidden")) return;
+  await chatAttachPaths(paths, () => IA.attach);
   iaRenderAttach();
+});
+
+/* Files dropped on the window (app.js, attach-logic.js attachTarget): to
+   the open sheet, or to the conversation shown. */
+async function iaDropPaths(target, paths) {
+  if (target === "sheet") {
+    await chatAttachPaths(paths, () => IA.attach);
+    iaRenderAttach();
+  } else if (target === "chat") {
+    if (IA.locked) {
+      toast(tr("chat.drop_locked"), true);
+      return;
+    }
+    // In the terminal view the message field is hidden: files dropped there
+    // would wait unseen for the next message. The chat shows them.
+    if (IA.view !== "chat") iaSwitchView("chat");
+    await chatAttachPaths(paths, () => CHAT.attach);
+    chatRenderAttachments();
+  }
 }
-const iaHasImage = (e) => [...(e.dataTransfer?.items || [])].some((i) => i.type.startsWith("image/"));
-const iaBox = $("iamodal").querySelector(".modal-box");
-iaBox.addEventListener("dragover", (e) => {
-  if (!iaHasImage(e)) return;
-  e.preventDefault();
-  $("ia-drop").classList.add("over");
-});
-iaBox.addEventListener("dragleave", (e) => {
-  if (!iaBox.contains(e.relatedTarget)) $("ia-drop").classList.remove("over");
-});
-iaBox.addEventListener("drop", (e) => {
-  $("ia-drop").classList.remove("over");
-  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
-  if (!files.length) return;
-  e.preventDefault();
-  iaAddFiles(files);
-});
-$("ia-prompt").addEventListener("paste", (e) => {
-  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
-  if (!files.length) return;
-  e.preventDefault();
-  iaAddFiles(files);
-});
-$("ia-drop-add").addEventListener("click", () => $("ia-file").click());
-$("ia-file").addEventListener("change", (e) => {
-  iaAddFiles([...e.target.files]);
-  e.target.value = "";
-});
+/* While files are dragged over the window: where they would go. */
+function iaDropHint(target) {
+  $("ia-drop").classList.toggle("over", target === "sheet");
+  $("ia-chat").classList.toggle("drop-over", target === "chat" && !IA.locked);
+}
 $("ia-ideas").addEventListener("click", (e) => {
   const b = e.target.closest("[data-idea]");
   if (!b) return;
@@ -758,6 +773,12 @@ function iaBounds() {
 }
 
 async function iaCreate() {
+  // A file still being checked would be left out of the conversation.
+  if (ATTACH_CHECKING) {
+    $("ia-msg").textContent = tr("ia.new.checking");
+    $("ia-msg").className = "pf-test busy";
+    return;
+  }
   const create = IA.mode === "create";
   if (!create && !IA.source) return;
   if (!iaModes().includes(IA.engine)) {
@@ -771,7 +792,8 @@ async function iaCreate() {
     $("ia-prompt").focus();
     return;
   }
-  if (create && !IA.dest) {
+  const from = iaFromModel();
+  if (create && !from && !IA.dest) {
     $("ia-msg").textContent = tr("ia.new.need_dest");
     $("ia-msg").className = "pf-test err";
     return;
@@ -782,7 +804,11 @@ async function iaCreate() {
   $("ia-msg").className = "pf-test busy";
   const model = IA.newModel || null;
   try {
-    const c = create
+    // Started from the model of the sheet: an edit conversation, its result
+    // saved next to that file as for "Edit with AI".
+    const c = from
+      ? await invoke("ia_create", { source: from.path, prompt: $("ia-prompt").value, engine: IA.engine, model })
+      : create
       ? await invoke("ia_create_blank", {
           prompt: $("ia-prompt").value,
           engine: IA.engine,
@@ -796,7 +822,8 @@ async function iaCreate() {
           engine: IA.engine,
           model,
         });
-    if (IA.attach.length) CHAT.firstImages.set(c.id, IA.attach);
+    const rest = IA.attach.filter((a) => a !== from);
+    if (rest.length) CHAT.firstAttach.set(c.id, rest);
     IA.attach = [];
     closeSheet($("iamodal"));
     await iaRefresh();
@@ -1379,7 +1406,12 @@ function iaRenderStats(s) {
    first one again for as many chips as fit. */
 function iaFitDock() {
   const dock = $("ia-dock");
-  if (!dock || !dock.offsetWidth) return;
+  if (!dock) return;
+  // An empty zone folds away. Not with `:has(:empty)` in the CSS: WebKit
+  // does not always restyle it when the zone fills, and the versions stayed
+  // hidden until something else (Terminal and back) restyled the bar.
+  for (const id of ["ia-versions", "ia-stats"]) $(id).parentElement.classList.toggle("empty", !$(id).childElementCount);
+  if (!dock.offsetWidth) return;
   const stats = $("ia-stats");
   const chips = [...stats.children];
   const more = $("ia-more");

@@ -19,6 +19,7 @@
 //! filtering.
 
 use crate::ia::Conversation;
+use crate::ia_attach::StagedModel;
 use crate::pty::Tools;
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
@@ -515,7 +516,8 @@ pub fn history(id: &str) -> Vec<Value> {
 }
 
 /// File name of an attachment in the workspace: numbered, without any path.
-fn attachment_name(dir: &Path, name: &str) -> String {
+/// Also used for the models of `sources/` (ia_attach.rs).
+pub(crate) fn attachment_name(dir: &Path, name: &str) -> String {
     let clean: String = Path::new(name)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -537,8 +539,9 @@ fn attachment_name(dir: &Path, name: &str) -> String {
 }
 
 /// Saves the attachments and returns the user message as the log keeps it:
-/// file names instead of data.
-fn save_attachments(ws: &Path, text: &str, images: &[Attachment]) -> Value {
+/// file names instead of data. Models, already copied into `sources/`,
+/// are kept by name with what their chip shows.
+fn save_attachments(ws: &Path, text: &str, images: &[Attachment], models: &[StagedModel]) -> Value {
     let dir = attachments_dir(ws);
     let _ = std::fs::create_dir_all(&dir);
     let mut content: Vec<Value> = Vec::new();
@@ -548,6 +551,16 @@ fn save_attachments(ws: &Path, text: &str, images: &[Attachment]) -> Value {
             let _ = std::fs::write(dir.join(&name), bytes);
         }
         content.push(json!({ "type": "attachment", "name": name, "media_type": a.media_type }));
+    }
+    for m in models {
+        content.push(json!({
+            "type": "model",
+            "name": m.name,
+            "original": m.original,
+            "tris": m.tris,
+            "parts": m.parts,
+            "size_mm": m.size_mm,
+        }));
     }
     if !text.is_empty() {
         content.push(json!({ "type": "text", "text": text }));
@@ -880,11 +893,34 @@ fn write_line(id: &str, message: &Value) -> Result<()> {
 
 /// Sends a message, starting Claude first if needed. The message is logged
 /// before it leaves, with its attachments saved in the workspace.
-pub fn send(app: &AppHandle, c: &Conversation, text: &str, images: &[Attachment]) -> Result<()> {
-    ensure_started(app, c)?;
+///
+/// `models` are paths of the user's files: copied into `sources/` first, so
+/// that one that can no longer be read stops the message before anything
+/// leaves (the copies already made are removed, as when Claude can't start).
+pub fn send(app: &AppHandle, c: &Conversation, text: &str, images: &[Attachment], models: &[PathBuf]) -> Result<()> {
     let ws = crate::ia::workspace(&c.id);
-    log_append(&ws, &[save_attachments(&ws, text, images)]);
-    if let Err(e) = write_line(&c.id, &user_message(text, images)) {
+    let mut staged: Vec<StagedModel> = Vec::new();
+    let unstage = |staged: &[StagedModel]| {
+        for m in staged {
+            let _ = std::fs::remove_file(ws.join(crate::ia_attach::SOURCES).join(&m.name));
+        }
+    };
+    for p in models {
+        match crate::ia_attach::stage_model(&ws, p) {
+            Ok(m) => staged.push(m),
+            Err(e) => {
+                unstage(&staged);
+                return Err(e);
+            }
+        }
+    }
+    if let Err(e) = ensure_started(app, c) {
+        unstage(&staged);
+        return Err(e);
+    }
+    log_append(&ws, &[save_attachments(&ws, text, images, &staged)]);
+    let text = crate::ia_attach::with_models(text, &staged);
+    if let Err(e) = write_line(&c.id, &user_message(&text, images)) {
         close(&c.id);
         return Err(e);
     }
@@ -1343,6 +1379,26 @@ while IFS= read -r line; do echo "$line" >> '{}'; done
         assert_eq!(h.iter().filter(|e| e["type"] == "result").count(), 1, "the interrupt shows as stopped");
     }
 
+    /// A model is logged by its name in `sources/` and what its chip shows,
+    /// never by the path of the user's file.
+    #[test]
+    fn models_are_logged_without_their_path() {
+        let ws = std::env::temp_dir().join(format!("snapstudio-chat-models-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&ws);
+        std::fs::create_dir_all(&ws).unwrap();
+        let m =
+            StagedModel { name: "001-bracket.3mf".into(), original: "bracket.stl".into(), tris: 12, parts: 1, size_mm: [40.0, 20.0, 10.0] };
+        let msg = save_attachments(&ws, "thicker", &[], &[m]);
+        let content = msg["message"]["content"].as_array().unwrap();
+        assert_eq!(content[0]["type"], "model");
+        assert_eq!(content[0]["name"], "001-bracket.3mf");
+        assert_eq!(content[0]["original"], "bracket.stl");
+        assert_eq!(content[0]["size_mm"][0], 40.0);
+        assert_eq!(content[1]["text"], "thicker", "the user's own text, without the list sent to Claude");
+        assert!(!msg.to_string().contains(&*ws.to_string_lossy()), "no path in the log");
+        let _ = std::fs::remove_dir_all(&ws);
+    }
+
     #[test]
     fn the_log_is_the_history_once_it_exists() {
         let ws = std::env::temp_dir().join(format!("snapstudio-chat-{}", std::process::id()));
@@ -1353,7 +1409,7 @@ while IFS= read -r line; do echo "$line" >> '{}'; done
         assert!(!history_of(&ws, Some(&tr)).is_empty(), "no log yet: the transcript");
 
         let img = Attachment { name: "../../evil sketch.png".into(), media_type: "image/png".into(), data: "iVBORw0K".into() };
-        let msg = save_attachments(&ws, "hello", &[img]);
+        let msg = save_attachments(&ws, "hello", &[img], &[]);
         log_append(&ws, &[msg, json!({ "type": "result", "subtype": "success" })]);
         let h = history_of(&ws, Some(&tr));
         assert_eq!(h.len(), 2, "the log wins over the transcript");

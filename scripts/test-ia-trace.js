@@ -20,6 +20,15 @@ const out = run([
   { type: "result", subtype: "success", is_error: false, duration_ms: 41800 },
 ]);
 assert.ok(out.includes("❯ Make it 2 mm thicker trace.images{\"n\":1}"), out);
+
+// STL/3MF attached: counted beside the text, and a message of models only
+// is still shown.
+const models = run([
+  { type: "user", message: { content: [{ type: "model", name: "1-bracket.stl" }, { type: "model", name: "2-lid.3mf" }, { type: "text", text: "Join them" }] } },
+  { type: "user", message: { content: [{ type: "model", name: "3-base.stl" }] } },
+]);
+assert.ok(models.includes('❯ Join them trace.models{"n":2}'), models);
+assert.ok(models.includes('❯  trace.models{"n":1}'), models);
 assert.ok(out.includes("● Bash(python3 tools/mf.py --thicken 2)"), "command on one line");
 assert.ok(out.includes("  ⎿ ok\r\n    saved v2.3mf\r\n"), "result lines, trailing empty line dropped");
 assert.ok(out.includes("Done: the walls\r\nare 2 mm thicker."), "newlines as terminal line ends");

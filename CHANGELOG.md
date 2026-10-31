@@ -24,8 +24,22 @@ with its packages for macOS, Windows and Linux. What comes next:
   Shift-click picks a range, as in the Files view, without entering Select
   mode first. The selection bar and the right-click menu act on the files
   picked (#84).
+- **3D models in AI conversations**: attach STL and 3MF files, when creating
+  a conversation or during one, for Claude to modify or build on — dropped
+  on the window, chosen with the paperclip or pasted from the file manager
+  (up to 3 per message, 200 MB each). With a single model in the creation
+  sheet, "Start from this model" (on by default) makes the conversation
+  start from it, as "Edit with AI" does; otherwise Claude gets the models as
+  references next to its work. The message shows each model's name, parts
+  and size (#83).
 
 ### Fixed
+- **AI versions sometimes missing**: the versions (v1, v2…) at the bottom
+  left of an AI conversation could stay hidden until switching to Terminal
+  and back; they now show as soon as they are read.
+- **Files dropped on the AI view or its creation sheet were ignored**: they
+  are now attached; a file that can't be (wrong type, too large, unreadable,
+  too many) says why instead of being skipped silently (#83).
 - **Presets made with Snapmaker Orca 2.3**: a custom print profile based on
   a system profile that Orca 2.4 renamed (e.g. "0.08 Extra Fine" → "0.08mm
   Standard") slices again instead of failing with "unresolvable

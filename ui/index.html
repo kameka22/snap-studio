@@ -818,10 +818,10 @@
             </div>
           </div>
           <div id="ia-dock" class="ia-dock" role="toolbar" aria-label="Details" data-i18n-aria="ia.details">
-            <div class="ia-zone ia-zone-lead">
+            <div class="ia-zone ia-zone-lead empty">
               <div id="ia-versions" class="ia-versions" role="group" aria-label="Versions" data-i18n-aria="ia.versions"></div>
             </div>
-            <div class="ia-zone ia-zone-stats">
+            <div class="ia-zone ia-zone-stats empty">
               <div id="ia-stats" class="ia-stats"></div>
               <button id="ia-more" class="tb-btn ia-more hidden" aria-haspopup="dialog" aria-expanded="false" aria-controls="ia-pop" title="All details" data-i18n-title="ia.details_all" aria-label="All details" data-i18n-aria="ia.details_all"><svg viewBox="0 0 24 24"><path d="M6 10.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3m6 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3m6 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3"/></svg></button>
               <div id="ia-pop" class="ia-pop hidden" role="dialog" aria-label="Details" data-i18n-aria="ia.details"></div>
@@ -840,7 +840,7 @@
           <div class="chat-compose">
             <div id="chat-attach" class="chat-attach hidden"></div>
             <div class="chat-row">
-              <button id="chat-add" class="chat-icon" title="Attach an image" data-i18n-title="chat.attach">
+              <button id="chat-add" class="chat-icon" title="Attach images or 3D models (STL, 3MF)" data-i18n-title="chat.attach">
                 <svg viewBox="0 0 24 24"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10z"/></svg>
               </button>
               <select id="chat-model" class="chat-model" title="Claude model for this conversation" data-i18n-title="chat.model.title"></select>
@@ -853,7 +853,6 @@
               </button>
             </div>
           </div>
-          <input id="chat-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
         </div>
         <div id="ia-term" class="ia-term"></div>
         <button id="ia-term-stop" class="ia-term-stop hidden" title="Stop Claude's current answer (Esc)" data-i18n-title="ia.stop.term_title"><svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg><span data-i18n="ia.stop.button">Stop Claude</span></button>
@@ -1407,9 +1406,9 @@
       <div id="ia-attach" class="chat-attach hidden"></div>
       <button id="ia-drop-add" type="button" class="ia-drop-add">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10z"/></svg>
-        <span data-i18n="ia.new.drop">Drop images here (sketches, photos), or click to choose</span>
+        <span data-i18n="ia.new.drop">Drop images or 3D models (STL, 3MF) here, or click to choose</span>
       </button>
-      <input id="ia-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+      <label id="ia-from-row" class="sw-label ia-from hidden"><input type="checkbox" id="ia-from-model" class="sw small" role="switch" checked /><span><span data-i18n="ia.new.from_model">Start from this model</span> <small id="ia-from-sub"></small></span></label>
     </div>
     <div class="ia-ideas">
       <span class="ia-new-k" data-i18n="ia.new.ideas">Ideas</span>
@@ -2223,6 +2222,7 @@
 <script src="vendor/marked.js"></script>
 <script src="vendor/purify.js"></script>
 <script src="vendor/xterm-addon-fit.js"></script>
+<script src="attach-logic.js"></script>
 <script src="ai-logic.js"></script>
 <script src="ai-setup.js"></script>
 <script src="ia-list.js"></script>

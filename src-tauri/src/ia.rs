@@ -524,7 +524,7 @@ pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
 
 /// Writes parts as one object, the way Claude's tools do, replacing `dst`
 /// at once: the watch must never read a half-written file.
-fn write_3mf(dst: &Path, name: &str, parts: &[Part]) -> Result<()> {
+pub(crate) fn write_3mf(dst: &Path, name: &str, parts: &[Part]) -> Result<()> {
     let tmp = dst.with_file_name(format!(".writing-{}", dst.file_name().unwrap_or_default().to_string_lossy()));
     crate::write3mf::write_multipart(&tmp, name, parts, &on_plate(parts))?;
     std::fs::rename(&tmp, dst)?;
@@ -600,7 +600,8 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
     // Conversion first: if the object is unreadable, nothing must remain.
     let stem = source.file_stem().unwrap_or_default().to_string_lossy().to_string();
     let src_3mf = ws.join(SOURCE);
-    let parts = match parts_of_3mf(source).and_then(|p| write_3mf(&src_3mf, &stem, &p).map(|_| p)) {
+    // A 3MF or an STL (ia_attach.rs: the same checks as an attached model).
+    let parts = match crate::ia_attach::model_parts(source).and_then(|p| write_3mf(&src_3mf, &stem, &p).map(|_| p)) {
         Ok(p) => p,
         Err(e) => {
             let _ = std::fs::remove_dir_all(dir(&id));
@@ -768,6 +769,17 @@ Snapmaker U1) that prints it. That is how a multicolor model stays one.
 - `tools/measure.py` — dimensions, volume, watertightness, part by part.
 - `trimesh`, `manifold3d` (booleans), `numpy`.";
 
+/// The models the user attaches (ia_attach.rs), in both kinds of
+/// conversation.
+const SOURCES_DOC: &str = "- `sources/` — 3D models the user attached (STL and 3MF files, each
+  converted to a 3MF of this workspace's layout: one object, one part per
+  head). Read them with `mf.read(\"sources/…\")`; **never modify them**. To
+  build on one, read its parts, change or combine them, and install the
+  result with `tools/export.py`, as usual. Each is centered on the plate:
+  the positions of the original file are not kept. STL has no unit:
+  millimeters are assumed; if a size looks wrong (under 1 mm or over 1 m),
+  ask.";
+
 /// The instructions left to Claude in the working folder.
 fn instructions(source_name: &str, source: &Summary) -> String {
     // The language Claude must answer in: the app's, named in English.
@@ -800,6 +812,7 @@ before changing, and look again afterwards.
 - `chat.jsonl`, `attachments/` — this conversation as the app shows it, and
   the images the user attached. Read attachments when asked; never modify
   either.
+{SOURCES_DOC}
 
 {parts}
 {COMMON}
@@ -872,6 +885,7 @@ shapes, main dimensions, colors, print orientation.
 - `chat.jsonl`, `attachments/` — this conversation as the app shows it, and
   the images the user attached (sketches, photos: look at them). Never modify
   either.
+{SOURCES_DOC}
 
 {COMMON}
 
@@ -1208,6 +1222,29 @@ mod tests {
         remove(&c.id).unwrap();
         assert!(!dir(&c.id).exists());
         assert!(!list().iter().any(|x| x.id == c.id));
+        let _ = std::fs::remove_file(&src);
+    }
+
+    /// An STL dropped in the creation sheet with "Start from this model"
+    /// becomes the conversation's original, as a one-part 3MF.
+    #[test]
+    fn a_conversation_starts_from_an_stl() {
+        let tmp = std::env::temp_dir().join("snapstudio-ia-test");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("bracket.stl");
+        crate::stl::write(&src, &crate::stl::tests_cube()).unwrap();
+        let c = create(&src, "", "local").unwrap();
+        let ws = workspace(&c.id);
+        for f in ["source.3mf", "out/current.3mf", "versions/v1.3mf"] {
+            assert!(ws.join(f).is_file(), "{f} should exist");
+        }
+        let parts = parts_of_3mf(&ws.join("source.3mf")).unwrap();
+        assert_eq!((parts.len(), parts[0].tris.len(), parts[0].extruder), (1, 12, 1));
+        assert_eq!(c.title, "bracket");
+        assert_eq!(c.source_name, "bracket.stl");
+        let md = std::fs::read_to_string(ws.join("CLAUDE.md")).unwrap();
+        assert!(md.contains("`sources/`"), "the instructions tell about attached models");
+        remove(&c.id).unwrap();
         let _ = std::fs::remove_file(&src);
     }
 
