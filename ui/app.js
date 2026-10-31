@@ -1136,13 +1136,37 @@ function refreshCacheSize() {
 }
 
 
-/* drag and drop of a folder */
-listen("tauri://drag-enter", () => document.body.classList.add("dragover"));
-listen("tauri://drag-leave", () => document.body.classList.remove("dragover"));
+/* drag and drop. Tauri takes every file dropped on the window (the page's
+   own drop never gets them): files go to the AI's creation sheet when it
+   is open, or to the conversation the AI view shows (attach-logic.js,
+   ia.js iaDropPaths); anywhere else, a folder opens in Files. */
+function dropTarget() {
+  return attachTarget({
+    sheetOpen: !$("iamodal").classList.contains("hidden"),
+    iaVisible: !$("view-ia").classList.contains("hidden"),
+    convOpen: !!CHAT.id,
+  });
+}
+listen("tauri://drag-enter", () => {
+  const target = dropTarget();
+  document.body.classList.toggle("dragover", !target);
+  iaDropHint(target);
+});
+listen("tauri://drag-leave", () => {
+  document.body.classList.remove("dragover");
+  iaDropHint(null);
+});
 listen("tauri://drag-drop", (e) => {
   document.body.classList.remove("dragover");
-  const p = e.payload?.paths?.[0];
-  // Images are for the AI's message or creation sheet (their own drop).
+  iaDropHint(null);
+  const paths = e.payload?.paths || [];
+  const target = dropTarget();
+  if (target) {
+    iaDropPaths(target, paths);
+    return;
+  }
+  const p = paths[0];
+  // An image has nothing to open outside the AI view.
   if (!p || /\.(png|jpe?g|gif|webp)$/i.test(p)) return;
   // A file dropped opens its folder (a file path pushed to the recents
   // would stay there as a dead entry); a folder opens itself.

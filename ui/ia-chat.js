@@ -22,18 +22,19 @@ const CHAT = {
   /* tool_use id → row; request_id → permission card. */
   tools: new Map(),
   perms: new Map(),
-  /* Images waiting to leave with the next message. */
+  /* Images and models (attach-logic.js) waiting to leave with the next
+     message. */
   attach: [],
   /* Initial requests already sent, so a reopening does not send them twice. */
   autoSent: new Set(),
-  /* Conversation id → images dropped in the creation sheet, which leave
-     with its initial request. */
-  firstImages: new Map(),
+  /* Conversation id → images and models added in the creation sheet, which
+     leave with its initial request. */
+  firstAttach: new Map(),
   /* The turn of the conversation shown: "" | "answering" | "stopping". */
   phase: "",
 };
 
-const CHAT_MAX_IMAGES = 5;
+const CHAT_MAX_IMAGES = ATTACH_MAX_IMAGES;
 /* Longest side sent to Claude: beyond it, the model scales images down anyway. */
 const CHAT_MAX_SIDE = 1568;
 const INTERRUPTED = "[Request interrupted by user]";
@@ -151,8 +152,9 @@ function chatSetLocked(on) {
 const chatAttachmentUrl = (name) =>
   schemeUrl("thumb", `/ia?ia=${encodeURIComponent(CHAT.id)}&att=${encodeURIComponent(name)}`);
 
-/* A user message: images first, then the text. `images` are URLs. */
-function chatUserBubble(text, images = []) {
+/* A user message: images first, then the models, then the text. `images`
+   are URLs; `models` as their chips show them ({ name, parts, size_mm }). */
+function chatUserBubble(text, images = [], models = []) {
   chatClearEmpty();
   const d = chatDiv("chat-msg user");
   if (images.length) {
@@ -164,6 +166,11 @@ function chatUserBubble(text, images = []) {
       img.onerror = () => img.remove();
       row.appendChild(img);
     }
+    d.appendChild(row);
+  }
+  if (models.length) {
+    const row = chatDiv("chat-models");
+    for (const m of models) row.appendChild(chatModelChip(m));
     d.appendChild(row);
   }
   if (text) {
@@ -502,13 +509,15 @@ function chatHandle(ev, live) {
       const content = ev.message?.content;
       const blocks = typeof content === "string" ? [{ type: "text", text: content }] : content || [];
       const images = [];
+      const models = [];
       let text = "";
       for (const block of blocks) {
         if (block.type === "tool_result") chatToolResult(block.tool_use_id, block.content, block.is_error);
         else if (block.type === "attachment") images.push(chatAttachmentUrl(block.name));
+        else if (block.type === "model") models.push({ name: block.original || block.name, parts: block.parts, size_mm: block.size_mm });
         else if (block.type === "text" && block.text.trim() && block.text !== INTERRUPTED) text += block.text;
       }
-      if (text || images.length) chatUserBubble(text, images);
+      if (text || images.length || models.length) chatUserBubble(text, images, models);
       break;
     }
     case "control_request":
@@ -641,11 +650,11 @@ async function chatOpen(c) {
   chatSetLocked(!!IA.locked);
   if (!past.length) {
     chatList.appendChild(chatDiv("chat-empty", tr(iaIsCreation(c) ? "chat.empty_create" : "chat.empty")));
-    const images = CHAT.firstImages.get(c.id) || [];
-    if ((c.prompt || images.length) && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
+    const attach = CHAT.firstAttach.get(c.id) || [];
+    if ((c.prompt || attach.length) && !c.started && !CHAT.autoSent.has(c.id) && !IA.locked) {
       CHAT.autoSent.add(c.id);
-      CHAT.firstImages.delete(c.id);
-      chatSend(c.prompt || "", images);
+      CHAT.firstAttach.delete(c.id);
+      chatSend(c.prompt || "", attach);
     }
   }
   $("chat-input").focus();
@@ -663,11 +672,17 @@ function chatLeave() {
 
 /* ------------------------------------------------------------ sending */
 
+/* `attachments`: images and models (attach-logic.js). Models leave as the
+   paths of the user's files: the app copies them into the conversation's
+   folder. */
 async function chatSend(text, attachments) {
   const id = CHAT.id;
   if (!id || (!text && !attachments.length)) return;
   const c = IA.list.find((x) => x.id === id);
-  chatUserBubble(text, attachments.map((a) => a.url));
+  const images = attachments.filter((a) => a.kind !== "model");
+  const models = attachments.filter((a) => a.kind === "model");
+  // As the history will show them: no weight.
+  chatUserBubble(text, images.map((a) => a.url), models.map(({ name, parts, size_mm }) => ({ name, parts, size_mm })));
   chatList.scrollTop = chatList.scrollHeight;
   chatSetBusy(true);
   // The first start of the sandbox builds its image: say so, it takes a while.
@@ -678,7 +693,8 @@ async function chatSend(text, attachments) {
     await invoke("ia_chat_send", {
       id,
       text,
-      images: attachments.map(({ name, media_type, data }) => ({ name, media_type, data })),
+      images: images.map(({ name, media_type, data }) => ({ name, media_type, data })),
+      models: models.map((m) => m.path),
     });
     if (c) c.started = true;
   } catch (e) {
@@ -757,12 +773,11 @@ function chatReadImage(file) {
   });
 }
 
-/* Reads the images among `files` into `list`, up to CHAT_MAX_IMAGES: the
-   message being written, or the creation sheet's (ia.js). */
+/* Reads images into `list`, up to CHAT_MAX_IMAGES: the message being
+   written, or the creation sheet's (ia.js). */
 async function chatReadImages(files, list) {
   for (const f of files) {
-    if (!f.type.startsWith("image/")) continue;
-    if (list.length >= CHAT_MAX_IMAGES) {
+    if (attachRoom(list, "image") <= 0) {
       toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
       break;
     }
@@ -774,9 +789,110 @@ async function chatReadImages(files, list) {
   }
 }
 
-async function chatAddFiles(files) {
-  await chatReadImages(files, CHAT.attach);
-  chatRenderAttachments();
+/* Files given by their paths — dropped on the window, chosen in the dialog,
+   pasted from a file manager — checked by the app (ia_attach.rs), then
+   added to `list`: images scaled like any other, models as chips. A file
+   refused says why; none is skipped silently. */
+async function chatAttachPaths(paths, list) {
+  if (!paths?.length) return;
+  let staged = [];
+  try {
+    staged = await invoke("ia_attach_files", { paths });
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  }
+  for (const s of staged) {
+    if (s.kind === "rejected") {
+      const [key, params] = attachRejectMessage(s);
+      if (s.reason === "size") params.max = fmtSize(s.max);
+      toast(tr(key, params), true);
+    } else if (s.kind === "model") {
+      if (attachRoom(list, "model") <= 0) {
+        toast(tr("chat.too_many_models", { n: ATTACH_MAX_MODELS }), true);
+        continue;
+      }
+      list.push(s);
+      if (attachOddScale(s.size_mm)) toast(tr("chat.model_scale", { name: s.name, size: chatModelDims(s) }));
+    } else if (attachRoom(list, "image") <= 0) {
+      toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
+    } else {
+      const bytes = Uint8Array.from(atob(s.data), (ch) => ch.charCodeAt(0));
+      try {
+        list.push(await chatReadImage(new File([bytes], s.name, { type: s.media_type })));
+      } catch (e) {
+        toast(e.message, true);
+      }
+    }
+  }
+}
+
+/* The native dialog, for images and models: paths, as a drop gives. */
+async function chatPickFiles() {
+  const all = [...ATTACH_IMAGE_EXT, ...ATTACH_MODEL_EXT];
+  try {
+    const picked = await window.__TAURI__.dialog.open({
+      multiple: true,
+      filters: [
+        { name: tr("chat.filter_all"), extensions: all },
+        { name: tr("chat.filter_images"), extensions: ATTACH_IMAGE_EXT },
+        { name: tr("chat.filter_models"), extensions: ATTACH_MODEL_EXT },
+      ],
+    });
+    return picked == null ? [] : [].concat(picked);
+  } catch (e) {
+    toast(String(e), true);
+    return [];
+  }
+}
+
+/* A paste in a message field: images from the clipboard (a screenshot), or
+   files copied in a file manager, which some systems give as paths
+   (text/uri-list). A copied file without its path cannot be read here: the
+   message says to drop or choose it. Plain text pastes as usual. */
+function chatPaste(e, list, after) {
+  const paths = pathsFromUriList(e.clipboardData?.getData("text/uri-list"));
+  const files = [...(e.clipboardData?.files || [])];
+  if (!paths.length && !files.length) return;
+  e.preventDefault();
+  if (paths.length) {
+    chatAttachPaths(paths, list).then(after);
+    return;
+  }
+  const images = files.filter((f) => f.type.startsWith("image/"));
+  for (const f of files) if (!f.type.startsWith("image/")) toast(tr("chat.paste_choose", { name: f.name || "?" }), true);
+  if (images.length) chatReadImages(images, list).then(after);
+}
+
+/* Width × depth × height of a model, as its chip says it. */
+function chatModelDims(m) {
+  const [x, y, z] = attachDims(m.size_mm);
+  return tr("chat.model_dims", { x, y, z });
+}
+
+/* A model's chip: its name, parts, size (and weight while it waits to
+   leave); a ✕ when `onRemove` is given. No preview: the 3D pane shows the
+   result. */
+function chatModelChip(m, onRemove) {
+  const chip = chatDiv("chat-model-chip");
+  chip.title = m.name;
+  const icon = document.createElement("span");
+  icon.className = "chat-model-icon";
+  icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7zm0 2.3L18.8 8 12 11.7 5.2 8zM5 9.7l6 3.3v6.6l-6-3.3zm8 9.9V13l6-3.3v6.6z"/></svg>';
+  const meta = [tr("chat.model_parts", { n: m.parts || 1 }), chatModelDims(m)];
+  if (m.bytes) meta.unshift(fmtSize(m.bytes));
+  const body = chatDiv("chat-model-body");
+  body.append(chatDiv("chat-model-name", m.name), chatDiv("chat-model-meta", meta.join(" · ")));
+  chip.append(icon, body);
+  if (onRemove) {
+    const x = document.createElement("button");
+    x.type = "button";
+    x.textContent = "✕";
+    x.title = tr("common.delete");
+    x.onclick = onRemove;
+    chip.appendChild(x);
+  }
+  return chip;
 }
 
 function chatRenderAttachments() {
@@ -784,10 +900,19 @@ function chatRenderAttachments() {
   chatGrow();
 }
 
-/* `list`'s images into `box`, each with its ✕; `again` redraws. */
+/* `list`'s images and models into `box`, each with its ✕; `again` redraws. */
 function chatRenderThumbs(box, list, again) {
   box.innerHTML = "";
   list.forEach((a, i) => {
+    if (a.kind === "model") {
+      box.appendChild(
+        chatModelChip(a, () => {
+          list.splice(i, 1);
+          again();
+        })
+      );
+      return;
+    }
     const t = chatDiv("chat-thumb");
     const img = document.createElement("img");
     img.src = a.url;
@@ -830,13 +955,7 @@ $("chat-input").addEventListener("keydown", (e) => {
     chatStop();
   }
 });
-$("chat-input").addEventListener("paste", (e) => {
-  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
-  if (files.length) {
-    e.preventDefault();
-    chatAddFiles(files);
-  }
-});
+$("chat-input").addEventListener("paste", (e) => chatPaste(e, CHAT.attach, chatRenderAttachments));
 $("chat-send").addEventListener("click", chatSubmit);
 $("chat-stop").addEventListener("click", chatStop);
 /* Esc stops Claude from anywhere in the conversation view, not only from the
@@ -852,21 +971,16 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
   chatStop();
 });
-$("chat-add").addEventListener("click", () => $("chat-file").click());
-$("chat-file").addEventListener("change", (e) => {
-  chatAddFiles([...e.target.files]);
-  e.target.value = "";
-});
-$("ia-chat").addEventListener("dragover", (e) => {
-  if ([...(e.dataTransfer?.items || [])].some((i) => i.type.startsWith("image/"))) e.preventDefault();
-});
-$("ia-chat").addEventListener("drop", (e) => {
-  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
-  if (files.length) {
-    e.preventDefault();
-    chatAddFiles(files);
+$("chat-add").addEventListener("click", async () => {
+  const paths = await chatPickFiles();
+  // The conversation may have changed while the dialog was open.
+  if (paths.length && CHAT.id) {
+    await chatAttachPaths(paths, CHAT.attach);
+    chatRenderAttachments();
   }
 });
+/* Files dropped on the window reach the conversation through app.js: with
+   Tauri's drop on, the page's own drop never gets them. */
 
 /* Links open in the browser, never in the app's window. */
 chatList.addEventListener("click", (e) => {

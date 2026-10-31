@@ -2046,6 +2046,8 @@ body.no-toolbar .toolbar { display: none; }
 .ia-drop-add:hover { color: var(--text); }
 .ia-drop-add:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 6px; }
 .ia-drop-add svg { flex: none; width: 16px; height: 16px; fill: currentColor; }
+.ia-from { display: flex; margin-top: 8px; white-space: normal; }
+.ia-from small { color: var(--text-secondary); font-weight: 400; }
 .ia-ideas { display: flex; align-items: baseline; gap: 8px; margin-top: -4px; }
 .ia-ideas-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .ia-idea {
@@ -2296,6 +2298,31 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
   line-height: 18px;
   padding: 0;
 }
+/* A 3D model attached to a message (attach-logic.js): no preview, its
+   name, parts and size. */
+.chat-model-chip { position: relative; display: flex; align-items: center; gap: 8px; max-width: 260px; height: 56px; padding: 0 12px 0 10px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--control-bg, transparent); }
+.chat-model-icon svg { display: block; width: 22px; height: 22px; fill: var(--accent); }
+.chat-model-body { min-width: 0; }
+.chat-model-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-model-meta { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-model-chip button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--content-bg);
+  font-size: 10px;
+  line-height: 18px;
+  padding: 0;
+}
+.chat-models { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.chat-msg.user .chat-model-chip { height: auto; padding: 6px 10px; }
+/* Files dragged over the conversation: they will be attached. */
+.ia-chat.drop-over .chat-compose { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 12px; }
 .chat-question { margin: 6px 0 8px; }
 .chat-question .q { font-weight: 600; margin-bottom: 5px; }
 .chat-question .opts { display: flex; flex-wrap: wrap; gap: 6px; }
