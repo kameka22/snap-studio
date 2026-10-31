@@ -118,13 +118,17 @@ async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+/// Runs blocking work (disk, conversion) off the main thread, where
+/// synchronous commands run: the UI does not freeze meanwhile.
+async fn off_main<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+}
+
 /// Off the main thread: a macOS permission prompt or a big folder does not
 /// freeze the UI.
 #[tauri::command]
 async fn scan_folder(dir: String, recursive: bool) -> Result<Vec<FileDto>, String> {
-    tauri::async_runtime::spawn_blocking(move || scan_folder_sync(&dir, recursive))
-        .await
-        .map_err(|e| e.to_string())?
+    off_main(move || scan_folder_sync(&dir, recursive)).await
 }
 
 fn scan_folder_sync(dir: &str, recursive: bool) -> Result<Vec<FileDto>, String> {
@@ -273,10 +277,12 @@ async fn analyze(path: String) -> Result<AnalyzeDto, String> {
 }
 
 #[tauri::command]
-fn trash_files(paths: Vec<String>) -> Result<usize, String> {
-    let n = paths.len();
-    trash::delete_all(&paths).map_err(|e| e.to_string())?;
-    Ok(n)
+async fn trash_files(paths: Vec<String>) -> Result<usize, String> {
+    off_main(move || {
+        trash::delete_all(&paths).map_err(|e| e.to_string())?;
+        Ok(paths.len())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -477,10 +483,13 @@ fn slice_start(app: tauri::AppHandle, request: slice::Request) -> Result<String,
 
 /// Saves a slice's preview; returns the path of the G-code written.
 #[tauri::command]
-fn slice_save(id: String, dir: Option<String>) -> Result<String, String> {
-    slice::save(&id, dir.as_deref())
-        .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| e.to_string())
+async fn slice_save(id: String, dir: Option<String>) -> Result<String, String> {
+    off_main(move || {
+        slice::save(&id, dir.as_deref())
+            .map(|p| p.to_string_lossy().to_string())
+            .map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Discards a slice's preview.
@@ -931,9 +940,12 @@ fn share_copy(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn share_save(path: String, dest: String) -> Result<(), String> {
-    let p = share::cached(&path).map_err(|e| e.to_string())?;
-    share::save(&p, Path::new(&dest)).map_err(|e| e.to_string())
+async fn share_save(path: String, dest: String) -> Result<(), String> {
+    off_main(move || {
+        let p = share::cached(&path).map_err(|e| e.to_string())?;
+        share::save(&p, Path::new(&dest)).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// The system's share menu (AirDrop, Messages, Mail…) at (`x`, `y`) of the
@@ -1442,15 +1454,13 @@ fn initial_dir() -> Option<String> {
 }
 
 #[tauri::command]
-fn cache_info() -> CacheDto {
-    CacheDto {
-        bytes: thumbs::size_on_disk(),
-    }
+async fn cache_info() -> Result<CacheDto, String> {
+    off_main(|| Ok(CacheDto { bytes: thumbs::size_on_disk() })).await
 }
 
 #[tauri::command]
-fn clear_cache() -> usize {
-    thumbs::clear()
+async fn clear_cache() -> Result<usize, String> {
+    off_main(|| Ok(thumbs::clear())).await
 }
 
 // ---------------------------------------------------------------- thumb:// protocol
@@ -1543,8 +1553,8 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
 /// Raw mesh for the 3D viewer.
 /// Saves the current state into the user's files, as 3MF.
 #[tauri::command]
-fn ia_save(id: String) -> Result<String, String> {
-    ia::save_to_files(&id).map_err(|e| e.to_string())
+async fn ia_save(id: String) -> Result<String, String> {
+    off_main(move || ia::save_to_files(&id).map_err(|e| e.to_string())).await
 }
 
 #[tauri::command]
@@ -1553,13 +1563,13 @@ fn ia_versions(id: String) -> Vec<ia::Version> {
 }
 
 #[tauri::command]
-fn ia_revert(id: String, n: u32) -> Result<(), String> {
-    ia::revert(&id, n).map_err(|e| e.to_string())
+async fn ia_revert(id: String, n: u32) -> Result<(), String> {
+    off_main(move || ia::revert(&id, n).map_err(|e| e.to_string())).await
 }
 
 #[tauri::command]
-fn ia_stats(id: String) -> Result<mesh::Stats, String> {
-    ia::current_stats(&id).map_err(|e| e.to_string())
+async fn ia_stats(id: String) -> Result<mesh::Stats, String> {
+    off_main(move || ia::current_stats(&id).map_err(|e| e.to_string())).await
 }
 
 // ---------------------------------------------------------------- AI chat
@@ -1707,15 +1717,19 @@ fn ia_list() -> Vec<ia::Conversation> {
 }
 
 #[tauri::command]
-fn ia_create(
+async fn ia_create(
     source: String,
     prompt: String,
     engine: String,
     model: Option<String>,
 ) -> Result<ia::Conversation, String> {
     let model = creation_model(model)?;
-    let c = ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())?;
-    with_model(c, model)
+    // The source is converted to 3MF: a big mesh takes a while.
+    off_main(move || {
+        let c = ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())?;
+        with_model(c, model)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1796,15 +1810,18 @@ struct IaDeletePlan {
 }
 
 #[tauri::command]
-fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
-    ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
-    let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
-    Ok(IaDeletePlan { files: found.paths.len(), running: chat::is_open(&id) })
+async fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
+    off_main(move || {
+        ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
+        let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
+        Ok(IaDeletePlan { files: found.paths.len(), running: chat::is_open(&id) })
+    })
+    .await
 }
 
 #[tauri::command]
-fn ia_duplicate(id: String) -> Result<ia::Conversation, String> {
-    ia::duplicate(&id).map_err(|e| e.to_string())
+async fn ia_duplicate(id: String) -> Result<ia::Conversation, String> {
+    off_main(move || ia::duplicate(&id).map_err(|e| e.to_string())).await
 }
 
 #[tauri::command]
