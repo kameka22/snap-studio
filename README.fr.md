@@ -35,8 +35,8 @@
   nouvelle couleur, et donnez une tour d'amorçage à chaque groupe de
   matériaux qui n'adhèrent pas entre eux.
 - **Concevoir avec l'IA** — décrivez une modification ou une nouvelle
-  pièce ; Claude la modélise, vous la voyez prendre forme en 3D, version
-  après version.
+  pièce, ou partez de votre propre STL ou 3MF ; Claude la modélise, vous la
+  voyez prendre forme en 3D, version après version.
 - **En neuf langues** — français, anglais, allemand, espagnol, portugais
   du Brésil, italien, japonais, chinois simplifié et coréen.
 
@@ -156,6 +156,8 @@ Des matériaux qui n'adhèrent pas entre eux sur un même plateau, sans tour d'a
 
 Claude modifie une pièce ou en crée une à partir d'une description.
 
+- Joignez vos propres modèles STL ou 3MF, au départ ou en cours de
+  conversation, pour que Claude les modifie ou s'en serve de base.
 - Une discussion avec aperçu 3D en direct, chaque version gardée.
 - Les résultats sont des 3MF multicolores, prêts à découper.
 - Les conversations se recherchent, s'épinglent, se renomment, se
@@ -466,8 +468,10 @@ Sous chaque imprimante, **Fichiers** montre ce qui y est stocké, lu en direct.
   recherche et tri. **Imprimer** ouvre la même fenêtre qu'après une découpe
   — lancer là, mettre en file, ou imprimer sur une autre imprimante — et les
   têtes utilisées sont lues dans le fichier lui-même. Télécharger, renommer,
-  supprimer, plusieurs à la fois ; le fichier en cours d'impression est
-  protégé.
+  supprimer, plusieurs à la fois : à choisir en mode Sélection, ou par
+  Ctrl-clic (Cmd-clic sous macOS) et Maj-clic pour une plage ; la barre de
+  sélection et le menu du clic droit agissent sur tous les fichiers choisis.
+  Le fichier en cours d'impression est protégé.
 - **Timelapses**, lus directement depuis l'imprimante (vitesse 0,5×–4×,
   plein écran, précédente / suivante), téléchargés ou supprimés.
 - **Partager** un fichier ou une vidéo : le menu de partage de macOS
@@ -624,7 +628,8 @@ sélectionne une plage.
 Dans la liste de l'IA : ⌘F rechercher, ↑ / ↓ et ⏎ ouvrir, F2 renommer,
 ⌫ supprimer. Dans une conversation : ⌘⏎ envoyer, Échap arrêter Claude.
 
-Dans les fichiers d'une imprimante : ⏎ détail, Échap fermer ; dans le
+Dans les fichiers d'une imprimante : ⏎ détail, Échap fermer, ⌘-clic
+(Ctrl-clic) ajoute ou retire un fichier, ⇧-clic choisit une plage ; dans le
 lecteur : ← / → vidéo précédente / suivante, Espace pause, Échap retour.
 
 ## Feuille de route

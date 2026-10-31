@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-10-31
+
 ### Added
 - **Integrated title bar on Windows and Linux**: the window draws its own
   minimize, maximize and close buttons in the same top band as macOS's
@@ -36,21 +38,26 @@ with its packages for macOS, Windows and Linux. What comes next:
 ### Fixed
 - **AI versions sometimes missing**: the versions (v1, v2…) at the bottom
   left of an AI conversation could stay hidden until switching to Terminal
-  and back; they now show as soon as they are read.
+  and back; they now show as soon as they are read (#83).
 - **Files dropped on the AI view or its creation sheet were ignored**: they
   are now attached; a file that can't be (wrong type, too large, unreadable,
   too many) says why instead of being skipped silently (#83).
 - **Presets made with Snapmaker Orca 2.3**: a custom print profile based on
   a system profile that Orca 2.4 renamed (e.g. "0.08 Extra Fine" → "0.08mm
   Standard") slices again instead of failing with "unresolvable
-  inheritance". When a parent really is missing, the message now names it.
+  inheritance". When a parent really is missing, the message now names it
+  (#82).
 - **No more freezes during long file operations**: saving a slice or an AI
   model, reverting a version, moving files to the trash, sharing a copy,
   starting an AI conversation from a big model and clearing the cache now
-  run in the background instead of blocking the window.
+  run in the background instead of blocking the window (#82).
 - **Previews and thumbnails no longer stop loading for good** after an
   error in one file: the faulty file answers with an error and the others
-  keep loading.
+  keep loading (#82).
+- **Clearer error messages**: an error now keeps its cause instead of only
+  its first line, and a failed file operation (sharing, copying a print
+  job, saving a preset, installing the engine, a download or an upload)
+  names the file it was working on (#82).
 - **Deleting several files on a printer**: with files picked in Select mode,
   right-click → Delete now deletes every picked file ("Delete {n} files"),
   instead of only the one clicked, and the other picks are kept (#84).
@@ -691,7 +698,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/kameka22/snap-studio/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/kameka22/snap-studio/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/kameka22/snap-studio/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/kameka22/snap-studio/compare/v0.15.0...v0.16.0

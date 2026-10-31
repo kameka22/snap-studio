@@ -129,9 +129,9 @@ No cloud and no account: everything goes over the LAN to the U1's own **Moonrake
 
 ## 5. Tests and CI
 
-- **Rust**: `cargo test --lib` gives **255 passed, 0 failed, 23 ignored** (the ignored tests need a local Snapmaker Orca or the engine). Several tests run against a small fake Moonraker on `127.0.0.1`, for file listing, deletion permissions and sharing. Another test checks that the print-start request matches Snapmaker Orca's.
-- **Interface logic**: **25 Node test scripts** (`scripts/test-*.js`, about 2,900 lines) cover Prepare, towers and pillars, virtual heads, the spool check, Prints, the camera, Control, bed mesh, printer files, the 3D printer model, themes and more.
-- **Translations**: `scripts/check-i18n.py` checks the 9 catalogs, with 2,247 keys each and 100 % coverage.
+- **Rust**: `cargo test --lib` gives **269 passed, 0 failed, 25 ignored** (the ignored tests need a local Snapmaker Orca or the engine). Several tests run against a small fake Moonraker on `127.0.0.1`, for file listing, deletion permissions and sharing. Another test checks that the print-start request matches Snapmaker Orca's.
+- **Interface logic**: **27 Node test scripts** (`scripts/test-*.js`, about 3,100 lines) cover Prepare, towers and pillars, virtual heads, the spool check, Prints, the camera, Control, bed mesh, printer files and their picking, files attached to an AI message, the 3D printer model, themes and more.
+- **Translations**: `scripts/check-i18n.py` checks the 9 catalogs, with 2,269 keys each and 100 % coverage.
 - **CI** (GitHub Actions): `test.yml` runs both jobs, "Rust unit tests" and "Interface logic and catalogs", on every pull request and every push to `main`. `build.yml` (started by hand) builds the release for macOS (universal), Windows x64 and Linux amd64/arm64, signs the update packages and publishes `latest.json` for the updater. `engine.yml` repackages each Snapmaker Orca version and runs a **real test slice** on every platform before publishing; if one platform fails, nothing is published. `pages.yml` deploys the website.
 
 ## 6. Documentation and languages
@@ -183,6 +183,15 @@ A welcome assistant then sets up the language, the models folder, the U1 on your
 ## 9. Development log
 
 Since 2026-10-28, the opening of the Snapmaker Innovation Fund Phase 2. Updated with each release; full details are in the [CHANGELOG](../CHANGELOG.md).
+
+**0.18.0, 2026-10-31** ([#85](https://github.com/kameka22/snap-studio/pull/85))
+- STL and 3MF models in AI conversations: attached when creating a conversation or during one (dropped, chosen or pasted), copied into the conversation's folder, with a conversation that can start from a single model ([#83](https://github.com/kameka22/snap-studio/pull/83)).
+- An integrated title bar on Windows and Linux, as on macOS, with the system's title bar still available on Linux ([#27](https://github.com/kameka22/snap-studio/pull/27)).
+- Printer › Files: Ctrl/Cmd-click and Shift-click to pick several files, and right-click → Delete deleting every picked file ([#84](https://github.com/kameka22/snap-studio/pull/84)).
+- A review of the Rust backend: presets made with Snapmaker Orca 2.3 slice again, long file operations moved off the UI thread, preview threads that survive a failing file, errors that keep their cause and name the file, and `rustfmt` checked in CI ([#82](https://github.com/kameka22/snap-studio/pull/82)).
+
+**0.17.1, 2026-10-28**
+- Smooth mix for virtual heads (Snapmaker Orca's Subdivide Mix Layer, on by default), a warning for colors too far apart to mix, and a slice preview that draws each line as tall as its layer ([#81](https://github.com/kameka22/snap-studio/pull/81)).
 
 **0.17.0, 2026-10-28** ([#77](https://github.com/kameka22/snap-studio/pull/77))
 - 7 new interface languages: German, Spanish, Brazilian Portuguese, Italian, Japanese, Simplified Chinese and Korean ([#72](https://github.com/kameka22/snap-studio/pull/72), [#73](https://github.com/kameka22/snap-studio/pull/73)).

@@ -1,53 +1,41 @@
 {
-  "version": "0.17",
+  "version": "0.18",
   "highlights": [
     {
-      "id": "prints-page",
-      "en": "Prints page",
-      "fr": "Page Impressions",
-      "de": "Seite Drucke",
-      "es": "Página Impresiones",
-      "pt-BR": "Página Impressões",
-      "it": "Pagina Stampe",
-      "ja": "造形ページ",
-      "zh-Hans": "打印记录页面",
-      "ko": "출력 페이지"
+      "id": "ai-source-models",
+      "en": "STL and 3MF in AI",
+      "fr": "STL et 3MF dans l’IA",
+      "de": "STL und 3MF in der KI",
+      "es": "STL y 3MF en la IA",
+      "pt-BR": "STL e 3MF na IA",
+      "it": "STL e 3MF nell’IA",
+      "ja": "AIでSTL・3MF",
+      "zh-Hans": "AI 支持 STL 和 3MF",
+      "ko": "AI에서 STL·3MF"
     },
     {
-      "id": "one-camera",
-      "en": "One camera",
-      "fr": "Une seule caméra",
-      "de": "Eine Kamera",
-      "es": "Una sola cámara",
-      "pt-BR": "Uma só câmera",
-      "it": "Una sola videocamera",
-      "ja": "カメラを統一",
-      "zh-Hans": "统一摄像头",
-      "ko": "하나의 카메라"
+      "id": "integrated-title-bar",
+      "en": "Integrated title bar",
+      "fr": "Barre de titre intégrée",
+      "de": "Integrierte Titelleiste",
+      "es": "Barra de título integrada",
+      "pt-BR": "Barra de título integrada",
+      "it": "Barra del titolo integrata",
+      "ja": "統合タイトルバー",
+      "zh-Hans": "集成标题栏",
+      "ko": "통합 제목 표시줄"
     },
     {
-      "id": "languages",
-      "en": "9 languages",
-      "fr": "9 langues",
-      "de": "9 Sprachen",
-      "es": "9 idiomas",
-      "pt-BR": "9 idiomas",
-      "it": "9 lingue",
-      "ja": "9言語",
-      "zh-Hans": "9 种语言",
-      "ko": "9개 언어"
-    },
-    {
-      "id": "eight-libraries",
-      "en": "8 libraries",
-      "fr": "8 bibliothèques",
-      "de": "8 Bibliotheken",
-      "es": "8 bibliotecas",
-      "pt-BR": "8 bibliotecas",
-      "it": "8 librerie",
-      "ja": "8つのライブラリ",
-      "zh-Hans": "8 个模型库",
-      "ko": "8개 라이브러리"
+      "id": "printer-multi-pick",
+      "en": "Pick several files",
+      "fr": "Plusieurs fichiers",
+      "de": "Mehrere Dateien",
+      "es": "Varios archivos",
+      "pt-BR": "Vários arquivos",
+      "it": "Più file",
+      "ja": "複数ファイルを選択",
+      "zh-Hans": "多选文件",
+      "ko": "여러 파일 선택"
     }
   ]
 }

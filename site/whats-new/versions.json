@@ -1,6 +1,81 @@
 {
-  "current": "0.17",
+  "current": "0.18",
   "versions": [
+    {
+      "version": "0.18",
+      "date": "2026-10-31",
+      "tagline": {
+        "en": "Your own models in AI conversations, one title bar on every system, and several printer files at a click.",
+        "fr": "Vos propres modèles dans les conversations IA, une seule barre de titre sur chaque système, et plusieurs fichiers de l’imprimante d’un clic."
+      },
+      "features": [
+        {
+          "id": "ai-source-models",
+          "icon": "create",
+          "color": "#bf5af2",
+          "edge": "linear-gradient(90deg, #bf5af2, #0a84ff)",
+          "image": "../assets/ai-source-models.webp",
+          "tag": { "en": "Create", "fr": "Créer" },
+          "chip": {
+            "en": "STL and 3MF in AI", "fr": "STL et 3MF dans l’IA", "de": "STL und 3MF in der KI", "es": "STL y 3MF en la IA", "pt-BR": "STL e 3MF na IA",
+            "it": "STL e 3MF nell’IA", "ja": "AIでSTL・3MF", "zh-Hans": "AI 支持 STL 和 3MF", "ko": "AI에서 STL·3MF"
+          },
+          "title": { "en": "Start from your own model", "fr": "Partir de votre propre modèle" },
+          "text": {
+            "en": "Drop, choose or paste STL and 3MF files when you start an AI conversation or during one, up to three per message. Claude modifies them or builds on them; with a single model, the conversation starts from it. Drag and drop now works for images too, and a file that can’t be attached says why.",
+            "fr": "Déposez, choisissez ou collez des fichiers STL et 3MF au début d’une conversation IA ou pendant, jusqu’à trois par message. Claude les modifie ou s’en sert de base ; avec un seul modèle, la conversation part de lui. Le glisser-déposer marche maintenant aussi pour les images, et un fichier qui ne peut pas être joint dit pourquoi."
+          },
+          "alt": { "en": "The New Object sheet with two STL models attached", "fr": "La fenêtre Nouvel objet avec deux modèles STL joints" }
+        },
+        {
+          "id": "integrated-title-bar",
+          "icon": "windows",
+          "color": "#64d2ff",
+          "edge": "linear-gradient(90deg, #64d2ff, #0a84ff)",
+          "image": "../assets/title-bar.webp",
+          "position": "50% 0%",
+          "tag": { "en": "Window", "fr": "Fenêtre" },
+          "chip": {
+            "en": "Integrated title bar", "fr": "Barre de titre intégrée", "de": "Integrierte Titelleiste", "es": "Barra de título integrada", "pt-BR": "Barra de título integrada",
+            "it": "Barra del titolo integrata", "ja": "統合タイトルバー", "zh-Hans": "集成标题栏", "ko": "통합 제목 표시줄"
+          },
+          "title": { "en": "One title bar, on every system", "fr": "Une seule barre de titre, sur chaque système" },
+          "text": {
+            "en": "On Windows and Linux, the window buttons now sit in the app’s own top band, as on macOS: Windows 11 style on Windows, GNOME style with rounded corners on Linux. On Linux, Settings › Display brings the desktop’s title bar back.",
+            "fr": "Sous Windows et Linux, les boutons de la fenêtre sont maintenant dans la bande du haut de l’app, comme sous macOS : style Windows 11 sous Windows, style GNOME aux coins arrondis sous Linux. Sous Linux, Réglages › Affichage remet la barre de titre du bureau."
+          },
+          "alt": { "en": "The integrated title bar on Windows (top) and Ubuntu (bottom)", "fr": "La barre de titre intégrée sous Windows (en haut) et Ubuntu (en bas)" }
+        },
+        {
+          "id": "printer-multi-pick",
+          "icon": "folder",
+          "color": "#30d158",
+          "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
+          "image": "../assets/printer-multi-pick.webp",
+          "tag": { "en": "Printer files", "fr": "Fichiers de l’imprimante" },
+          "chip": {
+            "en": "Pick several files", "fr": "Plusieurs fichiers", "de": "Mehrere Dateien", "es": "Varios archivos", "pt-BR": "Vários arquivos",
+            "it": "Più file", "ja": "複数ファイルを選択", "zh-Hans": "多选文件", "ko": "여러 파일 선택"
+          },
+          "title": { "en": "Several printer files, at a click", "fr": "Plusieurs fichiers de l’imprimante, d’un clic" },
+          "text": {
+            "en": "In a printer’s Files, Ctrl-click (Cmd-click on macOS) adds or removes a file and Shift-click picks a range, as in the Files view, without Select mode. The selection bar and the right-click menu act on every file picked.",
+            "fr": "Dans les Fichiers d’une imprimante, Ctrl-clic (Cmd-clic sous macOS) ajoute ou retire un fichier et Maj-clic choisit une plage, comme dans la vue Fichiers, sans passer par le mode Sélection. La barre de sélection et le menu du clic droit agissent sur tous les fichiers choisis."
+          },
+          "alt": { "en": "Ten files picked in a printer’s Files, the selection bar and the delete confirmation", "fr": "Dix fichiers choisis dans les Fichiers d’une imprimante, la barre de sélection et la confirmation de suppression" }
+        }
+      ],
+      "small": [
+        {
+          "icon": "check", "color": "#30d158",
+          "title": { "en": "Fixes", "fr": "Corrections" },
+          "text": {
+            "en": "AI versions show right away. Presets made with Snapmaker Orca 2.3 slice again. Long file operations no longer freeze the window, and previews keep loading after an error in one file. Right-click › Delete on a printer deletes every picked file. An error message now says which file is at fault.",
+            "fr": "Les versions IA s’affichent tout de suite. Les profils créés avec Snapmaker Orca 2.3 découpent de nouveau. Les longues opérations sur les fichiers ne bloquent plus la fenêtre, et les aperçus continuent de charger après une erreur sur un fichier. Clic droit › Supprimer sur une imprimante supprime tous les fichiers choisis. Un message d’erreur indique maintenant quel fichier pose problème."
+          }
+        }
+      ]
+    },
     {
       "version": "0.17",
       "date": "2026-10-28",
@@ -8,6 +83,7 @@
         "en": "A new Prints page, one camera, and nine languages.",
         "fr": "Une nouvelle page Impressions, une seule caméra, et neuf langues."
       },
+      "summary": { "en": "The Prints page, one camera, nine languages, eight libraries", "fr": "La page Impressions, une seule caméra, neuf langues, huit bibliothèques" },
       "features": [
         {
           "id": "prints-page",
