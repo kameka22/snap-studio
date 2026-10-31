@@ -107,17 +107,53 @@ assert.equal(S.spBonds("PETG", "PLA"), false, "either way round");
 assert.equal(S.spBonds("PLA", "TPU 95A"), false);
 assert.equal(S.spBonds("PETG HF", "flex"), false, "an alias (FLEX → TPU)");
 assert.equal(S.spBonds("ABS", "ASA"), true, "close families bond");
-assert.equal(S.spBonds("PA", "PC"), null, "not known: never warned about");
+// D4: Snapmaker Orca 2.4.1's adhesiveness categories decide between
+// families that have one; the others keep the pairs known by experience.
+assert.equal(S.spBonds("PA", "PC"), false, "known since 2.4.1, each its own category");
+assert.equal(S.spBonds("PA-CF", "Nylon"), true, "one category (400)");
+assert.equal(S.spBonds("PC", "PETG"), false);
+assert.equal(S.spBonds("PLA", "PVA"), false, "no longer bond (100 vs 704)");
+assert.equal(S.spBonds("PVA", "BVOH"), false, "two support materials, two categories");
+assert.equal(S.spBonds("PEBA", "TPU"), true, "one category (600)");
+assert.equal(S.spBonds("PETG-CF", "PCTG"), true, "one category (300)");
+assert.equal(S.spBonds("PLA-CF", "PLA Silk"), true);
+assert.equal(S.spBonds("TPU", "TPE"), true, "TPE has no category: its pairs stay");
+assert.equal(S.spBonds("PLA", "TPE"), false);
+assert.equal(S.spBonds("PPS", "PEEK"), null, "no category, no pair: not known, never warned about");
 assert.equal(S.spBonds("", "PLA"), null);
 assert.equal(S.spBonds("?", "PLA"), null);
 
+// The category each family gets (D6): upstream's table, null when none.
+assert.deepEqual(
+  ["PLA Matte", "PLA-CF", "ABS", "ASA", "PETG HF", "PET", "PCTG", "PA12-CF", "PC", "TPU 95A", "PEBA", "PVA", "BVOH", "TPE", "PPS", "", "?"].map(S.spCategory),
+  [100, 100, 200, 200, 300, 300, 300, 400, 500, 600, 600, 704, 797, null, null, null, null]
+);
+// The same table as the one presets.rs sends to the engine.
+{
+  const rs = require("fs").readFileSync(require("path").join(__dirname, "../src-tauri/src/presets.rs"), "utf8");
+  const body = rs.slice(rs.indexOf("const ADHESIVENESS"), rs.indexOf("];", rs.indexOf("const ADHESIVENESS")));
+  const sent = Object.fromEntries([...body.matchAll(/\("([A-Z]+)", (\d+)\)/g)].map((m) => [m[1], +m[2]]));
+  assert.deepEqual(sent, S.SP_CATEGORY, "presets.rs ADHESIVENESS = spoolcheck.js SP_CATEGORY");
+}
+
 // The prime tower's advice.
+// The tower's automatic outer wall (D2): the first material's first head.
+assert.equal(S.spTowerWallHead(S.spTowerAdvice({ tower: true, heads: [{ n: 2, material: "PETG" }, { n: 0, material: "PLA" }, { n: 3, material: "PETG HF" }] })), 2);
+assert.equal(S.spTowerWallHead(null), null, "nothing to say: the engine picks");
+// Apart only when the pairs that do not bond purge into different blocks:
+// TPE has no category, the engine puts it in PLA's (100).
+assert.equal(S.spTowerAdvice({ tower: true, heads: [{ n: 0, material: "PLA" }, { n: 1, material: "PETG" }] }).apart, true);
+const tpe = S.spTowerAdvice({ tower: true, heads: [{ n: 0, material: "PLA" }, { n: 1, material: "TPE" }] });
+assert.equal(tpe.apart, false, "PLA and TPE share the engine's block 100");
+assert.equal(S.spTowerWallHead(tpe), null, "a wall would not keep them apart: none set");
+assert.equal(S.spTowerAdvice({ tower: true, heads: [{ n: 0, material: "PETG" }, { n: 1, material: "TPE" }] }).apart, true, "PETG (300) and TPE (100)");
 const h = (n, material) => ({ n, material });
 assert.equal(S.spTowerAdvice({ tower: false, heads: [h(0, "PLA"), h(1, "PETG")] }), null, "no tower, nothing to say");
 assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PLA")] }), null, "one head");
 assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PLA"), h(1, "PLA Matte")] }), null, "they bond");
 assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PLA"), h(1, "")] }), null, "a material not known");
-assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PA"), h(1, "PC")] }), null, "a pair not known");
+assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PPS"), h(1, "PEEK")] }), null, "a pair not known");
+assert.equal(S.spTowerAdvice({ tower: true, heads: [h(0, "PA"), h(1, "PC")] }).state, "conflict", "PA and PC, known since 2.4.1");
 let a = S.spTowerAdvice({ tower: true, heads: [h(0, "PLA"), h(2, "PETG"), h(3, "PLA Silk")] });
 assert.equal(a.state, "conflict");
 assert.deepEqual(a.pairs, [[0, 2], [2, 3]]);

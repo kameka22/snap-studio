@@ -4,7 +4,7 @@
    Supports, Brim, Seam and Multi-material each open a sub-panel inside the
    sheet. Every field is an Orca process key, described by
    `assets/orca-settings.<lang>.json` (label, unit, values, tooltip) and
-   checked against the shipped engine (Snapmaker Orca 2.4.0). Only values
+   checked against the shipped engine (Snapmaker Orca 2.4.1). Only values
    that differ from the chosen profile are kept, in `SL.adv`, remembered per
    machine profile, and sent to the engine as `overrides` (which win over the
    profile and the quick settings, see slice.rs). */
@@ -12,7 +12,7 @@
 const ADV = { schema: null, defaults: {}, cat: null, seq: 0 };
 SL.adv = SL.adv || {};
 
-/* Engine defaults (Snapmaker Orca 2.4.0, PrintConfig.cpp) for the keys a
+/* Engine defaults (Snapmaker Orca 2.4.1, PrintConfig.cpp) for the keys a
    profile may leave out: the engine then applies these. */
 const ADV_ENGINE_DEFAULTS = {
   seam_position: "aligned", staggered_inner_seams: "0", seam_gap: "10%",
@@ -50,6 +50,9 @@ const ADV_ENGINE_DEFAULTS = {
   // The tower's shape, for its estimate in Prepare (prepare-tower.js).
   wipe_tower_wall_type: "rectangle", wipe_tower_rib_width: "8", wipe_tower_extra_rib_length: "0",
   wipe_tower_extra_spacing: "100%",
+  // Added by Snapmaker Orca 2.4.1.
+  top_color_penetration_layers: "4", bottom_color_penetration_layers: "3", support_interface_min_area: "0.25",
+  prime_tower_enable_framework: "0", first_layer_travel_acceleration: "100%", first_layer_travel_jerk: "100%",
 };
 /* The prime tower's switch is the plate's (prepare-tower.js), never the
    profile's: a new plate starts without a tower. */
@@ -74,6 +77,10 @@ const ADV_STEPS = {
   overhang_1_4_speed: 1, overhang_2_4_speed: 1, overhang_3_4_speed: 1, overhang_4_4_speed: 1, ironing_speed: 1,
   infill_direction: 1, minimum_sparse_infill_area: 1, skirt_distance: 0.5, infill_anchor_max: 1,
 };
+/* Lowest values the engine takes, where the catalog does not say: below,
+   it refuses to slice (support_threshold_angle: 1 since 2.4.1, which
+   refuses 0, "not in range [1,90]"). */
+const ADV_MIN = { support_threshold_angle: 1 };
 /* Units the settings catalog leaves out. */
 const ADV_UNITS = { standby_temperature_delta: "°C", idle_temperature: "°C", infill_anchor_max: "mm" };
 /* Values hidden from a list: handled elsewhere ("no_brim" is the switch) or
@@ -92,7 +99,7 @@ const ADV_CATS = {
     title: "slice.supports",
     groups: [
       { t: "slice.adv.g.support", keys: ["support_type", "support_style", "support_threshold_angle", "support_on_build_plate_only", "support_critical_regions_only", "support_remove_small_overhang"] },
-      { t: "slice.adv.g.interface", keys: ["support_top_z_distance", "support_bottom_z_distance", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing"] },
+      { t: "slice.adv.g.interface", keys: ["support_top_z_distance", "support_bottom_z_distance", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing", "support_interface_min_area"] },
       { t: "slice.adv.g.base", keys: ["support_base_pattern", "support_base_pattern_spacing", "support_object_xy_distance", "bridge_no_support"] },
       {
         t: "slice.adv.g.tree",
@@ -114,7 +121,9 @@ const ADV_CATS = {
   quality: {
     title: "slice.quality",
     groups: [
-      { t: "slice.adv.g.first_layer", keys: ["initial_layer_print_height"] },
+      // Orca puts the travel ones in its Speed tab; the sheet's Speed panel
+      // scales the profile's speeds, so they join the first layer here.
+      { t: "slice.adv.g.first_layer", keys: ["initial_layer_print_height", "first_layer_travel_acceleration", "first_layer_travel_jerk"] },
       { t: "slice.adv.g.widths", keys: ["line_width", "initial_layer_line_width", "outer_wall_line_width", "top_surface_line_width"] },
       { t: "slice.adv.g.precision", keys: ["elefant_foot_compensation", "xy_hole_compensation", "xy_contour_compensation", "resolution", "enable_arc_fitting"] },
       { t: "slice.adv.g.overhangs", keys: ["detect_overhang_wall", "enable_overhang_speed", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_flow", "thick_bridges"] },
@@ -138,7 +147,7 @@ const ADV_CATS = {
   surfaces: {
     title: "slice.adv.surfaces",
     groups: [
-      { t: "slice.adv.g.shells", keys: ["top_shell_layers", "top_shell_thickness", "bottom_shell_layers", "bottom_shell_thickness", "ensure_vertical_shell_thickness"] },
+      { t: "slice.adv.g.shells", keys: ["top_shell_layers", "top_shell_thickness", "bottom_shell_layers", "bottom_shell_thickness", "ensure_vertical_shell_thickness", "top_color_penetration_layers", "bottom_color_penetration_layers"] },
       { t: "slice.adv.g.patterns", keys: ["top_surface_pattern", "bottom_surface_pattern", "internal_solid_infill_pattern"] },
       { t: "slice.adv.g.ironing", keys: ["ironing_type", "ironing_pattern", "ironing_flow", "ironing_spacing", "ironing_speed"] },
     ],
@@ -156,7 +165,7 @@ const ADV_CATS = {
     title: "slice.adv.mm",
     groups: [
       // The tower's switch is on the sheet (#s-tower-sw), as Supports' and Brim's.
-      { t: "slice.adv.g.tower", keys: ["wipe_tower_filament", "prime_tower_width", "prime_volume", "prime_tower_brim_width"] },
+      { t: "slice.adv.g.tower", keys: ["wipe_tower_filament", "prime_tower_width", "prime_volume", "prime_tower_brim_width", "prime_tower_enable_framework"] },
       { t: "slice.adv.g.ooze", keys: ["ooze_prevention", "standby_temperature_delta", "preheat_time", "idle_temperature"] },
       { t: "slice.adv.g.flush", keys: ["flush_into_infill", "flush_into_objects", "flush_into_support"] },
       { t: "slice.adv.g.features", keys: ["wall_filament", "sparse_infill_filament", "solid_infill_filament"] },
@@ -190,8 +199,8 @@ function advCatKeys(cat) {
 /* Heads flagged in a head picker when the plate's materials do not all
    bond (spTowerAdvice; #s-tower says why): for the walls, the heads whose
    material does not bond with another of the plate's; for the tower's
-   wall, the choices that leave it mixed — a head the plate does not print
-   with, or Automatic — since a head it prints with is the fix. */
+   wall, the heads the plate does not print with (Automatic picks one it
+   prints with, advTowerAutoWall). */
 function advWarnHeads(k) {
   if (k !== "wipe_tower_filament" && k !== "wall_filament") return { heads: [], auto: false };
   const used = advTowerHeads();
@@ -199,7 +208,7 @@ function advWarnHeads(k) {
   if (!a) return { heads: [], auto: false };
   if (k === "wall_filament") return { heads: [...new Set(a.pairs.flat())], auto: false };
   const fix = new Set(a.families.flatMap((g) => g.heads));
-  return { heads: Array.from({ length: headCount() }, (_, h) => h).filter((h) => !fix.has(h)), auto: true };
+  return { heads: Array.from({ length: headCount() }, (_, h) => h).filter((h) => !fix.has(h)), auto: false };
 }
 
 /* Heads offered to the per-feature filament fields (swatch-logic.js
@@ -225,7 +234,25 @@ async function advSchema() {
 
 /* Values sent to the engine: the kept differences, minus what does not
    apply (brim type with the brim off: the switch's "no_brim" must win). */
+/* What the engine gets: the user's differences, and the tower's outer wall
+   in one material when the plate's materials do not bond and none is
+   chosen (D2: with 2.4.1's blocks the materials then never meet). */
 function advOverrides() {
+  const o = advOverridesOwn();
+  const wall = advTowerAutoWall();
+  if (wall != null) o.wipe_tower_filament = String(wall + 1);
+  return o;
+}
+
+/* The tower's automatic outer wall (spoolcheck.js spTowerWallHead), null
+   when a wall is chosen, there is no tower, or the materials bond. */
+function advTowerAutoWall() {
+  if (+advOverridesOwn().wipe_tower_filament > 0) return null;
+  return spTowerWallHead(spTowerAdvice({ heads: advTowerHeads(), tower: advTowerOn(), wall: null }));
+}
+
+/* The user's differences from the profile, as they apply now. */
+function advOverridesOwn() {
   const o = { ...(SL.adv || {}) };
   // Sent either way: off unless the plate turns it on, whatever the profile.
   o.enable_prime_tower = advVal("enable_prime_tower");
@@ -239,6 +266,9 @@ function advOverrides() {
   // details without ironing…) is neither sent nor counted; SL.adv keeps it
   // for when that setting is on again.
   for (const k in o) if (ADV_WHEN[k] && !ADV_WHEN[k]()) delete o[k];
+  // A value kept from before the engine raised its minimum would stop
+  // the slice: the lowest it takes instead.
+  for (const k in ADV_MIN) if (k in o && +o[k] < ADV_MIN[k]) o[k] = ADV_MIN[k];
   for (const k in o) o[k] = String(o[k]);
   return o;
 }
@@ -254,7 +284,7 @@ const advCountOf = (cat, level = null) => advCatKeysAll(cat, level).filter((k) =
 /* The advanced differences, for the summary: not the tower's switch,
    which is on the sheet. */
 function advCount() {
-  return Object.keys(advOverrides()).filter((k) => k !== "enable_prime_tower").length;
+  return Object.keys(advOverridesOwn()).filter((k) => k !== "enable_prime_tower").length;
 }
 
 /* Machine profile changed: its remembered differences come back. */
@@ -430,7 +460,8 @@ function advField(k) {
     // Whole numbers and percentages by one, millimetres and the rest by a
     // tenth, unless the setting asks for finer (ADV_STEPS).
     const step = ADV_STEPS[k] ?? (def.type === "int" || pct ? 1 : 0.1);
-    input = `<input type="number" class="field num" step="${step}" data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : (def.unit || ADV_UNITS[k] || "").replace(/\s+(?:ou|or)\s+%$/, ""))}</span>`;
+    const min = k in ADV_MIN ? ` min="${ADV_MIN[k]}"` : "";
+    input = `<input type="number" class="field num" step="${step}"${min} data-k="${k}" data-pct="${pct ? 1 : ""}" value="${esc(num)}" /><span class="unit">${esc(pct ? "%" : (def.unit || ADV_UNITS[k] || "").replace(/\s+(?:ou|or)\s+%$/, ""))}</span>`;
   }
   return `<div class="grow-row adv-row${mod ? " mod" : ""}" title="${esc(def.tooltip || "")}">
     <span class="k">${esc(def.label)}${mod ? `<small class="sub">${esc(tr("slice.adv.profile_value", { v: advLabel(k, ADV.defaults[k]) || "—" }))}</small>` : ""}</span>
@@ -576,7 +607,8 @@ function advSet(k, v) {
    walls, infill, the tower's wall (`tower`: when it is printed) — as the
    engine gets them: { key: head }. */
 function advHeads({ tower = true } = {}) {
-  const o = advOverrides();
+  // The user's own: the automatic tower wall is one of the plate's heads.
+  const o = advOverridesOwn();
   const out = {};
   for (const k of ADV_FILAMENT) {
     const v = +o[k];
@@ -619,15 +651,19 @@ function advTowerHeads() {
   });
 }
 
-/* The tower shared by materials that do not bond (spoolcheck.js): it
-   comes off or collapses. Said above the Slice button, with the fixes the
-   engine allows (one tower per plate): no tower — the U1's tower only
-   primes the nozzle, ooze prevention covers the rest — or its outer wall
-   in one material, the wiki's advice (the inside still mixes). */
+/* The tower shared by materials that do not bond (spoolcheck.js). Since
+   Snapmaker Orca 2.4.1 each purges into its own block, and with the outer
+   wall in one of them (chosen, or advTowerAutoWall) they never meet (D2):
+   said above the Slice button as information, with the other walls, no
+   tower and one tower per material. Warned when two of them purge into one
+   block (a family without a category shares PLA's, the engine's default),
+   or when the chosen wall's head prints none of the plate's known
+   materials. */
 function advRenderTower() {
   const box = $("s-tower");
   if (!box) return;
-  const wall = +advVal("wipe_tower_filament") > 0 ? +advVal("wipe_tower_filament") - 1 : null;
+  const chosen = +advVal("wipe_tower_filament") > 0 ? +advVal("wipe_tower_filament") - 1 : null;
+  const wall = chosen ?? advTowerAutoWall();
   const a = spTowerAdvice({ heads: advTowerHeads(), tower: advTowerOn(), wall });
   const heads = (g) => g.heads.map((n) => "T" + n).join(", ");
   // One tower per material, Prepare's choice too (prepare-pillars.js).
@@ -643,10 +679,14 @@ function advRenderTower() {
   } else if (a) {
     const list = a.families.map((g) => `<b>${esc(g.family)}</b> (${esc(heads(g))})`).join(" · ");
     const off = `<button class="btn small" data-tower="off">${esc(tr("slice.tower.off"))}</button>`;
-    if (a.state === "walled") {
+    if (a.state === "walled" && a.apart) {
       const g = a.families.find((x) => x.heads.includes(wall));
-      html = `<span class="sl-tower-t">${tr("slice.tower.walled", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
-        <span class="sl-tower-acts">${off}${material}<button class="btn small" data-tower="undo">${esc(tr("slice.tower.undo"))}</button></span>`;
+      const others = a.families
+        .filter((x) => x !== g)
+        .map((x) => `<button class="btn small" data-tower-wall="${x.heads[0]}">${esc(tr("slice.tower.wall", { m: x.family, t: `T${x.heads[0]}` }))}</button>`)
+        .join("");
+      html = `<span class="sl-tower-t">${tr("slice.tower.apart", { m: `<b>${esc(g.family)}</b>`, t: `T${wall}` })}</span>
+        <span class="sl-tower-acts">${others}${off}${material}</span>`;
     } else {
       const walls = a.families
         .map((g) => `<button class="btn small" data-tower-wall="${g.heads[0]}">${esc(tr("slice.tower.wall", { m: g.family, t: `T${g.heads[0]}` }))}</button>`)
@@ -654,7 +694,7 @@ function advRenderTower() {
       html = `<span class="sl-tower-t">${tr("slice.tower.conflict", { list })}</span><span class="sl-tower-acts">${off}${material}${walls}</span>`;
     }
   }
-  box.classList.toggle("info", multiHead() && prPillarsShown());
+  box.classList.toggle("info", multiHead() && (prPillarsShown() || (a?.state === "walled" && a.apart)));
   // Rewritten only when it changes (the summary is refreshed often): a
   // focused button keeps its focus, the screen reader is not repeated.
   if (html === ADV.tower) return;
@@ -673,7 +713,6 @@ $("s-tower")?.addEventListener("click", (e) => {
   if (!b) return;
   if (b.dataset.tower === "off") advSet("enable_prime_tower", "0");
   else if (b.dataset.tower === "material" || b.dataset.tower === "single") prTowerSetKind(b.dataset.tower);
-  else if (b.dataset.tower === "undo") advSet("wipe_tower_filament", null);
   else advSet("wipe_tower_filament", String(+b.dataset.towerWall + 1));
 });
 
@@ -817,7 +856,7 @@ async function advSaveGo() {
   }
   if (exists && !(await confirmDelete(tr("slice.adv.save.replace_title"), tr("slice.adv.save.replace_text", { name }), tr("slice.adv.save.replace")))) return;
   try {
-    await invoke("slice_save_process", { name, base, simple: currentSimple(), overrides: { ...advOverrides(), ...spdOverrides() } });
+    await invoke("slice_save_process", { name, base, simple: currentSimple(), overrides: { ...advOverridesOwn(), ...spdOverrides() } });
   } catch (e) {
     $("advsave-msg").textContent = String(e);
     $("advsave-msg").className = "pf-test err";
