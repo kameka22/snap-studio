@@ -172,9 +172,23 @@ fn system_profiles(app: &Path) -> Option<PathBuf> {
     crate::slicers::resources(app).map(|r| r.join("profiles/Snapmaker"))
 }
 
+/// Which presets an index reads besides `app`'s system profiles.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    /// The user's presets and Orca's selection too.
+    WithUser,
+    /// System profiles only: what tests see does not depend on the machine.
+    SystemOnly,
+}
+
 impl Index {
-    /// Inventories `app`'s system profiles and the user's presets.
+    /// Inventories `app`'s system profiles and the user's presets (system
+    /// profiles only under test).
     pub fn build(app: &Path) -> Result<Index> {
+        Self::build_scoped(app, if cfg!(test) { Scope::SystemOnly } else { Scope::WithUser })
+    }
+
+    fn build_scoped(app: &Path, scope: Scope) -> Result<Index> {
         let Some(sys) = system_profiles(app).filter(|p| p.is_dir()) else {
             return Err(anyhow!(crate::t!("err.not_orca", path = app.display())));
         };
@@ -208,6 +222,9 @@ impl Index {
         };
         for kind in [Kind::Machine, Kind::Process, Kind::Filament] {
             add(sys.join(kind.dir()), kind, false, &mut entries);
+        }
+        if scope == Scope::SystemOnly {
+            return Ok(Index { entries, renamed, selected: HashMap::new() });
         }
         let ud = datadir().join("user/default");
         for kind in [Kind::Machine, Kind::Process, Kind::Filament] {
@@ -963,6 +980,22 @@ mod tests {
         assert!(!produced.is_empty(), "no G-code produced");
         let size = std::fs::metadata(&produced[0]).unwrap().len();
         assert!(size > 1000, "G-code too short ({size} bytes)");
+    }
+
+    /// Every preset of this machine's user resolves against the installed
+    /// Orca (`cargo test --lib presets -- --ignored`): a user preset whose
+    /// parent Orca renamed or removed shows here, not at slicing time.
+    #[test]
+    #[ignore = "reads the user's own Orca presets"]
+    fn the_users_presets_all_resolve() {
+        let Ok(idx) = Index::build_scoped(&app(), Scope::WithUser) else { return };
+        let broken: Vec<String> = idx
+            .entries
+            .iter()
+            .filter(|(_, e)| e.user)
+            .filter_map(|(n, _)| idx.resolve(n).err().map(|e| format!("{e:#}")))
+            .collect();
+        assert!(broken.is_empty(), "{broken:#?}");
     }
 
     #[test]
