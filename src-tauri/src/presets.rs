@@ -15,7 +15,7 @@
 //! * filaments compatible with the 0.4 nozzle have no suffix in their name:
 //!   they must be filtered on `compatible_printers`, never on the name.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -589,7 +589,7 @@ fn write_config(dir: &Path, kind: Kind, name: &str, mut cfg: Map<String, Value>,
     cfg.insert("from".into(), Value::String("system".into()));
     cfg.insert("instantiation".into(), Value::String("true".into()));
     let path = dir.join(format!("{}{}.json", kind.dir(), suffix));
-    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?)?;
+    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?).with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
 
@@ -640,9 +640,9 @@ fn save_user_process_in(index: &Index, dir: &Path, name: &str, base: &str, value
     cfg.insert("type".into(), Value::String("process".into()));
     cfg.insert("is_custom_defined".into(), Value::String("0".into()));
     cfg.insert("print_settings_id".into(), Value::String(name.into()));
-    std::fs::create_dir_all(dir)?;
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     let path = dir.join(format!("{name}.json"));
-    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?)?;
+    std::fs::write(&path, serde_json::to_vec_pretty(&Value::Object(cfg))?).with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
 

@@ -171,6 +171,22 @@ pub fn b64_encode(data: &[u8]) -> String {
     out
 }
 
+/// An error as the UI shows it: the message and its causes
+/// (`copying a to b: Permission denied`), where `to_string()` would keep
+/// only the first.
+pub fn ui_err(e: impl std::fmt::Display) -> String {
+    format!("{e:#}")
+}
+
+/// Writes a file whole or not at all (a temporary file, then a rename): a
+/// crash mid-write never leaves a truncated store. Errors name the file.
+pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> {
+    use anyhow::Context;
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, bytes).with_context(|| format!("writing {}", tmp.display()))?;
+    std::fs::rename(&tmp, path).with_context(|| format!("replacing {}", path.display()))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -216,5 +232,14 @@ mod path_tests {
         // No PATH at all: still the usual places.
         let p = ordered_path(Vec::new(), None);
         assert!(p.contains(&PathBuf::from("/opt/homebrew/bin")) && p.contains(&PathBuf::from("/usr/bin")));
+    }
+
+    #[test]
+    fn a_failed_write_names_the_file_and_keeps_the_cause() {
+        let missing = std::env::temp_dir().join("snapstudio-no-such-dir").join("store.json");
+        let e = write_atomic(&missing, b"{}").unwrap_err();
+        let shown = ui_err(&e);
+        assert!(shown.contains("store.tmp"), "{shown}");
+        assert!(shown.len() > e.to_string().len(), "the OS cause follows: {shown}");
     }
 }

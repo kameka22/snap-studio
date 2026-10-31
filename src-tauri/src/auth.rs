@@ -298,7 +298,7 @@ pub fn status(engine: &str) -> Status {
             }
             None => s.error = Some(crate::t!("err.auth_unreadable")),
         },
-        Err(e) => s.error = Some(e.to_string()),
+        Err(e) => s.error = Some(crate::util::ui_err(e)),
     }
     s
 }
@@ -330,7 +330,7 @@ pub fn verify(engine: &str) -> Check {
     };
     let out = match argv(engine, &tools, &args).and_then(|a| run(&a, &envs, deadline, decisive)) {
         Ok(out) => out,
-        Err(e) => return Check { ok: false, message: e.to_string() },
+        Err(e) => return Check { ok: false, message: crate::util::ui_err(e) },
     };
     check_of(&out)
 }
@@ -462,7 +462,7 @@ pub fn term_open(app: &AppHandle, kind: &str, cols: u16, rows: u16) -> Result<()
         let mut catcher = TokenCatcher::default();
         Box::new(move |bytes: &[u8]| {
             if let Some(token) = catcher.feed(bytes) {
-                let error = set_sandbox_token(&token).err().map(|e| e.to_string());
+                let error = set_sandbox_token(&token).err().map(crate::util::ui_err);
                 let _ = app.emit("auth-token", serde_json::json!({ "ok": error.is_none(), "error": error }));
             }
         }) as crate::pty::Tap

@@ -85,7 +85,7 @@ async fn run(app: AppHandle, p: Printer) {
                 backoff = 2;
                 crate::t!("err.closed_by_printer")
             }
-            Err(e) => e.to_string(),
+            Err(e) => crate::util::ui_err(e),
         };
         emit(
             &app,

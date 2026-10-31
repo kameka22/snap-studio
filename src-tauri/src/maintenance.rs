@@ -126,10 +126,7 @@ fn read_log(path: &std::path::Path) -> Log {
 }
 
 fn write_log(path: &std::path::Path, log: &Log) -> Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(log)?)?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
+    crate::util::write_atomic(path, &serde_json::to_vec_pretty(log)?)
 }
 
 /// A printer's log, oldest first.

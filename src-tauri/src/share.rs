@@ -13,7 +13,7 @@
 //! The actions only take files of the cache: nothing else of the computer
 //! can be shared from here.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{IpAddr, TcpListener, TcpStream, UdpSocket};
@@ -46,7 +46,7 @@ pub async fn fetch(host: &str, port: u16, root: &str, path: &str, modified: f64)
     if ready.is_file() {
         return Ok(ready);
     }
-    std::fs::create_dir_all(&dir)?;
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     crate::printer_files::download(host, port, root, path, &dir).await
 }
 
@@ -76,7 +76,7 @@ pub fn caps() -> Caps {
 
 /// Saves a copy where the user chose.
 pub fn save(src: &Path, dest: &Path) -> Result<()> {
-    std::fs::copy(src, dest)?;
+    std::fs::copy(src, dest).with_context(|| format!("copying {} to {}", src.display(), dest.display()))?;
     Ok(())
 }
 

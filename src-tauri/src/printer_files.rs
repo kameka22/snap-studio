@@ -17,7 +17,7 @@
 //! first and every candidate is listed, so both layouts work, and a root's
 //! own permissions decide whether its videos can be deleted.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -880,7 +880,7 @@ pub async fn download(host: &str, port: u16, root: &str, path: &str, dir: &Path)
     }
     f.flush()?;
     drop(f);
-    std::fs::rename(&part, &dest)?;
+    std::fs::rename(&part, &dest).with_context(|| format!("moving {} to {}", part.display(), dest.display()))?;
     Ok(dest)
 }
 

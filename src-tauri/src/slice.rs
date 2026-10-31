@@ -794,7 +794,7 @@ pub fn run_job(
             &overrides,
         ) {
             Ok(p) => p,
-            Err(e) => return fail(e.to_string()),
+            Err(e) => return fail(crate::util::ui_err(e)),
         };
         if is_cancelled() {
             return cancelled_now();
@@ -827,12 +827,12 @@ pub fn run_job(
             let dst = work.join("plate.3mf");
             match crate::plate::write_scene(&req.scene, &req.pillars, idx.plate_size(&req.machine), &dst) {
                 Ok(_) => dst,
-                Err(e) => return fail(e.to_string()),
+                Err(e) => return fail(crate::util::ui_err(e)),
             }
         } else if crate::scan::kind_of(source) == Some("3mf") || is_stl {
             match rewrite_centered(source, &work, idx.plate_size(&req.machine), &req.extruder_map) {
                 Ok(p) => p,
-                Err(e) => return fail(e.to_string()),
+                Err(e) => return fail(crate::util::ui_err(e)),
             }
         } else {
             // Other formats go as is: it is up to the engine to put them on the bed.
@@ -962,7 +962,7 @@ pub fn run_job(
         });
         let status = match status {
             Ok(s) => s,
-            Err(e) => return fail(e.to_string()),
+            Err(e) => return fail(crate::util::ui_err(e)),
         };
         let cancelled = jobs().lock().unwrap().remove(&job_id).is_none();
         if cancelled {

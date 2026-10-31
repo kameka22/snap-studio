@@ -53,10 +53,7 @@ pub fn list() -> Vec<Favorite> {
 }
 
 fn save(list: &[Favorite]) -> Result<()> {
-    let tmp = store_path().with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(list)?)?;
-    std::fs::rename(&tmp, store_path())?;
-    Ok(())
+    crate::util::write_atomic(&store_path(), &serde_json::to_vec_pretty(list)?)
 }
 
 pub fn remove(id: &str) -> Result<Vec<Favorite>> {

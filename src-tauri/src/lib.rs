@@ -48,6 +48,7 @@ use std::time::UNIX_EPOCH;
 use tauri::http::{Request, Response};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+use util::ui_err;
 
 // ---------------------------------------------------------------- DTO
 
@@ -121,7 +122,7 @@ async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
 /// Runs blocking work (disk, conversion) off the main thread, where
 /// synchronous commands run: the UI does not freeze meanwhile.
 async fn off_main<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
-    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(f).await.map_err(ui_err)?
 }
 
 /// Off the main thread: a macOS permission prompt or a big folder does not
@@ -267,8 +268,8 @@ async fn read_metas(paths: Vec<String>) -> Vec<MetaDto> {
 /// On-demand geometry analysis: real bounding box and triangle count.
 #[tauri::command]
 async fn analyze(path: String) -> Result<AnalyzeDto, String> {
-    let mut zip = model3mf::open(Path::new(&path)).map_err(|e| e.to_string())?;
-    let m = mesh::load_mesh(&mut zip, 2_500_000).map_err(|e| e.to_string())?;
+    let mut zip = model3mf::open(Path::new(&path)).map_err(ui_err)?;
+    let m = mesh::load_mesh(&mut zip, 2_500_000).map_err(ui_err)?;
     Ok(AnalyzeDto {
         size_mm: m.size(),
         triangles: m.tris.len(),
@@ -279,7 +280,7 @@ async fn analyze(path: String) -> Result<AnalyzeDto, String> {
 #[tauri::command]
 async fn trash_files(paths: Vec<String>) -> Result<usize, String> {
     off_main(move || {
-        trash::delete_all(&paths).map_err(|e| e.to_string())?;
+        trash::delete_all(&paths).map_err(ui_err)?;
         Ok(paths.len())
     })
     .await
@@ -289,14 +290,14 @@ async fn trash_files(paths: Vec<String>) -> Result<usize, String> {
 fn reveal(app: tauri::AppHandle, path: String) -> Result<(), String> {
     app.opener()
         .reveal_item_in_dir(PathBuf::from(path))
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)
 }
 
 #[tauri::command]
 fn open_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
     app.opener()
         .open_path(path, None::<&str>)
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)
 }
 
 // ---------------------------------------------------------------- library
@@ -309,7 +310,7 @@ fn lib_sites() -> Vec<library::Site> {
 /// The floating navigation's buttons: on the tab shown.
 #[tauri::command]
 fn lib_nav(app: tauri::AppHandle, what: String) -> Result<(), String> {
-    library::nav_command(&app, &what).map_err(|e| e.to_string())
+    library::nav_command(&app, &what).map_err(ui_err)
 }
 
 /// The pinned camera over a site: where the interface's pinned window is
@@ -340,7 +341,7 @@ async fn lib_favicon(id: String) -> Option<String> {
 /// thread; the creation is dispatched to it.
 #[tauri::command]
 async fn lib_open(app: tauri::AppHandle, id: String, url: String) -> Result<(), String> {
-    library::open_tab(&app, &id, &url).map_err(|e| e.to_string())
+    library::open_tab(&app, &id, &url).map_err(ui_err)
 }
 
 #[tauri::command]
@@ -367,18 +368,18 @@ fn lib_rect(
 
 #[tauri::command]
 fn lib_navigate(app: tauri::AppHandle, id: String, url: String) -> Result<(), String> {
-    library::navigate(&app, &id, &url).map_err(|e| e.to_string())
+    library::navigate(&app, &id, &url).map_err(ui_err)
 }
 
 #[tauri::command]
 fn lib_command(app: tauri::AppHandle, id: String, what: String) -> Result<(), String> {
-    library::command(&app, &id, &what).map_err(|e| e.to_string())
+    library::command(&app, &id, &what).map_err(ui_err)
 }
 
 /// Logs a site out: its cookies only, not the others'.
 #[tauri::command]
 async fn lib_logout(app: tauri::AppHandle, id: String, site: String) -> Result<usize, String> {
-    library::logout(&app, &id, &site).map_err(|e| e.to_string())
+    library::logout(&app, &id, &site).map_err(ui_err)
 }
 
 /// The address of the page a tab shows (not of its frames).
@@ -397,12 +398,12 @@ fn fav_list() -> Vec<favorites::Favorite> {
 /// Saves the page shown as a favorite; `title` is the tab's.
 #[tauri::command]
 fn fav_add(url: String, title: Option<String>) -> Result<Vec<favorites::Favorite>, String> {
-    favorites::add(&url, title.as_deref()).map_err(|e| e.to_string())
+    favorites::add(&url, title.as_deref()).map_err(ui_err)
 }
 
 #[tauri::command]
 fn fav_remove(id: String) -> Result<Vec<favorites::Favorite>, String> {
-    favorites::remove(&id).map_err(|e| e.to_string())
+    favorites::remove(&id).map_err(ui_err)
 }
 
 // ---------------------------------------------------------------- slicing
@@ -416,7 +417,7 @@ fn engine_status() -> engine::Status {
 /// Downloads and installs the engine; progress through `engine-progress`.
 #[tauri::command]
 async fn engine_install(app: tauri::AppHandle) -> Result<engine::Status, String> {
-    engine::install(app).await.map_err(|e| e.to_string())
+    engine::install(app).await.map_err(ui_err)
 }
 
 #[tauri::command]
@@ -426,7 +427,7 @@ fn engine_cancel() {
 
 #[tauri::command]
 fn engine_remove() -> Result<engine::Status, String> {
-    engine::remove().map_err(|e| e.to_string())
+    engine::remove().map_err(ui_err)
 }
 
 /// Effective content of a preset, for the details sheet.
@@ -442,8 +443,8 @@ async fn slice_details(
         slice::details(&name, &machine, simple, &overrides.unwrap_or_default(), color.as_deref())
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())
+    .map_err(ui_err)?
+    .map_err(ui_err)
 }
 
 /// Saves the effective process settings as a user process preset.
@@ -456,14 +457,14 @@ async fn slice_save_process(
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || slice::save_process(&name, &base, simple, &overrides.unwrap_or_default()))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 /// Presets that can be offered for the chosen machine.
 #[tauri::command]
 async fn slice_lists(machine: Option<String>) -> Result<slice::PresetLists, String> {
-    slice::lists(machine.as_deref()).map_err(|e| e.to_string())
+    slice::lists(machine.as_deref()).map_err(ui_err)
 }
 
 /// Starting values of the simplified settings for a given preset.
@@ -471,14 +472,14 @@ async fn slice_lists(machine: Option<String>) -> Result<slice::PresetLists, Stri
 async fn slice_defaults(_machine: String, process: String) -> Result<slice::Simple, String> {
     // `machine` is still sent by the sheet; a process's quick settings do
     // not depend on it.
-    slice::defaults(&process).map_err(|e| e.to_string())
+    slice::defaults(&process).map_err(ui_err)
 }
 
 /// Starts a background slice; progress arrives through the `slice-progress`
 /// event.
 #[tauri::command]
 fn slice_start(app: tauri::AppHandle, request: slice::Request) -> Result<String, String> {
-    slice::start(app, request).map_err(|e| e.to_string())
+    slice::start(app, request).map_err(ui_err)
 }
 
 /// Saves a slice's preview; returns the path of the G-code written.
@@ -487,7 +488,7 @@ async fn slice_save(id: String, dir: Option<String>) -> Result<String, String> {
     off_main(move || {
         slice::save(&id, dir.as_deref())
             .map(|p| p.to_string_lossy().to_string())
-            .map_err(|e| e.to_string())
+            .map_err(ui_err)
     })
     .await
 }
@@ -503,8 +504,8 @@ fn slice_discard(id: String) {
 async fn plate_items(path: String) -> Result<Vec<plate::PlateItem>, String> {
     tauri::async_runtime::spawn_blocking(move || plate::items(Path::new(&path)))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 /// Convex hull of a plate object, or of a piece of it (own frame).
@@ -512,8 +513,8 @@ async fn plate_items(path: String) -> Result<Vec<plate::PlateItem>, String> {
 async fn plate_hull(path: String, item: usize, piece: Option<usize>) -> Result<orient::Hull, String> {
     tauri::async_runtime::spawn_blocking(move || plate::hull(Path::new(&path), item, piece))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 /// The pieces of a plate object, to split it into several (Orca's "Split
@@ -522,8 +523,8 @@ async fn plate_hull(path: String, item: usize, piece: Option<usize>) -> Result<o
 async fn plate_pieces(path: String, item: usize, piece: Option<usize>) -> Result<Vec<plate::Piece>, String> {
     tauri::async_runtime::spawn_blocking(move || plate::pieces(Path::new(&path), item, piece))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 /// Auto-orientation (Orca's rules): one rotation per object.
@@ -534,8 +535,8 @@ async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) ->
         items.iter().map(|it| plate::orient(it, threshold)).collect::<anyhow::Result<Vec<_>>>()
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())
+    .map_err(ui_err)?
+    .map_err(ui_err)
 }
 
 /// Saves the plate as 3MF.
@@ -549,8 +550,8 @@ async fn plate_save(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, tower, smooth_mix, snap.as_ref(), Path::new(&path)))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 /// A virtual head's preview color: `a` and `b` (`#rrggbb`) mixed at each
@@ -565,7 +566,7 @@ fn mix_colors(a: String, b: String, shares: Vec<f32>) -> Result<Vec<String>, Str
 async fn plate_tower(path: String) -> Result<Option<plate::FileTower>, String> {
     tauri::async_runtime::spawn_blocking(move || plate::tower_of(Path::new(&path)))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)
 }
 
 /// The machine's bed (preset): dimensions and printer model.
@@ -573,7 +574,7 @@ async fn plate_tower(path: String) -> Result<Option<plate::FileTower>, String> {
 async fn plate_bed(machine: Option<String>) -> Result<slice::Bed, String> {
     tauri::async_runtime::spawn_blocking(move || slice::bed(machine.as_deref()))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)
 }
 
 /// Filaments declared by a model, to associate them with heads.
@@ -581,8 +582,8 @@ async fn plate_bed(machine: Option<String>) -> Result<slice::Bed, String> {
 async fn slice_model(path: String) -> Result<slice::ModelInfo, String> {
     tauri::async_runtime::spawn_blocking(move || slice::model_info(Path::new(&path)))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 #[derive(serde::Deserialize)]
@@ -638,7 +639,7 @@ async fn launch(
         send_progress(&handle, "upload", Some(pct), None);
     })
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(ui_err)?;
     start_printing(p, name, options, tools, map).await
 }
 
@@ -652,7 +653,7 @@ async fn prepare_printer(
     tools: &[u8],
     map: &[(u8, u8)],
 ) -> Result<(), String> {
-    printers::check_map(tools, map).map_err(|e| e.to_string())?;
+    printers::check_map(tools, map).map_err(ui_err)?;
     send_progress(app, "check", None, None);
     let st = printers::status(&p.host, p.port).await;
     if !st.online {
@@ -734,7 +735,7 @@ async fn pf_overview(printer_id: String) -> Result<printer_files::Overview, Stri
         return Err(t!("err.printer_silent", name = p.name));
     }
     let printing = printer_files::printing_path(&st.state, st.job.as_deref());
-    printer_files::overview(&p.host, p.port, printing).await.map_err(|e| e.to_string())
+    printer_files::overview(&p.host, p.port, printing).await.map_err(ui_err)
 }
 
 /// Tools a print file on a printer uses, read from the G-code when the
@@ -742,21 +743,21 @@ async fn pf_overview(printer_id: String) -> Result<printer_files::Overview, Stri
 #[tauri::command]
 async fn pf_tools(printer_id: String, path: String, modified: f64) -> Result<Vec<u8>, String> {
     let p = printer_by_id(&printer_id)?;
-    printer_files::tools(&p.host, p.port, &path, modified).await.map_err(|e| e.to_string())
+    printer_files::tools(&p.host, p.port, &path, modified).await.map_err(ui_err)
 }
 
 /// A printer's timelapse videos, for the Prints record.
 #[tauri::command]
 async fn pf_videos(printer_id: String) -> Result<Vec<printer_files::RemoteFile>, String> {
     let p = printer_by_id(&printer_id)?;
-    printer_files::videos(&p.host, p.port).await.map_err(|e| e.to_string())
+    printer_files::videos(&p.host, p.port).await.map_err(ui_err)
 }
 
 /// Number of print files on a printer, for the sidebar.
 #[tauri::command]
 async fn pf_count(printer_id: String) -> Result<usize, String> {
     let p = printer_by_id(&printer_id)?;
-    printer_files::count(&p.host, p.port).await.map_err(|e| e.to_string())
+    printer_files::count(&p.host, p.port).await.map_err(ui_err)
 }
 
 #[tauri::command]
@@ -765,7 +766,7 @@ async fn pf_video_duration(printer_id: String, root: String, path: String, modif
     let p = printer_by_id(&printer_id)?;
     printer_files::video_duration(&p.host, p.port, &root, &path, modified)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)
 }
 
 /// Deletes files of one root; each one's error, if any, in order.
@@ -777,11 +778,11 @@ async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Resu
     let mut out = Vec::new();
     for path in &paths {
         let r = match printer_files::check_change(&root, path, printing.as_deref()) {
-            Ok(()) if root == "gcodes" => printer_files::delete_retrying(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            Ok(()) if root == "gcodes" => printer_files::delete_retrying(&p.host, p.port, &root, path).await.map_err(ui_err),
             // Timelapses: also through the camera service when Moonraker
             // only lists them (a U1's read-only `camera` folder).
-            Ok(()) => printer_files::delete_video(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
-            Err(e) => Err(e.to_string()),
+            Ok(()) => printer_files::delete_video(&p.host, p.port, &root, path).await.map_err(ui_err),
+            Err(e) => Err(ui_err(e)),
         };
         out.push(r.err());
     }
@@ -792,8 +793,8 @@ async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Resu
 async fn pf_rename(printer_id: String, path: String, name: String) -> Result<String, String> {
     let p = printer_by_id(&printer_id)?;
     let printing = printing_file(&p).await;
-    printer_files::check_change("gcodes", &path, printing.as_deref()).map_err(|e| e.to_string())?;
-    printer_files::rename(&p.host, p.port, &path, &name).await.map_err(|e| e.to_string())
+    printer_files::check_change("gcodes", &path, printing.as_deref()).map_err(ui_err)?;
+    printer_files::rename(&p.host, p.port, &path, &name).await.map_err(ui_err)
 }
 
 /// Downloads files into a folder: the Files folder for print files, the
@@ -812,7 +813,7 @@ async fn pf_download(printer_id: String, root: String, paths: Vec<String>, dir: 
     }
     let mut out = Vec::new();
     for path in &paths {
-        let f = printer_files::download(&p.host, p.port, &root, path, &dir).await.map_err(|e| e.to_string())?;
+        let f = printer_files::download(&p.host, p.port, &root, path, &dir).await.map_err(ui_err)?;
         out.push(f.to_string_lossy().to_string());
     }
     Ok(out)
@@ -857,7 +858,7 @@ async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Opti
     let src = printer_by_id(&request.source_id)?;
     send_progress(&app, "fetch", None, None);
     let tmp = std::env::temp_dir().join("snapstudio-pfiles").join(printers::new_id());
-    std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&tmp).map_err(ui_err)?;
     let result = async {
         let gcode = printer_files::download(&src.host, src.port, "gcodes", &request.path, &tmp)
             .await
@@ -886,8 +887,8 @@ async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Opti
         if request.queue {
             let job = add(gcode, new, "queued", String::new())
                 .await
-                .map_err(|e| e.to_string())?
-                .map_err(|e| e.to_string())?;
+                .map_err(ui_err)?
+                .map_err(ui_err)?;
             emit_jobs(&app);
             return Ok(Some(job.id));
         }
@@ -935,15 +936,15 @@ fn share_caps() -> share::Caps {
 
 #[tauri::command]
 fn share_copy(path: String) -> Result<(), String> {
-    let p = share::cached(&path).map_err(|e| e.to_string())?;
-    share::copy(&p).map_err(|e| e.to_string())
+    let p = share::cached(&path).map_err(ui_err)?;
+    share::copy(&p).map_err(ui_err)
 }
 
 #[tauri::command]
 async fn share_save(path: String, dest: String) -> Result<(), String> {
     off_main(move || {
-        let p = share::cached(&path).map_err(|e| e.to_string())?;
-        share::save(&p, Path::new(&dest)).map_err(|e| e.to_string())
+        let p = share::cached(&path).map_err(ui_err)?;
+        share::save(&p, Path::new(&dest)).map_err(ui_err)
     })
     .await
 }
@@ -952,22 +953,22 @@ async fn share_save(path: String, dest: String) -> Result<(), String> {
 /// window. macOS only.
 #[tauri::command]
 async fn share_native(app: tauri::AppHandle, path: String, x: f64, y: f64) -> Result<(), String> {
-    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    let p = share::cached(&path).map_err(ui_err)?;
     #[cfg(target_os = "macos")]
     {
         use tauri::Manager;
         // The window, not the "webview window": once the Library has added
         // its own views to it, it is no longer one (get_webview_window: None).
         let w = app.get_window("main").ok_or("no window")?;
-        let ns = w.ns_window().map_err(|e| e.to_string())? as usize;
+        let ns = w.ns_window().map_err(ui_err)? as usize;
         let (tx, rx) = std::sync::mpsc::channel();
         app.run_on_main_thread(move || {
-            let _ = tx.send(share::native(ns, &p, x, y).map_err(|e| e.to_string()));
+            let _ = tx.send(share::native(ns, &p, x, y).map_err(ui_err));
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(ui_err)?;
         return tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or_else(|_| Err("no answer".into())))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(ui_err)?;
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -980,7 +981,7 @@ async fn share_native(app: tauri::AppHandle, path: String, x: f64, y: f64) -> Re
 /// its address and QR code. On the network that reaches the printer.
 #[tauri::command]
 fn share_qr_start(path: String, printer_id: String) -> Result<share::QrShare, String> {
-    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    let p = share::cached(&path).map_err(ui_err)?;
     let printer = printer_by_id(&printer_id)?;
     share::qr_start(p, &printer.host).map_err(|e| t!("share.err.qr", err = e))
 }
@@ -1065,8 +1066,8 @@ async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<Strin
     if request.queue {
         let job = add(gcode, new, "queued", String::new())
             .await
-            .map_err(|e| e.to_string())?
-            .map_err(|e| e.to_string())?;
+            .map_err(ui_err)?
+            .map_err(ui_err)?;
         emit_jobs(&app);
         return Ok(job.id);
     }
@@ -1137,14 +1138,14 @@ async fn job_launch(app: tauri::AppHandle, id: String, map: Option<Vec<(u8, u8)>
 
 #[tauri::command]
 fn job_remove(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    jobs::remove(&id).map_err(|e| e.to_string())?;
+    jobs::remove(&id).map_err(ui_err)?;
     emit_jobs(&app);
     Ok(())
 }
 
 #[tauri::command]
 fn job_move(app: tauri::AppHandle, id: String, delta: i32) -> Result<(), String> {
-    jobs::shift(&id, delta).map_err(|e| e.to_string())?;
+    jobs::shift(&id, delta).map_err(ui_err)?;
     emit_jobs(&app);
     Ok(())
 }
@@ -1156,7 +1157,7 @@ fn job_edit(
     printer_id: Option<String>,
     options: Option<printers::StartOptions>,
 ) -> Result<jobs::Job, String> {
-    let j = jobs::edit(&id, printer_id, options).map_err(|e| e.to_string())?;
+    let j = jobs::edit(&id, printer_id, options).map_err(ui_err)?;
     emit_jobs(&app);
     Ok(j)
 }
@@ -1166,8 +1167,8 @@ async fn job_requeue(app: tauri::AppHandle, id: String) -> Result<jobs::Job, Str
     // G-code copy: off the main thread.
     let j = tauri::async_runtime::spawn_blocking(move || jobs::requeue(&id))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
+        .map_err(ui_err)?
+        .map_err(ui_err)?;
     emit_jobs(&app);
     Ok(j)
 }
@@ -1175,14 +1176,14 @@ async fn job_requeue(app: tauri::AppHandle, id: String) -> Result<jobs::Job, Str
 /// The result of a finished print, set in its record (None clears it).
 #[tauri::command]
 fn job_set_result(id: String, result: Option<jobs::PrintResult>) -> Result<jobs::JobView, String> {
-    jobs::set_result(&id, result).map(jobs::view).map_err(|e| e.to_string())
+    jobs::set_result(&id, result).map(jobs::view).map_err(ui_err)
 }
 
 /// The timelapse matched to a finished print, kept with it.
 #[tauri::command]
 fn job_set_timelapse(id: String, root: String, path: String) -> Result<jobs::JobView, String> {
     served_root(&root)?;
-    jobs::set_timelapse(&id, jobs::Timelapse { root, path }).map(jobs::view).map_err(|e| e.to_string())
+    jobs::set_timelapse(&id, jobs::Timelapse { root, path }).map(jobs::view).map_err(ui_err)
 }
 
 /// Automatic deletion of the prints history, in days (None: never).
@@ -1193,7 +1194,7 @@ fn jobs_retention() -> Option<u32> {
 
 #[tauri::command]
 fn jobs_set_retention(app: tauri::AppHandle, days: Option<u32>) -> Result<(), String> {
-    jobs::set_retention(days).map_err(|e| e.to_string())?;
+    jobs::set_retention(days).map_err(ui_err)?;
     emit_jobs(&app);
     Ok(())
 }
@@ -1214,7 +1215,7 @@ fn queue_check(app: tauri::AppHandle) {
 #[tauri::command]
 async fn print_action(printer_id: String, action: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    printers::print_action(&p.host, p.port, &action).await.map_err(|e| e.to_string())
+    printers::print_action(&p.host, p.port, &action).await.map_err(ui_err)
 }
 
 fn printer_by_id(id: &str) -> Result<printers::Printer, String> {
@@ -1225,13 +1226,13 @@ fn printer_by_id(id: &str) -> Result<printers::Printer, String> {
 #[tauri::command]
 async fn camera_start(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    printers::camera_start(&p.host, p.port).await.map_err(|e| e.to_string())
+    printers::camera_start(&p.host, p.port).await.map_err(ui_err)
 }
 
 #[tauri::command]
 async fn camera_stop(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    printers::camera_stop(&p.host, p.port).await.map_err(|e| e.to_string())
+    printers::camera_stop(&p.host, p.port).await.map_err(ui_err)
 }
 
 /// `cam://localhost/f?id=<printer>`: latest image of its camera. The printer
@@ -1312,7 +1313,7 @@ fn printer_save(mut printer: printers::Printer) -> Result<Vec<printers::Printer>
         Some(slot) => *slot = printer,
         None => list.push(printer),
     }
-    printers::save(&list).map_err(|e| e.to_string())?;
+    printers::save(&list).map_err(ui_err)?;
     Ok(list)
 }
 
@@ -1320,7 +1321,7 @@ fn printer_save(mut printer: printers::Printer) -> Result<Vec<printers::Printer>
 fn printer_remove(id: String) -> Result<Vec<printers::Printer>, String> {
     let mut list = printers::load();
     list.retain(|p| p.id != id);
-    printers::save(&list).map_err(|e| e.to_string())?;
+    printers::save(&list).map_err(ui_err)?;
     Ok(list)
 }
 
@@ -1338,7 +1339,7 @@ async fn printer_status(host: String, port: u16) -> printers::Status {
 /// What a printer counts (heads, hours, jobs), for its Maintenance view.
 #[tauri::command]
 async fn printer_maintenance(host: String, port: u16) -> Result<maintenance::Usage, String> {
-    maintenance::usage(&host, port).await.map_err(|e| e.to_string())
+    maintenance::usage(&host, port).await.map_err(ui_err)
 }
 
 /// A printer's maintenance log.
@@ -1350,20 +1351,20 @@ fn maintenance_log(printer_id: String) -> Vec<maintenance::Entry> {
 /// Logs a maintenance task done now, with the counters at that moment.
 #[tauri::command]
 fn maintenance_done(printer_id: String, task: String, print_hours: f64, swaps: Vec<u64>) -> Result<Vec<maintenance::Entry>, String> {
-    maintenance::done(&printer_id, &task, print_hours, swaps).map_err(|e| e.to_string())
+    maintenance::done(&printer_id, &task, print_hours, swaps).map_err(ui_err)
 }
 
 /// Forgets a log entry made by mistake.
 #[tauri::command]
 fn maintenance_remove(printer_id: String, task: String, at: u64) -> Result<Vec<maintenance::Entry>, String> {
-    maintenance::remove(&printer_id, &task, at).map_err(|e| e.to_string())
+    maintenance::remove(&printer_id, &task, at).map_err(ui_err)
 }
 
 /// A printer's bed mesh now, with its settings and progress.
 #[tauri::command]
 async fn bed_mesh_read(printer_id: String, light: Option<bool>) -> Result<bedmesh::Live, String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::read(&p.host, p.port, light.unwrap_or(false)).await.map_err(|e| e.to_string())
+    bedmesh::read(&p.host, p.port, light.unwrap_or(false)).await.map_err(ui_err)
 }
 
 /// The meshes stored for a printer, oldest first.
@@ -1375,25 +1376,25 @@ fn bed_mesh_history(printer_id: String) -> Vec<bedmesh::Mesh> {
 /// Stores a full-bed mesh not seen yet; returns the history.
 #[tauri::command]
 fn bed_mesh_record(printer_id: String, mesh: bedmesh::Mesh, keep: usize, by_app: bool) -> Result<Vec<bedmesh::Mesh>, String> {
-    bedmesh::record(&printer_id, mesh, keep, by_app).map_err(|e| e.to_string())
+    bedmesh::record(&printer_id, mesh, keep, by_app).map_err(ui_err)
 }
 
 #[tauri::command]
 fn bed_mesh_remove(printer_id: String, at: u64) -> Result<Vec<bedmesh::Mesh>, String> {
-    bedmesh::remove(&printer_id, at).map_err(|e| e.to_string())
+    bedmesh::remove(&printer_id, at).map_err(ui_err)
 }
 
 /// Keeps only the `keep` newest meshes.
 #[tauri::command]
 fn bed_mesh_keep(printer_id: String, keep: usize) -> Result<Vec<bedmesh::Mesh>, String> {
-    bedmesh::keep(&printer_id, keep).map_err(|e| e.to_string())
+    bedmesh::keep(&printer_id, keep).map_err(ui_err)
 }
 
 /// Measures the bed; returns when the printer is done.
 #[tauri::command]
 async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::measure(&p.host, p.port, temp).await.map_err(|e| e.to_string())
+    bedmesh::measure(&p.host, p.port, temp).await.map_err(ui_err)
 }
 
 /// Care & Tuning › Control: the printer's state, with its configuration
@@ -1401,7 +1402,7 @@ async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
 #[tauri::command]
 async fn control_read(printer_id: String, config: Option<bool>) -> Result<serde_json::Value, String> {
     let p = printer_by_id(&printer_id)?;
-    let (state, cfg) = control::read(&p.host, p.port, config.unwrap_or(false)).await.map_err(|e| e.to_string())?;
+    let (state, cfg) = control::read(&p.host, p.port, config.unwrap_or(false)).await.map_err(ui_err)?;
     Ok(serde_json::json!({ "state": state, "config": cfg }))
 }
 
@@ -1409,21 +1410,21 @@ async fn control_read(printer_id: String, config: Option<bool>) -> Result<serde_
 #[tauri::command]
 async fn control_run(printer_id: String, action: control::Action) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    control::run(&p.host, p.port, &action).await.map_err(|e| e.to_string())
+    control::run(&p.host, p.port, &action).await.map_err(ui_err)
 }
 
 /// Stops the probing cleanly (the U1, once its leveling has begun).
 #[tauri::command]
 async fn bed_mesh_abort(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::abort(&p.host, p.port).await.map_err(|e| e.to_string())
+    bedmesh::abort(&p.host, p.port).await.map_err(ui_err)
 }
 
 /// Emergency stop of a measurement going wrong (then Klipper restarts).
 #[tauri::command]
 async fn bed_mesh_stop(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::stop(&p.host, p.port).await.map_err(|e| e.to_string())
+    bedmesh::stop(&p.host, p.port).await.map_err(ui_err)
 }
 
 /// A system notification (the end of a measurement while the app is
@@ -1536,7 +1537,7 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
     access::ensure_file(Path::new(&path));
     let file = match std::fs::File::open(&path) {
         Ok(f) => f,
-        Err(e) => return fail(404, &e.to_string()),
+        Err(e) => return fail(404, &ui_err(e)),
     };
     match gcode::parse(file) {
         Ok(d) => Response::builder()
@@ -1546,7 +1547,7 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
             .header("Access-Control-Allow-Origin", "*")
             .body(gcode::encode(&d))
             .unwrap(),
-        Err(e) => fail(422, &e.to_string()),
+        Err(e) => fail(422, &ui_err(e)),
     }
 }
 
@@ -1554,7 +1555,7 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
 /// Saves the current state into the user's files, as 3MF.
 #[tauri::command]
 async fn ia_save(id: String) -> Result<String, String> {
-    off_main(move || ia::save_to_files(&id).map_err(|e| e.to_string())).await
+    off_main(move || ia::save_to_files(&id).map_err(ui_err)).await
 }
 
 #[tauri::command]
@@ -1564,12 +1565,12 @@ fn ia_versions(id: String) -> Vec<ia::Version> {
 
 #[tauri::command]
 async fn ia_revert(id: String, n: u32) -> Result<(), String> {
-    off_main(move || ia::revert(&id, n).map_err(|e| e.to_string())).await
+    off_main(move || ia::revert(&id, n).map_err(ui_err)).await
 }
 
 #[tauri::command]
 async fn ia_stats(id: String) -> Result<mesh::Stats, String> {
-    off_main(move || ia::current_stats(&id).map_err(|e| e.to_string())).await
+    off_main(move || ia::current_stats(&id).map_err(ui_err)).await
 }
 
 // ---------------------------------------------------------------- AI chat
@@ -1590,16 +1591,16 @@ async fn ia_chat_send(
     images: Vec<chat::Attachment>,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let c = ia::get(&id).map_err(|e| e.to_string())?;
-        chat::send(&app, &c, &text, &images).map_err(|e| e.to_string())
+        let c = ia::get(&id).map_err(ui_err)?;
+        chat::send(&app, &c, &text, &images).map_err(ui_err)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(ui_err)?
 }
 
 #[tauri::command]
 fn ia_chat_stop(id: String) -> Result<(), String> {
-    chat::stop(&id).map_err(|e| e.to_string())
+    chat::stop(&id).map_err(ui_err)
 }
 
 /// Answers a permission request; `input` carries an `AskUserQuestion`'s answers.
@@ -1611,13 +1612,13 @@ fn ia_chat_answer(
     always: bool,
     input: Option<serde_json::Value>,
 ) -> Result<(), String> {
-    chat::answer(&id, &request_id, allow, always, input).map_err(|e| e.to_string())
+    chat::answer(&id, &request_id, allow, always, input).map_err(ui_err)
 }
 
 /// Claude model of the conversation; none: the account's default.
 #[tauri::command]
 fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
-    chat::set_model(&id, model.as_deref()).map_err(|e| e.to_string())
+    chat::set_model(&id, model.as_deref()).map_err(ui_err)
 }
 
 /// True while Claude runs for this conversation in chat mode.
@@ -1639,7 +1640,7 @@ async fn ia_chat_close(id: String) {
 async fn auth_status(engine: String) -> Result<auth::Status, String> {
     tauri::async_runtime::spawn_blocking(move || auth::status(&engine))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)
 }
 
 /// A real check of the sign-in: one tiny call to the model.
@@ -1647,7 +1648,7 @@ async fn auth_status(engine: String) -> Result<auth::Status, String> {
 async fn auth_verify(engine: String) -> Result<auth::Check, String> {
     tauri::async_runtime::spawn_blocking(move || auth::verify(&engine))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)
 }
 
 /// True if the sandbox has a token of its own.
@@ -1659,25 +1660,25 @@ fn auth_sandbox_present() -> bool {
 /// Stores a sandbox token pasted by hand.
 #[tauri::command]
 fn auth_sandbox_set(token: String) -> Result<(), String> {
-    auth::set_sandbox_token(&token).map_err(|e| e.to_string())
+    auth::set_sandbox_token(&token).map_err(ui_err)
 }
 
 /// Forgets the sandbox token: the sandbox goes back to the Mac's login.
 #[tauri::command]
 fn auth_sandbox_clear() -> Result<(), String> {
-    auth::clear_sandbox_token().map_err(|e| e.to_string())
+    auth::clear_sandbox_token().map_err(ui_err)
 }
 
 /// Opens the sign-in terminal: "login" (this Mac) or "setup" (sandbox token).
 #[tauri::command]
 fn auth_term_open(app: tauri::AppHandle, kind: String, cols: u16, rows: u16) -> Result<(), String> {
-    auth::term_open(&app, &kind, cols, rows).map_err(|e| e.to_string())
+    auth::term_open(&app, &kind, cols, rows).map_err(ui_err)
 }
 
 /// Keystrokes for the sign-in terminal (`auth_term_open`).
 #[tauri::command]
 fn pty_write(id: String, data: String) -> Result<(), String> {
-    pty::write(&id, &data).map_err(|e| e.to_string())
+    pty::write(&id, &data).map_err(ui_err)
 }
 
 #[tauri::command]
@@ -1699,7 +1700,7 @@ fn ia_workspace(id: String) -> String {
 
 #[tauri::command]
 fn ia_get(id: String) -> Result<ia::Conversation, String> {
-    ia::get(&id).map_err(|e| e.to_string())
+    ia::get(&id).map_err(ui_err)
 }
 
 // ---------------------------------------------------------------- IA
@@ -1708,7 +1709,7 @@ fn ia_get(id: String) -> Result<ia::Conversation, String> {
 /// A few seconds: Python, and the container engines when `scope` asks.
 #[tauri::command]
 async fn ai_check(scope: Option<setup::CheckScope>) -> Result<setup::Report, String> {
-    tauri::async_runtime::spawn_blocking(move || setup::check(scope.unwrap_or_default())).await.map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || setup::check(scope.unwrap_or_default())).await.map_err(ui_err)
 }
 
 #[tauri::command]
@@ -1726,7 +1727,7 @@ async fn ia_create(
     let model = creation_model(model)?;
     // The source is converted to 3MF: a big mesh takes a while.
     off_main(move || {
-        let c = ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())?;
+        let c = ia::create(Path::new(&source), &prompt, &engine).map_err(ui_err)?;
         with_model(c, model)
     })
     .await
@@ -1741,7 +1742,7 @@ fn ia_create_blank(
     model: Option<String>,
 ) -> Result<ia::Conversation, String> {
     let model = creation_model(model)?;
-    let c = ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())?;
+    let c = ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(ui_err)?;
     with_model(c, model)
 }
 
@@ -1757,15 +1758,15 @@ fn creation_model(model: Option<String>) -> Result<Option<String>, String> {
 /// The new conversation with its model, kept for its first start.
 fn with_model(c: ia::Conversation, model: Option<String>) -> Result<ia::Conversation, String> {
     let Some(m) = model else { return Ok(c) };
-    chat::set_model(&c.id, Some(&m)).map_err(|e| e.to_string())?;
-    ia::get(&c.id).map_err(|e| e.to_string())
+    chat::set_model(&c.id, Some(&m)).map_err(ui_err)?;
+    ia::get(&c.id).map_err(ui_err)
 }
 
 #[tauri::command]
 async fn ia_delete(id: String) -> Result<IaDeleted, String> {
     tauri::async_runtime::spawn_blocking(move || delete_conversation(&id))
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(ui_err)?
 }
 
 /// What a deletion left behind, for the toast.
@@ -1788,8 +1789,8 @@ fn delete_conversation(id: &str) -> Result<IaDeleted, String> {
     chat::close(id);
     ia::watch_stop(id);
     // Listed before the folder goes: the project folder's name derives from it.
-    let found = ia::session_artifacts(id).map_err(|e| e.to_string())?;
-    ia::remove(id).map_err(|e| e.to_string())?;
+    let found = ia::session_artifacts(id).map_err(ui_err)?;
+    ia::remove(id).map_err(ui_err)?;
     let (removed, failed) = ia::remove_artifacts(&found);
     let kept = found
         .skipped
@@ -1813,7 +1814,7 @@ struct IaDeletePlan {
 async fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
     off_main(move || {
         ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
-        let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
+        let found = ia::session_artifacts(&id).map_err(ui_err)?;
         Ok(IaDeletePlan { files: found.paths.len(), running: chat::is_open(&id) })
     })
     .await
@@ -1821,12 +1822,12 @@ async fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
 
 #[tauri::command]
 async fn ia_duplicate(id: String) -> Result<ia::Conversation, String> {
-    off_main(move || ia::duplicate(&id).map_err(|e| e.to_string())).await
+    off_main(move || ia::duplicate(&id).map_err(ui_err)).await
 }
 
 #[tauri::command]
 fn ia_rename(id: String, title: String) -> Result<ia::Conversation, String> {
-    ia::rename(&id, &title).map_err(|e| e.to_string())
+    ia::rename(&id, &title).map_err(ui_err)
 }
 
 /// Path of the current mesh and stamp of its last write.
@@ -1871,7 +1872,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
                 .header("Access-Control-Allow-Origin", "*")
                 .body(mesh::encode(&m))
                 .unwrap(),
-            Err(e) => fail(422, &e.to_string()),
+            Err(e) => fail(422, &ui_err(e)),
         };
     }
     let loaded = if is_stl {
@@ -1885,7 +1886,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
                 plate::filament_colored(&mut zip, &mut m);
                 m
             }),
-            Err(e) => return fail(404, &e.to_string()),
+            Err(e) => return fail(404, &ui_err(e)),
         }
     };
     match loaded {
@@ -1896,7 +1897,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
             .header("Access-Control-Allow-Origin", "*")
             .body(mesh::encode(&m))
             .unwrap(),
-        Err(e) => fail(422, &e.to_string()),
+        Err(e) => fail(422, &ui_err(e)),
     }
 }
 
@@ -1963,7 +1964,7 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
 /// Switches language; the native menu bar is rebuilt to follow.
 #[tauri::command]
 fn language_set(app: tauri::AppHandle, lang: String) -> Result<(), String> {
-    i18n::set(&lang).map_err(|e| e.to_string())?;
+    i18n::set(&lang).map_err(ui_err)?;
     #[cfg(target_os = "macos")]
     if let Ok(menu) = menu::app_menu(&app) {
         let _ = app.set_menu(menu);

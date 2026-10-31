@@ -15,7 +15,7 @@
 
 use crate::gcode::SliceStats;
 use crate::printers::{self, StartOptions, Status};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -147,11 +147,7 @@ fn load_unlocked() -> Vec<Job> {
 }
 
 fn save_unlocked(list: &[Job]) -> Result<()> {
-    let path = dir().join("jobs.json");
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec(list)?)?;
-    std::fs::rename(&tmp, &path)?;
-    Ok(())
+    crate::util::write_atomic(&dir().join("jobs.json"), &serde_json::to_vec(list)?)
 }
 
 /// Changes the store in one go.
@@ -265,7 +261,7 @@ pub fn remote_name(name: &str, id: &str) -> String {
 pub fn add(gcode: &Path, new: NewJob, state: &str, remote: &str) -> Result<Job> {
     let id = new.id.clone().unwrap_or_else(printers::new_id);
     let file = dir().join(format!("{id}.gcode"));
-    std::fs::copy(gcode, &file)?;
+    std::fs::copy(gcode, &file).with_context(|| format!("copying {} to {}", gcode.display(), file.display()))?;
     // Summary recomputed from the file: it travels with the job.
     let stats = new.stats.clone().or_else(|| {
         std::fs::File::open(&file)

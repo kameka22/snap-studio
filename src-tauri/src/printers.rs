@@ -4,7 +4,7 @@
 //! the Moonraker API, without cloud nor authentication. The same requests work
 //! on any Klipper printer (Voron, Prusa Core One, etc.).
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -39,10 +39,7 @@ pub fn load() -> Vec<Printer> {
 }
 
 pub fn save(list: &[Printer]) -> Result<()> {
-    let tmp = store_path().with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(list)?)?;
-    std::fs::rename(&tmp, store_path())?;
-    Ok(())
+    crate::util::write_atomic(&store_path(), &serde_json::to_vec_pretty(list)?)
 }
 
 pub fn new_id() -> String {
@@ -520,8 +517,8 @@ pub async fn upload(
 ) -> Result<()> {
     // Read as it is sent, 64 KiB at a time: a G-code of hundreds of
     // megabytes is not held in memory (it was, twice over).
-    let total = std::fs::metadata(path)?.len();
-    let mut file = std::io::BufReader::with_capacity(256 * 1024, std::fs::File::open(path)?);
+    let total = std::fs::metadata(path).with_context(|| format!("reading {}", path.display()))?.len();
+    let mut file = std::io::BufReader::with_capacity(256 * 1024, std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?);
     let mut sent = 0u64;
     let stream = futures_util::stream::iter(std::iter::from_fn(move || {
         let mut buf = vec![0u8; 64 * 1024];
@@ -694,7 +691,7 @@ pub async fn status(host: &str, port: u16) -> Status {
             }
         }
         Err(e) => {
-            st.message = Some(e.to_string());
+            st.message = Some(crate::util::ui_err(e));
             return st;
         }
     }

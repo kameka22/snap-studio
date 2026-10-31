@@ -325,10 +325,7 @@ fn read_store(path: &Path) -> Store {
 }
 
 fn write_store(path: &Path, s: &Store) -> Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec(s)?)?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
+    crate::util::write_atomic(path, &serde_json::to_vec(s)?)
 }
 
 /// The same mesh: same area and the same heights.

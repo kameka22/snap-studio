@@ -107,8 +107,8 @@ pub fn titlebar_system_set(window: tauri::Window, on: bool) -> Result<Info, Stri
     #[cfg(target_os = "linux")]
     {
         // Applied first: a preference that could not take effect is not kept.
-        window.set_decorations(on).map_err(|e| e.to_string())?;
-        crate::i18n::store(SYSTEM_KEY, serde_json::Value::Bool(on)).map_err(|e| e.to_string())?;
+        window.set_decorations(on).map_err(crate::util::ui_err)?;
+        crate::i18n::store(SYSTEM_KEY, serde_json::Value::Bool(on)).map_err(crate::util::ui_err)?;
         // What was asked: `is_decorated` may still give the former state.
         Ok(info(!on))
     }

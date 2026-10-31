@@ -87,10 +87,10 @@ pub async fn update_check(app: AppHandle, pending: State<'_, Pending>) -> Result
     }
     let update = app
         .updater()
-        .map_err(|e| e.to_string())?
+        .map_err(crate::util::ui_err)?
         .check()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(crate::util::ui_err)?;
     let out = update.as_ref().map(|u| Available {
         version: u.version.clone(),
         current: u.current_version.clone(),
@@ -122,7 +122,7 @@ pub async fn update_install(app: AppHandle, pending: State<'_, Pending>) -> Resu
             || {},
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(crate::util::ui_err)?;
     app.restart()
 }
 

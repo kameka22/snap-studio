@@ -53,10 +53,10 @@ fn last_popup() -> &'static Mutex<Option<Menu<tauri::Wry>>> {
 /// Shows a native menu at page coordinates (logical points).
 #[tauri::command]
 pub fn popup_menu(window: Window, items: Vec<Entry>, x: f64, y: f64) -> Result<(), String> {
-    let menu = build(window.app_handle(), &items).map_err(|e| e.to_string())?;
+    let menu = build(window.app_handle(), &items).map_err(crate::util::ui_err)?;
     window
         .popup_menu_at(&menu, LogicalPosition::new(x, y))
-        .map_err(|e| e.to_string())?;
+        .map_err(crate::util::ui_err)?;
     *last_popup().lock().unwrap() = Some(menu);
     Ok(())
 }
