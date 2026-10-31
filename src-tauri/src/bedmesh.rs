@@ -120,11 +120,8 @@ fn count(v: &Value) -> Option<[u32; 2]> {
 
 /// Rows of finite numbers, at least 2 × 2, all of the same length.
 fn matrix(v: &Value) -> Option<Vec<Vec<f64>>> {
-    let rows: Vec<Vec<f64>> = v
-        .as_array()?
-        .iter()
-        .map(|r| r.as_array().map(|r| r.iter().filter_map(|x| x.as_f64()).collect()).unwrap_or_default())
-        .collect();
+    let rows: Vec<Vec<f64>> =
+        v.as_array()?.iter().map(|r| r.as_array().map(|r| r.iter().filter_map(|x| x.as_f64()).collect()).unwrap_or_default()).collect();
     let w = rows.first()?.len();
     (rows.len() >= 2 && w >= 2 && rows.iter().all(|r| r.len() == w && r.iter().all(|x| x.is_finite()))).then_some(rows)
 }
@@ -310,25 +307,17 @@ pub async fn stop(host: &str, port: u16) -> Result<()> {
 type Store = HashMap<String, Vec<Mesh>>;
 
 fn store_path() -> PathBuf {
-    let dir = dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio");
+    let dir = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio");
     let _ = std::fs::create_dir_all(&dir);
     dir.join("bed_mesh.json")
 }
 
 fn read_store(path: &Path) -> Store {
-    std::fs::read(path)
-        .ok()
-        .and_then(|d| serde_json::from_slice(&d).ok())
-        .unwrap_or_default()
+    std::fs::read(path).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default()
 }
 
 fn write_store(path: &Path, s: &Store) -> Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, serde_json::to_vec(s)?)?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
+    crate::util::write_atomic(path, &serde_json::to_vec(s)?)
 }
 
 /// The same mesh: same area and the same heights.
@@ -393,10 +382,7 @@ fn trim_in(path: &Path, printer: &str, keep: usize) -> Result<Vec<Mesh>> {
 }
 
 fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// A printer's stored meshes, oldest first.
@@ -507,7 +493,15 @@ mod tests {
     }
 
     fn mesh(z: f64) -> Mesh {
-        Mesh { at: 0, profile: "default".into(), min: [3.0, 3.0], max: [267.0, 267.0], points: vec![vec![0.0, z], vec![z, 0.0]], partial: false, by_app: false }
+        Mesh {
+            at: 0,
+            profile: "default".into(),
+            min: [3.0, 3.0],
+            max: [267.0, 267.0],
+            points: vec![vec![0.0, z], vec![z, 0.0]],
+            partial: false,
+            by_app: false,
+        }
     }
 
     #[test]

@@ -1,6 +1,3 @@
-mod menu;
-mod migrate;
-mod mixcolor;
 mod access;
 mod auth;
 mod bedmesh;
@@ -16,19 +13,22 @@ mod ia;
 mod jobs;
 mod library;
 mod maintenance;
+mod menu;
 mod mesh;
+mod migrate;
+mod mixcolor;
 mod model3mf;
-mod presets;
-mod printers;
-mod printer_files;
-mod share;
 mod orient;
 mod paint;
 mod plate;
+mod presets;
+mod printer_files;
+mod printers;
 mod pty;
 mod render;
 mod scan;
 mod setup;
+mod share;
 mod slice;
 mod slicers;
 mod stl;
@@ -36,8 +36,8 @@ mod thumbs;
 mod titlebar;
 mod update;
 mod util;
-mod write3mf;
 mod watch;
+mod write3mf;
 
 use model3mf::ThumbPref;
 use serde::Serialize;
@@ -48,6 +48,7 @@ use std::time::UNIX_EPOCH;
 use tauri::http::{Request, Response};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+use util::ui_err;
 
 // ---------------------------------------------------------------- DTO
 
@@ -111,20 +112,20 @@ pub struct CacheDto {
 
 #[tauri::command]
 async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
-    app.dialog()
-        .file()
-        .blocking_pick_folder()
-        .and_then(|p| p.into_path().ok())
-        .map(|p| p.to_string_lossy().to_string())
+    app.dialog().file().blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| p.to_string_lossy().to_string())
+}
+
+/// Runs blocking work (disk, conversion) off the main thread, where
+/// synchronous commands run: the UI does not freeze meanwhile.
+async fn off_main<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(ui_err)?
 }
 
 /// Off the main thread: a macOS permission prompt or a big folder does not
 /// freeze the UI.
 #[tauri::command]
 async fn scan_folder(dir: String, recursive: bool) -> Result<Vec<FileDto>, String> {
-    tauri::async_runtime::spawn_blocking(move || scan_folder_sync(&dir, recursive))
-        .await
-        .map_err(|e| e.to_string())?
+    off_main(move || scan_folder_sync(&dir, recursive)).await
 }
 
 fn scan_folder_sync(dir: &str, recursive: bool) -> Result<Vec<FileDto>, String> {
@@ -136,23 +137,14 @@ fn scan_folder_sync(dir: &str, recursive: bool) -> Result<Vec<FileDto>, String> 
     Ok(scan::scan_dir(&root, recursive)
         .into_iter()
         .map(|f| {
-            let rel = f
-                .path
-                .parent()
-                .and_then(|p| p.strip_prefix(&root).ok())
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_default();
+            let rel = f.path.parent().and_then(|p| p.strip_prefix(&root).ok()).map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
             FileDto {
                 path: f.path.to_string_lossy().to_string(),
                 name: f.name,
                 kind: f.kind.to_string(),
                 rel,
                 size: f.size,
-                modified: f
-                    .modified
-                    .duration_since(UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0),
+                modified: f.modified.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
             }
         })
         .collect())
@@ -186,17 +178,8 @@ fn meta_of(path: &str) -> MetaDto {
                 dto.weight_g = g.meta.filament_g;
                 dto.plates = 1;
                 dto.has_embedded_thumb = true;
-                dto.filaments = g
-                    .meta
-                    .filaments
-                    .into_iter()
-                    .map(|k| FilamentDto {
-                        kind: k,
-                        color: None,
-                        used_g: None,
-                        used_m: None,
-                    })
-                    .collect();
+                dto.filaments =
+                    g.meta.filaments.into_iter().map(|k| FilamentDto { kind: k, color: None, used_g: None, used_m: None }).collect();
             }
         }
         return dto;
@@ -221,9 +204,7 @@ fn meta_of(path: &str) -> MetaDto {
             .into_iter()
             .map(|f| FilamentDto {
                 kind: f.kind,
-                color: f
-                    .color
-                    .map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])),
+                color: f.color.map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])),
                 used_g: f.used_g,
                 used_m: f.used_m,
             })
@@ -238,9 +219,7 @@ fn meta_of(path: &str) -> MetaDto {
 #[tauri::command]
 async fn read_metas(paths: Vec<String>) -> Vec<MetaDto> {
     tauri::async_runtime::spawn_blocking(move || {
-        let workers = std::thread::available_parallelism()
-            .map(|n| n.get().clamp(2, 8))
-            .unwrap_or(4);
+        let workers = std::thread::available_parallelism().map(|n| n.get().clamp(2, 8)).unwrap_or(4);
         let chunk = paths.len().div_ceil(workers).max(1);
         let mut out: Vec<MetaDto> = Vec::with_capacity(paths.len());
         std::thread::scope(|s| {
@@ -263,34 +242,28 @@ async fn read_metas(paths: Vec<String>) -> Vec<MetaDto> {
 /// On-demand geometry analysis: real bounding box and triangle count.
 #[tauri::command]
 async fn analyze(path: String) -> Result<AnalyzeDto, String> {
-    let mut zip = model3mf::open(Path::new(&path)).map_err(|e| e.to_string())?;
-    let m = mesh::load_mesh(&mut zip, 2_500_000).map_err(|e| e.to_string())?;
-    Ok(AnalyzeDto {
-        size_mm: m.size(),
-        triangles: m.tris.len(),
-        approximated: m.truncated,
-    })
+    let mut zip = model3mf::open(Path::new(&path)).map_err(ui_err)?;
+    let m = mesh::load_mesh(&mut zip, 2_500_000).map_err(ui_err)?;
+    Ok(AnalyzeDto { size_mm: m.size(), triangles: m.tris.len(), approximated: m.truncated })
 }
 
 #[tauri::command]
-fn trash_files(paths: Vec<String>) -> Result<usize, String> {
-    let n = paths.len();
-    trash::delete_all(&paths).map_err(|e| e.to_string())?;
-    Ok(n)
+async fn trash_files(paths: Vec<String>) -> Result<usize, String> {
+    off_main(move || {
+        trash::delete_all(&paths).map_err(ui_err)?;
+        Ok(paths.len())
+    })
+    .await
 }
 
 #[tauri::command]
 fn reveal(app: tauri::AppHandle, path: String) -> Result<(), String> {
-    app.opener()
-        .reveal_item_in_dir(PathBuf::from(path))
-        .map_err(|e| e.to_string())
+    app.opener().reveal_item_in_dir(PathBuf::from(path)).map_err(ui_err)
 }
 
 #[tauri::command]
 fn open_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
-    app.opener()
-        .open_path(path, None::<&str>)
-        .map_err(|e| e.to_string())
+    app.opener().open_path(path, None::<&str>).map_err(ui_err)
 }
 
 // ---------------------------------------------------------------- library
@@ -303,7 +276,7 @@ fn lib_sites() -> Vec<library::Site> {
 /// The floating navigation's buttons: on the tab shown.
 #[tauri::command]
 fn lib_nav(app: tauri::AppHandle, what: String) -> Result<(), String> {
-    library::nav_command(&app, &what).map_err(|e| e.to_string())
+    library::nav_command(&app, &what).map_err(ui_err)
 }
 
 /// The pinned camera over a site: where the interface's pinned window is
@@ -334,7 +307,7 @@ async fn lib_favicon(id: String) -> Option<String> {
 /// thread; the creation is dispatched to it.
 #[tauri::command]
 async fn lib_open(app: tauri::AppHandle, id: String, url: String) -> Result<(), String> {
-    library::open_tab(&app, &id, &url).map_err(|e| e.to_string())
+    library::open_tab(&app, &id, &url).map_err(ui_err)
 }
 
 #[tauri::command]
@@ -350,29 +323,24 @@ fn lib_show(app: tauri::AppHandle, id: Option<String>) {
 }
 
 #[tauri::command]
-fn lib_rect(
-    app: tauri::AppHandle,
-    rect: library::Rect,
-    viewport: f64,
-    visible: Option<String>,
-) {
+fn lib_rect(app: tauri::AppHandle, rect: library::Rect, viewport: f64, visible: Option<String>) {
     library::set_rect(&app, rect, viewport, visible.as_deref());
 }
 
 #[tauri::command]
 fn lib_navigate(app: tauri::AppHandle, id: String, url: String) -> Result<(), String> {
-    library::navigate(&app, &id, &url).map_err(|e| e.to_string())
+    library::navigate(&app, &id, &url).map_err(ui_err)
 }
 
 #[tauri::command]
 fn lib_command(app: tauri::AppHandle, id: String, what: String) -> Result<(), String> {
-    library::command(&app, &id, &what).map_err(|e| e.to_string())
+    library::command(&app, &id, &what).map_err(ui_err)
 }
 
 /// Logs a site out: its cookies only, not the others'.
 #[tauri::command]
 async fn lib_logout(app: tauri::AppHandle, id: String, site: String) -> Result<usize, String> {
-    library::logout(&app, &id, &site).map_err(|e| e.to_string())
+    library::logout(&app, &id, &site).map_err(ui_err)
 }
 
 /// The address of the page a tab shows (not of its frames).
@@ -391,12 +359,12 @@ fn fav_list() -> Vec<favorites::Favorite> {
 /// Saves the page shown as a favorite; `title` is the tab's.
 #[tauri::command]
 fn fav_add(url: String, title: Option<String>) -> Result<Vec<favorites::Favorite>, String> {
-    favorites::add(&url, title.as_deref()).map_err(|e| e.to_string())
+    favorites::add(&url, title.as_deref()).map_err(ui_err)
 }
 
 #[tauri::command]
 fn fav_remove(id: String) -> Result<Vec<favorites::Favorite>, String> {
-    favorites::remove(&id).map_err(|e| e.to_string())
+    favorites::remove(&id).map_err(ui_err)
 }
 
 // ---------------------------------------------------------------- slicing
@@ -410,7 +378,7 @@ fn engine_status() -> engine::Status {
 /// Downloads and installs the engine; progress through `engine-progress`.
 #[tauri::command]
 async fn engine_install(app: tauri::AppHandle) -> Result<engine::Status, String> {
-    engine::install(app).await.map_err(|e| e.to_string())
+    engine::install(app).await.map_err(ui_err)
 }
 
 #[tauri::command]
@@ -420,7 +388,7 @@ fn engine_cancel() {
 
 #[tauri::command]
 fn engine_remove() -> Result<engine::Status, String> {
-    engine::remove().map_err(|e| e.to_string())
+    engine::remove().map_err(ui_err)
 }
 
 /// Effective content of a preset, for the details sheet.
@@ -432,12 +400,10 @@ async fn slice_details(
     overrides: Option<serde_json::Map<String, serde_json::Value>>,
     color: Option<String>,
 ) -> Result<presets::Details, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        slice::details(&name, &machine, simple, &overrides.unwrap_or_default(), color.as_deref())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || slice::details(&name, &machine, simple, &overrides.unwrap_or_default(), color.as_deref()))
+        .await
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 /// Saves the effective process settings as a user process preset.
@@ -450,14 +416,14 @@ async fn slice_save_process(
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || slice::save_process(&name, &base, simple, &overrides.unwrap_or_default()))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 /// Presets that can be offered for the chosen machine.
 #[tauri::command]
 async fn slice_lists(machine: Option<String>) -> Result<slice::PresetLists, String> {
-    slice::lists(machine.as_deref()).map_err(|e| e.to_string())
+    slice::lists(machine.as_deref()).map_err(ui_err)
 }
 
 /// Starting values of the simplified settings for a given preset.
@@ -465,22 +431,20 @@ async fn slice_lists(machine: Option<String>) -> Result<slice::PresetLists, Stri
 async fn slice_defaults(_machine: String, process: String) -> Result<slice::Simple, String> {
     // `machine` is still sent by the sheet; a process's quick settings do
     // not depend on it.
-    slice::defaults(&process).map_err(|e| e.to_string())
+    slice::defaults(&process).map_err(ui_err)
 }
 
 /// Starts a background slice; progress arrives through the `slice-progress`
 /// event.
 #[tauri::command]
 fn slice_start(app: tauri::AppHandle, request: slice::Request) -> Result<String, String> {
-    slice::start(app, request).map_err(|e| e.to_string())
+    slice::start(app, request).map_err(ui_err)
 }
 
 /// Saves a slice's preview; returns the path of the G-code written.
 #[tauri::command]
-fn slice_save(id: String, dir: Option<String>) -> Result<String, String> {
-    slice::save(&id, dir.as_deref())
-        .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| e.to_string())
+async fn slice_save(id: String, dir: Option<String>) -> Result<String, String> {
+    off_main(move || slice::save(&id, dir.as_deref()).map(|p| p.to_string_lossy().to_string()).map_err(ui_err)).await
 }
 
 /// Discards a slice's preview.
@@ -492,29 +456,20 @@ fn slice_discard(id: String) {
 /// A file's objects, to put on the Prepare view's plate.
 #[tauri::command]
 async fn plate_items(path: String) -> Result<Vec<plate::PlateItem>, String> {
-    tauri::async_runtime::spawn_blocking(move || plate::items(Path::new(&path)))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || plate::items(Path::new(&path))).await.map_err(ui_err)?.map_err(ui_err)
 }
 
 /// Convex hull of a plate object, or of a piece of it (own frame).
 #[tauri::command]
 async fn plate_hull(path: String, item: usize, piece: Option<usize>) -> Result<orient::Hull, String> {
-    tauri::async_runtime::spawn_blocking(move || plate::hull(Path::new(&path), item, piece))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || plate::hull(Path::new(&path), item, piece)).await.map_err(ui_err)?.map_err(ui_err)
 }
 
 /// The pieces of a plate object, to split it into several (Orca's "Split
 /// to objects").
 #[tauri::command]
 async fn plate_pieces(path: String, item: usize, piece: Option<usize>) -> Result<Vec<plate::Piece>, String> {
-    tauri::async_runtime::spawn_blocking(move || plate::pieces(Path::new(&path), item, piece))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || plate::pieces(Path::new(&path), item, piece)).await.map_err(ui_err)?.map_err(ui_err)
 }
 
 /// Auto-orientation (Orca's rules): one rotation per object.
@@ -525,8 +480,8 @@ async fn plate_orient(items: Vec<plate::OrientItem>, process: Option<String>) ->
         items.iter().map(|it| plate::orient(it, threshold)).collect::<anyhow::Result<Vec<_>>>()
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())
+    .map_err(ui_err)?
+    .map_err(ui_err)
 }
 
 /// Saves the plate as 3MF.
@@ -540,8 +495,8 @@ async fn plate_save(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || plate::save_scene(&scene, tower, smooth_mix, snap.as_ref(), Path::new(&path)))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(ui_err)?
+        .map_err(ui_err)
 }
 
 /// A virtual head's preview color: `a` and `b` (`#rrggbb`) mixed at each
@@ -554,26 +509,19 @@ fn mix_colors(a: String, b: String, shares: Vec<f32>) -> Result<Vec<String>, Str
 /// The prime tower a 3MF keeps (its first plate's), if any.
 #[tauri::command]
 async fn plate_tower(path: String) -> Result<Option<plate::FileTower>, String> {
-    tauri::async_runtime::spawn_blocking(move || plate::tower_of(Path::new(&path)))
-        .await
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || plate::tower_of(Path::new(&path))).await.map_err(ui_err)
 }
 
 /// The machine's bed (preset): dimensions and printer model.
 #[tauri::command]
 async fn plate_bed(machine: Option<String>) -> Result<slice::Bed, String> {
-    tauri::async_runtime::spawn_blocking(move || slice::bed(machine.as_deref()))
-        .await
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || slice::bed(machine.as_deref())).await.map_err(ui_err)
 }
 
 /// Filaments declared by a model, to associate them with heads.
 #[tauri::command]
 async fn slice_model(path: String) -> Result<slice::ModelInfo, String> {
-    tauri::async_runtime::spawn_blocking(move || slice::model_info(Path::new(&path)))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || slice::model_info(Path::new(&path))).await.map_err(ui_err)?.map_err(ui_err)
 }
 
 #[derive(serde::Deserialize)]
@@ -629,7 +577,7 @@ async fn launch(
         send_progress(&handle, "upload", Some(pct), None);
     })
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(ui_err)?;
     start_printing(p, name, options, tools, map).await
 }
 
@@ -643,7 +591,7 @@ async fn prepare_printer(
     tools: &[u8],
     map: &[(u8, u8)],
 ) -> Result<(), String> {
-    printers::check_map(tools, map).map_err(|e| e.to_string())?;
+    printers::check_map(tools, map).map_err(ui_err)?;
     send_progress(app, "check", None, None);
     let st = printers::status(&p.host, p.port).await;
     if !st.online {
@@ -668,9 +616,7 @@ async fn prepare_printer(
     send_progress(app, "prepare", None, None);
     let script = printers::map_script(tools, map);
     if !script.is_empty() {
-        printers::gcode_script_checked(&p.host, p.port, &script)
-            .await
-            .map_err(|e| t!("err.prepare_refused", err = e))?;
+        printers::gcode_script_checked(&p.host, p.port, &script).await.map_err(|e| t!("err.prepare_refused", err = e))?;
     }
     // As Snapmaker Orca, for a firmware that knows it; the options of the
     // start request are what count.
@@ -690,9 +636,7 @@ async fn start_printing(
     tools: &[u8],
     map: &[(u8, u8)],
 ) -> Result<Option<String>, String> {
-    let route = printers::start_print(&p.host, p.port, path, options, tools, map)
-        .await
-        .map_err(|e| t!("err.start_refused", err = e))?;
+    let route = printers::start_print(&p.host, p.port, path, options, tools, map).await.map_err(|e| t!("err.start_refused", err = e))?;
     eprintln!("[print] {path} started ({route:?})");
     let Some(cfg) = printers::task_config(&p.host, p.port).await else { return Ok(None) };
     let missing: Vec<String> = printers::unapplied_options(&cfg, options).iter().map(|k| t!(*k)).collect();
@@ -725,7 +669,7 @@ async fn pf_overview(printer_id: String) -> Result<printer_files::Overview, Stri
         return Err(t!("err.printer_silent", name = p.name));
     }
     let printing = printer_files::printing_path(&st.state, st.job.as_deref());
-    printer_files::overview(&p.host, p.port, printing).await.map_err(|e| e.to_string())
+    printer_files::overview(&p.host, p.port, printing).await.map_err(ui_err)
 }
 
 /// Tools a print file on a printer uses, read from the G-code when the
@@ -733,30 +677,28 @@ async fn pf_overview(printer_id: String) -> Result<printer_files::Overview, Stri
 #[tauri::command]
 async fn pf_tools(printer_id: String, path: String, modified: f64) -> Result<Vec<u8>, String> {
     let p = printer_by_id(&printer_id)?;
-    printer_files::tools(&p.host, p.port, &path, modified).await.map_err(|e| e.to_string())
+    printer_files::tools(&p.host, p.port, &path, modified).await.map_err(ui_err)
 }
 
 /// A printer's timelapse videos, for the Prints record.
 #[tauri::command]
 async fn pf_videos(printer_id: String) -> Result<Vec<printer_files::RemoteFile>, String> {
     let p = printer_by_id(&printer_id)?;
-    printer_files::videos(&p.host, p.port).await.map_err(|e| e.to_string())
+    printer_files::videos(&p.host, p.port).await.map_err(ui_err)
 }
 
 /// Number of print files on a printer, for the sidebar.
 #[tauri::command]
 async fn pf_count(printer_id: String) -> Result<usize, String> {
     let p = printer_by_id(&printer_id)?;
-    printer_files::count(&p.host, p.port).await.map_err(|e| e.to_string())
+    printer_files::count(&p.host, p.port).await.map_err(ui_err)
 }
 
 #[tauri::command]
 async fn pf_video_duration(printer_id: String, root: String, path: String, modified: f64) -> Result<Option<f64>, String> {
     served_root(&root)?;
     let p = printer_by_id(&printer_id)?;
-    printer_files::video_duration(&p.host, p.port, &root, &path, modified)
-        .await
-        .map_err(|e| e.to_string())
+    printer_files::video_duration(&p.host, p.port, &root, &path, modified).await.map_err(ui_err)
 }
 
 /// Deletes files of one root; each one's error, if any, in order.
@@ -768,11 +710,11 @@ async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Resu
     let mut out = Vec::new();
     for path in &paths {
         let r = match printer_files::check_change(&root, path, printing.as_deref()) {
-            Ok(()) if root == "gcodes" => printer_files::delete_retrying(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
+            Ok(()) if root == "gcodes" => printer_files::delete_retrying(&p.host, p.port, &root, path).await.map_err(ui_err),
             // Timelapses: also through the camera service when Moonraker
             // only lists them (a U1's read-only `camera` folder).
-            Ok(()) => printer_files::delete_video(&p.host, p.port, &root, path).await.map_err(|e| e.to_string()),
-            Err(e) => Err(e.to_string()),
+            Ok(()) => printer_files::delete_video(&p.host, p.port, &root, path).await.map_err(ui_err),
+            Err(e) => Err(ui_err(e)),
         };
         out.push(r.err());
     }
@@ -783,8 +725,8 @@ async fn pf_delete(printer_id: String, root: String, paths: Vec<String>) -> Resu
 async fn pf_rename(printer_id: String, path: String, name: String) -> Result<String, String> {
     let p = printer_by_id(&printer_id)?;
     let printing = printing_file(&p).await;
-    printer_files::check_change("gcodes", &path, printing.as_deref()).map_err(|e| e.to_string())?;
-    printer_files::rename(&p.host, p.port, &path, &name).await.map_err(|e| e.to_string())
+    printer_files::check_change("gcodes", &path, printing.as_deref()).map_err(ui_err)?;
+    printer_files::rename(&p.host, p.port, &path, &name).await.map_err(ui_err)
 }
 
 /// Downloads files into a folder: the Files folder for print files, the
@@ -794,16 +736,13 @@ async fn pf_rename(printer_id: String, path: String, name: String) -> Result<Str
 async fn pf_download(printer_id: String, root: String, paths: Vec<String>, dir: Option<String>) -> Result<Vec<String>, String> {
     served_root(&root)?;
     let p = printer_by_id(&printer_id)?;
-    let dir = dir
-        .map(PathBuf::from)
-        .or_else(dirs::download_dir)
-        .ok_or_else(|| t!("pfiles.err.no_folder"))?;
+    let dir = dir.map(PathBuf::from).or_else(dirs::download_dir).ok_or_else(|| t!("pfiles.err.no_folder"))?;
     if !dir.is_dir() {
         return Err(t!("pfiles.err.no_folder"));
     }
     let mut out = Vec::new();
     for path in &paths {
-        let f = printer_files::download(&p.host, p.port, &root, path, &dir).await.map_err(|e| e.to_string())?;
+        let f = printer_files::download(&p.host, p.port, &root, path, &dir).await.map_err(ui_err)?;
         out.push(f.to_string_lossy().to_string());
     }
     Ok(out)
@@ -848,7 +787,7 @@ async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Opti
     let src = printer_by_id(&request.source_id)?;
     send_progress(&app, "fetch", None, None);
     let tmp = std::env::temp_dir().join("snapstudio-pfiles").join(printers::new_id());
-    std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&tmp).map_err(ui_err)?;
     let result = async {
         let gcode = printer_files::download(&src.host, src.port, "gcodes", &request.path, &tmp)
             .await
@@ -875,10 +814,7 @@ async fn pf_print(app: tauri::AppHandle, request: PfPrintRequest) -> Result<Opti
             tauri::async_runtime::spawn_blocking(move || jobs::add(&gcode, new, state, &remote))
         };
         if request.queue {
-            let job = add(gcode, new, "queued", String::new())
-                .await
-                .map_err(|e| e.to_string())?
-                .map_err(|e| e.to_string())?;
+            let job = add(gcode, new, "queued", String::new()).await.map_err(ui_err)?.map_err(ui_err)?;
             emit_jobs(&app);
             return Ok(Some(job.id));
         }
@@ -926,36 +862,39 @@ fn share_caps() -> share::Caps {
 
 #[tauri::command]
 fn share_copy(path: String) -> Result<(), String> {
-    let p = share::cached(&path).map_err(|e| e.to_string())?;
-    share::copy(&p).map_err(|e| e.to_string())
+    let p = share::cached(&path).map_err(ui_err)?;
+    share::copy(&p).map_err(ui_err)
 }
 
 #[tauri::command]
-fn share_save(path: String, dest: String) -> Result<(), String> {
-    let p = share::cached(&path).map_err(|e| e.to_string())?;
-    share::save(&p, Path::new(&dest)).map_err(|e| e.to_string())
+async fn share_save(path: String, dest: String) -> Result<(), String> {
+    off_main(move || {
+        let p = share::cached(&path).map_err(ui_err)?;
+        share::save(&p, Path::new(&dest)).map_err(ui_err)
+    })
+    .await
 }
 
 /// The system's share menu (AirDrop, Messages, Mail…) at (`x`, `y`) of the
 /// window. macOS only.
 #[tauri::command]
 async fn share_native(app: tauri::AppHandle, path: String, x: f64, y: f64) -> Result<(), String> {
-    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    let p = share::cached(&path).map_err(ui_err)?;
     #[cfg(target_os = "macos")]
     {
         use tauri::Manager;
         // The window, not the "webview window": once the Library has added
         // its own views to it, it is no longer one (get_webview_window: None).
         let w = app.get_window("main").ok_or("no window")?;
-        let ns = w.ns_window().map_err(|e| e.to_string())? as usize;
+        let ns = w.ns_window().map_err(ui_err)? as usize;
         let (tx, rx) = std::sync::mpsc::channel();
         app.run_on_main_thread(move || {
-            let _ = tx.send(share::native(ns, &p, x, y).map_err(|e| e.to_string()));
+            let _ = tx.send(share::native(ns, &p, x, y).map_err(ui_err));
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(ui_err)?;
         return tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or_else(|_| Err("no answer".into())))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(ui_err)?;
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -968,7 +907,7 @@ async fn share_native(app: tauri::AppHandle, path: String, x: f64, y: f64) -> Re
 /// its address and QR code. On the network that reaches the printer.
 #[tauri::command]
 fn share_qr_start(path: String, printer_id: String) -> Result<share::QrShare, String> {
-    let p = share::cached(&path).map_err(|e| e.to_string())?;
+    let p = share::cached(&path).map_err(ui_err)?;
     let printer = printer_by_id(&printer_id)?;
     share::qr_start(p, &printer.host).map_err(|e| t!("share.err.qr", err = e))
 }
@@ -993,13 +932,7 @@ fn refused() -> Response<Vec<u8>> {
 /// `prn://localhost/f?id=<printer>&root=<root>&p=<path>`: a file of a
 /// printer (thumbnail, timelapse picture, video by pieces).
 async fn handle_prn(uri: String, range: Option<String>) -> Response<Vec<u8>> {
-    let fail = |code: u16| {
-        Response::builder()
-            .status(code)
-            .header("Access-Control-Allow-Origin", "*")
-            .body(Vec::new())
-            .unwrap()
-    };
+    let fail = |code: u16| Response::builder().status(code).header("Access-Control-Allow-Origin", "*").body(Vec::new()).unwrap();
     let (Some(id), Some(root), Some(path)) = (query_param(&uri, "id"), query_param(&uri, "root"), query_param(&uri, "p")) else {
         return fail(400);
     };
@@ -1051,10 +984,7 @@ async fn print_send(app: tauri::AppHandle, request: SendRequest) -> Result<Strin
         tauri::async_runtime::spawn_blocking(move || jobs::add(&gcode, new, state, &remote))
     };
     if request.queue {
-        let job = add(gcode, new, "queued", String::new())
-            .await
-            .map_err(|e| e.to_string())?
-            .map_err(|e| e.to_string())?;
+        let job = add(gcode, new, "queued", String::new()).await.map_err(ui_err)?.map_err(ui_err)?;
         emit_jobs(&app);
         return Ok(job.id);
     }
@@ -1125,14 +1055,14 @@ async fn job_launch(app: tauri::AppHandle, id: String, map: Option<Vec<(u8, u8)>
 
 #[tauri::command]
 fn job_remove(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    jobs::remove(&id).map_err(|e| e.to_string())?;
+    jobs::remove(&id).map_err(ui_err)?;
     emit_jobs(&app);
     Ok(())
 }
 
 #[tauri::command]
 fn job_move(app: tauri::AppHandle, id: String, delta: i32) -> Result<(), String> {
-    jobs::shift(&id, delta).map_err(|e| e.to_string())?;
+    jobs::shift(&id, delta).map_err(ui_err)?;
     emit_jobs(&app);
     Ok(())
 }
@@ -1144,7 +1074,7 @@ fn job_edit(
     printer_id: Option<String>,
     options: Option<printers::StartOptions>,
 ) -> Result<jobs::Job, String> {
-    let j = jobs::edit(&id, printer_id, options).map_err(|e| e.to_string())?;
+    let j = jobs::edit(&id, printer_id, options).map_err(ui_err)?;
     emit_jobs(&app);
     Ok(j)
 }
@@ -1152,10 +1082,7 @@ fn job_edit(
 #[tauri::command]
 async fn job_requeue(app: tauri::AppHandle, id: String) -> Result<jobs::Job, String> {
     // G-code copy: off the main thread.
-    let j = tauri::async_runtime::spawn_blocking(move || jobs::requeue(&id))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
+    let j = tauri::async_runtime::spawn_blocking(move || jobs::requeue(&id)).await.map_err(ui_err)?.map_err(ui_err)?;
     emit_jobs(&app);
     Ok(j)
 }
@@ -1163,14 +1090,14 @@ async fn job_requeue(app: tauri::AppHandle, id: String) -> Result<jobs::Job, Str
 /// The result of a finished print, set in its record (None clears it).
 #[tauri::command]
 fn job_set_result(id: String, result: Option<jobs::PrintResult>) -> Result<jobs::JobView, String> {
-    jobs::set_result(&id, result).map(jobs::view).map_err(|e| e.to_string())
+    jobs::set_result(&id, result).map(jobs::view).map_err(ui_err)
 }
 
 /// The timelapse matched to a finished print, kept with it.
 #[tauri::command]
 fn job_set_timelapse(id: String, root: String, path: String) -> Result<jobs::JobView, String> {
     served_root(&root)?;
-    jobs::set_timelapse(&id, jobs::Timelapse { root, path }).map(jobs::view).map_err(|e| e.to_string())
+    jobs::set_timelapse(&id, jobs::Timelapse { root, path }).map(jobs::view).map_err(ui_err)
 }
 
 /// Automatic deletion of the prints history, in days (None: never).
@@ -1181,7 +1108,7 @@ fn jobs_retention() -> Option<u32> {
 
 #[tauri::command]
 fn jobs_set_retention(app: tauri::AppHandle, days: Option<u32>) -> Result<(), String> {
-    jobs::set_retention(days).map_err(|e| e.to_string())?;
+    jobs::set_retention(days).map_err(ui_err)?;
     emit_jobs(&app);
     Ok(())
 }
@@ -1202,7 +1129,7 @@ fn queue_check(app: tauri::AppHandle) {
 #[tauri::command]
 async fn print_action(printer_id: String, action: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    printers::print_action(&p.host, p.port, &action).await.map_err(|e| e.to_string())
+    printers::print_action(&p.host, p.port, &action).await.map_err(ui_err)
 }
 
 fn printer_by_id(id: &str) -> Result<printers::Printer, String> {
@@ -1213,26 +1140,20 @@ fn printer_by_id(id: &str) -> Result<printers::Printer, String> {
 #[tauri::command]
 async fn camera_start(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    printers::camera_start(&p.host, p.port).await.map_err(|e| e.to_string())
+    printers::camera_start(&p.host, p.port).await.map_err(ui_err)
 }
 
 #[tauri::command]
 async fn camera_stop(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    printers::camera_stop(&p.host, p.port).await.map_err(|e| e.to_string())
+    printers::camera_stop(&p.host, p.port).await.map_err(ui_err)
 }
 
 /// `cam://localhost/f?id=<printer>`: latest image of its camera. The printer
 /// is designated by its id, never by an address: the protocol can only reach
 /// saved machines.
 async fn handle_cam(uri: String) -> Response<Vec<u8>> {
-    let fail = |code: u16| {
-        Response::builder()
-            .status(code)
-            .header("Access-Control-Allow-Origin", "*")
-            .body(Vec::new())
-            .unwrap()
-    };
+    let fail = |code: u16| Response::builder().status(code).header("Access-Control-Allow-Origin", "*").body(Vec::new()).unwrap();
     let Some(id) = query_param(&uri, "id") else {
         return fail(400);
     };
@@ -1268,10 +1189,7 @@ fn quick_places() -> Vec<PlaceDto> {
     let mut push = |label: &str, p: Option<PathBuf>| {
         if let Some(p) = p {
             if p.is_dir() {
-                v.push(PlaceDto {
-                    label: label.to_string(),
-                    path: p.to_string_lossy().to_string(),
-                });
+                v.push(PlaceDto { label: label.to_string(), path: p.to_string_lossy().to_string() });
             }
         }
     };
@@ -1300,7 +1218,7 @@ fn printer_save(mut printer: printers::Printer) -> Result<Vec<printers::Printer>
         Some(slot) => *slot = printer,
         None => list.push(printer),
     }
-    printers::save(&list).map_err(|e| e.to_string())?;
+    printers::save(&list).map_err(ui_err)?;
     Ok(list)
 }
 
@@ -1308,7 +1226,7 @@ fn printer_save(mut printer: printers::Printer) -> Result<Vec<printers::Printer>
 fn printer_remove(id: String) -> Result<Vec<printers::Printer>, String> {
     let mut list = printers::load();
     list.retain(|p| p.id != id);
-    printers::save(&list).map_err(|e| e.to_string())?;
+    printers::save(&list).map_err(ui_err)?;
     Ok(list)
 }
 
@@ -1326,7 +1244,7 @@ async fn printer_status(host: String, port: u16) -> printers::Status {
 /// What a printer counts (heads, hours, jobs), for its Maintenance view.
 #[tauri::command]
 async fn printer_maintenance(host: String, port: u16) -> Result<maintenance::Usage, String> {
-    maintenance::usage(&host, port).await.map_err(|e| e.to_string())
+    maintenance::usage(&host, port).await.map_err(ui_err)
 }
 
 /// A printer's maintenance log.
@@ -1338,20 +1256,20 @@ fn maintenance_log(printer_id: String) -> Vec<maintenance::Entry> {
 /// Logs a maintenance task done now, with the counters at that moment.
 #[tauri::command]
 fn maintenance_done(printer_id: String, task: String, print_hours: f64, swaps: Vec<u64>) -> Result<Vec<maintenance::Entry>, String> {
-    maintenance::done(&printer_id, &task, print_hours, swaps).map_err(|e| e.to_string())
+    maintenance::done(&printer_id, &task, print_hours, swaps).map_err(ui_err)
 }
 
 /// Forgets a log entry made by mistake.
 #[tauri::command]
 fn maintenance_remove(printer_id: String, task: String, at: u64) -> Result<Vec<maintenance::Entry>, String> {
-    maintenance::remove(&printer_id, &task, at).map_err(|e| e.to_string())
+    maintenance::remove(&printer_id, &task, at).map_err(ui_err)
 }
 
 /// A printer's bed mesh now, with its settings and progress.
 #[tauri::command]
 async fn bed_mesh_read(printer_id: String, light: Option<bool>) -> Result<bedmesh::Live, String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::read(&p.host, p.port, light.unwrap_or(false)).await.map_err(|e| e.to_string())
+    bedmesh::read(&p.host, p.port, light.unwrap_or(false)).await.map_err(ui_err)
 }
 
 /// The meshes stored for a printer, oldest first.
@@ -1363,25 +1281,25 @@ fn bed_mesh_history(printer_id: String) -> Vec<bedmesh::Mesh> {
 /// Stores a full-bed mesh not seen yet; returns the history.
 #[tauri::command]
 fn bed_mesh_record(printer_id: String, mesh: bedmesh::Mesh, keep: usize, by_app: bool) -> Result<Vec<bedmesh::Mesh>, String> {
-    bedmesh::record(&printer_id, mesh, keep, by_app).map_err(|e| e.to_string())
+    bedmesh::record(&printer_id, mesh, keep, by_app).map_err(ui_err)
 }
 
 #[tauri::command]
 fn bed_mesh_remove(printer_id: String, at: u64) -> Result<Vec<bedmesh::Mesh>, String> {
-    bedmesh::remove(&printer_id, at).map_err(|e| e.to_string())
+    bedmesh::remove(&printer_id, at).map_err(ui_err)
 }
 
 /// Keeps only the `keep` newest meshes.
 #[tauri::command]
 fn bed_mesh_keep(printer_id: String, keep: usize) -> Result<Vec<bedmesh::Mesh>, String> {
-    bedmesh::keep(&printer_id, keep).map_err(|e| e.to_string())
+    bedmesh::keep(&printer_id, keep).map_err(ui_err)
 }
 
 /// Measures the bed; returns when the printer is done.
 #[tauri::command]
 async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::measure(&p.host, p.port, temp).await.map_err(|e| e.to_string())
+    bedmesh::measure(&p.host, p.port, temp).await.map_err(ui_err)
 }
 
 /// Care & Tuning › Control: the printer's state, with its configuration
@@ -1389,7 +1307,7 @@ async fn bed_mesh_measure(printer_id: String, temp: f64) -> Result<(), String> {
 #[tauri::command]
 async fn control_read(printer_id: String, config: Option<bool>) -> Result<serde_json::Value, String> {
     let p = printer_by_id(&printer_id)?;
-    let (state, cfg) = control::read(&p.host, p.port, config.unwrap_or(false)).await.map_err(|e| e.to_string())?;
+    let (state, cfg) = control::read(&p.host, p.port, config.unwrap_or(false)).await.map_err(ui_err)?;
     Ok(serde_json::json!({ "state": state, "config": cfg }))
 }
 
@@ -1397,21 +1315,21 @@ async fn control_read(printer_id: String, config: Option<bool>) -> Result<serde_
 #[tauri::command]
 async fn control_run(printer_id: String, action: control::Action) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    control::run(&p.host, p.port, &action).await.map_err(|e| e.to_string())
+    control::run(&p.host, p.port, &action).await.map_err(ui_err)
 }
 
 /// Stops the probing cleanly (the U1, once its leveling has begun).
 #[tauri::command]
 async fn bed_mesh_abort(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::abort(&p.host, p.port).await.map_err(|e| e.to_string())
+    bedmesh::abort(&p.host, p.port).await.map_err(ui_err)
 }
 
 /// Emergency stop of a measurement going wrong (then Klipper restarts).
 #[tauri::command]
 async fn bed_mesh_stop(printer_id: String) -> Result<(), String> {
     let p = printer_by_id(&printer_id)?;
-    bedmesh::stop(&p.host, p.port).await.map_err(|e| e.to_string())
+    bedmesh::stop(&p.host, p.port).await.map_err(ui_err)
 }
 
 /// A system notification (the end of a measurement while the app is
@@ -1436,21 +1354,17 @@ fn printers_watch_stop() {
 /// Folder passed as an argument at launch: `snap-studio ~/Downloads`.
 #[tauri::command]
 fn initial_dir() -> Option<String> {
-    std::env::args()
-        .skip(1)
-        .find(|a| !a.starts_with('-') && Path::new(a).is_dir())
+    std::env::args().skip(1).find(|a| !a.starts_with('-') && Path::new(a).is_dir())
 }
 
 #[tauri::command]
-fn cache_info() -> CacheDto {
-    CacheDto {
-        bytes: thumbs::size_on_disk(),
-    }
+async fn cache_info() -> Result<CacheDto, String> {
+    off_main(|| Ok(CacheDto { bytes: thumbs::size_on_disk() })).await
 }
 
 #[tauri::command]
-fn clear_cache() -> usize {
-    thumbs::clear()
+async fn clear_cache() -> Result<usize, String> {
+    off_main(|| Ok(thumbs::clear())).await
 }
 
 // ---------------------------------------------------------------- thumb:// protocol
@@ -1462,9 +1376,7 @@ fn pool() -> &'static Sender<Job> {
     POOL.get_or_init(|| {
         let (tx, rx) = channel::<Job>();
         let rx = std::sync::Arc::new(Mutex::new(rx));
-        let n = std::thread::available_parallelism()
-            .map(|n| n.get().clamp(2, 8))
-            .unwrap_or(4);
+        let n = std::thread::available_parallelism().map(|n| n.get().clamp(2, 8)).unwrap_or(4);
         for _ in 0..n {
             let rx = rx.clone();
             std::thread::spawn(move || loop {
@@ -1477,6 +1389,25 @@ fn pool() -> &'static Sender<Job> {
         }
         tx
     })
+}
+
+/// Answers a request on the pool. A handler that panics answers 500: the
+/// thread survives (a dead one is never replaced, and once all are gone
+/// every preview and thumbnail would hang).
+fn serve_on_pool(responder: tauri::UriSchemeResponder, uri: String, handle: fn(&str) -> Response<Vec<u8>>) {
+    let _ = pool().send(Box::new(move || {
+        let response = std::panic::catch_unwind(|| handle(&uri)).unwrap_or_else(|_| {
+            eprintln!("[protocol] {uri}: the handler panicked");
+            Response::builder().status(500).body(Vec::new()).unwrap_or_default()
+        });
+        responder.respond(response);
+    }));
+}
+
+/// A message as a header value: `http` refuses control characters (a
+/// newline in an error would make the response builder fail).
+fn header_text(msg: &str) -> String {
+    msg.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
 }
 
 fn query_param(uri: &str, key: &str) -> Option<String> {
@@ -1497,7 +1428,7 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
         Response::builder()
             .status(code)
             .header("Access-Control-Allow-Origin", "*")
-            .header("X-Error", msg.to_string())
+            .header("X-Error", header_text(msg))
             .body(Vec::new())
             .unwrap()
     };
@@ -1507,7 +1438,7 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
     access::ensure_file(Path::new(&path));
     let file = match std::fs::File::open(&path) {
         Ok(f) => f,
-        Err(e) => return fail(404, &e.to_string()),
+        Err(e) => return fail(404, &ui_err(e)),
     };
     match gcode::parse(file) {
         Ok(d) => Response::builder()
@@ -1517,15 +1448,15 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
             .header("Access-Control-Allow-Origin", "*")
             .body(gcode::encode(&d))
             .unwrap(),
-        Err(e) => fail(422, &e.to_string()),
+        Err(e) => fail(422, &ui_err(e)),
     }
 }
 
 /// Raw mesh for the 3D viewer.
 /// Saves the current state into the user's files, as 3MF.
 #[tauri::command]
-fn ia_save(id: String) -> Result<String, String> {
-    ia::save_to_files(&id).map_err(|e| e.to_string())
+async fn ia_save(id: String) -> Result<String, String> {
+    off_main(move || ia::save_to_files(&id).map_err(ui_err)).await
 }
 
 #[tauri::command]
@@ -1534,13 +1465,13 @@ fn ia_versions(id: String) -> Vec<ia::Version> {
 }
 
 #[tauri::command]
-fn ia_revert(id: String, n: u32) -> Result<(), String> {
-    ia::revert(&id, n).map_err(|e| e.to_string())
+async fn ia_revert(id: String, n: u32) -> Result<(), String> {
+    off_main(move || ia::revert(&id, n).map_err(ui_err)).await
 }
 
 #[tauri::command]
-fn ia_stats(id: String) -> Result<mesh::Stats, String> {
-    ia::current_stats(&id).map_err(|e| e.to_string())
+async fn ia_stats(id: String) -> Result<mesh::Stats, String> {
+    off_main(move || ia::current_stats(&id).map_err(ui_err)).await
 }
 
 // ---------------------------------------------------------------- AI chat
@@ -1554,41 +1485,30 @@ fn ia_chat_history(id: String) -> Vec<serde_json::Value> {
 /// Sends a message (and its images), starting Claude when needed. Slow
 /// enough (process start, image writing) to stay off the main thread.
 #[tauri::command]
-async fn ia_chat_send(
-    app: tauri::AppHandle,
-    id: String,
-    text: String,
-    images: Vec<chat::Attachment>,
-) -> Result<(), String> {
+async fn ia_chat_send(app: tauri::AppHandle, id: String, text: String, images: Vec<chat::Attachment>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let c = ia::get(&id).map_err(|e| e.to_string())?;
-        chat::send(&app, &c, &text, &images).map_err(|e| e.to_string())
+        let c = ia::get(&id).map_err(ui_err)?;
+        chat::send(&app, &c, &text, &images).map_err(ui_err)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(ui_err)?
 }
 
 #[tauri::command]
 fn ia_chat_stop(id: String) -> Result<(), String> {
-    chat::stop(&id).map_err(|e| e.to_string())
+    chat::stop(&id).map_err(ui_err)
 }
 
 /// Answers a permission request; `input` carries an `AskUserQuestion`'s answers.
 #[tauri::command]
-fn ia_chat_answer(
-    id: String,
-    request_id: String,
-    allow: bool,
-    always: bool,
-    input: Option<serde_json::Value>,
-) -> Result<(), String> {
-    chat::answer(&id, &request_id, allow, always, input).map_err(|e| e.to_string())
+fn ia_chat_answer(id: String, request_id: String, allow: bool, always: bool, input: Option<serde_json::Value>) -> Result<(), String> {
+    chat::answer(&id, &request_id, allow, always, input).map_err(ui_err)
 }
 
 /// Claude model of the conversation; none: the account's default.
 #[tauri::command]
 fn ia_chat_model(id: String, model: Option<String>) -> Result<(), String> {
-    chat::set_model(&id, model.as_deref()).map_err(|e| e.to_string())
+    chat::set_model(&id, model.as_deref()).map_err(ui_err)
 }
 
 /// True while Claude runs for this conversation in chat mode.
@@ -1608,17 +1528,13 @@ async fn ia_chat_close(id: String) {
 /// as Claude reports it. Slow in the sandbox (a container starts).
 #[tauri::command]
 async fn auth_status(engine: String) -> Result<auth::Status, String> {
-    tauri::async_runtime::spawn_blocking(move || auth::status(&engine))
-        .await
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || auth::status(&engine)).await.map_err(ui_err)
 }
 
 /// A real check of the sign-in: one tiny call to the model.
 #[tauri::command]
 async fn auth_verify(engine: String) -> Result<auth::Check, String> {
-    tauri::async_runtime::spawn_blocking(move || auth::verify(&engine))
-        .await
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || auth::verify(&engine)).await.map_err(ui_err)
 }
 
 /// True if the sandbox has a token of its own.
@@ -1630,25 +1546,25 @@ fn auth_sandbox_present() -> bool {
 /// Stores a sandbox token pasted by hand.
 #[tauri::command]
 fn auth_sandbox_set(token: String) -> Result<(), String> {
-    auth::set_sandbox_token(&token).map_err(|e| e.to_string())
+    auth::set_sandbox_token(&token).map_err(ui_err)
 }
 
 /// Forgets the sandbox token: the sandbox goes back to the Mac's login.
 #[tauri::command]
 fn auth_sandbox_clear() -> Result<(), String> {
-    auth::clear_sandbox_token().map_err(|e| e.to_string())
+    auth::clear_sandbox_token().map_err(ui_err)
 }
 
 /// Opens the sign-in terminal: "login" (this Mac) or "setup" (sandbox token).
 #[tauri::command]
 fn auth_term_open(app: tauri::AppHandle, kind: String, cols: u16, rows: u16) -> Result<(), String> {
-    auth::term_open(&app, &kind, cols, rows).map_err(|e| e.to_string())
+    auth::term_open(&app, &kind, cols, rows).map_err(ui_err)
 }
 
 /// Keystrokes for the sign-in terminal (`auth_term_open`).
 #[tauri::command]
 fn pty_write(id: String, data: String) -> Result<(), String> {
-    pty::write(&id, &data).map_err(|e| e.to_string())
+    pty::write(&id, &data).map_err(ui_err)
 }
 
 #[tauri::command]
@@ -1670,7 +1586,7 @@ fn ia_workspace(id: String) -> String {
 
 #[tauri::command]
 fn ia_get(id: String) -> Result<ia::Conversation, String> {
-    ia::get(&id).map_err(|e| e.to_string())
+    ia::get(&id).map_err(ui_err)
 }
 
 // ---------------------------------------------------------------- IA
@@ -1679,7 +1595,7 @@ fn ia_get(id: String) -> Result<ia::Conversation, String> {
 /// A few seconds: Python, and the container engines when `scope` asks.
 #[tauri::command]
 async fn ai_check(scope: Option<setup::CheckScope>) -> Result<setup::Report, String> {
-    tauri::async_runtime::spawn_blocking(move || setup::check(scope.unwrap_or_default())).await.map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || setup::check(scope.unwrap_or_default())).await.map_err(ui_err)
 }
 
 #[tauri::command]
@@ -1688,15 +1604,14 @@ fn ia_list() -> Vec<ia::Conversation> {
 }
 
 #[tauri::command]
-fn ia_create(
-    source: String,
-    prompt: String,
-    engine: String,
-    model: Option<String>,
-) -> Result<ia::Conversation, String> {
+async fn ia_create(source: String, prompt: String, engine: String, model: Option<String>) -> Result<ia::Conversation, String> {
     let model = creation_model(model)?;
-    let c = ia::create(Path::new(&source), &prompt, &engine).map_err(|e| e.to_string())?;
-    with_model(c, model)
+    // The source is converted to 3MF: a big mesh takes a while.
+    off_main(move || {
+        let c = ia::create(Path::new(&source), &prompt, &engine).map_err(ui_err)?;
+        with_model(c, model)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1708,7 +1623,7 @@ fn ia_create_blank(
     model: Option<String>,
 ) -> Result<ia::Conversation, String> {
     let model = creation_model(model)?;
-    let c = ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(|e| e.to_string())?;
+    let c = ia::create_blank(&prompt, &engine, Path::new(&dest), bounds).map_err(ui_err)?;
     with_model(c, model)
 }
 
@@ -1724,15 +1639,13 @@ fn creation_model(model: Option<String>) -> Result<Option<String>, String> {
 /// The new conversation with its model, kept for its first start.
 fn with_model(c: ia::Conversation, model: Option<String>) -> Result<ia::Conversation, String> {
     let Some(m) = model else { return Ok(c) };
-    chat::set_model(&c.id, Some(&m)).map_err(|e| e.to_string())?;
-    ia::get(&c.id).map_err(|e| e.to_string())
+    chat::set_model(&c.id, Some(&m)).map_err(ui_err)?;
+    ia::get(&c.id).map_err(ui_err)
 }
 
 #[tauri::command]
 async fn ia_delete(id: String) -> Result<IaDeleted, String> {
-    tauri::async_runtime::spawn_blocking(move || delete_conversation(&id))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || delete_conversation(&id)).await.map_err(ui_err)?
 }
 
 /// What a deletion left behind, for the toast.
@@ -1755,15 +1668,10 @@ fn delete_conversation(id: &str) -> Result<IaDeleted, String> {
     chat::close(id);
     ia::watch_stop(id);
     // Listed before the folder goes: the project folder's name derives from it.
-    let found = ia::session_artifacts(id).map_err(|e| e.to_string())?;
-    ia::remove(id).map_err(|e| e.to_string())?;
+    let found = ia::session_artifacts(id).map_err(ui_err)?;
+    ia::remove(id).map_err(ui_err)?;
     let (removed, failed) = ia::remove_artifacts(&found);
-    let kept = found
-        .skipped
-        .iter()
-        .chain(&failed)
-        .map(|p| p.to_string_lossy().into_owned())
-        .collect();
+    let kept = found.skipped.iter().chain(&failed).map(|p| p.to_string_lossy().into_owned()).collect();
     Ok(IaDeleted { list: ia::list(), removed, kept })
 }
 
@@ -1777,20 +1685,23 @@ struct IaDeletePlan {
 }
 
 #[tauri::command]
-fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
-    ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
-    let found = ia::session_artifacts(&id).map_err(|e| e.to_string())?;
-    Ok(IaDeletePlan { files: found.paths.len(), running: chat::is_open(&id) })
+async fn ia_delete_plan(id: String) -> Result<IaDeletePlan, String> {
+    off_main(move || {
+        ia::get(&id).map_err(|_| t!("err.conv_unknown"))?;
+        let found = ia::session_artifacts(&id).map_err(ui_err)?;
+        Ok(IaDeletePlan { files: found.paths.len(), running: chat::is_open(&id) })
+    })
+    .await
 }
 
 #[tauri::command]
-fn ia_duplicate(id: String) -> Result<ia::Conversation, String> {
-    ia::duplicate(&id).map_err(|e| e.to_string())
+async fn ia_duplicate(id: String) -> Result<ia::Conversation, String> {
+    off_main(move || ia::duplicate(&id).map_err(ui_err)).await
 }
 
 #[tauri::command]
 fn ia_rename(id: String, title: String) -> Result<ia::Conversation, String> {
-    ia::rename(&id, &title).map_err(|e| e.to_string())
+    ia::rename(&id, &title).map_err(ui_err)
 }
 
 /// Path of the current mesh and stamp of its last write.
@@ -1804,7 +1715,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
         Response::builder()
             .status(code)
             .header("Access-Control-Allow-Origin", "*")
-            .header("X-Error", msg.to_string())
+            .header("X-Error", header_text(msg))
             .body(Vec::new())
             .unwrap()
     };
@@ -1813,16 +1724,11 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
     };
     // Beyond this, display gets heavy without gaining readability: the loader
     // then samples the triangles.
-    let budget: usize = query_param(uri, "b")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(900_000)
-        .clamp(10_000, 3_000_000);
+    let budget: usize = query_param(uri, "b").and_then(|s| s.parse().ok()).unwrap_or(900_000).clamp(10_000, 3_000_000);
 
     // STL and 3MF go through the same protocol (older AI conversations kept
     // STL versions); the extension decides.
-    let is_stl = Path::new(&path)
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+    let is_stl = Path::new(&path).extension().is_some_and(|e| e.eq_ignore_ascii_case("stl"));
     // `i`: a single object of the file, in its own frame (Prepare view).
     if let Some(index) = query_param(uri, "i").and_then(|s| s.parse::<usize>().ok()) {
         // `c`: one piece of it, once split.
@@ -1835,7 +1741,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
                 .header("Access-Control-Allow-Origin", "*")
                 .body(mesh::encode(&m))
                 .unwrap(),
-            Err(e) => fail(422, &e.to_string()),
+            Err(e) => fail(422, &ui_err(e)),
         };
     }
     let loaded = if is_stl {
@@ -1849,7 +1755,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
                 plate::filament_colored(&mut zip, &mut m);
                 m
             }),
-            Err(e) => return fail(404, &e.to_string()),
+            Err(e) => return fail(404, &ui_err(e)),
         }
     };
     match loaded {
@@ -1860,18 +1766,12 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
             .header("Access-Control-Allow-Origin", "*")
             .body(mesh::encode(&m))
             .unwrap(),
-        Err(e) => fail(422, &e.to_string()),
+        Err(e) => fail(422, &ui_err(e)),
     }
 }
 
 fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
-    let not_found = || {
-        Response::builder()
-            .status(404)
-            .header("Access-Control-Allow-Origin", "*")
-            .body(Vec::new())
-            .unwrap()
-    };
+    let not_found = || Response::builder().status(404).header("Access-Control-Allow-Origin", "*").body(Vec::new()).unwrap();
     // An object created by the AI has no original: its thumbnail is the
     // preview the app renders for Claude.
     if let Some(id) = query_param(uri, "ia") {
@@ -1900,10 +1800,7 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
     let Some(path) = query_param(uri, "p") else {
         return not_found();
     };
-    let size: u32 = query_param(uri, "s")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(320)
-        .clamp(64, 1600);
+    let size: u32 = query_param(uri, "s").and_then(|s| s.parse().ok()).unwrap_or(320).clamp(64, 1600);
     let pref = match query_param(uri, "k").as_deref() {
         Some("1") => ThumbPref::Plate,
         Some("2") => ThumbPref::Model,
@@ -1927,7 +1824,7 @@ fn handle_thumb(uri: &str) -> Response<Vec<u8>> {
 /// Switches language; the native menu bar is rebuilt to follow.
 #[tauri::command]
 fn language_set(app: tauri::AppHandle, lang: String) -> Result<(), String> {
-    i18n::set(&lang).map_err(|e| e.to_string())?;
+    i18n::set(&lang).map_err(ui_err)?;
     #[cfg(target_os = "macos")]
     if let Ok(menu) = menu::app_menu(&app) {
         let _ = app.set_menu(menu);
@@ -1982,27 +1879,21 @@ pub fn run() {
                 return responder.respond(refused());
             }
             let uri = request.uri().to_string();
-            let _ = pool().send(Box::new(move || {
-                responder.respond(handle_gcode(&uri));
-            }));
+            serve_on_pool(responder, uri, handle_gcode);
         })
         .register_asynchronous_uri_scheme_protocol("mesh", |ctx, request: Request<Vec<u8>>, responder| {
             if !own_webview(&ctx) {
                 return responder.respond(refused());
             }
             let uri = request.uri().to_string();
-            let _ = pool().send(Box::new(move || {
-                responder.respond(handle_mesh(&uri));
-            }));
+            serve_on_pool(responder, uri, handle_mesh);
         })
         .register_asynchronous_uri_scheme_protocol("thumb", |ctx, request: Request<Vec<u8>>, responder| {
             if !own_webview(&ctx) {
                 return responder.respond(refused());
             }
             let uri = request.uri().to_string();
-            let _ = pool().send(Box::new(move || {
-                responder.respond(handle_thumb(&uri));
-            }));
+            serve_on_pool(responder, uri, handle_thumb);
         })
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .setup(|app| {
@@ -2012,8 +1903,7 @@ pub fn run() {
             // The main window is declared with `create: false` so that it can
             // receive the translation catalogs before any of its scripts run.
             if let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == "main") {
-                let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), cfg)?
-                    .initialization_script(i18n::init_script());
+                let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), cfg)?.initialization_script(i18n::init_script());
                 // Linux: the system title bar when the user prefers it
                 // (titlebar.rs); the interface draws its own otherwise.
                 #[cfg(target_os = "linux")]
@@ -2026,12 +1916,8 @@ pub fn run() {
                 #[cfg(target_os = "macos")]
                 {
                     use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
-                    let _ = apply_vibrancy(
-                        &window,
-                        NSVisualEffectMaterial::Sidebar,
-                        Some(NSVisualEffectState::FollowsWindowActiveState),
-                        None,
-                    );
+                    let _ =
+                        apply_vibrancy(&window, NSVisualEffectMaterial::Sidebar, Some(NSVisualEffectState::FollowsWindowActiveState), None);
                 }
                 // Linux, without decorations: resizing from the edges,
                 // rounded corners.
@@ -2217,6 +2103,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn error_header_never_breaks_the_response() {
+        let msg = "line one\nline two\r\u{7f}é";
+        assert!(Response::builder().header("X-Error", msg).body(()).is_err(), "raw: refused by http");
+        assert_eq!(header_text(msg), "line one line two  é");
+        assert!(Response::builder().header("X-Error", header_text(msg)).body(()).is_ok());
+    }
+
+    #[test]
     fn creation_model_is_checked_first() {
         assert_eq!(creation_model(None), Ok(None));
         assert_eq!(creation_model(Some(String::new())), Ok(None));
@@ -2227,10 +2121,7 @@ mod tests {
     #[test]
     fn parse_query() {
         let u = "thumb://localhost/t?p=%2FUsers%2Fa%2FMon%20fichier%20%2B%20test.3mf&s=320&k=2&v=12";
-        assert_eq!(
-            query_param(u, "p").as_deref(),
-            Some("/Users/a/Mon fichier + test.3mf")
-        );
+        assert_eq!(query_param(u, "p").as_deref(), Some("/Users/a/Mon fichier + test.3mf"));
         assert_eq!(query_param(u, "s").as_deref(), Some("320"));
         assert_eq!(query_param(u, "k").as_deref(), Some("2"));
         assert_eq!(query_param(u, "zz"), None);
@@ -2241,12 +2132,12 @@ mod tests {
     #[test]
     fn parse_query_windows_form_and_paths() {
         let cases = [
-            ("http://thumb.localhost/t?p=C%3A%5CUsers%5CAna%5CMes%20mod%C3%A8les%5Cpi%C3%A8ce%20%231.3mf&s=46&k=0&v=3",
-             r"C:\Users\Ana\Mes modèles\pièce #1.3mf"),
-            ("http://thumb.localhost/t?p=%5C%5CNAS%5Cprints%5Ca%26b.3mf&s=320&k=0",
-             r"\\NAS\prints\a&b.3mf"),
-            ("http://thumb.localhost/t?p=%5C%5C%3F%5CC%3A%5Clong%5Cx.3mf&s=320&k=0",
-             r"\\?\C:\long\x.3mf"),
+            (
+                "http://thumb.localhost/t?p=C%3A%5CUsers%5CAna%5CMes%20mod%C3%A8les%5Cpi%C3%A8ce%20%231.3mf&s=46&k=0&v=3",
+                r"C:\Users\Ana\Mes modèles\pièce #1.3mf",
+            ),
+            ("http://thumb.localhost/t?p=%5C%5CNAS%5Cprints%5Ca%26b.3mf&s=320&k=0", r"\\NAS\prints\a&b.3mf"),
+            ("http://thumb.localhost/t?p=%5C%5C%3F%5CC%3A%5Clong%5Cx.3mf&s=320&k=0", r"\\?\C:\long\x.3mf"),
         ];
         for (u, want) in cases {
             assert_eq!(query_param(u, "p").as_deref(), Some(want), "{u}");
@@ -2257,15 +2148,13 @@ mod tests {
     /// Shows the metadata read from real files.
     #[test]
     fn dump_meta() {
-        let dir = std::env::var("PROBE_DIR")
-            .unwrap_or_else(|_| format!("{}/Downloads", std::env::var("HOME").unwrap()));
+        let dir = std::env::var("PROBE_DIR").unwrap_or_else(|_| format!("{}/Downloads", std::env::var("HOME").unwrap()));
         // Local probe over real 3MFs; skip when Downloads (or PROBE_DIR) is absent (CI).
-        let Ok(rd) = std::fs::read_dir(&dir) else { return; };
-        let mut files: Vec<_> = rd
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.extension().map(|e| e.eq_ignore_ascii_case("3mf")).unwrap_or(false))
-            .collect();
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            return;
+        };
+        let mut files: Vec<_> =
+            rd.flatten().map(|e| e.path()).filter(|p| p.extension().map(|e| e.eq_ignore_ascii_case("3mf")).unwrap_or(false)).collect();
         files.sort();
         for p in files.iter().take(6) {
             let m = meta_of(&p.to_string_lossy());

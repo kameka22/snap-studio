@@ -17,7 +17,7 @@
 //! first and every candidate is listed, so both layouts work, and a root's
 //! own permissions decide whether its videos can be deleted.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -198,10 +198,7 @@ pub fn is_video(path: &str) -> bool {
 /// The picture of a video: same name, image extension, same folder.
 pub fn video_thumb(video: &str, all: &[&str]) -> Option<String> {
     let stem = video.rsplit_once('.').map(|(s, _)| s)?;
-    ["jpg", "jpeg", "png", "JPG", "PNG"]
-        .iter()
-        .map(|e| format!("{stem}.{e}"))
-        .find(|c| all.contains(&c.as_str()))
+    ["jpg", "jpeg", "png", "JPG", "PNG"].iter().map(|e| format!("{stem}.{e}")).find(|c| all.contains(&c.as_str()))
 }
 
 fn strings(v: Option<&Value>) -> Vec<String> {
@@ -216,9 +213,7 @@ fn strings(v: Option<&Value>) -> Vec<String> {
 fn color(s: &str) -> Option<String> {
     let h = s.trim().trim_start_matches('#');
     // `get`: a non-ASCII character at the cut gives None, not a panic.
-    h.get(..6)
-        .filter(|h| h.chars().all(|c| c.is_ascii_hexdigit()))
-        .map(|h| format!("#{}", h.to_ascii_lowercase()))
+    h.get(..6).filter(|h| h.chars().all(|c| c.is_ascii_hexdigit())).map(|h| format!("#{}", h.to_ascii_lowercase()))
 }
 
 /// `/server/files/metadata`. `file_dir` is the file's folder in its root:
@@ -237,15 +232,17 @@ pub fn parse_meta(v: &Value, file_dir: &str) -> FileMeta {
         .and_then(|a| a.as_array())
         .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect())
         .unwrap_or_default();
-    let thumb = r
-        .get("thumbnails")
-        .and_then(|t| t.as_array())
-        .and_then(|a| {
-            a.iter()
-                .filter_map(|t| Some((t.get("width")?.as_u64().unwrap_or(0) * t.get("height").and_then(|h| h.as_u64()).unwrap_or(0), t.get("relative_path")?.as_str()?)))
-                .max_by_key(|(area, _)| *area)
-                .map(|(_, p)| if file_dir.is_empty() { p.to_string() } else { format!("{file_dir}/{p}") })
-        });
+    let thumb = r.get("thumbnails").and_then(|t| t.as_array()).and_then(|a| {
+        a.iter()
+            .filter_map(|t| {
+                Some((
+                    t.get("width")?.as_u64().unwrap_or(0) * t.get("height").and_then(|h| h.as_u64()).unwrap_or(0),
+                    t.get("relative_path")?.as_str()?,
+                ))
+            })
+            .max_by_key(|(area, _)| *area)
+            .map(|(_, p)| if file_dir.is_empty() { p.to_string() } else { format!("{file_dir}/{p}") })
+    });
     let mut m = FileMeta {
         estimated_time: f("estimated_time"),
         slicer: s("slicer"),
@@ -402,7 +399,8 @@ pub fn file_url(base: &str, root: &str, path: &str) -> Result<String> {
 /// The roots this view reads or changes: print files and timelapses, never
 /// the configuration or the logs.
 pub fn served_root(root: &str) -> bool {
-    valid_root(root) && (root == "gcodes" || root == "camera" || ((root.contains("timelapse") || root.contains("video")) && root != "timelapse_frames"))
+    valid_root(root)
+        && (root == "gcodes" || root == "camera" || ((root.contains("timelapse") || root.contains("video")) && root != "timelapse_frames"))
 }
 
 pub fn valid_root(root: &str) -> bool {
@@ -488,11 +486,7 @@ pub fn mvhd_duration(moov: &[u8]) -> Option<f64> {
 fn client() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| {
-        reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(3))
-            .user_agent("Snap-Studio")
-            .build()
-            .expect("client HTTP")
+        reqwest::Client::builder().connect_timeout(Duration::from_secs(3)).user_agent("Snap-Studio").build().expect("client HTTP")
     })
 }
 
@@ -547,10 +541,7 @@ pub async fn overview(host: &str, port: u16, printing: Option<String>) -> Result
     let roots = get(&format!("{b}/server/files/roots"), 4).await.ok().map(|v| parse_roots(&v));
     let gcodes_rw = roots.as_ref().and_then(|r| r.iter().find(|r| r.name == "gcodes")).map(|r| r.writable()).unwrap_or(true);
     let listed = list_root(&b, "gcodes").await?;
-    let history = get(&format!("{b}/server/history/list?limit=200&order=desc"), 6)
-        .await
-        .map(|v| last_prints(&v))
-        .unwrap_or_default();
+    let history = get(&format!("{b}/server/history/list?limit=200&order=desc"), 6).await.map(|v| last_prints(&v)).unwrap_or_default();
     let disk = get(&format!("{b}/server/files/directory?path=gcodes&extended=false"), 4).await.ok().and_then(|v| parse_disk(&v));
 
     let prints: Vec<(String, u64, f64)> = listed.into_iter().filter(|(p, _, _)| is_print_file(p)).collect();
@@ -624,12 +615,8 @@ fn duration_cache() -> &'static Mutex<HashMap<DurKey, Option<f64>>> {
 }
 
 async fn range(url: &str, start: u64, len: u64) -> Result<Vec<u8>> {
-    let r = client()
-        .get(url)
-        .timeout(Duration::from_secs(15))
-        .header("Range", format!("bytes={}-{}", start, start + len - 1))
-        .send()
-        .await?;
+    let r =
+        client().get(url).timeout(Duration::from_secs(15)).header("Range", format!("bytes={}-{}", start, start + len - 1)).send().await?;
     if !r.status().is_success() {
         return Err(anyhow!("HTTP {}", r.status().as_u16()));
     }
@@ -756,10 +743,7 @@ pub fn date_index_of(path: &str, instances: Option<&Value>) -> Option<String> {
 }
 
 fn req_id() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64 % 2_000_000_000)
-        .unwrap_or(1)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64 % 2_000_000_000).unwrap_or(1)
 }
 
 /// Deletes a timelapse. Moonraker first; a U1 lists its videos in the
@@ -827,7 +811,11 @@ pub fn display_name(path: &str) -> String {
         _ => base,
     };
     if let Some((head, tail)) = stem.rsplit_once('-') {
-        if !head.is_empty() && tail.len() == 6 && tail.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) && tail.chars().any(|c| c.is_ascii_digit()) {
+        if !head.is_empty()
+            && tail.len() == 6
+            && tail.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+            && tail.chars().any(|c| c.is_ascii_digit())
+        {
             return head.to_string();
         }
     }
@@ -880,7 +868,7 @@ pub async fn download(host: &str, port: u16, root: &str, path: &str, dir: &Path)
     }
     f.flush()?;
     drop(f);
-    std::fs::rename(&part, &dest)?;
+    std::fs::rename(&part, &dest).with_context(|| format!("moving {} to {}", part.display(), dest.display()))?;
     Ok(dest)
 }
 
@@ -1034,7 +1022,10 @@ mod tests {
         let h = last_prints(&v);
         assert_eq!(h["a.gcode"].status, "cancelled", "newest first");
         assert_eq!(h["b.gcode"].duration, Some(3600.0));
-        assert_eq!(parse_disk(&json!({"result": {"disk_usage": {"total": 100, "used": 40, "free": 60}}})), Some(Disk { total: 100, used: 40, free: 60 }));
+        assert_eq!(
+            parse_disk(&json!({"result": {"disk_usage": {"total": 100, "used": 40, "free": 60}}})),
+            Some(Disk { total: 100, used: 40, free: 60 })
+        );
     }
 
     #[test]
@@ -1139,7 +1130,8 @@ mod tests {
         use std::io::{BufRead, BufReader, Write};
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = l.local_addr().unwrap().port();
-        let camera = std::sync::Arc::new(Mutex::new(vec!["monitor.jpg".to_string(), "20261019153000.mp4".into(), "20261019153000.jpg".into()]));
+        let camera =
+            std::sync::Arc::new(Mutex::new(vec!["monitor.jpg".to_string(), "20261019153000.mp4".into(), "20261019153000.jpg".into()]));
         let cam = camera.clone();
         std::thread::spawn(move || {
             let mp4 = fake_mp4();
@@ -1165,7 +1157,11 @@ mod tests {
                                     let mut files = cam.lock().unwrap();
                                     let before = files.len();
                                     files.retain(|f| idx.is_empty() || !f.starts_with(&idx));
-                                    if files.len() == before { json!({"state": "failed", "message": "no such instance"}) } else { json!({"state": "success"}) }
+                                    if files.len() == before {
+                                        json!({"state": "failed", "message": "no such instance"})
+                                    } else {
+                                        json!({"state": "success"})
+                                    }
                                 }
                                 _ => json!(null),
                             };
@@ -1196,10 +1192,15 @@ mod tests {
                         json!({"result": files.iter().map(|f| json!({"path": f, "size": if f.ends_with(".mp4") { mp4.len() } else { 900 }, "modified": 1760000200.0})).collect::<Vec<_>>()})
                     };
                     let (code, mime, body, cr) = match target.as_str() {
-                        _ if method == "DELETE" && target.starts_with("/server/files/camera/") => {
-                            (405, "application/json", br#"{"error": {"code": 405, "message": "Path not available for DELETE"}}"#.to_vec(), None)
+                        _ if method == "DELETE" && target.starts_with("/server/files/camera/") => (
+                            405,
+                            "application/json",
+                            br#"{"error": {"code": 405, "message": "Path not available for DELETE"}}"#.to_vec(),
+                            None,
+                        ),
+                        _ if method == "DELETE" && target.starts_with("/server/files/gcodes/") => {
+                            (200, "application/json", b"{}".to_vec(), None)
                         }
-                        _ if method == "DELETE" && target.starts_with("/server/files/gcodes/") => (200, "application/json", b"{}".to_vec(), None),
                         "/server/files/roots" => json(json!({"result": [
                             {"name": "gcodes", "path": "/userdata/gcodes", "permissions": "rw"},
                             {"name": "camera", "path": "/oem/printer_data/camera", "permissions": "r"},
@@ -1219,24 +1220,34 @@ mod tests {
                         }})),
                         // A file Moonraker says nothing about: its G-code must be read.
                         "/server/files/metadata?filename=Bare.gcode" => json(json!({"result": {"estimated_time": 60}})),
-                        "/server/files/gcodes/Bare.gcode" => (200, "text/plain", b"G1 F600\nG1 X10 Y0 E1\nT2\nG1 X10 Y20 E2\nT0\nG1 X0 Y20 E3\n".to_vec(), None),
+                        "/server/files/gcodes/Bare.gcode" => {
+                            (200, "text/plain", b"G1 F600\nG1 X10 Y0 E1\nT2\nG1 X10 Y20 E2\nT0\nG1 X0 Y20 E3\n".to_vec(), None)
+                        }
                         "/server/history/list?limit=200&order=desc" => json(json!({"result": {"jobs": [
                             {"filename": "Cube-1a2b3c.gcode", "status": "completed", "end_time": 1760001000.0, "print_duration": 3500.0}
                         ]}})),
-                        "/server/files/directory?path=gcodes&extended=false" => json(json!({"result": {"disk_usage": {"total": 1000, "used": 400, "free": 600}}})),
+                        "/server/files/directory?path=gcodes&extended=false" => {
+                            json(json!({"result": {"disk_usage": {"total": 1000, "used": 400, "free": 600}}}))
+                        }
                         "/server/files/camera/20261019153000.mp4" => {
                             let span = range.as_deref().and_then(|r| clamp_range(Some(r), u64::MAX / 4)).filter(|_| ranges);
                             match span {
                                 Some((a, b)) => {
                                     let end = b.min(mp4.len() as u64 - 1);
-                                    (206, "video/mp4", mp4[a as usize..=end as usize].to_vec(), Some(format!("bytes {a}-{end}/{}", mp4.len())))
+                                    (
+                                        206,
+                                        "video/mp4",
+                                        mp4[a as usize..=end as usize].to_vec(),
+                                        Some(format!("bytes {a}-{end}/{}", mp4.len())),
+                                    )
                                 }
                                 None => (200, "video/mp4", mp4.clone(), None),
                             }
                         }
                         _ => (404, "application/json", b"{}".to_vec(), None),
                     };
-                    let mut head = format!("HTTP/1.1 {code} X\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nConnection: close\r\n", body.len());
+                    let mut head =
+                        format!("HTTP/1.1 {code} X\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nConnection: close\r\n", body.len());
                     if let Some(cr) = cr {
                         head += &format!("Content-Range: {cr}\r\n");
                     }

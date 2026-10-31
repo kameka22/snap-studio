@@ -35,9 +35,7 @@ pub struct Info {
 /// Linux: the user asked for the system title bar.
 #[cfg(target_os = "linux")]
 pub fn system_bar() -> bool {
-    crate::i18n::stored_value(SYSTEM_KEY)
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+    crate::i18n::stored_value(SYSTEM_KEY).and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 /// Buttons on each side for a GTK decoration layout
@@ -68,10 +66,7 @@ fn windows_layout() -> Vec<&'static str> {
 #[cfg(target_os = "linux")]
 fn desktop_layout() -> (Vec<&'static str>, Vec<&'static str>) {
     use gtk::prelude::*;
-    let layout = gtk::Settings::default()
-        .and_then(|s| s.gtk_decoration_layout())
-        .map(|s| s.to_string())
-        .unwrap_or_default();
+    let layout = gtk::Settings::default().and_then(|s| s.gtk_decoration_layout()).map(|s| s.to_string()).unwrap_or_default();
     parse_layout(&layout)
 }
 
@@ -107,8 +102,8 @@ pub fn titlebar_system_set(window: tauri::Window, on: bool) -> Result<Info, Stri
     #[cfg(target_os = "linux")]
     {
         // Applied first: a preference that could not take effect is not kept.
-        window.set_decorations(on).map_err(|e| e.to_string())?;
-        crate::i18n::store(SYSTEM_KEY, serde_json::Value::Bool(on)).map_err(|e| e.to_string())?;
+        window.set_decorations(on).map_err(crate::util::ui_err)?;
+        crate::i18n::store(SYSTEM_KEY, serde_json::Value::Bool(on)).map_err(crate::util::ui_err)?;
         // What was asked: `is_decorated` may still give the former state.
         Ok(info(!on))
     }
@@ -181,9 +176,7 @@ pub mod edge_resize {
     /// Watches the pointer over a view: resize cursor along the edges, resize
     /// on a press there. Elsewhere the view gets its events as usual.
     pub fn attach(view: &gtk::Widget) {
-        view.add_events(
-            gtk::gdk::EventMask::POINTER_MOTION_MASK | gtk::gdk::EventMask::BUTTON_PRESS_MASK,
-        );
+        view.add_events(gtk::gdk::EventMask::POINTER_MOTION_MASK | gtk::gdk::EventMask::BUTTON_PRESS_MASK);
         // Our resize cursor is on the view: taken back when the pointer
         // leaves the edge (the view only sets its own when it changes).
         let shown = std::rc::Rc::new(std::cell::Cell::new(false));

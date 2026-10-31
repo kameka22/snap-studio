@@ -59,10 +59,7 @@ pub struct Tools {
 
 impl Tools {
     pub fn detect() -> Tools {
-        Tools {
-            claude: crate::util::which("claude"),
-            yolobox: crate::util::which("yolobox"),
-        }
+        Tools { claude: crate::util::which("claude"), yolobox: crate::util::which("yolobox") }
     }
 }
 
@@ -81,9 +78,7 @@ fn purge_markers(cmd: &mut CommandBuilder, names: impl Iterator<Item = String>) 
 
 /// The inherited variables to remove (see [`purge_markers`]).
 pub fn inherited_markers(names: impl Iterator<Item = String>) -> Vec<String> {
-    names
-        .filter(|k| k.starts_with("CLAUDE") && k != "CLAUDE_CONFIG_DIR")
-        .collect()
+    names.filter(|k| k.starts_with("CLAUDE") && k != "CLAUDE_CONFIG_DIR").collect()
 }
 
 /// `PATH` for Claude and the checks: launched from the Finder, the app does
@@ -111,12 +106,7 @@ pub fn spawn_terminal(
     rows: u16,
     mut tap: Option<Tap>,
 ) -> Result<()> {
-    let pair = native_pty_system().openpty(PtySize {
-        rows: rows.max(4),
-        cols: cols.max(20),
-        pixel_width: 0,
-        pixel_height: 0,
-    })?;
+    let pair = native_pty_system().openpty(PtySize { rows: rows.max(4), cols: cols.max(20), pixel_width: 0, pixel_height: 0 })?;
 
     let mut cmd = CommandBuilder::new(&argv[0]);
     for a in &argv[1..] {
@@ -139,15 +129,7 @@ pub fn spawn_terminal(
     let writer = pair.master.take_writer()?;
 
     let token = next_token();
-    sessions().lock().unwrap().insert(
-        key.to_string(),
-        Session {
-            master: pair.master,
-            writer: Arc::new(Mutex::new(writer)),
-            child,
-            token,
-        },
-    );
+    sessions().lock().unwrap().insert(key.to_string(), Session { master: pair.master, writer: Arc::new(Mutex::new(writer)), child, token });
 
     let id = key.to_string();
     let app = app.clone();
@@ -160,13 +142,7 @@ pub fn spawn_terminal(
                     if let Some(t) = tap.as_mut() {
                         t(&buf[..n]);
                     }
-                    let _ = app.emit(
-                        "ia-pty",
-                        Chunk {
-                            id: id.clone(),
-                            b64: crate::util::b64_encode(&buf[..n]),
-                        },
-                    );
+                    let _ = app.emit("ia-pty", Chunk { id: id.clone(), b64: crate::util::b64_encode(&buf[..n]) });
                 }
             }
         }
@@ -244,10 +220,7 @@ pub fn close(id: &str) {
 
 /// Closes all terminals — when the app closes.
 pub fn close_all() {
-    let ids: Vec<String> = sessions()
-        .lock()
-        .map(|s| s.keys().cloned().collect())
-        .unwrap_or_default();
+    let ids: Vec<String> = sessions().lock().map(|s| s.keys().cloned().collect()).unwrap_or_default();
     for id in ids {
         close_and_wait(&id);
     }
@@ -260,14 +233,7 @@ mod tests {
     /// A terminal on a trivial command: write, read back.
     #[test]
     fn a_terminal_carries_bytes_both_ways() {
-        let pair = native_pty_system()
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .unwrap();
+        let pair = native_pty_system().openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 }).unwrap();
         let mut cmd = CommandBuilder::new("/bin/cat");
         cmd.env("TERM", "dumb");
         let mut child = pair.slave.spawn_command(cmd).unwrap();
@@ -324,15 +290,8 @@ mod env_tests {
         }
         purge_markers(&mut cmd, planted.iter().map(|(k, _)| k.to_string()));
 
-        let left: std::collections::HashMap<&str, &str> =
-            cmd.iter_full_env_as_str().collect();
-        for k in [
-            "CLAUDECODE",
-            "CLAUDE_CODE_CHILD_SESSION",
-            "CLAUDE_CODE_SESSION_ID",
-            "CLAUDE_CODE_ENTRYPOINT",
-            "CLAUDE_PID",
-        ] {
+        let left: std::collections::HashMap<&str, &str> = cmd.iter_full_env_as_str().collect();
+        for k in ["CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_PID"] {
             assert!(!left.contains_key(k), "“{k}” should have disappeared");
         }
         assert_eq!(left.get("CLAUDE_CONFIG_DIR"), Some(&"/tmp/conf"), "intended setting");

@@ -101,12 +101,7 @@ const ALL: [&str; 3] = ["sandbox", "container", "local"];
 const HOST: [&str; 2] = ["local", "sandbox"];
 
 fn item(key: &str, state: State, modes: &[&'static str], detail: Option<String>) -> Item {
-    Item {
-        key: key.to_string(),
-        state,
-        modes: modes.to_vec(),
-        detail,
-    }
+    Item { key: key.to_string(), state, modes: modes.to_vec(), detail }
 }
 
 // ------------------------------------------------------------ running things
@@ -143,13 +138,8 @@ fn probe(program: &Path, args: &[&str], deadline: Duration) -> Option<(bool, Str
 
 /// "2.1.286 (Claude Code)" → (2, 1, 286).
 pub fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
-    let word = s
-        .split_whitespace()
-        .map(|w| w.trim_start_matches('v'))
-        .find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))?;
-    let mut n = word.split('.').map(|p| {
-        p.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u32>().ok()
-    });
+    let word = s.split_whitespace().map(|w| w.trim_start_matches('v')).find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))?;
+    let mut n = word.split('.').map(|p| p.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u32>().ok());
     Some((n.next()??, n.next().flatten().unwrap_or(0), n.next().flatten().unwrap_or(0)))
 }
 
@@ -186,10 +176,7 @@ fn check_accounts(claude_ok: bool) -> Vec<Item> {
     let who = host.email.clone();
     match (host.logged_in, token) {
         (true, _) => vec![item("account", State::Ok, &ALL, who)],
-        (false, true) => vec![
-            item("account", State::SignedOut, &HOST, None),
-            item("sandbox_account", State::Ok, &["container"], None),
-        ],
+        (false, true) => vec![item("account", State::SignedOut, &HOST, None), item("sandbox_account", State::Ok, &["container"], None)],
         (false, false) => vec![item("account", State::SignedOut, &ALL, None)],
     }
 }
@@ -215,12 +202,8 @@ fn check_sandbox() -> (Vec<Item>, Option<String>) {
     if cfg!(windows) {
         return (vec![item("runtime", State::Unsupported, &["container"], None)], None);
     }
-    let mut items = vec![item(
-        "yolobox",
-        if crate::util::which("yolobox").is_some() { State::Ok } else { State::Missing },
-        &["container"],
-        None,
-    )];
+    let mut items =
+        vec![item("yolobox", if crate::util::which("yolobox").is_some() { State::Ok } else { State::Missing }, &["container"], None)];
     let states: Vec<(String, State)> = std::thread::scope(|s| {
         let handles: Vec<_> = RUNTIMES.iter().map(|r| s.spawn(move || (r.to_string(), runtime_state(r)))).collect();
         handles.into_iter().filter_map(|h| h.join().ok()).collect()
@@ -352,17 +335,8 @@ fn parse_python(out: &str) -> Vec<Item> {
 
 /// A mode is ready when every check that serves it passes.
 fn readiness(items: &[Item]) -> Ready {
-    let ready = |mode: &str| {
-        items
-            .iter()
-            .filter(|i| i.modes.contains(&mode) && i.state != State::Info)
-            .all(|i| i.state == State::Ok)
-    };
-    Ready {
-        sandbox: ready("sandbox"),
-        container: ready("container"),
-        local: ready("local"),
-    }
+    let ready = |mode: &str| items.iter().filter(|i| i.modes.contains(&mode) && i.state != State::Info).all(|i| i.state == State::Ok);
+    Ready { sandbox: ready("sandbox"), container: ready("container"), local: ready("local") }
 }
 
 /// The running container engine, as last checked.

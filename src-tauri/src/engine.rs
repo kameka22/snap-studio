@@ -8,7 +8,7 @@
 //! extraction into a temporary folder then rename — a half-installed engine
 //! is never used.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -54,11 +54,7 @@ fn manifest() -> &'static Manifest {
             // Said in the console: "no engine referenced" alone would hide a
             // build whose manifest is broken.
             eprintln!("[engine] engine.json is unreadable: {e}");
-            Manifest {
-                version: String::new(),
-                source: String::new(),
-                platforms: HashMap::new(),
-            }
+            Manifest { version: String::new(), source: String::new(), platforms: HashMap::new() }
         })
     })
 }
@@ -84,10 +80,7 @@ pub fn referenced() -> bool {
 }
 
 fn root() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("engine")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("engine")
 }
 
 fn install_dir() -> PathBuf {
@@ -260,7 +253,7 @@ async fn download(app: &AppHandle, a: &Asset, part: &Path) -> Result<()> {
 
 async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
     let root = root();
-    std::fs::create_dir_all(&root)?;
+    std::fs::create_dir_all(&root).with_context(|| format!("creating {}", root.display()))?;
     let part = root.join(format!(".download-{}.part", manifest().version));
 
     // Streamed download, checksum computed on the way.
@@ -272,14 +265,12 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
     let target = install_dir();
     let part2 = part.clone();
     let staging2 = staging.clone();
-    tauri::async_runtime::spawn_blocking(move || extract(&part2, &staging2))
-        .await
-        .map_err(|e| anyhow!("{e}"))??;
+    tauri::async_runtime::spawn_blocking(move || extract(&part2, &staging2)).await.map_err(|e| anyhow!("{e}"))??;
     std::fs::write(staging.join(COMPLETE), manifest().version.as_bytes())?;
     if target.exists() {
-        std::fs::remove_dir_all(&target)?;
+        std::fs::remove_dir_all(&target).with_context(|| format!("removing {}", target.display()))?;
     }
-    std::fs::rename(&staging, &target)?;
+    std::fs::rename(&staging, &target).with_context(|| format!("moving {} to {}", staging.display(), target.display()))?;
     let _ = std::fs::remove_file(&part);
     prune_old(&root, &target);
     emit(app, "done", a.unpacked, a.unpacked);
@@ -293,10 +284,10 @@ fn hex(bytes: &[u8]) -> String {
 /// tar.zst archive → folder; execute permissions and links kept.
 fn extract(archive: &Path, dst: &Path) -> Result<()> {
     if dst.exists() {
-        std::fs::remove_dir_all(dst)?;
+        std::fs::remove_dir_all(dst).with_context(|| format!("removing {}", dst.display()))?;
     }
-    std::fs::create_dir_all(dst)?;
-    let f = std::io::BufReader::new(std::fs::File::open(archive)?);
+    std::fs::create_dir_all(dst).with_context(|| format!("creating {}", dst.display()))?;
+    let f = std::io::BufReader::new(std::fs::File::open(archive).with_context(|| format!("opening {}", archive.display()))?);
     let zst = ruzstd::decoding::StreamingDecoder::new(f).map_err(|e| anyhow!(crate::t!("err.archive", err = e)))?;
     let mut tar = tar::Archive::new(zst);
     tar.set_preserve_permissions(true);

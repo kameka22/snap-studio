@@ -20,6 +20,19 @@ with its packages for macOS, Windows and Linux. What comes next:
   Display → "Use the system title bar" to get the desktop's own back. macOS
   is unchanged (#27).
 
+### Fixed
+- **Presets made with Snapmaker Orca 2.3**: a custom print profile based on
+  a system profile that Orca 2.4 renamed (e.g. "0.08 Extra Fine" → "0.08mm
+  Standard") slices again instead of failing with "unresolvable
+  inheritance". When a parent really is missing, the message now names it.
+- **No more freezes during long file operations**: saving a slice or an AI
+  model, reverting a version, moving files to the trash, sharing a copy,
+  starting an AI conversation from a big model and clearing the cache now
+  run in the background instead of blocking the window.
+- **Previews and thumbnails no longer stop loading for good** after an
+  error in one file: the faulty file answers with an error and the others
+  keep loading.
+
 ## [0.17.1] — 2026-10-28
 
 ### Added

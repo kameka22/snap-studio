@@ -48,15 +48,78 @@ enum Plural {
 
 /// Supported languages, in the order the pickers show them.
 pub const LANGS: &[Lang] = &[
-    Lang { code: "en", name: "English", english: "English", locale: "en-US", plural: Plural::One, raw: include_str!("../../ui/i18n/en.json") },
-    Lang { code: "fr", name: "Français", english: "French", locale: "fr-FR", plural: Plural::ZeroOne, raw: include_str!("../../ui/i18n/fr.json") },
-    Lang { code: "de", name: "Deutsch", english: "German", locale: "de-DE", plural: Plural::One, raw: include_str!("../../ui/i18n/de.json") },
-    Lang { code: "es", name: "Español", english: "Spanish", locale: "es-ES", plural: Plural::One, raw: include_str!("../../ui/i18n/es.json") },
-    Lang { code: "pt-BR", name: "Português (Brasil)", english: "Brazilian Portuguese", locale: "pt-BR", plural: Plural::ZeroOne, raw: include_str!("../../ui/i18n/pt-BR.json") },
-    Lang { code: "it", name: "Italiano", english: "Italian", locale: "it-IT", plural: Plural::One, raw: include_str!("../../ui/i18n/it.json") },
-    Lang { code: "ja", name: "日本語", english: "Japanese", locale: "ja-JP", plural: Plural::Never, raw: include_str!("../../ui/i18n/ja.json") },
-    Lang { code: "zh-Hans", name: "简体中文", english: "Simplified Chinese", locale: "zh-CN", plural: Plural::Never, raw: include_str!("../../ui/i18n/zh-Hans.json") },
-    Lang { code: "ko", name: "한국어", english: "Korean", locale: "ko-KR", plural: Plural::Never, raw: include_str!("../../ui/i18n/ko.json") },
+    Lang {
+        code: "en",
+        name: "English",
+        english: "English",
+        locale: "en-US",
+        plural: Plural::One,
+        raw: include_str!("../../ui/i18n/en.json"),
+    },
+    Lang {
+        code: "fr",
+        name: "Français",
+        english: "French",
+        locale: "fr-FR",
+        plural: Plural::ZeroOne,
+        raw: include_str!("../../ui/i18n/fr.json"),
+    },
+    Lang {
+        code: "de",
+        name: "Deutsch",
+        english: "German",
+        locale: "de-DE",
+        plural: Plural::One,
+        raw: include_str!("../../ui/i18n/de.json"),
+    },
+    Lang {
+        code: "es",
+        name: "Español",
+        english: "Spanish",
+        locale: "es-ES",
+        plural: Plural::One,
+        raw: include_str!("../../ui/i18n/es.json"),
+    },
+    Lang {
+        code: "pt-BR",
+        name: "Português (Brasil)",
+        english: "Brazilian Portuguese",
+        locale: "pt-BR",
+        plural: Plural::ZeroOne,
+        raw: include_str!("../../ui/i18n/pt-BR.json"),
+    },
+    Lang {
+        code: "it",
+        name: "Italiano",
+        english: "Italian",
+        locale: "it-IT",
+        plural: Plural::One,
+        raw: include_str!("../../ui/i18n/it.json"),
+    },
+    Lang {
+        code: "ja",
+        name: "日本語",
+        english: "Japanese",
+        locale: "ja-JP",
+        plural: Plural::Never,
+        raw: include_str!("../../ui/i18n/ja.json"),
+    },
+    Lang {
+        code: "zh-Hans",
+        name: "简体中文",
+        english: "Simplified Chinese",
+        locale: "zh-CN",
+        plural: Plural::Never,
+        raw: include_str!("../../ui/i18n/zh-Hans.json"),
+    },
+    Lang {
+        code: "ko",
+        name: "한국어",
+        english: "Korean",
+        locale: "ko-KR",
+        plural: Plural::Never,
+        raw: include_str!("../../ui/i18n/ko.json"),
+    },
 ];
 
 fn lang_of(code: &str) -> Option<&'static Lang> {
@@ -87,10 +150,7 @@ fn catalog(lang: &str) -> Option<&'static Map<String, Value>> {
 // ------------------------------------------------------------ preference
 
 fn settings_path() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("settings.json")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("settings.json")
 }
 
 /// The language the user picked, if they ever did.
@@ -192,9 +252,7 @@ pub fn store(key: &str, value: Value) -> Result<()> {
 // ------------------------------------------------------------ lookup
 
 fn lookup(lang: &str, key: &str) -> Option<&'static Value> {
-    catalog(lang)
-        .and_then(|m| m.get(key))
-        .or_else(|| catalog("en").and_then(|m| m.get(key)))
+    catalog(lang).and_then(|m| m.get(key)).or_else(|| catalog("en").and_then(|m| m.get(key)))
 }
 
 /// The `one` and `other` forms of `Intl.PluralRules`, enough for the counts
@@ -232,17 +290,8 @@ pub fn tf(key: &str, params: &[(&str, String)]) -> String {
     let s = match lookup(&lang, key) {
         Some(Value::String(s)) => s.clone(),
         Some(Value::Object(forms)) => {
-            let n = params
-                .iter()
-                .find(|(k, _)| *k == "n")
-                .and_then(|(_, v)| v.parse::<f64>().ok())
-                .unwrap_or(0.0);
-            forms
-                .get(plural_form(&lang, n))
-                .or_else(|| forms.get("other"))
-                .and_then(Value::as_str)
-                .unwrap_or(key)
-                .to_string()
+            let n = params.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<f64>().ok()).unwrap_or(0.0);
+            forms.get(plural_form(&lang, n)).or_else(|| forms.get("other")).and_then(Value::as_str).unwrap_or(key).to_string()
         }
         _ => key.to_string(),
     };
@@ -267,10 +316,7 @@ macro_rules! t {
 /// first frame. The others are fetched from `i18n/<code>.json` when picked.
 pub fn init_script() -> String {
     let lang = lang();
-    let langs: Vec<Value> = LANGS
-        .iter()
-        .map(|l| serde_json::json!({ "code": l.code, "name": l.name, "locale": l.locale }))
-        .collect();
+    let langs: Vec<Value> = LANGS.iter().map(|l| serde_json::json!({ "code": l.code, "name": l.name, "locale": l.locale })).collect();
     let raw = |code: &str| lang_of(code).map(|l| l.raw.trim()).unwrap_or("{}");
     let mut catalogs = format!("{}:{}", serde_json::to_string("en").unwrap(), raw("en"));
     if lang != "en" {

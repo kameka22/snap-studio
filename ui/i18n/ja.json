@@ -957,6 +957,7 @@
   "err.bad_preset_name": "無効なプロファイル名",
   "err.preset_exists": "{name} という名前のシステムプロファイルがすでにあります",
   "err.inheritance": "{name} の継承を解決できません",
+  "err.inheritance_missing": "{name}: 親プリセット「{parent}」が見つかりません（別のバージョンの Snapmaker Orca で作成されましたか？）",
   "err.no_filament": "フィラメントが選択されていません",
   "err.unknown_filament": "不明なフィラメントプリセット：{name}",
   "err.not_orca": "{path} にプロファイルが見つかりません。このアプリケーションは Snapmaker Orca ではありません",

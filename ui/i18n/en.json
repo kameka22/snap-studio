@@ -986,6 +986,7 @@
   "err.bad_preset_name": "invalid profile name",
   "err.preset_exists": "a system profile is already named {name}",
   "err.inheritance": "unresolvable inheritance for {name}",
+  "err.inheritance_missing": "{name}: its parent preset “{parent}” is missing (made with another Snapmaker Orca version?)",
   "err.no_filament": "no filament chosen",
   "err.unknown_filament": "unknown filament preset: {name}",
   "err.not_orca": "profiles not found in {path} — this application is not Snapmaker Orca",
