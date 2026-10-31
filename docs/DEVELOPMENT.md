@@ -162,12 +162,14 @@ favorites, conversations) is carried over on first launch.
 ## Tests
 
 ```sh
-cd src-tauri && cargo test --lib
+cd src-tauri && cargo fmt --check && cargo test --lib   # formatting: rustfmt.toml
 for t in scripts/test-*.js; do node "$t"; done   # interface logic
 python3 scripts/check-i18n.py                    # missing or unused texts
 ```
 
-Some tests are opt-in (`--ignored`) because they need real tools: the
+`cargo test --lib presets -- --ignored` also checks that every preset of
+your own Snapmaker Orca still resolves (a parent renamed by an Orca update
+shows there). Some tests are opt-in (`--ignored`) because they need real tools: the
 slicing engine, Claude Code (`CHAT_REAL=1`, `AUTH_REAL=1`, `IA_REAL=1`), a
 Python with trimesh (`SS_PYTHON=…`), a 3MF of your own (`IA_3MF=…`). Each
 says how to run it in its comment.

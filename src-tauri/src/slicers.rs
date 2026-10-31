@@ -27,12 +27,7 @@ const KNOWN: &[Known] = &[
         win: &[r"Snapmaker_Orca\snapmaker-orca.exe", r"Snapmaker Orca\snapmaker-orca.exe"],
         linux: &["snapmaker-orca", "Snapmaker_Orca"],
     },
-    Known {
-        name: "OrcaSlicer",
-        mac: &["OrcaSlicer.app"],
-        win: &[r"OrcaSlicer\orca-slicer.exe"],
-        linux: &["orca-slicer", "OrcaSlicer"],
-    },
+    Known { name: "OrcaSlicer", mac: &["OrcaSlicer.app"], win: &[r"OrcaSlicer\orca-slicer.exe"], linux: &["orca-slicer", "OrcaSlicer"] },
     Known {
         name: "Bambu Studio",
         mac: &["BambuStudio.app", "Bambu Studio.app"],
@@ -57,18 +52,8 @@ const KNOWN: &[Known] = &[
         win: &[],
         linux: &["cura", "UltiMaker-Cura"],
     },
-    Known {
-        name: "Creality Print",
-        mac: &["Creality Print.app"],
-        win: &[],
-        linux: &["CrealityPrint"],
-    },
-    Known {
-        name: "Snapmaker Luban",
-        mac: &["Snapmaker Luban.app"],
-        win: &[],
-        linux: &[],
-    },
+    Known { name: "Creality Print", mac: &["Creality Print.app"], win: &[], linux: &["CrealityPrint"] },
+    Known { name: "Snapmaker Luban", mac: &["Snapmaker Luban.app"], win: &[], linux: &[] },
 ];
 
 #[derive(Serialize, Clone)]
@@ -85,27 +70,17 @@ fn candidates(k: &Known) -> Vec<PathBuf> {
     if let Some(home) = dirs::home_dir() {
         roots.push(home.join("Applications"));
     }
-    k.mac
-        .iter()
-        .flat_map(|b| roots.iter().map(move |r| r.join(b)))
-        .filter(|p| p.is_dir())
-        .collect()
+    k.mac.iter().flat_map(|b| roots.iter().map(move |r| r.join(b))).filter(|p| p.is_dir()).collect()
 }
 
 #[cfg(windows)]
 fn candidates(k: &Known) -> Vec<PathBuf> {
-    let mut roots: Vec<PathBuf> = ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"]
-        .iter()
-        .filter_map(|v| std::env::var_os(v).map(PathBuf::from))
-        .collect();
+    let mut roots: Vec<PathBuf> =
+        ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"].iter().filter_map(|v| std::env::var_os(v).map(PathBuf::from)).collect();
     if let Some(local) = dirs::data_local_dir() {
         roots.push(local.join("Programs"));
     }
-    k.win
-        .iter()
-        .flat_map(|e| roots.iter().map(move |r| r.join(e)))
-        .filter(|p| p.is_file())
-        .collect()
+    k.win.iter().flat_map(|e| roots.iter().map(move |r| r.join(e))).filter(|p| p.is_file()).collect()
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -122,8 +97,7 @@ fn candidates(k: &Known) -> Vec<PathBuf> {
         let Ok(rd) = std::fs::read_dir(&d) else { continue };
         for e in rd.flatten() {
             let n = e.file_name().to_string_lossy().to_lowercase();
-            let hit = n.ends_with(".appimage")
-                && k.linux.iter().any(|p| n.starts_with(&p.to_lowercase()));
+            let hit = n.ends_with(".appimage") && k.linux.iter().any(|p| n.starts_with(&p.to_lowercase()));
             if hit && e.path().is_file() {
                 out.push(e.path());
             }
@@ -144,10 +118,7 @@ pub fn list() -> Vec<Slicer> {
                 .map(|c| c.to_string_lossy().to_lowercase())
                 .unwrap_or_else(|_| p.to_string_lossy().to_lowercase());
             if seen.insert(key) {
-                out.push(Slicer {
-                    name: k.name.to_string(),
-                    path: p.to_string_lossy().to_string(),
-                });
+                out.push(Slicer { name: k.name.to_string(), path: p.to_string_lossy().to_string() });
             }
         }
     }
@@ -211,9 +182,7 @@ pub fn resources(app: &Path) -> Option<PathBuf> {
 /// AppImage, extracted once into the cache.
 #[cfg(all(unix, not(target_os = "macos")))]
 fn linux_resources(app: &Path) -> Option<PathBuf> {
-    let is_appimage = app
-        .extension()
-        .is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case("appimage"));
+    let is_appimage = app.extension().is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case("appimage"));
     if is_appimage {
         return appimage_resources(app);
     }
@@ -231,17 +200,9 @@ fn linux_resources(app: &Path) -> Option<PathBuf> {
 #[cfg(all(unix, not(target_os = "macos")))]
 fn appimage_resources(app: &Path) -> Option<PathBuf> {
     let meta = std::fs::metadata(app).ok()?;
-    let stamp = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let stamp = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
     let key = crate::util::fnv1a(&[format!("{}|{}|{}", app.display(), meta.len(), stamp).as_bytes()]);
-    let root = dirs::cache_dir()?
-        .join("fr.carlini.snapstudio")
-        .join("engine")
-        .join(format!("{key:016x}"));
+    let root = dirs::cache_dir()?.join("fr.carlini.snapstudio").join("engine").join(format!("{key:016x}"));
     let res = root.join("squashfs-root/resources");
     if res.join("profiles").is_dir() {
         return Some(res);
@@ -254,11 +215,7 @@ fn appimage_resources(app: &Path) -> Option<PathBuf> {
         if let Some(p) = pattern {
             cmd.arg(p);
         }
-        let ok = cmd
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success());
+        let ok = cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().is_ok_and(|s| s.success());
         if ok && res.join("profiles").is_dir() {
             return Some(res);
         }

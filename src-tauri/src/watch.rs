@@ -67,14 +67,7 @@ pub fn stop() {
 }
 
 fn emit(app: &AppHandle, id: &str, live: bool, status: Status) {
-    let _ = app.emit(
-        "printer-status",
-        Payload {
-            id: id.to_string(),
-            live,
-            status,
-        },
-    );
+    let _ = app.emit("printer-status", Payload { id: id.to_string(), live, status });
 }
 
 async fn run(app: AppHandle, p: Printer) {
@@ -87,17 +80,7 @@ async fn run(app: AppHandle, p: Printer) {
             }
             Err(e) => crate::util::ui_err(e),
         };
-        emit(
-            &app,
-            &p.id,
-            false,
-            Status {
-                online: false,
-                state: "offline".into(),
-                message: Some(err),
-                ..Default::default()
-            },
-        );
+        emit(&app, &p.id, false, Status { online: false, state: "offline".into(), message: Some(err), ..Default::default() });
         tokio::time::sleep(Duration::from_secs(backoff)).await;
         backoff = (backoff * 2).min(20);
     }
@@ -125,9 +108,7 @@ fn merge(base: &mut Map<String, Value>, upd: &Value) {
     }
 }
 
-type Ws = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type Sink = futures_util::stream::SplitSink<Ws, Message>;
 
 async fn send(tx: &mut Sink, v: Value) -> Result<()> {
@@ -142,17 +123,11 @@ async fn session(app: &AppHandle, p: &Printer) -> Result<()> {
 }
 
 /// Core of the session, independent of Tauri (testable).
-pub async fn session_with(
-    p: &Printer,
-    out: &(dyn Fn(bool, Status) + Send + Sync),
-) -> Result<()> {
+pub async fn session_with(p: &Printer, out: &(dyn Fn(bool, Status) + Send + Sync)) -> Result<()> {
     // Without a bound, an unreachable address would block the task for very long.
-    let (stream, _) = tokio::time::timeout(
-        Duration::from_secs(6),
-        tokio_tungstenite::connect_async(ws_url(p)),
-    )
-    .await
-    .map_err(|_| anyhow!(crate::t!("err.connect_timeout")))??;
+    let (stream, _) = tokio::time::timeout(Duration::from_secs(6), tokio_tungstenite::connect_async(ws_url(p)))
+        .await
+        .map_err(|_| anyhow!(crate::t!("err.connect_timeout")))??;
     let (mut tx, mut rx) = stream.split();
 
     // 1. Identification (recommended by Moonraker) then object inventory.
@@ -167,11 +142,7 @@ pub async fn session_with(
     send(&mut tx, json!({"jsonrpc":"2.0","id":4,"method":"printer.info"})).await?;
 
     let mut snapshot = Map::new();
-    let mut st = Status {
-        online: true,
-        state: "standby".into(),
-        ..Default::default()
-    };
+    let mut st = Status { online: true, state: "standby".into(), ..Default::default() };
     // Klipper down: the snapshot's `print_stats` is stale until it is back
     // (ready, then a fresh subscription), and must not read as a print.
     let mut down = false;
@@ -302,10 +273,7 @@ mod tests {
         // A notification carrying only the temperature.
         merge(&mut snap, &json!({"extruder":{"temperature":221.4}}));
 
-        let mut st = Status {
-            online: true,
-            ..Default::default()
-        };
+        let mut st = Status { online: true, ..Default::default() };
         printers::apply_status(&Value::Object(snap.clone()), &mut st);
         assert_eq!(st.nozzles.len(), 1);
         assert!((st.nozzles[0].current - 221.4).abs() < 0.01);
@@ -315,10 +283,7 @@ mod tests {
 
         // State change alone.
         merge(&mut snap, &json!({"print_stats":{"state":"paused"}}));
-        let mut st2 = Status {
-            online: true,
-            ..Default::default()
-        };
+        let mut st2 = Status { online: true, ..Default::default() };
         printers::apply_status(&Value::Object(snap), &mut st2);
         assert_eq!(st2.state, "paused");
         assert_eq!(st2.job.as_deref(), Some("piece.gcode"));
@@ -351,16 +316,9 @@ mod tests {
         };
         let seen: std::sync::Arc<Mutex<Vec<Status>>> = Default::default();
         let sink = seen.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         rt.block_on(async {
-            let _ = tokio::time::timeout(
-                Duration::from_secs(10),
-                session_with(&p, &move |_live, st| sink.lock().unwrap().push(st)),
-            )
-            .await;
+            let _ = tokio::time::timeout(Duration::from_secs(10), session_with(&p, &move |_live, st| sink.lock().unwrap().push(st))).await;
         });
         let _ = srv.wait();
 
@@ -376,11 +334,7 @@ mod tests {
 
         // Pushed updates: the temperature rises, the target is kept.
         let last_printing = got.iter().rev().find(|s| s.state == "printing").unwrap();
-        assert!(
-            (last_printing.nozzles[0].current - 219.9).abs() < 0.01,
-            "final temperature = {}",
-            last_printing.nozzles[0].current
-        );
+        assert!((last_printing.nozzles[0].current - 219.9).abs() < 0.01, "final temperature = {}", last_printing.nozzles[0].current);
         assert!((last_printing.nozzles[0].target - 220.0).abs() < 0.01);
         assert!((last_printing.progress.unwrap() - 0.35).abs() < 1e-4);
         assert!(last_printing.remaining_s.is_some());
@@ -417,10 +371,7 @@ mod camera_probe {
     #[test]
     fn wakes_the_camera() {
         let Ok(host) = std::env::var("CAM_HOST") else { return };
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         rt.block_on(async {
             let url = format!("ws://{host}:7125/websocket");
             let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
@@ -432,9 +383,7 @@ mod camera_probe {
             });
             ws.send(Message::Text(call.to_string().into())).await.unwrap();
             for _ in 0..12 {
-                let Ok(Some(Ok(msg))) =
-                    tokio::time::timeout(std::time::Duration::from_secs(3), ws.next()).await
-                else {
+                let Ok(Some(Ok(msg))) = tokio::time::timeout(std::time::Duration::from_secs(3), ws.next()).await else {
                     break;
                 };
                 if let Message::Text(t) = msg {

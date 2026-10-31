@@ -95,11 +95,7 @@ pub struct MeshData {
 
 impl MeshData {
     pub fn size(&self) -> [f32; 3] {
-        [
-            self.max[0] - self.min[0],
-            self.max[1] - self.min[1],
-            self.max[2] - self.min[2],
-        ]
+        [self.max[0] - self.min[0], self.max[1] - self.min[1], self.max[2] - self.min[2]]
     }
 }
 
@@ -259,9 +255,7 @@ fn parse_part(data: &[u8]) -> Part {
                         // slicer; the spec puts resources before their use)
                         // would leave the object uncolored.
                         let mut obj = std::mem::take(&mut cur);
-                        obj.color = cur_pid
-                            .and_then(|pid| groups.get(&pid))
-                            .and_then(|g| g.get(cur_pindex).copied());
+                        obj.color = cur_pid.and_then(|pid| groups.get(&pid)).and_then(|g| g.get(cur_pindex).copied());
                         for (ti, pid, p1) in pending_tri_refs.drain(..) {
                             if let Some(c) = groups.get(&pid).and_then(|g| g.get(p1 as usize)) {
                                 obj.tri_colors[ti] = Some(*c);
@@ -311,16 +305,7 @@ impl<'a> Ctx<'a> {
 
     /// Resolves components recursively without touching the meshes.
     #[allow(clippy::too_many_arguments)]
-    fn collect(
-        &mut self,
-        part_key: &str,
-        objid: u32,
-        root: u32,
-        xf: Mat,
-        inherited: Option<[u8; 3]>,
-        depth: u32,
-        out: &mut Vec<Inst>,
-    ) {
+    fn collect(&mut self, part_key: &str, objid: u32, root: u32, xf: Mat, inherited: Option<[u8; 3]>, depth: u32, out: &mut Vec<Inst>) {
         if depth > 12 || out.len() > 100_000 {
             return;
         }
@@ -334,13 +319,7 @@ impl<'a> Ctx<'a> {
         let has_mesh = !obj.tris.is_empty();
         let components = obj.components.clone();
         if has_mesh {
-            out.push(Inst {
-                part_key: part_key.to_string(),
-                objid,
-                root,
-                xf,
-                color,
-            });
+            out.push(Inst { part_key: part_key.to_string(), objid, root, xf, color });
         }
         for (path, id, cxf) in components {
             let key = path.unwrap_or_else(|| part_key.to_string());
@@ -352,28 +331,17 @@ impl<'a> Ctx<'a> {
 /// Loads and flattens the 3MF file's geometry.
 pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
     let root_key = "3D/3dmodel.model".to_string();
-    let mut ctx = Ctx {
-        zip,
-        parts: HashMap::new(),
-    };
+    let mut ctx = Ctx { zip, parts: HashMap::new() };
     if !ctx.part(&root_key) {
         return Err(anyhow!(crate::t!("err.no_model")));
     }
 
     // 1. Scene resolution: which objects, where, in what color.
-    let build: Vec<(u32, Mat, Option<String>)> = ctx
-        .parts
-        .get(&root_key)
-        .map(|p| p.build.clone())
-        .unwrap_or_default();
+    let build: Vec<(u32, Mat, Option<String>)> = ctx.parts.get(&root_key).map(|p| p.build.clone()).unwrap_or_default();
     let mut insts = Vec::new();
     if build.is_empty() {
         // Some exports have no <build>: take all the objects.
-        let ids: Vec<u32> = ctx
-            .parts
-            .get(&root_key)
-            .map(|p| p.objects.keys().copied().collect())
-            .unwrap_or_default();
+        let ids: Vec<u32> = ctx.parts.get(&root_key).map(|p| p.objects.keys().copied().collect()).unwrap_or_default();
         for id in ids {
             ctx.collect(&root_key, id, id, Mat::IDENTITY, None, 0, &mut insts);
         }
@@ -387,7 +355,6 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
     emit(&mut ctx, &insts, budget)
 }
 
-
 /// Emits the transformed triangles of the occurrences, without copying meshes.
 /// Above this many triangles a mesh is not read whole: one in so many is
 /// kept, to stay within memory (the mesh is marked truncated, and slicing
@@ -395,38 +362,25 @@ pub fn load_mesh(zip: &mut Zip, budget: usize) -> Result<MeshData> {
 const READ_CAP: usize = 8_000_000;
 
 fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
-    let total: usize = insts
-        .iter()
-        .filter_map(|i| ctx.parts.get(&i.part_key)?.objects.get(&i.objid))
-        .map(|o| o.tris.len())
-        .sum();
+    let total: usize = insts.iter().filter_map(|i| ctx.parts.get(&i.part_key)?.objects.get(&i.objid)).map(|o| o.tris.len()).sum();
     let cap = budget.max(READ_CAP);
-    let step = if total > cap {
-        (total as f32 / cap as f32).ceil() as usize
-    } else {
-        1
-    };
+    let step = if total > cap { (total as f32 / cap as f32).ceil() as usize } else { 1 };
     let mut tris: Vec<Tri> = Vec::with_capacity(total.min(cap) + 8);
     // Extruder of each occurrence: the part's, otherwise the object's.
     let settings = crate::model3mf::extruder_settings(ctx.zip);
-    let painted = insts
-        .iter()
-        .filter_map(|i| ctx.parts.get(&i.part_key)?.objects.get(&i.objid))
-        .any(|o| o.paint.iter().any(Option::is_some));
+    let painted =
+        insts.iter().filter_map(|i| ctx.parts.get(&i.part_key)?.objects.get(&i.objid)).any(|o| o.paint.iter().any(Option::is_some));
     let mut extruders: Vec<u8> = Vec::new();
     let mut volumes: Vec<u8> = Vec::new();
     let mut paint: Vec<Option<Box<str>>> = Vec::new();
     let mut min = [f32::MAX; 3];
     let mut max = [f32::MIN; 3];
     for inst in insts {
-        let Some(obj) = ctx.parts.get(&inst.part_key).and_then(|p| p.objects.get(&inst.objid))
-        else {
+        let Some(obj) = ctx.parts.get(&inst.part_key).and_then(|p| p.objects.get(&inst.objid)) else {
             continue;
         };
         let base = inst.color;
-        let ext = settings.get(&inst.root).map(|(obj, parts)| {
-            parts.get(&inst.objid).copied().filter(|e| *e > 0).unwrap_or(*obj).max(1)
-        });
+        let ext = settings.get(&inst.root).map(|(obj, parts)| parts.get(&inst.objid).copied().filter(|e| *e > 0).unwrap_or(*obj).max(1));
         // A painted mesh needs a model color for every triangle: extruder 1
         // stands for an undeclared volume, as in the slicers.
         let ext = ext.or(painted.then_some(1));
@@ -444,11 +398,7 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
             if a >= obj.verts.len() || b >= obj.verts.len() || c >= obj.verts.len() {
                 continue;
             }
-            let mut v = [
-                inst.xf.apply(obj.verts[a]),
-                inst.xf.apply(obj.verts[b]),
-                inst.xf.apply(obj.verts[c]),
-            ];
+            let mut v = [inst.xf.apply(obj.verts[a]), inst.xf.apply(obj.verts[b]), inst.xf.apply(obj.verts[c])];
             if mirrored {
                 v.swap(1, 2);
             }
@@ -458,10 +408,7 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
                     max[k] = max[k].max(p[k]);
                 }
             }
-            tris.push(Tri {
-                v,
-                c: obj.tri_colors[i].or(base).unwrap_or(crate::render::DEFAULT_COLOR),
-            });
+            tris.push(Tri { v, c: obj.tri_colors[i].or(base).unwrap_or(crate::render::DEFAULT_COLOR) });
             if let Some(e) = ext {
                 let p = obj.paint.get(i).and_then(Option::as_deref).and_then(|p| {
                     if mirrored {
@@ -489,15 +436,7 @@ fn emit(ctx: &mut Ctx<'_>, insts: &[Inst], budget: usize) -> Result<MeshData> {
     if !extruders.is_empty() {
         extruders.resize(tris.len(), 1);
     }
-    let mut m = MeshData {
-        extruders,
-        volumes,
-        paint,
-        tris,
-        min,
-        max,
-        truncated: step > 1,
-    };
+    let mut m = MeshData { extruders, volumes, paint, tris, min, max, truncated: step > 1 };
     downsample(&mut m, budget);
     Ok(m)
 }
@@ -561,9 +500,7 @@ pub struct ItemMesh {
 /// Loads occurrence `index` of the `<build>`, in its own frame.
 pub fn load_item(zip: &mut Zip, index: usize, budget: usize) -> Result<ItemMesh> {
     let mut ctx = Ctx { zip, parts: HashMap::new() };
-    let item = *root_items(&mut ctx)?
-        .get(index)
-        .ok_or_else(|| anyhow!(crate::t!("err.no_object", index = index)))?;
+    let item = *root_items(&mut ctx)?.get(index).ok_or_else(|| anyhow!(crate::t!("err.no_object", index = index)))?;
     item_mesh(&mut ctx, item, budget)
 }
 
@@ -592,6 +529,7 @@ fn item_mesh(ctx: &mut Ctx, item: BuildItem, budget: usize) -> Result<ItemMesh> 
     let mut insts = Vec::new();
     ctx.collect(ROOT_KEY, item.objid, item.objid, lin, None, 0, &mut insts);
     let mut mesh = emit(ctx, &insts, budget)?;
+    #[rustfmt::skip]
     let c = [
         (mesh.min[0] + mesh.max[0]) / 2.0,
         (mesh.min[1] + mesh.max[1]) / 2.0,
@@ -634,11 +572,7 @@ const WATERTIGHT_BUDGET: usize = 400_000;
 /// different computations often describe the same point without being equal.
 fn edges_are_paired(tris: &[Tri]) -> bool {
     let key = |p: [f32; 3]| -> [i64; 3] {
-        [
-            (p[0] as f64 * 1000.0).round() as i64,
-            (p[1] as f64 * 1000.0).round() as i64,
-            (p[2] as f64 * 1000.0).round() as i64,
-        ]
+        [(p[0] as f64 * 1000.0).round() as i64, (p[1] as f64 * 1000.0).round() as i64, (p[2] as f64 * 1000.0).round() as i64]
     };
     let mut ids: HashMap<[i64; 3], u32> = HashMap::with_capacity(tris.len());
     let mut edges: HashMap<(u32, u32), i32> = HashMap::with_capacity(tris.len() * 2);
@@ -882,9 +816,13 @@ pub mod testkit {
     /// The same, placed by `transform` in the `<build>`, with the project's
     /// filament colors (`project_settings.config`) when given.
     pub fn painted_cube_with(dst: &Path, paint: &[&str], extruder: Option<u8>, transform: &str, filaments: &[&str]) {
+        #[rustfmt::skip]
         let p = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.], [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.]];
+        #[rustfmt::skip]
         let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
-        let mut m = String::from(r#"<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices>"#);
+        let mut m = String::from(
+            r#"<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices>"#,
+        );
         for v in p {
             m.push_str(&format!(r#"<vertex x="{}" y="{}" z="{}"/>"#, v[0], v[1], v[2]));
         }
@@ -893,20 +831,27 @@ pub mod testkit {
             let paint = paint.get(i).filter(|s| !s.is_empty()).map(|s| format!(r#" paint_color="{s}""#)).unwrap_or_default();
             m.push_str(&format!(r#"<triangle v1="{}" v2="{}" v3="{}"{paint}/>"#, t[0], t[1], t[2]));
         }
-        m.push_str(&format!(r#"</triangles></mesh></object></resources><build><item objectid="1" transform="{transform}"/></build></model>"#));
+        m.push_str(&format!(
+            r#"</triangles></mesh></object></resources><build><item objectid="1" transform="{transform}"/></build></model>"#
+        ));
         let mut z = zip::ZipWriter::new(std::fs::File::create(dst).unwrap());
         let o = zip::write::SimpleFileOptions::default();
         z.start_file("3D/3dmodel.model", o).unwrap();
         z.write_all(m.as_bytes()).unwrap();
         if let Some(e) = extruder {
             z.start_file("Metadata/model_settings.config", o).unwrap();
-            let cfg = format!(r#"<?xml version="1.0" encoding="UTF-8"?><config><object id="1"><metadata key="name" value="cube"/><metadata key="extruder" value="{e}"/></object></config>"#);
+            let cfg = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?><config><object id="1"><metadata key="name" value="cube"/><metadata key="extruder" value="{e}"/></object></config>"#
+            );
             z.write_all(cfg.as_bytes()).unwrap();
         }
         if !filaments.is_empty() {
             z.start_file("Metadata/project_settings.config", o).unwrap();
             let list = filaments.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(",");
-            z.write_all(format!(r#"{{"filament_colour":[{list}],"filament_type":[{}]}}"#, vec!["\"PLA\""; filaments.len()].join(",")).as_bytes()).unwrap();
+            z.write_all(
+                format!(r#"{{"filament_colour":[{list}],"filament_type":[{}]}}"#, vec!["\"PLA\""; filaments.len()].join(",")).as_bytes(),
+            )
+            .unwrap();
         }
         z.finish().unwrap();
     }
@@ -925,12 +870,7 @@ mod tests {
         let mut zip = crate::model3mf::open(std::path::Path::new(&src)).unwrap();
         let m = load_mesh(&mut zip, 900_000).unwrap();
         let bytes = encode(&m);
-        println!(
-            "{} triangles, {} octets, encombrement {:?}",
-            m.tris.len(),
-            bytes.len(),
-            m.size()
-        );
+        println!("{} triangles, {} octets, encombrement {:?}", m.tris.len(), bytes.len(), m.size());
         std::fs::write(out, bytes).unwrap();
     }
 
@@ -1082,15 +1022,8 @@ mod stats_tests {
     #[test]
     fn a_closed_cube_is_watertight() {
         let tris = crate::stl::tests_cube();
-        let m = MeshData {
-            extruders: Vec::new(),
-            min: [0.; 3],
-            max: [10.; 3],
-            tris,
-            truncated: false,
-            volumes: Vec::new(),
-            paint: Vec::new(),
-        };
+        let m =
+            MeshData { extruders: Vec::new(), min: [0.; 3], max: [10.; 3], tris, truncated: false, volumes: Vec::new(), paint: Vec::new() };
         let s = stats(&m);
         assert_eq!(s.triangles, 12);
         assert_eq!(s.watertight, Some(true));
@@ -1102,15 +1035,8 @@ mod stats_tests {
     fn an_open_cube_is_not() {
         let mut tris = crate::stl::tests_cube();
         tris.truncate(10); // remove one face
-        let m = MeshData {
-            extruders: Vec::new(),
-            min: [0.; 3],
-            max: [10.; 3],
-            tris,
-            truncated: false,
-            volumes: Vec::new(),
-            paint: Vec::new(),
-        };
+        let m =
+            MeshData { extruders: Vec::new(), min: [0.; 3], max: [10.; 3], tris, truncated: false, volumes: Vec::new(), paint: Vec::new() };
         assert_eq!(stats(&m).watertight, Some(false));
     }
 
@@ -1184,10 +1110,14 @@ mod stats_tests {
         let dir = std::env::temp_dir().join("snapstudio_paint_read");
         std::fs::create_dir_all(&dir).unwrap();
         let signed_volume = |m: &MeshData| -> f32 {
-            m.tris.iter().map(|t| {
-                let [a, b, c] = t.v;
-                a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])
-            }).sum::<f32>() / 6.0
+            m.tris
+                .iter()
+                .map(|t| {
+                    let [a, b, c] = t.v;
+                    a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])
+                })
+                .sum::<f32>()
+                / 6.0
         };
         let paint = ["2C", "", "3C0C0C0C3"];
         let plain = dir.join("plain-placed.3mf");

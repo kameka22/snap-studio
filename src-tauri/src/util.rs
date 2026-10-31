@@ -2,12 +2,7 @@
 pub fn strip_html(input: &str) -> String {
     let mut s = input.to_string();
     for _ in 0..2 {
-        s = s
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&#39;", "'");
+        s = s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'");
     }
     let mut out = String::with_capacity(s.len());
     let mut in_tag = false;
@@ -59,9 +54,7 @@ pub fn fnv1a(parts: &[&[u8]]) -> u64 {
 /// would be found instead of the user's Homebrew Python. Launched from a
 /// terminal, the user's own order is kept (its folders come first).
 pub fn search_path() -> Vec<std::path::PathBuf> {
-    let inherited: Vec<std::path::PathBuf> = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).collect())
-        .unwrap_or_default();
+    let inherited: Vec<std::path::PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     ordered_path(inherited, home.as_deref())
 }
@@ -97,14 +90,9 @@ fn ordered_path(inherited: Vec<std::path::PathBuf>, home: Option<&std::path::Pat
 pub fn which(name: &str) -> Option<std::path::PathBuf> {
     let dirs = search_path();
     // Windows: the command is written without its extension.
-    let names: Vec<String> = if cfg!(windows) {
-        vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_string()]
-    } else {
-        vec![name.to_string()]
-    };
-    dirs.into_iter().find_map(|d| {
-        names.iter().map(|n| d.join(n)).find(|c| c.is_file())
-    })
+    let names: Vec<String> =
+        if cfg!(windows) { vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_string()] } else { vec![name.to_string()] };
+    dirs.into_iter().find_map(|d| names.iter().map(|n| d.join(n)).find(|c| c.is_file()))
 }
 
 /// Windows: runs the command without opening a console window.
@@ -191,13 +179,7 @@ pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> 
 mod tests {
     #[test]
     fn base64_matches_the_reference() {
-        for (raw, enc) in [
-            ("", ""),
-            ("a", "YQ=="),
-            ("ab", "YWI="),
-            ("abc", "YWJj"),
-            ("bonjour, été", "Ym9uam91ciwgw6l0w6k="),
-        ] {
+        for (raw, enc) in [("", ""), ("a", "YQ=="), ("ab", "YWI="), ("abc", "YWJj"), ("bonjour, été", "Ym9uam91ciwgw6l0w6k=")] {
             assert_eq!(super::b64_encode(raw.as_bytes()), enc, "for {raw:?}");
         }
     }

@@ -39,7 +39,10 @@ pub fn cleanup() {
 
 /// The local copy of a printer file, fetched once per version.
 pub async fn fetch(host: &str, port: u16, root: &str, path: &str, modified: f64) -> Result<PathBuf> {
-    let key = format!("{:x}", crate::util::fnv1a(&[host.as_bytes(), &port.to_le_bytes(), root.as_bytes(), path.as_bytes(), &modified.to_bits().to_le_bytes()]));
+    let key = format!(
+        "{:x}",
+        crate::util::fnv1a(&[host.as_bytes(), &port.to_le_bytes(), root.as_bytes(), path.as_bytes(), &modified.to_bits().to_le_bytes()])
+    );
     let dir = cache_dir().join(key);
     let name = path.rsplit('/').next().unwrap_or(path);
     let ready = dir.join(name);
@@ -245,11 +248,7 @@ pub fn qr_start(path: PathBuf, toward: &str) -> Result<QrShare> {
         IpAddr::V4(v4) => v4.to_string(),
     };
     let url = format!("http://{host}:{port}/{token}/{}", urlencoding::encode(&name));
-    let svg = qrcode::QrCode::new(url.as_bytes())?
-        .render::<qrcode::render::svg::Color>()
-        .min_dimensions(220, 220)
-        .quiet_zone(true)
-        .build();
+    let svg = qrcode::QrCode::new(url.as_bytes())?.render::<qrcode::render::svg::Color>().min_dimensions(220, 220).quiet_zone(true).build();
 
     let stop = Arc::new(AtomicBool::new(false));
     *serving().lock().unwrap() = Some(Serving { stop: stop.clone() });
@@ -385,7 +384,9 @@ fn serve(conn: TcpStream, path: &Path, prefix: &str, stop: &AtomicBool) -> Resul
     let mut rd = BufReader::new(conn.try_clone()?);
     let mut out = conn;
     let Some(ask) = read_request(&mut rd) else { return Ok(()) };
-    let reply = |out: &mut TcpStream, code: &str| out.write_all(format!("HTTP/1.1 {code}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes());
+    let reply = |out: &mut TcpStream, code: &str| {
+        out.write_all(format!("HTTP/1.1 {code}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes())
+    };
     if !ask.target.starts_with(prefix) || stop.load(Ordering::Relaxed) {
         reply(&mut out, "404 Not Found")?;
         return Ok(());
@@ -402,7 +403,12 @@ fn serve(conn: TcpStream, path: &Path, prefix: &str, stop: &AtomicBool) -> Resul
     let (code, start, end) = match byte_range(ask.range.as_deref(), len) {
         Some((a, b)) => ("206 Partial Content", a, b),
         None if ask.range.is_some() && len > 0 => {
-            out.write_all(format!("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{len}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes())?;
+            out.write_all(
+                format!(
+                    "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{len}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                )
+                .as_bytes(),
+            )?;
             return Ok(());
         }
         None => ("200 OK", 0, len.saturating_sub(1)),
@@ -496,12 +502,14 @@ mod tests {
         assert!(get("/other/clip.mp4", None).starts_with("HTTP/1.1 404"));
         qr_stop();
         std::thread::sleep(Duration::from_millis(400));
-        assert!(TcpStream::connect(&addr).map(|mut c| {
-            let _ = write!(c, "GET {} HTTP/1.1\r\n\r\n", u.path());
-            let mut s = String::new();
-            let _ = c.read_to_string(&mut s);
-            s.is_empty() || s.starts_with("HTTP/1.1 404")
-        }).unwrap_or(true));
+        assert!(TcpStream::connect(&addr)
+            .map(|mut c| {
+                let _ = write!(c, "GET {} HTTP/1.1\r\n\r\n", u.path());
+                let mut s = String::new();
+                let _ = c.read_to_string(&mut s);
+                s.is_empty() || s.starts_with("HTTP/1.1 404")
+            })
+            .unwrap_or(true));
         let _ = std::fs::remove_dir_all(&d);
     }
 }

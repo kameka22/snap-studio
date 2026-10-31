@@ -29,10 +29,7 @@ pub struct SceneObject {
 
 #[allow(dead_code)]
 fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 /// Merges identical vertices: a mesh with shared vertices slices much better
@@ -64,10 +61,7 @@ fn weld(tris: &[Tri]) -> (Vec<[f32; 3]>, Vec<Option<[u32; 3]>>) {
 }
 
 fn mat_str(m: &Mat) -> String {
-    m.0.iter()
-        .map(|v| format!("{v}"))
-        .collect::<Vec<_>>()
-        .join(" ")
+    m.0.iter().map(|v| format!("{v}")).collect::<Vec<_>>().join(" ")
 }
 
 /// Id of the material group (color palette).
@@ -91,26 +85,15 @@ fn write_mesh_object<W: Write>(
     }
     let single = tris.first().map(|t| t.c).filter(|c| tris.iter().all(|t| t.c == *c));
     match single {
-        Some(c) => writeln!(
-            w,
-            r#"  <object id="{id}" type="model" name="{}" pid="{MAT_ID}" pindex="{}">"#,
-            xml_escape(name),
-            color_id[&c]
-        )?,
-        None => writeln!(
-            w,
-            r#"  <object id="{id}" type="model" name="{}">"#,
-            xml_escape(name)
-        )?,
+        Some(c) => {
+            writeln!(w, r#"  <object id="{id}" type="model" name="{}" pid="{MAT_ID}" pindex="{}">"#, xml_escape(name), color_id[&c])?
+        }
+        None => writeln!(w, r#"  <object id="{id}" type="model" name="{}">"#, xml_escape(name))?,
     }
     writeln!(w, "   <mesh>")?;
     writeln!(w, "    <vertices>")?;
     for v in &verts {
-        writeln!(
-            w,
-            r#"     <vertex x="{:.6}" y="{:.6}" z="{:.6}"/>"#,
-            v[0], v[1], v[2]
-        )?;
+        writeln!(w, r#"     <vertex x="{:.6}" y="{:.6}" z="{:.6}"/>"#, v[0], v[1], v[2])?;
     }
     writeln!(w, "    </vertices>")?;
     writeln!(w, "    <triangles>")?;
@@ -122,17 +105,9 @@ fn write_mesh_object<W: Write>(
             _ => String::new(),
         };
         if single.is_some() {
-            writeln!(
-                w,
-                r#"     <triangle v1="{}" v2="{}" v3="{}"{painted}/>"#,
-                f[0], f[1], f[2]
-            )?;
+            writeln!(w, r#"     <triangle v1="{}" v2="{}" v3="{}"{painted}/>"#, f[0], f[1], f[2])?;
         } else {
-            writeln!(
-                w,
-                r#"     <triangle v1="{}" v2="{}" v3="{}" pid="{MAT_ID}" p1="{}"{painted}/>"#,
-                f[0], f[1], f[2], color_id[&t.c]
-            )?;
+            writeln!(w, r#"     <triangle v1="{}" v2="{}" v3="{}" pid="{MAT_ID}" p1="{}"{painted}/>"#, f[0], f[1], f[2], color_id[&t.c])?;
         }
     }
     writeln!(w, "    </triangles>")?;
@@ -147,8 +122,7 @@ type Archive = zip::ZipWriter<BufWriter<File>>;
 fn begin_archive(dst: &Path) -> Result<(Archive, zip::write::SimpleFileOptions)> {
     let out = File::create(dst)?;
     let mut z = zip::ZipWriter::new(BufWriter::new(out));
-    let opts = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     z.start_file("[Content_Types].xml", opts)?;
     z.write_all(
@@ -174,10 +148,7 @@ fn begin_archive(dst: &Path) -> Result<(Archive, zip::write::SimpleFileOptions)>
 
 fn begin_model<W: Write>(w: &mut W) -> Result<()> {
     writeln!(w, r#"<?xml version="1.0" encoding="UTF-8"?>"#)?;
-    writeln!(
-        w,
-        r#"<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">"#
-    )?;
+    writeln!(w, r#"<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">"#)?;
     writeln!(w, r#" <metadata name="Application">Snap Studio</metadata>"#)?;
     writeln!(w, " <resources>")?;
     Ok(())
@@ -198,14 +169,7 @@ fn write_palette<W: Write>(w: &mut W, groups: &[&[Tri]]) -> Result<HashMap<[u8; 
     if !palette.is_empty() {
         writeln!(w, r#"  <basematerials id="{MAT_ID}">"#)?;
         for (i, c) in palette.iter().enumerate() {
-            writeln!(
-                w,
-                r##"   <base name="Couleur {}" displaycolor="#{:02X}{:02X}{:02X}FF"/>"##,
-                i + 1,
-                c[0],
-                c[1],
-                c[2]
-            )?;
+            writeln!(w, r##"   <base name="Couleur {}" displaycolor="#{:02X}{:02X}{:02X}FF"/>"##, i + 1, c[0], c[1], c[2])?;
         }
         writeln!(w, "  </basematerials>")?;
     }
@@ -243,10 +207,8 @@ pub fn write_multipart(dst: &Path, name: &str, parts: &[Part], transform: &Mat) 
 /// Writes several objects made of parts, in this order, placements already
 /// applied to the triangles (plate scene).
 pub fn write_objects(dst: &Path, objects: &[Object]) -> Result<()> {
-    let list: Vec<Composite> = objects
-        .iter()
-        .map(|o| (o.name.as_str(), o.parts.as_slice(), Mat::IDENTITY, o.settings.as_slice()))
-        .collect();
+    let list: Vec<Composite> =
+        objects.iter().map(|o| (o.name.as_str(), o.parts.as_slice(), Mat::IDENTITY, o.settings.as_slice())).collect();
     write_composites(dst, &list)
 }
 
@@ -304,20 +266,14 @@ fn write_composites(dst: &Path, objects: &[Composite]) -> Result<()> {
     for (((name, parts, _, settings), ids), whole) in objects.iter().zip(&part_ids).zip(&whole_ids) {
         s.push_str(&format!("  <object id=\"{whole}\">\n"));
         s.push_str(&format!("    <metadata key=\"name\" value=\"{}\"/>\n", xml_escape(name)));
-        s.push_str(&format!(
-            "    <metadata key=\"extruder\" value=\"{}\"/>\n",
-            parts[0].extruder.clamp(1, 16)
-        ));
+        s.push_str(&format!("    <metadata key=\"extruder\" value=\"{}\"/>\n", parts[0].extruder.clamp(1, 16)));
         for (k, v) in settings.iter() {
             s.push_str(&format!("    <metadata key=\"{}\" value=\"{}\"/>\n", xml_escape(k), xml_escape(v)));
         }
         for (p, id) in parts.iter().zip(ids) {
             s.push_str(&format!("    <part id=\"{id}\" subtype=\"normal_part\">\n"));
             s.push_str(&format!("      <metadata key=\"name\" value=\"{}\"/>\n", xml_escape(&p.name)));
-            s.push_str(&format!(
-                "      <metadata key=\"extruder\" value=\"{}\"/>\n",
-                p.extruder.clamp(1, 16)
-            ));
+            s.push_str(&format!("      <metadata key=\"extruder\" value=\"{}\"/>\n", p.extruder.clamp(1, 16)));
             s.push_str("    </part>\n");
         }
         s.push_str("  </object>\n");
@@ -358,12 +314,7 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
     writeln!(w, " </resources>")?;
     writeln!(w, " <build>")?;
     for (i, o) in objects.iter().enumerate() {
-        writeln!(
-            w,
-            r#"  <item objectid="{}" transform="{}"/>"#,
-            i as u32 + 2,
-            mat_str(&o.transform)
-        )?;
+        writeln!(w, r#"  <item objectid="{}" transform="{}"/>"#, i as u32 + 2, mat_str(&o.transform))?;
     }
     writeln!(w, " </build>")?;
     writeln!(w, "</model>")?;
@@ -375,15 +326,9 @@ pub fn write_scene(dst: &Path, objects: &[SceneObject]) -> Result<()> {
     let mut s = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<config>\n");
     for (i, o) in objects.iter().enumerate() {
         s.push_str(&format!("  <object id=\"{}\">\n", i as u32 + 2));
-        s.push_str(&format!(
-            "    <metadata key=\"name\" value=\"{}\"/>\n",
-            xml_escape(&o.name)
-        ));
+        s.push_str(&format!("    <metadata key=\"name\" value=\"{}\"/>\n", xml_escape(&o.name)));
         if let Some(e) = o.extruder {
-            s.push_str(&format!(
-                "    <metadata key=\"extruder\" value=\"{}\"/>\n",
-                e.clamp(1, 16)
-            ));
+            s.push_str(&format!("    <metadata key=\"extruder\" value=\"{}\"/>\n", e.clamp(1, 16)));
         }
         s.push_str("  </object>\n");
     }
@@ -402,10 +347,12 @@ mod tests {
 
     fn cube(size: f32, color: [u8; 3]) -> Vec<Tri> {
         let s = size;
+        #[rustfmt::skip]
         let p = [
             [0., 0., 0.], [s, 0., 0.], [s, s, 0.], [0., s, 0.],
             [0., 0., s], [s, 0., s], [s, s, s], [0., s, s],
         ];
+        #[rustfmt::skip]
         let faces = [
             [0, 2, 1], [0, 3, 2], // dessous
             [4, 5, 6], [4, 6, 7], // dessus
@@ -414,13 +361,7 @@ mod tests {
             [2, 3, 7], [2, 7, 6],
             [3, 0, 4], [3, 4, 7],
         ];
-        faces
-            .iter()
-            .map(|f| Tri {
-                v: [p[f[0]], p[f[1]], p[f[2]]],
-                c: color,
-            })
-            .collect()
+        faces.iter().map(|f| Tri { v: [p[f[0]], p[f[1]], p[f[2]]], c: color }).collect()
     }
 
     /// Objects keep their order and their own settings: each object's block
@@ -430,11 +371,32 @@ mod tests {
         let dir = std::env::temp_dir().join("snapstudio_w3mf_settings");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("objects.3mf");
-        let part = |name: &str, x: f32, head: u8| Part { name: name.into(), tris: cube(10.0, [200, 40, 40]).into_iter().map(|mut t| { for v in &mut t.v { v[0] += x; } t }).collect(), extruder: head, paint: vec![] };
-        write_objects(&path, &[
-            Object { name: "pillar".into(), parts: vec![part("ring", 0.0, 2)], settings: vec![("sparse_infill_density".into(), "0%".into()), ("brim_type".into(), "outer_only".into())] },
-            Object { name: "model & co".into(), parts: vec![part("a", 50.0, 1), part("b", 70.0, 3)], settings: vec![] },
-        ]).unwrap();
+        let part = |name: &str, x: f32, head: u8| Part {
+            name: name.into(),
+            tris: cube(10.0, [200, 40, 40])
+                .into_iter()
+                .map(|mut t| {
+                    for v in &mut t.v {
+                        v[0] += x;
+                    }
+                    t
+                })
+                .collect(),
+            extruder: head,
+            paint: vec![],
+        };
+        write_objects(
+            &path,
+            &[
+                Object {
+                    name: "pillar".into(),
+                    parts: vec![part("ring", 0.0, 2)],
+                    settings: vec![("sparse_infill_density".into(), "0%".into()), ("brim_type".into(), "outer_only".into())],
+                },
+                Object { name: "model & co".into(), parts: vec![part("a", 50.0, 1), part("b", 70.0, 3)], settings: vec![] },
+            ],
+        )
+        .unwrap();
         let mut zip = crate::model3mf::open(&path).unwrap();
         let cfg = String::from_utf8(crate::model3mf::read_entry(&mut zip, "Metadata/model_settings.config").unwrap()).unwrap();
         let blocks: Vec<&str> = cfg.split("<object ").skip(1).collect();
@@ -464,18 +426,8 @@ mod tests {
         place.0[9] = 100.0; // X translation of the second cube
         place.0[10] = 50.0;
         let objects = vec![
-            SceneObject {
-                name: "red cube".into(),
-                tris: cube(10.0, [200, 40, 40]),
-                transform: Mat::IDENTITY,
-                extruder: Some(1),
-            },
-            SceneObject {
-                name: "blue cube".into(),
-                tris: cube(20.0, [40, 60, 200]),
-                transform: place,
-                extruder: Some(3),
-            },
+            SceneObject { name: "red cube".into(), tris: cube(10.0, [200, 40, 40]), transform: Mat::IDENTITY, extruder: Some(1) },
+            SceneObject { name: "blue cube".into(), tris: cube(20.0, [40, 60, 200]), transform: place, extruder: Some(3) },
         ];
         write_scene(&path, &objects).unwrap();
 
@@ -496,17 +448,11 @@ mod tests {
         let data = std::fs::read(&path).unwrap();
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(data)).unwrap();
         let mut xml = String::new();
-        z.by_name("3D/3dmodel.model")
-            .unwrap()
-            .read_to_string(&mut xml)
-            .unwrap();
+        z.by_name("3D/3dmodel.model").unwrap().read_to_string(&mut xml).unwrap();
         assert_eq!(xml.matches("<vertex ").count(), 16, "8 vertices per cube");
         assert!(xml.contains(r#"name="red cube""#));
         let mut cfg = String::new();
-        z.by_name("Metadata/model_settings.config")
-            .unwrap()
-            .read_to_string(&mut cfg)
-            .unwrap();
+        z.by_name("Metadata/model_settings.config").unwrap().read_to_string(&mut cfg).unwrap();
         assert!(cfg.contains(r#"key="extruder" value="3""#), "head assigned");
     }
 
@@ -528,26 +474,11 @@ mod tests {
             t
         };
         let objects = vec![
-            SceneObject {
-                name: "piece A".into(),
-                tris: m.tris.clone(),
-                transform: recenter(30.0, 30.0),
-                extruder: Some(1),
-            },
-            SceneObject {
-                name: "piece B".into(),
-                tris: m.tris.clone(),
-                transform: recenter(40.0 + size[0], 30.0),
-                extruder: Some(2),
-            },
+            SceneObject { name: "piece A".into(), tris: m.tris.clone(), transform: recenter(30.0, 30.0), extruder: Some(1) },
+            SceneObject { name: "piece B".into(), tris: m.tris.clone(), transform: recenter(40.0 + size[0], 30.0), extruder: Some(2) },
         ];
         write_scene(Path::new(&dst), &objects).unwrap();
-        println!(
-            "written: {dst} ({} triangles per part, footprint {:.1} x {:.1} mm)",
-            m.tris.len(),
-            size[0],
-            size[1]
-        );
+        println!("written: {dst} ({} triangles per part, footprint {:.1} x {:.1} mm)", m.tris.len(), size[0], size[1]);
     }
 }
 

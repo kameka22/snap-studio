@@ -18,10 +18,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
 
 const WAKEUP: &str = "_services._dns-sd._udp.local.";
-const SERVICES: &[(&str, &str)] = &[
-    ("_snapmaker._tcp.local.", "snapmaker"),
-    ("_moonraker._tcp.local.", "moonraker"),
-];
+const SERVICES: &[(&str, &str)] = &[("_snapmaker._tcp.local.", "snapmaker"), ("_moonraker._tcp.local.", "moonraker")];
 /// Listening time, as in Orca.
 const LISTEN: Duration = Duration::from_secs(20);
 
@@ -104,13 +101,7 @@ fn run(daemon: &ServiceDaemon, stop: &AtomicBool, mut on_found: impl FnMut(Found
             while let Ok(ev) = rx.try_recv() {
                 idle = false;
                 if let ServiceEvent::ServiceResolved(s) = ev {
-                    let txt = |k: &str| {
-                        s.txt_properties
-                            .get_property_val_str(k)
-                            .map(str::trim)
-                            .filter(|v| !v.is_empty())
-                            .map(String::from)
-                    };
+                    let txt = |k: &str| s.txt_properties.get_property_val_str(k).map(str::trim).filter(|v| !v.is_empty()).map(String::from);
                     let ips: Vec<_> = s.get_addresses_v4().into_iter().collect();
                     if let Some(f) = found(kind, &s.fullname, &s.host, s.port, &ips, txt) {
                         on_found(f);
@@ -139,28 +130,18 @@ fn found(
 ) -> Option<Found> {
     // The address announced in the TXT record comes before the record's own:
     // it is the one the printer says it uses.
-    let ip = txt("ip")
-        .filter(|v| v.parse::<std::net::Ipv4Addr>().is_ok())
-        .or_else(|| {
-            let mut v: Vec<_> = ips.iter().filter(|a| !a.is_loopback() && !a.is_link_local()).collect();
-            v.sort();
-            v.first().map(|a| a.to_string())
-        })?;
+    let ip = txt("ip").filter(|v| v.parse::<std::net::Ipv4Addr>().is_ok()).or_else(|| {
+        let mut v: Vec<_> = ips.iter().filter(|a| !a.is_loopback() && !a.is_link_local()).collect();
+        v.sort();
+        v.first().map(|a| a.to_string())
+    })?;
     let instance = fullname.split("._").next().unwrap_or("").trim();
     let hostname = host.trim_end_matches('.').trim_end_matches(".local");
     let name = txt("device_name")
         .or_else(|| (!instance.is_empty()).then(|| instance.to_string()))
         .or_else(|| (!hostname.is_empty()).then(|| hostname.to_string()))
         .unwrap_or_else(|| ip.clone());
-    Some(Found {
-        sn: txt("sn"),
-        name,
-        model: txt("machine_type"),
-        ip,
-        port,
-        firmware: txt("version"),
-        service: kind.to_string(),
-    })
+    Some(Found { sn: txt("sn"), name, model: txt("machine_type"), ip, port, firmware: txt("version"), service: kind.to_string() })
 }
 
 fn log(msg: &str) {
@@ -273,15 +254,9 @@ mod tests {
         std::thread::scope(|sc| {
             sc.spawn(|| {
                 std::thread::sleep(Duration::from_secs(2));
-                let info = ServiceInfo::new(
-                    "_snapmaker._tcp.local.",
-                    "U1-BUSY",
-                    "u1-busy.local.",
-                    ip.as_str(),
-                    8883,
-                    &[("sn", "SNBUSY")][..],
-                )
-                .unwrap();
+                let info =
+                    ServiceInfo::new("_snapmaker._tcp.local.", "U1-BUSY", "u1-busy.local.", ip.as_str(), 8883, &[("sn", "SNBUSY")][..])
+                        .unwrap();
                 host.register(info).unwrap();
                 std::thread::sleep(Duration::from_secs(6));
                 stop.store(true, Ordering::Relaxed);

@@ -54,11 +54,7 @@ fn manifest() -> &'static Manifest {
             // Said in the console: "no engine referenced" alone would hide a
             // build whose manifest is broken.
             eprintln!("[engine] engine.json is unreadable: {e}");
-            Manifest {
-                version: String::new(),
-                source: String::new(),
-                platforms: HashMap::new(),
-            }
+            Manifest { version: String::new(), source: String::new(), platforms: HashMap::new() }
         })
     })
 }
@@ -84,10 +80,7 @@ pub fn referenced() -> bool {
 }
 
 fn root() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("engine")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("engine")
 }
 
 fn install_dir() -> PathBuf {
@@ -272,9 +265,7 @@ async fn install_inner(app: &AppHandle, a: &Asset) -> Result<()> {
     let target = install_dir();
     let part2 = part.clone();
     let staging2 = staging.clone();
-    tauri::async_runtime::spawn_blocking(move || extract(&part2, &staging2))
-        .await
-        .map_err(|e| anyhow!("{e}"))??;
+    tauri::async_runtime::spawn_blocking(move || extract(&part2, &staging2)).await.map_err(|e| anyhow!("{e}"))??;
     std::fs::write(staging.join(COMPLETE), manifest().version.as_bytes())?;
     if target.exists() {
         std::fs::remove_dir_all(&target).with_context(|| format!("removing {}", target.display()))?;

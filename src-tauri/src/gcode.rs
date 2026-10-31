@@ -127,9 +127,7 @@ fn num_after(line: &str, key: u8) -> Option<f32> {
         }
         if c == key && (i == 0 || bytes[i - 1] == b' ') {
             let rest = &line[i + 1..];
-            let end = rest
-                .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e'))
-                .unwrap_or(rest.len());
+            let end = rest.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e')).unwrap_or(rest.len());
             return rest[..end].parse().ok();
         }
         i += 1;
@@ -236,11 +234,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     let mut times = RawTimes::default();
     let mut clock = 0f32;
     let mut tools_used = [false; 16];
-    let list = |v: &str| -> Vec<f32> {
-        v.split(|c| c == ',' || c == ';')
-            .filter_map(|x| x.trim().parse::<f32>().ok())
-            .collect()
-    };
+    let list = |v: &str| -> Vec<f32> { v.split(|c| c == ',' || c == ';').filter_map(|x| x.trim().parse::<f32>().ok()).collect() };
 
     loop {
         line.clear();
@@ -284,23 +278,15 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                     layer = n.max(0) as u16;
                     seen_layer_marker = true;
                 }
-            } else if let Some(v) = comment_value(l, "printer_model")
-                .or_else(|| comment_value(l, "Printer"))
-            {
+            } else if let Some(v) = comment_value(l, "printer_model").or_else(|| comment_value(l, "Printer")) {
                 meta.printer.get_or_insert_with(|| v.to_string());
             } else if let Some(v) = comment_value(l, "Profile").or_else(|| comment_value(l, "print_settings_id")) {
                 meta.profile.get_or_insert_with(|| v.to_string());
             } else if let Some(v) = comment_value(l, "filament_type") {
                 if meta.filaments.is_empty() {
-                    meta.filaments = v
-                        .split(|c| c == ';' || c == ',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
+                    meta.filaments = v.split(|c| c == ';' || c == ',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                 }
-            } else if let Some(v) = comment_value(l, "total layer number")
-                .or_else(|| comment_value(l, "LAYER_COUNT"))
-            {
+            } else if let Some(v) = comment_value(l, "total layer number").or_else(|| comment_value(l, "LAYER_COUNT")) {
                 meta.total_layers = v.parse().ok();
             } else if let Some(v) = comment_value(l, "layer_height") {
                 meta.layer_height = v.parse().ok();
@@ -316,10 +302,8 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                 // Orca: `; model printing time: 1h 2m; total estimated time: 1h 10m`.
                 // The total (preheat included) is the useful value; never add up the two
                 // durations of the line.
-                let total = v
-                    .split(';')
-                    .find_map(|part| comment_value(part, "total estimated time"))
-                    .unwrap_or(v.split(';').next().unwrap_or(v));
+                let total =
+                    v.split(';').find_map(|part| comment_value(part, "total estimated time")).unwrap_or(v.split(';').next().unwrap_or(v));
                 if let Some(t) = parse_duration(total) {
                     meta.print_time_s = Some(t);
                 }
@@ -345,9 +329,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
                     let sum: f32 = list(v).iter().sum();
                     meta.cost = (sum > 0.0).then_some(sum);
                 }
-            } else if let Some(v) = comment_value(l, "total filament weight [g]")
-                .or_else(|| comment_value(l, "total filament used [g]"))
-            {
+            } else if let Some(v) = comment_value(l, "total filament weight [g]").or_else(|| comment_value(l, "total filament used [g]")) {
                 meta.filament_g = v.split(',').next().and_then(|s| s.trim().parse().ok()).or(meta.filament_g);
             } else if let Some(v) = comment_value(l, "filament_colour") {
                 meta.colors = hex_list(v);
@@ -376,12 +358,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
         if up != b'G' && up != b'M' {
             continue;
         }
-        let code: u32 = match l[1..]
-            .split(|c: char| !c.is_ascii_digit())
-            .next()
-            .unwrap_or("")
-            .parse()
-        {
+        let code: u32 = match l[1..].split(|c: char| !c.is_ascii_digit()).next().unwrap_or("").parse() {
             Ok(c) => c,
             Err(_) => continue,
         };
@@ -522,15 +499,7 @@ pub fn parse(read: impl Read) -> Result<GcodeData> {
     }
 
     times.tools = (0..16u8).filter(|t| tools_used[*t as usize]).collect();
-    Ok(GcodeData {
-        segs,
-        layers,
-        min,
-        max,
-        meta,
-        truncated,
-        times,
-    })
+    Ok(GcodeData { segs, layers, min, max, meta, truncated, times })
 }
 
 /// Time of a path feature in the preview.
@@ -580,13 +549,8 @@ pub fn stats(d: &GcodeData) -> SliceStats {
         Some(total) if raw_total > 0.0 => total as f32 / raw_total,
         _ => 1.0,
     };
-    let mut features: Vec<FeatureTime> = t
-        .feature
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| **s > 0.0)
-        .map(|(i, s)| FeatureTime { feature: i as u8, seconds: s * k })
-        .collect();
+    let mut features: Vec<FeatureTime> =
+        t.feature.iter().enumerate().filter(|(_, s)| **s > 0.0).map(|(i, s)| FeatureTime { feature: i as u8, seconds: s * k }).collect();
     features.sort_by(|a, b| b.seconds.total_cmp(&a.seconds));
     SliceStats {
         print_time_s: d.meta.print_time_s.or_else(|| (raw_total > 0.0).then_some(raw_total as u32)),
@@ -884,9 +848,7 @@ G1 X30 Y30 F9000
         println!("breakdown by feature: {hist:?}");
         std::fs::write(format!("{out}.bin"), encode(&d)).unwrap();
         let img = crate::render::render_paths(&d.segs, d.min, d.max, 512);
-        image::DynamicImage::ImageRgba8(img)
-            .save(format!("{out}.png"))
-            .unwrap();
+        image::DynamicImage::ImageRgba8(img).save(format!("{out}.png")).unwrap();
     }
 
     #[test]

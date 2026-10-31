@@ -117,17 +117,11 @@ pub struct Job {
 }
 
 fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 fn dir() -> PathBuf {
-    let d = dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("jobs");
+    let d = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("jobs");
     let _ = std::fs::create_dir_all(&d);
     d
 }
@@ -140,10 +134,7 @@ fn lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 fn load_unlocked() -> Vec<Job> {
-    std::fs::read(dir().join("jobs.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+    std::fs::read(dir().join("jobs.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
 fn save_unlocked(list: &[Job]) -> Result<()> {
@@ -263,12 +254,10 @@ pub fn add(gcode: &Path, new: NewJob, state: &str, remote: &str) -> Result<Job> 
     let file = dir().join(format!("{id}.gcode"));
     std::fs::copy(gcode, &file).with_context(|| format!("copying {} to {}", gcode.display(), file.display()))?;
     // Summary recomputed from the file: it travels with the job.
-    let stats = new.stats.clone().or_else(|| {
-        std::fs::File::open(&file)
-            .ok()
-            .and_then(|f| crate::gcode::parse(f).ok())
-            .map(|d| crate::gcode::stats(&d))
-    });
+    let stats = new
+        .stats
+        .clone()
+        .or_else(|| std::fs::File::open(&file).ok().and_then(|f| crate::gcode::parse(f).ok()).map(|d| crate::gcode::stats(&d)));
     let job = Job {
         id,
         name: if new.name.is_empty() { "impression".into() } else { new.name },
@@ -302,9 +291,7 @@ pub fn remove(id: &str) -> Result<()> {
         if let Some(j) = list.iter().find(|j| j.id == id) {
             // Only a print that really runs is protected: a printer that was deleted,
             // is unreachable or free will never close it.
-            let running = snapshot()
-                .iter()
-                .any(|l| l.printer_id == j.printer_id && l.status.online && busy(&l.status.state));
+            let running = snapshot().iter().any(|l| l.printer_id == j.printer_id && l.status.online && busy(&l.status.state));
             if j.state == "printing" && running {
                 return Err(anyhow!(crate::t!("err.job_running")));
             }
@@ -444,12 +431,8 @@ fn track(job: &mut Job, state: &str, at: u64) -> bool {
 /// Snap Studio's job behind a printer's running print: the one with the
 /// file it prints, else the last started.
 fn running_job<'a>(list: &'a mut [Job], printer_id: &str, file: Option<&str>) -> Option<&'a mut Job> {
-    let mine: Vec<usize> = list
-        .iter()
-        .enumerate()
-        .filter(|(_, j)| j.printer_id == printer_id && j.state == "printing")
-        .map(|(i, _)| i)
-        .collect();
+    let mine: Vec<usize> =
+        list.iter().enumerate().filter(|(_, j)| j.printer_id == printer_id && j.state == "printing").map(|(i, _)| i).collect();
     let i = mine
         .iter()
         .copied()
@@ -598,15 +581,8 @@ fn offer_next(app: &AppHandle, live: &Live, finished: Option<Job>) {
             return;
         }
     }
-    let _ = app.emit(
-        "queue-next",
-        QueueNext {
-            printer_id: live.printer_id.clone(),
-            printer_name: live.printer_name.clone(),
-            finished,
-            next,
-        },
-    );
+    let _ =
+        app.emit("queue-next", QueueNext { printer_id: live.printer_id.clone(), printer_name: live.printer_name.clone(), finished, next });
 }
 
 /// Background task: one pass every `POLL` seconds, while the app lives.
@@ -708,19 +684,13 @@ fn observe(app: &AppHandle, live: &Live) -> bool {
     let reset = closed.iter().any(|j| j.remapped);
     if was_busy || !closed.is_empty() {
         let _ = app.emit("jobs-changed", ());
-        let name = closed
-            .first()
-            .map(|j| j.name.clone())
-            .or_else(|| live.status.job.clone())
-            .unwrap_or_else(|| crate::t!("prints.print"));
+        let name = closed.first().map(|j| j.name.clone()).or_else(|| live.status.job.clone()).unwrap_or_else(|| crate::t!("prints.print"));
         let key = match outcome {
             "cancelled" => "queue.done.cancelled",
             "error" => "queue.done.error",
             _ => "queue.done.ok",
         };
-        let next = next_for(id)
-            .map(|j| format!(" {}", crate::t!("notify.next", name = j.name)))
-            .unwrap_or_default();
+        let next = next_for(id).map(|j| format!(" {}", crate::t!("notify.next", name = j.name))).unwrap_or_default();
         notify(app, &crate::t!(key, name = name), &format!("{}.{next}", live.printer_name));
     }
     offer_next(app, live, closed.into_iter().next());

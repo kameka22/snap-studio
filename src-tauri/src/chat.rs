@@ -59,10 +59,7 @@ pub const MODELS: [&str; 3] = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-h
 /// with its own sandbox's settings in sandbox mode. The initial request is
 /// not an argument any more: it is the first message.
 pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec<String>> {
-    let claude = tools
-        .claude
-        .as_ref()
-        .ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?;
+    let claude = tools.claude.as_ref().ok_or_else(|| anyhow!(crate::t!("err.no_claude")))?;
     let mut inner: Vec<String> = CLI_ARGS.iter().map(|s| s.to_string()).collect();
     inner.push(if resume { "--resume" } else { "--session-id" }.into());
     inner.push(c.id.clone());
@@ -72,10 +69,7 @@ pub fn command_line(c: &Conversation, tools: &Tools, resume: bool) -> Result<Vec
     }
 
     if c.engine == "container" {
-        let yolobox = tools
-            .yolobox
-            .as_ref()
-            .ok_or_else(|| anyhow!(crate::t!("err.no_yolobox")))?;
+        let yolobox = tools.yolobox.as_ref().ok_or_else(|| anyhow!(crate::t!("err.no_yolobox")))?;
         // With pipes instead of a terminal, yolobox runs Docker with `-i` and
         // no `-t`; its `claude` alias already skips permission prompts.
         let mut argv = vec![
@@ -211,11 +205,32 @@ const WEB_TOOLS: [&str; 2] = ["WebFetch", "WebSearch"];
 /// (tokens, cloud keys, `PYTHONPATH`…) stays out. `PATH` is Claude's own.
 pub fn sandbox_env_allowlist(vars: impl Iterator<Item = (String, String)>) -> Vec<(String, String)> {
     const KEEP: [&str; 26] = [
-        "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "TZ",
-        "CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR",
-        "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "no_proxy", "all_proxy",
-        "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
-        "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        "TMPDIR",
+        "LANG",
+        "TZ",
+        "CLAUDE_CONFIG_DIR",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_DATA_HOME",
+        "XDG_RUNTIME_DIR",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "no_proxy",
+        "all_proxy",
+        "NODE_EXTRA_CA_CERTS",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
     ];
     let mut out: Vec<(String, String)> = vars.filter(|(k, _)| KEEP.contains(&k.as_str()) || k.starts_with("LC_")).collect();
     if let Some(p) = crate::pty::child_path() {
@@ -240,9 +255,7 @@ pub struct Attachment {
 pub fn user_message(text: &str, images: &[Attachment]) -> Value {
     let mut content: Vec<Value> = images
         .iter()
-        .map(|a| {
-            json!({ "type": "image", "source": { "type": "base64", "media_type": a.media_type, "data": a.data } })
-        })
+        .map(|a| json!({ "type": "image", "source": { "type": "base64", "media_type": a.media_type, "data": a.data } }))
         .collect();
     if !text.is_empty() {
         content.push(json!({ "type": "text", "text": text }));
@@ -289,9 +302,7 @@ pub fn permission_response(
 /// (an image Claude read is a file of the workspace, shown from there).
 fn slim_tool_result(content: &Value) -> Value {
     match content {
-        Value::String(s) if s.chars().count() > RESULT_CAP => {
-            Value::String(s.chars().take(RESULT_CAP).collect::<String>() + "…")
-        }
+        Value::String(s) if s.chars().count() > RESULT_CAP => Value::String(s.chars().take(RESULT_CAP).collect::<String>() + "…"),
         Value::Array(items) => Value::Array(
             items
                 .iter()
@@ -401,10 +412,7 @@ fn logged(view: &Value) -> bool {
 /// or a result that gives up on it.
 pub fn auth_failed(event: &Value) -> bool {
     match event["type"].as_str() {
-        Some("system") => {
-            event["subtype"] == "api_retry"
-                && (event["error"] == "authentication_failed" || event["error_status"] == 401)
-        }
+        Some("system") => event["subtype"] == "api_retry" && (event["error"] == "authentication_failed" || event["error_status"] == 401),
         Some("result") => event["is_error"] == true && event["result"].as_str().is_some_and(crate::auth::is_auth_failure),
         _ => false,
     }
@@ -499,10 +507,7 @@ pub fn history_of(ws: &Path, transcript: Option<&Path>) -> Vec<Value> {
     if let Ok(text) = std::fs::read_to_string(log_path(ws)) {
         return text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
     }
-    transcript
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .map(|t| from_transcript(&t))
-        .unwrap_or_default()
+    transcript.and_then(|p| std::fs::read_to_string(p).ok()).map(|t| from_transcript(&t)).unwrap_or_default()
 }
 
 pub fn history(id: &str) -> Vec<Value> {
@@ -524,10 +529,7 @@ fn attachment_name(dir: &Path, name: &str) -> String {
     // attachment the log still points at (and `seen-*.png` live here too).
     let n = std::fs::read_dir(dir)
         .map(|d| {
-            d.flatten()
-                .filter_map(|e| e.file_name().to_str().and_then(|s| s.split('-').next()?.parse::<u32>().ok()))
-                .max()
-                .unwrap_or(0)
+            d.flatten().filter_map(|e| e.file_name().to_str().and_then(|s| s.split('-').next()?.parse::<u32>().ok())).max().unwrap_or(0)
         })
         .unwrap_or(0)
         + 1;
@@ -616,11 +618,7 @@ fn tail_into(mut r: impl std::io::Read, into: &Mutex<Vec<u8>>, cap: usize) {
 /// view, the web asked each time.
 fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], sandbox: bool, listener: Listener) -> Result<Session> {
     let mut cmd = Command::new(&argv[0]);
-    cmd.args(&argv[1..])
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(&argv[1..]).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     if sandbox {
         cmd.env_clear();
         cmd.envs(sandbox_env_allowlist(std::env::vars()));
@@ -739,7 +737,10 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], sandb
         let code = mine.and_then(|mut s| s.child.wait().ok()).map(|st| st.code());
         let stderr = errs.lock().map(|b| String::from_utf8_lossy(&b).trim().to_string()).unwrap_or_default();
         if let Some(code) = code {
-            eprintln!("[chat] Claude ended for {id}: code {code:?}{}", if stderr.is_empty() { String::new() } else { format!("\n{stderr}") });
+            eprintln!(
+                "[chat] Claude ended for {id}: code {code:?}{}",
+                if stderr.is_empty() { String::new() } else { format!("\n{stderr}") }
+            );
         }
         // A sandbox that cannot start (bubblewrap missing, refused by
         // AppArmor…): Claude stops at once, never unsandboxed; said in words.
@@ -748,14 +749,7 @@ fn spawn(id: &str, argv: &[String], cwd: &Path, envs: &[(String, String)], sandb
         listener(json!({ "type": "exited", "code": code.flatten(), "stderr": stderr, "message": message }));
     });
 
-    Ok(Session {
-        child,
-        stdin,
-        permissions,
-        next: 0,
-        token,
-        sandbox,
-    })
+    Ok(Session { child, stdin, permissions, next: 0, token, sandbox })
 }
 
 /// Previews Claude looks at: `Read` calls on `preview/*.png`, by tool id,
@@ -1018,10 +1012,7 @@ pub fn close(id: &str) {
 
 /// Ends every conversation's Claude — when the app closes.
 pub fn close_all() {
-    let ids: Vec<String> = sessions()
-        .lock()
-        .map(|s| s.keys().cloned().collect())
-        .unwrap_or_default();
+    let ids: Vec<String> = sessions().lock().map(|s| s.keys().cloned().collect()).unwrap_or_default();
     for id in ids {
         close(&id);
     }
@@ -1051,16 +1042,14 @@ mod tests {
     }
 
     fn tools() -> Tools {
-        Tools {
-            claude: Some("/usr/local/bin/claude".into()),
-            yolobox: Some("/usr/local/bin/yolobox".into()),
-        }
+        Tools { claude: Some("/usr/local/bin/claude".into()), yolobox: Some("/usr/local/bin/yolobox".into()) }
     }
 
     #[test]
     fn sign_in_failures_are_recognized() {
         // As Claude Code 2.1.286 prints them with a dead token.
-        let retry = json!({ "type": "system", "subtype": "api_retry", "attempt": 1, "error_status": 401, "error": "authentication_failed" });
+        let retry =
+            json!({ "type": "system", "subtype": "api_retry", "attempt": 1, "error_status": 401, "error": "authentication_failed" });
         let result = json!({ "type": "result", "is_error": true, "result": "Failed to authenticate. API Error: 401 OAuth access token is invalid." });
         assert!(auth_failed(&retry));
         assert!(auth_failed(&result));
@@ -1142,8 +1131,13 @@ mod tests {
         assert_eq!(sb["network"], json!({ "allowedDomains": [], "strictAllowlist": true }));
         assert_eq!(s["permissions"]["blockReadsOutsideWorkingDirectories"], true);
         // Every kept Anthropic variable is denied to commands.
-        let denied: Vec<&str> = sb["credentials"]["envVars"].as_array().unwrap().iter()
-            .filter(|v| v["mode"] == "deny").filter_map(|v| v["name"].as_str()).collect();
+        let denied: Vec<&str> = sb["credentials"]["envVars"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|v| v["mode"] == "deny")
+            .filter_map(|v| v["name"].as_str())
+            .collect();
         for k in ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"] {
             assert!(denied.contains(&k), "{k}");
         }
@@ -1182,7 +1176,10 @@ mod tests {
             let a = sandbox_answer(&req("Write", &out), &ws).unwrap_or_else(|| panic!("{out}: allowed"));
             assert_eq!(a["behavior"], "deny", "{out}");
         }
-        assert_eq!(sandbox_answer(&json!({ "tool_name": "NotebookEdit", "input": { "notebook_path": "/tmp/n.ipynb" } }), &ws).unwrap()["behavior"], "deny");
+        assert_eq!(
+            sandbox_answer(&json!({ "tool_name": "NotebookEdit", "input": { "notebook_path": "/tmp/n.ipynb" } }), &ws).unwrap()["behavior"],
+            "deny"
+        );
         // Other tools: not this guard's business.
         for tool in ["Bash", "WebSearch", "AskUserQuestion", "Read"] {
             assert!(sandbox_answer(&req(tool, "/etc/hosts"), &ws).is_none(), "{tool}");
@@ -1192,8 +1189,20 @@ mod tests {
 
     #[test]
     fn sandbox_env_is_reduced() {
-        let vars = ["PATH", "HOME", "LANG", "LC_ALL", "HTTPS_PROXY", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY", "ANTHROPIC_API_KEY", "PYTHONPATH"]
-            .map(|k| (k.to_string(), format!("value-of-{k}")));
+        let vars = [
+            "PATH",
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "HTTPS_PROXY",
+            "CLAUDE_CONFIG_DIR",
+            "CLAUDECODE",
+            "GITHUB_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "ANTHROPIC_API_KEY",
+            "PYTHONPATH",
+        ]
+        .map(|k| (k.to_string(), format!("value-of-{k}")));
         let out = sandbox_env_allowlist(vars.into_iter());
         let keys: Vec<&str> = out.iter().map(|(k, _)| k.as_str()).collect();
         for k in ["HOME", "LANG", "LC_ALL", "HTTPS_PROXY", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY", "PATH"] {
@@ -1238,7 +1247,8 @@ while IFS= read -r line; do echo "$line" >> '{}'; done
         let got: Arc<Mutex<Vec<Value>>> = Arc::default();
         let sink = got.clone();
         let id = "fake-sandbox";
-        let sess = spawn(id, &[fake.to_string_lossy().to_string()], &dir, &[], true, Arc::new(move |e| sink.lock().unwrap().push(e))).unwrap();
+        let sess =
+            spawn(id, &[fake.to_string_lossy().to_string()], &dir, &[], true, Arc::new(move |e| sink.lock().unwrap().push(e))).unwrap();
         sessions().lock().unwrap().insert(id.into(), sess);
         let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while (got.lock().unwrap().is_empty() || !answers.exists()) && std::time::Instant::now() < end {
@@ -1308,11 +1318,8 @@ while IFS= read -r line; do echo "$line" >> '{}'; done
         let perm = view.iter().find(|e| e["type"] == "control_request").unwrap();
         assert_eq!(perm["request"]["tool_name"], "Bash");
         assert_eq!(perm["request"]["can_always"], true);
-        let text: String = view
-            .iter()
-            .filter(|e| e["type"] == "stream_event")
-            .filter_map(|e| e["event"]["delta"]["text"].as_str())
-            .collect();
+        let text: String =
+            view.iter().filter(|e| e["type"] == "stream_event").filter_map(|e| e["event"]["delta"]["text"].as_str()).collect();
         assert!(text.contains("hello from file"));
         let s = serde_json::to_string(&view).unwrap();
         assert!(!s.contains("signature"), "thinking signatures stay out");
@@ -1362,11 +1369,7 @@ while IFS= read -r line; do echo "$line" >> '{}'; done
     #[test]
     #[ignore]
     fn dump_view_events() {
-        let view: Vec<Value> = STREAM
-            .lines()
-            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-            .filter_map(|e| for_view(&e))
-            .collect();
+        let view: Vec<Value> = STREAM.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter_map(|e| for_view(&e)).collect();
         let out = std::env::var("CHAT_VIEW_OUT").unwrap_or_else(|_| "/tmp/chat-view.json".into());
         std::fs::write(out, serde_json::to_string(&view).unwrap()).unwrap();
         std::fs::write("/tmp/chat-history.json", serde_json::to_string(&from_transcript(TRANSCRIPT)).unwrap()).unwrap();
@@ -1380,12 +1383,16 @@ while IFS= read -r line; do echo "$line" >> '{}'; done
         std::fs::create_dir_all(&preview).unwrap();
         std::fs::write(preview.join("front.png"), b"png").unwrap();
         let mut g = Glances::default();
-        let read = |id: &str, path: &Path| json!({ "type": "assistant", "message": { "content": [
-            { "type": "tool_use", "id": id, "name": "Read", "input": { "file_path": path } } ] } });
+        let read = |id: &str, path: &Path| {
+            json!({ "type": "assistant", "message": { "content": [
+            { "type": "tool_use", "id": id, "name": "Read", "input": { "file_path": path } } ] } })
+        };
         g.watch(&ws, &read("toolu_1", &preview.join("front.png")));
         g.watch(&ws, &read("toolu_2", &ws.join("model.py")));
-        let result = |id: &str| json!({ "type": "user", "message": { "content": [
-            { "type": "tool_result", "tool_use_id": id, "content": [{ "type": "image" }] } ] } });
+        let result = |id: &str| {
+            json!({ "type": "user", "message": { "content": [
+            { "type": "tool_result", "tool_use_id": id, "content": [{ "type": "image" }] } ] } })
+        };
         let seen = g.seen(&ws, &result("toolu_1"));
         assert_eq!(seen.len(), 1);
         assert_eq!(seen[0]["name"], "seen-toolu_1.png");
@@ -1429,16 +1436,17 @@ while IFS= read -r line; do echo "$line" >> '{}'; done
         };
         write_line(&id, &user_message("Run `echo real-ok > proof.txt` with the Bash tool, then say done.", &[])).unwrap();
         wait(&|e| e.iter().any(|x| x["type"] == "control_request"));
-        let rid = got.lock().unwrap().iter().find(|x| x["type"] == "control_request").unwrap()["request_id"]
-            .as_str()
-            .unwrap()
-            .to_string();
+        let rid = got.lock().unwrap().iter().find(|x| x["type"] == "control_request").unwrap()["request_id"].as_str().unwrap().to_string();
         answer(&id, &rid, true, false, None).unwrap();
         wait(&|e| e.iter().any(|x| x["type"] == "result"));
         assert_eq!(std::fs::read_to_string(ws.join("proof.txt")).unwrap().trim(), "real-ok");
         close(&id);
         let events = got.lock().unwrap().clone();
-        println!("{} view events; types: {:?}", events.len(), events.iter().map(|e| e["type"].as_str().unwrap_or("")).collect::<std::collections::BTreeSet<_>>());
+        println!(
+            "{} view events; types: {:?}",
+            events.len(),
+            events.iter().map(|e| e["type"].as_str().unwrap_or("")).collect::<std::collections::BTreeSet<_>>()
+        );
         assert!(events.iter().any(|x| x["type"] == "result"));
         let _ = std::fs::remove_dir_all(&ws);
     }
@@ -1497,8 +1505,12 @@ while IFS= read -r line; do echo "$line" >> '{}'; done
         }
         close(&c.id);
         let events = got.lock().unwrap().clone();
-        let results: Vec<String> = events.iter().filter(|e| e["type"] == "user").flat_map(|e| e["message"]["content"].as_array().cloned().unwrap_or_default())
-            .map(|b| b["content"].to_string()).collect();
+        let results: Vec<String> = events
+            .iter()
+            .filter(|e| e["type"] == "user")
+            .flat_map(|e| e["message"]["content"].as_array().cloned().unwrap_or_default())
+            .map(|b| b["content"].to_string())
+            .collect();
         for r in &results {
             println!("result: {}", &r[..r.len().min(200)]);
         }
@@ -1546,7 +1558,8 @@ done
         let got: Arc<Mutex<Vec<Value>>> = Arc::default();
         let sink = got.clone();
         let id = "fake-session";
-        let sess = spawn(id, &[fake.to_string_lossy().to_string()], &dir, &[], false, Arc::new(move |e| sink.lock().unwrap().push(e))).unwrap();
+        let sess =
+            spawn(id, &[fake.to_string_lossy().to_string()], &dir, &[], false, Arc::new(move |e| sink.lock().unwrap().push(e))).unwrap();
         sessions().lock().unwrap().insert(id.into(), sess);
         write_line(id, &user_message("ping", &[])).unwrap();
         stop(id).unwrap();

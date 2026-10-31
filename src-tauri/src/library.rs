@@ -215,7 +215,8 @@ pub async fn favicon(id: &str) -> Option<String> {
         if !r.status().is_success() {
             continue;
         }
-        let header = r.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").split(';').next().unwrap_or("").trim().to_string();
+        let header =
+            r.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").split(';').next().unwrap_or("").trim().to_string();
         let Ok(bytes) = r.bytes().await else { continue };
         if bytes.is_empty() || bytes.len() > 512 * 1024 {
             continue;
@@ -262,7 +263,15 @@ pub fn icon_links(html: &str) -> Vec<String> {
         }
         let Some(href) = attr("href") else { continue };
         let lh = href.to_ascii_lowercase();
-        let score = if rel.contains("apple") { 3 } else if lh.ends_with(".svg") { 2 } else if lh.ends_with(".png") { 1 } else { 0 };
+        let score = if rel.contains("apple") {
+            3
+        } else if lh.ends_with(".svg") {
+            2
+        } else if lh.ends_with(".png") {
+            1
+        } else {
+            0
+        };
         out.push((score, href));
     }
     out.sort_by(|a, b| b.0.cmp(&a.0));
@@ -300,9 +309,7 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
         show_only(app, Some(id));
         return Ok(());
     }
-    let window = app
-        .get_window("main")
-        .ok_or_else(|| anyhow!("main window not found"))?;
+    let window = app.get_window("main").ok_or_else(|| anyhow!("main window not found"))?;
     let target = url::Url::parse(url)?;
 
     let handle = app.clone();
@@ -341,11 +348,7 @@ pub fn open_tab(app: &AppHandle, id: &str, url: &str) -> Result<()> {
 
     let r = *last_rect().lock().unwrap();
     let dy = title_offset(&window);
-    let _view = window.add_child(
-        builder,
-        LogicalPosition::new(r.x, r.y + dy),
-        LogicalSize::new(r.w.max(1.0), r.h.max(1.0)),
-    )?;
+    let _view = window.add_child(builder, LogicalPosition::new(r.x, r.y + dy), LogicalSize::new(r.w.max(1.0), r.h.max(1.0)))?;
     // Linux: Tauri stacked the view under ours; it goes over the main view.
     #[cfg(target_os = "linux")]
     gtk_layer::adopt(app, &_view);
@@ -381,10 +384,7 @@ pub fn page_url(app: &AppHandle, id: &str) -> Option<String> {
 fn download_hook(app: &AppHandle, id: &str, event: tauri::webview::DownloadEvent<'_>) -> bool {
     match event {
         tauri::webview::DownloadEvent::Requested { url, destination } => {
-            let name = destination
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "modele.3mf".into());
+            let name = destination.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "modele.3mf".into());
             let dir = dirs::download_dir().unwrap_or_else(std::env::temp_dir);
             *destination = unique_path(&dir, &name);
             let _ = app.emit(
@@ -479,7 +479,10 @@ fn place_in_window(wv: &tauri::Webview, rect: Rect) {
         eprintln!(
             "[lib] asked y={:.1} h={:.1} | title offset {:.1} | scale {:.2} | \
              inner {:?} | outer {:?} | view position before {:?}",
-            rect.y, rect.h, dy, scale,
+            rect.y,
+            rect.h,
+            dy,
+            scale,
             w.inner_size().map(|s| s.to_logical::<f64>(scale).height).ok(),
             w.outer_size().map(|s| s.to_logical::<f64>(scale).height).ok(),
             wv.position().map(|p| p.to_logical::<f64>(scale).y).ok(),
@@ -489,10 +492,7 @@ fn place_in_window(wv: &tauri::Webview, rect: Rect) {
     let _ = wv.set_size(LogicalSize::new(rect.w.max(1.0), rect.h.max(1.0)));
     if std::env::var("SNAPSTUDIO_LIBDEBUG").is_ok() {
         let scale = w.scale_factor().unwrap_or(1.0);
-        eprintln!(
-            "[lib] view position after {:?}",
-            wv.position().map(|p| p.to_logical::<f64>(scale).y).ok()
-        );
+        eprintln!("[lib] view position after {:?}", wv.position().map(|p| p.to_logical::<f64>(scale).y).ok());
     }
 }
 
@@ -632,9 +632,7 @@ pub fn close_tab(app: &AppHandle, id: &str) {
 }
 
 pub fn navigate(app: &AppHandle, id: &str, url: &str) -> Result<()> {
-    let wv = app
-        .get_webview(&label(id))
-        .ok_or_else(|| anyhow!("unknown tab"))?;
+    let wv = app.get_webview(&label(id)).ok_or_else(|| anyhow!("unknown tab"))?;
     wv.navigate(url::Url::parse(url)?)?;
     Ok(())
 }
@@ -642,9 +640,7 @@ pub fn navigate(app: &AppHandle, id: &str, url: &str) -> Result<()> {
 /// History and reload: the remote view does not have our bridge, so we go
 /// through its own JavaScript context.
 pub fn command(app: &AppHandle, id: &str, what: &str) -> Result<()> {
-    let wv = app
-        .get_webview(&label(id))
-        .ok_or_else(|| anyhow!("unknown tab"))?;
+    let wv = app.get_webview(&label(id)).ok_or_else(|| anyhow!("unknown tab"))?;
     let js = match what {
         "back" => "history.back()",
         "forward" => "history.forward()",
@@ -659,7 +655,8 @@ pub fn command(app: &AppHandle, id: &str, what: &str) -> Result<()> {
 /// "shop.example.co.uk" gives "example.co.uk" (the usual two-level public
 /// suffixes).
 fn registrable(host: &str) -> String {
-    const TWO_LEVEL: [&str; 12] = ["co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "com.br", "co.za", "com.mx"];
+    const TWO_LEVEL: [&str; 12] =
+        ["co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "com.br", "co.za", "com.mx"];
     let parts: Vec<&str> = host.split('.').collect();
     let keep = if parts.len() >= 3 && TWO_LEVEL.contains(&parts[parts.len() - 2..].join(".").as_str()) { 3 } else { 2 };
     if parts.len() >= keep {
@@ -680,17 +677,9 @@ fn under(domain: &str, base: &str) -> bool {
 /// The cookie store is shared by all views: clearing it wholesale would log
 /// the other sites out too. So it is filtered by domain.
 pub fn logout(app: &AppHandle, tab: &str, site: &str) -> Result<usize> {
-    let site = SITES
-        .iter()
-        .find(|s| s.id == site)
-        .ok_or_else(|| anyhow!("unknown site"))?;
-    let wv = app
-        .get_webview(&label(tab))
-        .ok_or_else(|| anyhow!(crate::t!("err.tab_closed")))?;
-    let host = url::Url::parse(site.url)?
-        .host_str()
-        .unwrap_or_default()
-        .to_string();
+    let site = SITES.iter().find(|s| s.id == site).ok_or_else(|| anyhow!("unknown site"))?;
+    let wv = app.get_webview(&label(tab)).ok_or_else(|| anyhow!(crate::t!("err.tab_closed")))?;
+    let host = url::Url::parse(site.url)?.host_str().unwrap_or_default().to_string();
     let base = registrable(&host);
 
     let mut n = 0;

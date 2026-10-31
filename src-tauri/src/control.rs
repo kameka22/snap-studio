@@ -77,12 +77,24 @@ impl<'de> Deserialize<'de> for Keys {
                 while s.next_element::<serde::de::IgnoredAny>()?.is_some() {}
                 Ok(Keys::default())
             }
-            fn visit_bool<E: serde::de::Error>(self, _: bool) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
-            fn visit_i64<E: serde::de::Error>(self, _: i64) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
-            fn visit_u64<E: serde::de::Error>(self, _: u64) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
-            fn visit_f64<E: serde::de::Error>(self, _: f64) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
-            fn visit_str<E: serde::de::Error>(self, _: &str) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
-            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Keys, E> { Ok(Keys::default()) }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> std::result::Result<Keys, E> {
+                Ok(Keys::default())
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> std::result::Result<Keys, E> {
+                Ok(Keys::default())
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> std::result::Result<Keys, E> {
+                Ok(Keys::default())
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> std::result::Result<Keys, E> {
+                Ok(Keys::default())
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> std::result::Result<Keys, E> {
+                Ok(Keys::default())
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Keys, E> {
+                Ok(Keys::default())
+            }
         }
         d.deserialize_any(V)
     }
@@ -110,7 +122,8 @@ pub fn parse_materials(json: &str) -> Vec<Material> {
                         .filter_map(|(s, _)| s.strip_prefix("sub_").map(|x| if x == "generic" { String::new() } else { x.to_string() }))
                         .filter(|x| x.is_empty() || safe_name(x))
                         .collect();
-                    (safe_name(v) && !subs.is_empty()).then(|| Vendor { name: if v == "generic" { "Generic".into() } else { v.to_string() }, subs })
+                    (safe_name(v) && !subs.is_empty())
+                        .then(|| Vendor { name: if v == "generic" { "Generic".into() } else { v.to_string() }, subs })
                 })
                 .collect();
             (!vendors.is_empty()).then_some(Material { kind, vendors })
@@ -177,8 +190,19 @@ impl HeadState {
 /// `machine_state_manager.main_state`: a number on the U1's firmware
 /// (MachineMainState), a name in older answers.
 const MAIN_STATES: [&str; 14] = [
-    "IDLE", "PRINTING", "XYZ_OFFSET_CALIBRATE", "BED_LEVELING", "FLOW_CALIBRATION", "SHAPER_CALIBRATE", "UPGRADING",
-    "ABNORMAL", "SCREWS_TILT_ADJUST", "AUTO_LOAD", "AUTO_UNLOAD", "MANUAL_LOAD", "PARK_POINT_MANUAL_CALIBRATION",
+    "IDLE",
+    "PRINTING",
+    "XYZ_OFFSET_CALIBRATE",
+    "BED_LEVELING",
+    "FLOW_CALIBRATION",
+    "SHAPER_CALIBRATE",
+    "UPGRADING",
+    "ABNORMAL",
+    "SCREWS_TILT_ADJUST",
+    "AUTO_LOAD",
+    "AUTO_UNLOAD",
+    "MANUAL_LOAD",
+    "PARK_POINT_MANUAL_CALIBRATION",
     "HOMING_ORIGIN_CALIBRATION",
 ];
 fn main_state(v: &Value) -> String {
@@ -199,24 +223,58 @@ pub struct Temp {
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Action {
-    Home { axes: String },
-    Jog { axis: String, dist: f64 },
-    Tool { n: u8 },
-    NozzleTemp { n: u8, temp: f64 },
-    BedTemp { temp: f64 },
+    Home {
+        axes: String,
+    },
+    Jog {
+        axis: String,
+        dist: f64,
+    },
+    Tool {
+        n: u8,
+    },
+    NozzleTemp {
+        n: u8,
+        temp: f64,
+    },
+    BedTemp {
+        temp: f64,
+    },
     HeatersOff,
-    Load { n: u8 },
+    Load {
+        n: u8,
+    },
     /// Declares head `n`'s material and colour, as the printer's screen does.
-    Filament { n: u8, vendor: String, material: String, sub_type: String, color: String },
-    Unload { n: u8 },
-    Extrude { n: u8 },
-    Retract { n: u8 },
+    Filament {
+        n: u8,
+        vendor: String,
+        material: String,
+        sub_type: String,
+        color: String,
+    },
+    Unload {
+        n: u8,
+    },
+    Extrude {
+        n: u8,
+    },
+    Retract {
+        n: u8,
+    },
     Clean,
     PurgePosition,
-    PartFan { pct: f64 },
-    ChamberFan { pct: f64 },
-    Purifier { on: bool },
-    Light { on: bool },
+    PartFan {
+        pct: f64,
+    },
+    ChamberFan {
+        pct: f64,
+    },
+    Purifier {
+        on: bool,
+    },
+    Light {
+        on: bool,
+    },
     MotorsOff,
     FirmwareRestart,
     EmergencyStop,
@@ -303,7 +361,8 @@ pub fn parse_state(s: &Value) -> State {
         .collect();
     let hb = &s["heater_bed"];
     let led = &s["led cavity_led"]["color_data"];
-    let light = led.as_array().map(|rows| rows.iter().any(|r| r.as_array().is_some_and(|c| c.iter().any(|x| x.as_f64().unwrap_or(0.0) > 0.0))));
+    let light =
+        led.as_array().map(|rows| rows.iter().any(|r| r.as_array().is_some_and(|c| c.iter().any(|x| x.as_f64().unwrap_or(0.0) > 0.0))));
     let pur = &s["purifier"];
     let purifier = pur.is_object().then(|| {
         let speed = |k: &str| pur[k]["speed"].as_f64().unwrap_or(0.0);
@@ -462,7 +521,12 @@ pub fn plan(a: &Action, st: &State, cfg: &Config) -> Result<Plan> {
                 return Err(anyhow!(crate::t!("err.ctl_official", n = n)));
             }
             // Only what the printer lists, as it names it.
-            let known = cfg.materials.iter().find(|m| &m.kind == material).and_then(|m| m.vendors.iter().find(|v| &v.name == vendor)).is_some_and(|v| v.subs.contains(sub_type));
+            let known = cfg
+                .materials
+                .iter()
+                .find(|m| &m.kind == material)
+                .and_then(|m| m.vendors.iter().find(|v| &v.name == vendor))
+                .is_some_and(|v| v.subs.contains(sub_type));
             if !known {
                 return Err(anyhow!(crate::t!("err.ctl_material", kind = material)));
             }
@@ -648,18 +712,29 @@ mod tests {
         assert!(c.chamber_fan && c.light && c.purifier && c.u1);
         // main_state: a number on the U1's firmware.
         let n = |v: Value| parse_state(&serde_json::json!({ "machine_state_manager": { "main_state": v } })).main_state;
-        assert_eq!((n(serde_json::json!(0)), n(serde_json::json!(3)), n(serde_json::json!(10)), n(serde_json::json!(99))), ("IDLE".into(), "BED_LEVELING".into(), "AUTO_UNLOAD".into(), "99".into()));
+        assert_eq!(
+            (n(serde_json::json!(0)), n(serde_json::json!(3)), n(serde_json::json!(10)), n(serde_json::json!(99))),
+            ("IDLE".into(), "BED_LEVELING".into(), "AUTO_UNLOAD".into(), "99".into())
+        );
         assert_eq!(n(serde_json::json!("IDLE")), "IDLE");
         assert!(!busy_machine(&parse_state(&serde_json::json!({ "machine_state_manager": { "main_state": 0 } }))));
         let s = idle();
-        assert_eq!((s.active, s.position, s.part_fan, s.chamber_fan, s.light, s.purifier), (Some(1), [135.0, 135.0, 10.0], Some(0.5), Some(0.2), Some(true), Some(false)));
+        assert_eq!(
+            (s.active, s.position, s.part_fan, s.chamber_fan, s.light, s.purifier),
+            (Some(1), [135.0, 135.0, 10.0], Some(0.5), Some(0.2), Some(true), Some(false))
+        );
         assert_eq!((s.heads.len(), s.heads[1].temp, s.bed.clone().unwrap().target, s.main_state.as_str()), (4, 210.2, 60.0, "IDLE"));
         // Another Klipper: no U1 objects.
-        let o = parse_state(&serde_json::json!({ "toolhead": { "homed_axes": "", "extruder": "extruder" }, "extruder": { "temperature": 20.0, "target": 0.0 } }));
+        let o = parse_state(
+            &serde_json::json!({ "toolhead": { "homed_axes": "", "extruder": "extruder" }, "extruder": { "temperature": 20.0, "target": 0.0 } }),
+        );
         assert_eq!((o.active, o.light, o.purifier, o.main_state.as_str()), (Some(0), None, None, ""));
         assert_eq!((o.heads[0].filament, o.heads[0].feed_state.clone(), o.heads[0].loaded()), (None, None, None));
         let h = &s.heads;
-        assert_eq!((h[0].loaded(), h[2].loaded(), h[2].inserted, h[3].inserted, h[2].auto_feed), (Some(true), Some(false), Some(true), Some(false), Some(true)));
+        assert_eq!(
+            (h[0].loaded(), h[2].loaded(), h[2].inserted, h[3].inserted, h[2].auto_feed),
+            (Some(true), Some(false), Some(true), Some(false), Some(true))
+        );
         assert!(!parse_config(&serde_json::json!({ "extruder": {} })).u1);
     }
 
@@ -679,7 +754,13 @@ mod tests {
     #[test]
     fn declares_a_filament() {
         let s = idle();
-        let f = |vendor: &str, material: &str, sub: &str, color: &str| Action::Filament { n: 2, vendor: vendor.into(), material: material.into(), sub_type: sub.into(), color: color.into() };
+        let f = |vendor: &str, material: &str, sub: &str, color: &str| Action::Filament {
+            n: 2,
+            vendor: vendor.into(),
+            material: material.into(),
+            sub_type: sub.into(),
+            color: color.into(),
+        };
         // As the screen writes it: "Generic" and an empty subtype for the generic ones.
         assert_eq!(script(f("Generic", "PLA", "", "#ff7a1a"), &s), "SET_PRINT_FILAMENT_CONFIG CONFIG_EXTRUDER=2 VENDOR=\"Generic\" FILAMENT_TYPE=\"PLA\" FILAMENT_SUBTYPE=\"\" FILAMENT_COLOR_RGBA=FF7A1AFF");
         assert_eq!(script(f("Snapmaker", "TPU", "95A HF", "000000"), &s), "SET_PRINT_FILAMENT_CONFIG CONFIG_EXTRUDER=2 VENDOR=\"Snapmaker\" FILAMENT_TYPE=\"TPU\" FILAMENT_SUBTYPE=\"95A HF\" FILAMENT_COLOR_RGBA=000000FF");
@@ -695,8 +776,13 @@ mod tests {
         // Without the printer's list, nothing is declared.
         assert!(plan(&f("Generic", "PLA", "", "#ffffff"), &s, &cfg_bare()).is_err());
         // As the interface sends it.
-        let a: Action = serde_json::from_str(r##"{"kind":"filament","n":1,"vendor":"Generic","material":"PETG","sub_type":"HF","color":"#000000"}"##).unwrap();
-        assert_eq!(a, Action::Filament { n: 1, vendor: "Generic".into(), material: "PETG".into(), sub_type: "HF".into(), color: "#000000".into() });
+        let a: Action =
+            serde_json::from_str(r##"{"kind":"filament","n":1,"vendor":"Generic","material":"PETG","sub_type":"HF","color":"#000000"}"##)
+                .unwrap();
+        assert_eq!(
+            a,
+            Action::Filament { n: 1, vendor: "Generic".into(), material: "PETG".into(), sub_type: "HF".into(), color: "#000000".into() }
+        );
     }
 
     #[test]
@@ -708,10 +794,19 @@ mod tests {
         assert_eq!(script(Action::Home { axes: "x".into() }, &s), "G28 X Y");
         assert_eq!(script(Action::Home { axes: "z".into() }, &s), "G28 Z");
         let other = Config { u1: false, ..cfg() };
-        assert_eq!(plan(&Action::Home { axes: "zx".into() }, &s, &other).map(|p| format!("{p:?}")).unwrap(), format!("{:?}", Plan::Script("G28 X Z".into(), Duration::from_secs(180))));
+        assert_eq!(
+            plan(&Action::Home { axes: "zx".into() }, &s, &other).map(|p| format!("{p:?}")).unwrap(),
+            format!("{:?}", Plan::Script("G28 X Z".into(), Duration::from_secs(180)))
+        );
         // A jog leaves the printer's coordinate mode as it found it.
-        assert_eq!(script(Action::Jog { axis: "x".into(), dist: 10.0 }, &s), "SAVE_GCODE_STATE NAME=snapstudio_jog\nG91\nG0 X10 F6000\nRESTORE_GCODE_STATE NAME=snapstudio_jog");
-        assert_eq!(script(Action::Jog { axis: "z".into(), dist: -0.1 }, &s), "SAVE_GCODE_STATE NAME=snapstudio_jog\nG91\nG0 Z-0.1 F600\nRESTORE_GCODE_STATE NAME=snapstudio_jog");
+        assert_eq!(
+            script(Action::Jog { axis: "x".into(), dist: 10.0 }, &s),
+            "SAVE_GCODE_STATE NAME=snapstudio_jog\nG91\nG0 X10 F6000\nRESTORE_GCODE_STATE NAME=snapstudio_jog"
+        );
+        assert_eq!(
+            script(Action::Jog { axis: "z".into(), dist: -0.1 }, &s),
+            "SAVE_GCODE_STATE NAME=snapstudio_jog\nG91\nG0 Z-0.1 F600\nRESTORE_GCODE_STATE NAME=snapstudio_jog"
+        );
         assert_eq!(script(Action::Tool { n: 2 }, &s), "T2 A0");
         assert_eq!(script(Action::NozzleTemp { n: 0, temp: 215.4 }, &s), "M104 T0 S215 A0");
         assert_eq!(script(Action::NozzleTemp { n: 0, temp: 999.0 }, &s), "M104 T0 S300 A0", "never above max_temp");

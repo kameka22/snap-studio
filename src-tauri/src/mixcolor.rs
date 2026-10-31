@@ -752,10 +752,15 @@ fn parse(hex: &str) -> Option<[u8; 3]> {
 /// cannot be read.
 pub fn mix_hex(a: &str, b: &str, shares: &[f32]) -> Option<Vec<String>> {
     let (a, b) = (parse(a)?, parse(b)?);
-    Some(shares.iter().map(|&t| {
-        let c = lerp(a, b, t);
-        format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
-    }).collect())
+    Some(
+        shares
+            .iter()
+            .map(|&t| {
+                let c = lerp(a, b, t);
+                format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
+            })
+            .collect(),
+    )
 }
 
 #[cfg(test)]

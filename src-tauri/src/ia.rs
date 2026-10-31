@@ -93,10 +93,7 @@ fn one() -> u32 {
 }
 
 fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 // ------------------------------------------------------------ locations
@@ -210,7 +207,6 @@ pub fn mark_started(id: &str) {
     }
 }
 
-
 /// Claude Code's configuration folders, most specific first.
 ///
 /// `CLAUDE_CONFIG_DIR`, when set, replaces `~/.claude` for a local Claude.
@@ -240,10 +236,7 @@ fn claude_roots_from(env: Option<std::ffi::OsString>, home: Option<PathBuf>) -> 
 /// `/Users/me/.config/snap-studio/ia/<id>/workspace` gives
 /// `-Users-me--config-snap-studio-ia-<id>-workspace`.
 fn project_slug(ws: &Path) -> String {
-    ws.to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect()
+    ws.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
 }
 
 /// Where Claude Code stores the session of a working folder: in the first
@@ -251,11 +244,7 @@ fn project_slug(ws: &Path) -> String {
 pub fn session_file(id: &str) -> PathBuf {
     let rel = Path::new("projects").join(project_slug(&workspace(id))).join(format!("{id}.jsonl"));
     let roots = claude_roots();
-    roots
-        .iter()
-        .map(|r| r.join(&rel))
-        .find(|p| p.is_file())
-        .unwrap_or_else(|| roots[0].join(&rel))
+    roots.iter().map(|r| r.join(&rel)).find(|p| p.is_file()).unwrap_or_else(|| roots[0].join(&rel))
 }
 
 /// What Claude Code keeps of one session, outside the conversation folder.
@@ -521,27 +510,14 @@ fn split_by_head(m: MeshData) -> Vec<Part> {
     for (t, head) in m.tris.into_iter().zip(heads) {
         groups.entry(head.clamp(1, 16)).or_default().push(t);
     }
-    groups
-        .into_iter()
-        .map(|(head, tris)| Part {
-            name: format!("part-{head}"),
-            tris,
-            extruder: head,
-            paint: Vec::new(),
-        })
-        .collect()
+    groups.into_iter().map(|(head, tris)| Part { name: format!("part-{head}"), tris, extruder: head, paint: Vec::new() }).collect()
 }
 
 /// An STL as a one-part 3MF, for conversations from before 3MF.
 pub fn stl_to_3mf(src: &Path, dst: &Path, name: &str) -> Result<usize> {
     let m = crate::stl::read(src)?;
     let n = m.tris.len();
-    let part = Part {
-        name: "part-1".into(),
-        tris: m.tris,
-        extruder: 1,
-        paint: Vec::new(),
-    };
+    let part = Part { name: "part-1".into(), tris: m.tris, extruder: 1, paint: Vec::new() };
     write_3mf(dst, name, &[part])?;
     Ok(n)
 }
@@ -594,10 +570,7 @@ fn title_for(prompt: &str, source: &Path) -> String {
         }
         return t;
     }
-    source
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| crate::t!("ia.untitled"))
+    source.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| crate::t!("ia.untitled"))
 }
 
 /// Prepares a conversation: folder, instructions, tools, converted object.
@@ -607,7 +580,11 @@ fn title_for(prompt: &str, source: &Path) -> String {
 pub const ENGINES: [&str; 3] = ["sandbox", "container", "local"];
 
 fn check_engine(engine: &str) -> Result<()> {
-    if ENGINES.contains(&engine) { Ok(()) } else { Err(anyhow!("unknown engine: {engine}")) }
+    if ENGINES.contains(&engine) {
+        Ok(())
+    } else {
+        Err(anyhow!("unknown engine: {engine}"))
+    }
 }
 
 pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation> {
@@ -665,12 +642,7 @@ pub fn create(source: &Path, prompt: &str, engine: &str) -> Result<Conversation>
 ///
 /// The output folder exists from the start — the watch hooks onto it — but
 /// stays empty: the first exported mesh becomes v1.
-pub fn create_blank(
-    prompt: &str,
-    engine: &str,
-    dest_dir: &Path,
-    bounds: Option<[f32; 3]>,
-) -> Result<Conversation> {
+pub fn create_blank(prompt: &str, engine: &str, dest_dir: &Path, bounds: Option<[f32; 3]>) -> Result<Conversation> {
     check_engine(engine)?;
     let prompt = prompt.trim();
     if prompt.is_empty() {
@@ -996,11 +968,7 @@ mod tests {
 
     fn names(a: &Artifacts, root: &Path) -> Vec<String> {
         let base = root.canonicalize().unwrap();
-        let mut v: Vec<String> = a
-            .paths
-            .iter()
-            .map(|p| p.strip_prefix(&base).unwrap().to_string_lossy().into_owned())
-            .collect();
+        let mut v: Vec<String> = a.paths.iter().map(|p| p.strip_prefix(&base).unwrap().to_string_lossy().into_owned()).collect();
         v.sort();
         v
     }
@@ -1044,7 +1012,17 @@ mod tests {
     fn session_artifacts_refuse_bad_ids() {
         let root = fake_root("ids");
         let dashes = "-".repeat(36);
-        for bad in ["", "..", "*", &ID[..35], "../../../../../../etc/passwdxxxxxxxxx", "0b7c3a52-9d1e-4f4a-8a51-3f0e2b6c9d1/", &dashes, "0b7c3a529d1e-4f4a-8a51-3f0e2b6c9d10-", "0b7c3a52-9d1e-4f4a-8a51-3f0e2b6c9d1."] {
+        for bad in [
+            "",
+            "..",
+            "*",
+            &ID[..35],
+            "../../../../../../etc/passwdxxxxxxxxx",
+            "0b7c3a52-9d1e-4f4a-8a51-3f0e2b6c9d1/",
+            &dashes,
+            "0b7c3a529d1e-4f4a-8a51-3f0e2b6c9d10-",
+            "0b7c3a52-9d1e-4f4a-8a51-3f0e2b6c9d1.",
+        ] {
             assert!(artifacts_in(&root, bad).is_err(), "{bad:?} must be refused");
         }
         // A missing root is simply empty.
@@ -1193,16 +1171,7 @@ mod tests {
 
     fn cube_3mf(dst: &Path) {
         let tris = crate::stl::tests_cube();
-        crate::write3mf::write_scene(
-            dst,
-            &[SceneObject {
-                name: "cube".into(),
-                tris,
-                transform: Mat::IDENTITY,
-                extruder: None,
-            }],
-        )
-        .unwrap();
+        crate::write3mf::write_scene(dst, &[SceneObject { name: "cube".into(), tris, transform: Mat::IDENTITY, extruder: None }]).unwrap();
     }
 
     /// Claude installs an object: what `tools/export.py` does.
@@ -1249,7 +1218,13 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("deux-couleurs.3mf");
         let paint = |c: [u8; 3]| -> Vec<crate::mesh::Tri> {
-            crate::stl::tests_cube().into_iter().map(|mut t| { t.c = c; t }).collect()
+            crate::stl::tests_cube()
+                .into_iter()
+                .map(|mut t| {
+                    t.c = c;
+                    t
+                })
+                .collect()
         };
         let parts = [
             Part { name: "body".into(), tris: paint([240, 240, 240]), extruder: 1, paint: Vec::new() },
@@ -1507,8 +1482,7 @@ body.export("body.stl"); eye.export("eye.stl")
         std::fs::create_dir_all(&dest).unwrap();
         assert!(create_blank("  ", "local", &dest, None).is_err(), "description required");
 
-        let c = create_blank("Wall hook for headphones", "local", &dest, Some([270.0, 270.0, 270.0]))
-            .unwrap();
+        let c = create_blank("Wall hook for headphones", "local", &dest, Some([270.0, 270.0, 270.0])).unwrap();
         let ws = workspace(&c.id);
         assert!(c.is_creation());
         assert_eq!(c.version, 0);
@@ -1629,13 +1603,7 @@ mod essai_reel {
         let got = read_mesh(&ws.join(SOURCE)).unwrap();
         let orig = mesh_of_3mf(&src).unwrap();
         let parts = parts_of_3mf(&ws.join(SOURCE)).unwrap();
-        println!(
-            "{} : {} triangles in {} part(s), encombrement {:?} mm",
-            c.source_name,
-            got.tris.len(),
-            parts.len(),
-            got.size()
-        );
+        println!("{} : {} triangles in {} part(s), encombrement {:?} mm", c.source_name, got.tris.len(), parts.len(), got.size());
         assert_eq!(got.tris.len(), orig.tris.len(), "no triangle lost");
         for k in 0..3 {
             assert!((got.min[k] - orig.min[k]).abs() < 1e-3);
@@ -1651,8 +1619,7 @@ mod essai_reel {
                 let from = previews_dir(&c.id).join(format!("{name}.png"));
                 let bytes = std::fs::metadata(&from).unwrap().len();
                 assert!(bytes > 2000, "{name}.png is {bytes} bytes");
-                std::fs::copy(&from, std::path::Path::new(&dest).join(format!("{name}.png")))
-                    .unwrap();
+                std::fs::copy(&from, std::path::Path::new(&dest).join(format!("{name}.png"))).unwrap();
                 println!("preview {name}: {bytes} bytes");
             }
         }
@@ -1669,7 +1636,6 @@ mod essai_reel {
         remove(&c.id).unwrap();
     }
 }
-
 
 // ------------------------------------------------------------ sandbox
 
@@ -1714,11 +1680,7 @@ pub fn dockerfile() -> PathBuf {
 /// deliberately tilted by about twenty degrees: straight from above, all top
 /// faces look the same and relief vanishes — a 0.5 mm engraving rendered a
 /// uniform disc.
-const VIEWS: [(&str, [f32; 3]); 3] = [
-    ("front", [0.0, -1.0, 0.12]),
-    (THREE_QUARTER, [0.62, -1.0, 0.68]),
-    ("top", [0.0, -0.36, 1.0]),
-];
+const VIEWS: [(&str, [f32; 3]); 3] = [("front", [0.0, -1.0, 0.12]), (THREE_QUARTER, [0.62, -1.0, 0.68]), ("top", [0.0, -0.36, 1.0])];
 /// The view that also serves as the thumbnail of a created object.
 const THREE_QUARTER: &str = "three-quarter";
 
@@ -1768,8 +1730,7 @@ pub fn write_previews(id: &str) -> Result<()> {
     for (name, eye) in VIEWS {
         let img = flatten(crate::render::render_from(&mesh, 720, eye));
         let mut png = Vec::new();
-        image::DynamicImage::ImageRgba8(img)
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)?;
+        image::DynamicImage::ImageRgba8(img).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)?;
         std::fs::write(dir.join(format!("{name}.png")), png)?;
     }
     Ok(())
@@ -1790,9 +1751,7 @@ pub fn preview_png(id: &str) -> Result<Vec<u8>> {
 /// An image the user attached to the conversation, with its MIME type. Only a
 /// plain file name of `attachments/` is accepted: no path, no way out.
 pub fn attachment(id: &str, name: &str) -> Result<(Vec<u8>, &'static str)> {
-    let plain = !name.is_empty()
-        && !name.starts_with('.')
-        && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_'));
+    let plain = !name.is_empty() && !name.starts_with('.') && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_'));
     if !valid_id(id) || !plain {
         return Err(anyhow!("unknown attachment"));
     }
@@ -1900,16 +1859,10 @@ pub fn save_to_files(id: &str) -> Result<String> {
         (c.dest_dir.clone().map(PathBuf::from), slug(&c.title))
     } else {
         let src = PathBuf::from(&c.source);
-        let stem = src
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "object".into());
+        let stem = src.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "object".into());
         (src.parent().map(PathBuf::from), stem)
     };
-    let dir = home
-        .filter(|d| d.is_dir())
-        .or_else(dirs::download_dir)
-        .ok_or_else(|| anyhow!(crate::t!("err.nowhere_to_write")))?;
+    let dir = home.filter(|d| d.is_dir()).or_else(dirs::download_dir).ok_or_else(|| anyhow!(crate::t!("err.nowhere_to_write")))?;
     let dst = free_name(&dir, &stem);
     std::fs::copy(current(id), &dst)?;
 
@@ -2032,7 +1985,6 @@ fn next_token() -> u64 {
     N.fetch_add(1, Ordering::Relaxed)
 }
 
-
 fn watchers() -> &'static Mutex<HashMap<String, Watcher>> {
     static W: OnceLock<Mutex<HashMap<String, Watcher>>> = OnceLock::new();
     W.get_or_init(|| Mutex::new(HashMap::new()))
@@ -2060,16 +2012,8 @@ pub struct CurrentDto {
 pub fn current_dto(id: &str) -> Result<CurrentDto> {
     let p = current(id);
     let m = std::fs::metadata(&p)?;
-    let secs = m
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    Ok(CurrentDto {
-        path: p.to_string_lossy().to_string(),
-        stamp: format!("{secs}-{}", m.len()),
-    })
+    let secs = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis()).unwrap_or(0);
+    Ok(CurrentDto { path: p.to_string_lossy().to_string(), stamp: format!("{secs}-{}", m.len()) })
 }
 
 /// Reads the current state and takes its measurements.
@@ -2092,14 +2036,7 @@ pub fn watch_start(app: tauri::AppHandle, id: &str) -> Result<()> {
     let stop = Arc::new(AtomicBool::new(false));
     let last = Arc::new(Mutex::new(hash_file(&current(id)).unwrap_or(0)));
     let token = next_token();
-    watchers().lock().unwrap().insert(
-        id.to_string(),
-        Watcher {
-            stop: stop.clone(),
-            last: last.clone(),
-            token,
-        },
-    );
+    watchers().lock().unwrap().insert(id.to_string(), Watcher { stop: stop.clone(), last: last.clone(), token });
 
     let id = id.to_string();
     std::thread::spawn(move || {
@@ -2146,13 +2083,7 @@ fn consider(id: &str, last: &Mutex<u64>) -> Change {
     }
 }
 
-fn watch_loop(
-    app: &tauri::AppHandle,
-    id: &str,
-    out: &Path,
-    stop: &AtomicBool,
-    last: &Mutex<u64>,
-) {
+fn watch_loop(app: &tauri::AppHandle, id: &str, out: &Path, stop: &AtomicBool, last: &Mutex<u64>) {
     {
         use notify::{RecursiveMode, Watcher as _};
         let (tx, rx) = std::sync::mpsc::channel();
@@ -2195,14 +2126,7 @@ fn watch_loop(
                     continue;
                 }
             };
-            let _ = app.emit(
-                "ia-mesh",
-                MeshEvent {
-                    id: id.to_string(),
-                    version,
-                    stats,
-                },
-            );
+            let _ = app.emit("ia-mesh", MeshEvent { id: id.to_string(), version, stats });
         }
     }
 }
@@ -2243,11 +2167,7 @@ mod watch_tests {
         let delay = t0.elapsed();
         assert!(got.is_ok(), "no event received within 5 s");
         println!("event received in {} ms", delay.as_millis());
-        assert!(
-            delay < Duration::from_secs(2),
-            "trop lent : {} ms",
-            delay.as_millis()
-        );
+        assert!(delay < Duration::from_secs(2), "trop lent : {} ms", delay.as_millis());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -2283,12 +2203,7 @@ mod sortie_tests {
     fn cube_3mf(dst: &Path) {
         crate::write3mf::write_scene(
             dst,
-            &[SceneObject {
-                name: "cube".into(),
-                tris: crate::stl::tests_cube(),
-                transform: Mat::IDENTITY,
-                extruder: None,
-            }],
+            &[SceneObject { name: "cube".into(), tris: crate::stl::tests_cube(), transform: Mat::IDENTITY, extruder: None }],
         )
         .unwrap();
     }
@@ -2303,11 +2218,7 @@ mod sortie_tests {
         let c = create(&src, "", "local").unwrap();
 
         let first = save_to_files(&c.id).unwrap();
-        assert_eq!(
-            Path::new(&first).file_name().unwrap(),
-            "support-ai.3mf",
-            "the object goes back next to its own"
-        );
+        assert_eq!(Path::new(&first).file_name().unwrap(), "support-ai.3mf", "the object goes back next to its own");
         assert_eq!(get(&c.id).unwrap().saved.as_deref(), Some(first.as_str()));
         assert_eq!(mesh_of_3mf(Path::new(&first)).unwrap().tris.len(), 12);
 

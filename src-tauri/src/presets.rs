@@ -153,18 +153,13 @@ fn read_json(p: &Path) -> Option<Value> {
 
 /// Snapmaker Orca's data folder.
 pub fn datadir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("Snapmaker_Orca")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Snapmaker_Orca")
 }
 
 /// Snap Studio's own profiles (`<config>/fr.carlini.snapstudio/profiles/<kind>`):
 /// what the app saves never goes into Snapmaker Orca's folder.
 pub fn app_profiles_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio")
-        .join("profiles")
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio").join("profiles")
 }
 
 /// Folder of the profiles shipped with the app.
@@ -236,11 +231,7 @@ impl Index {
             add(own.join(kind.dir()), kind, true, &mut entries);
         }
 
-        Ok(Index {
-            entries,
-            renamed,
-            selected: read_selected(),
-        })
+        Ok(Index { entries, renamed, selected: read_selected() })
     }
 
     /// A preset's current name: `name` itself, or the system preset that
@@ -277,11 +268,7 @@ impl Index {
         if depth > 16 || !seen.insert(name.to_string()) {
             return Err(Unresolved::Loop);
         }
-        let obj = self
-            .entries
-            .get(name)
-            .and_then(|e| e.json.as_object())
-            .ok_or_else(|| Unresolved::Missing(name.to_string()))?;
+        let obj = self.entries.get(name).and_then(|e| e.json.as_object()).ok_or_else(|| Unresolved::Missing(name.to_string()))?;
         let mut out = match obj.get("inherits").and_then(|v| v.as_str()) {
             // A parent that is missing (a user preset from another Orca
             // version), in a cycle or too deep: no configuration at all,
@@ -344,10 +331,7 @@ impl Index {
             .and_then(|base| self.flatten(base))
             .map(|base| {
                 let own = self.flatten(name).unwrap_or_default();
-                own.iter()
-                    .filter(|(k, v)| base.get(*k) != Some(*v) && !META.contains(&k.as_str()))
-                    .map(|(k, _)| k.clone())
-                    .collect()
+                own.iter().filter(|(k, v)| base.get(*k) != Some(*v) && !META.contains(&k.as_str())).map(|(k, _)| k.clone()).collect()
             })
             .unwrap_or_default();
         for k in META {
@@ -361,10 +345,7 @@ impl Index {
         self.entries
             .iter()
             .filter(|(_, e)| e.kind == kind)
-            .filter(|(_, e)| {
-                e.user
-                    || e.json.get("instantiation").and_then(|v| v.as_str()) == Some("true")
-            })
+            .filter(|(_, e)| e.user || e.json.get("instantiation").and_then(|v| v.as_str()) == Some("true"))
             .collect()
     }
 
@@ -387,11 +368,7 @@ impl Index {
         let mut out = vec![machine.to_string()];
         let mut cur = machine.to_string();
         for _ in 0..16 {
-            let Some(parent) = self
-                .entry(&cur)
-                .and_then(|e| e.json.get("inherits"))
-                .and_then(|v| v.as_str())
-                .filter(|p| !p.is_empty())
+            let Some(parent) = self.entry(&cur).and_then(|e| e.json.get("inherits")).and_then(|v| v.as_str()).filter(|p| !p.is_empty())
             else {
                 break;
             };
@@ -418,9 +395,9 @@ impl Index {
                 // and vendor.
                 let flat = self.flatten(n).unwrap_or_default();
                 let ok = match flat.get("compatible_printers").and_then(|v| v.as_array()) {
-                    Some(list) if !list.is_empty() => list
-                        .iter()
-                        .any(|x| x.as_str().map(|s| names.iter().any(|n| n == s)).unwrap_or(false)),
+                    Some(list) if !list.is_empty() => {
+                        list.iter().any(|x| x.as_str().map(|s| names.iter().any(|n| n == s)).unwrap_or(false))
+                    }
                     // Without an explicit list, the preset applies to everyone.
                     _ => true,
                 };
@@ -449,10 +426,7 @@ impl Index {
 
     /// Usable bed dimensions, in millimeters.
     pub fn plate_size(&self, machine: &str) -> (f32, f32) {
-        let corners = self
-            .flatten(machine)
-            .and_then(|m| m.get("printable_area").and_then(|v| v.as_array()).cloned())
-            .unwrap_or_default();
+        let corners = self.flatten(machine).and_then(|m| m.get("printable_area").and_then(|v| v.as_array()).cloned()).unwrap_or_default();
         let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
         for c in corners {
             // "270.5x271" format.
@@ -477,11 +451,7 @@ impl Index {
 
     /// Printer model of a machine preset ("Snapmaker U1"…).
     pub fn printer_model(&self, machine: &str) -> Option<String> {
-        self.flatten(machine)?
-            .get("printer_model")?
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .map(String::from)
+        self.flatten(machine)?.get("printer_model")?.as_str().filter(|s| !s.is_empty()).map(String::from)
     }
 
     /// Plates offered for a machine, and the default one.
@@ -492,17 +462,10 @@ impl Index {
     /// instead of 65 °C.
     pub fn bed_types(&self, machine: &str) -> (Vec<BedType>, String) {
         let cfg = self.flatten(machine).unwrap_or_default();
-        let u1 = cfg
-            .get("printer_model")
-            .and_then(|v| v.as_str())
-            .is_some_and(|m| m.contains("U1"));
+        let u1 = cfg.get("printer_model").and_then(|v| v.as_str()).is_some_and(|m| m.contains("U1"));
         // Same lists as Orca's interface (`PrintConfig.cpp`).
         let list: &[(&str, &str)] = if u1 {
-            &[
-                ("Textured PEI Plate", "bed.textured_pei"),
-                ("High Temp Plate", "bed.smooth_pei"),
-                ("Graphic Effect Plate", "bed.graphic"),
-            ]
+            &[("Textured PEI Plate", "bed.textured_pei"), ("High Temp Plate", "bed.smooth_pei"), ("Graphic Effect Plate", "bed.graphic")]
         } else {
             &[
                 ("Textured PEI Plate", "bed.textured_pei"),
@@ -514,10 +477,7 @@ impl Index {
             ]
         };
         // The second element is the label's translation key.
-        let types: Vec<BedType> = list
-            .iter()
-            .map(|(value, key)| BedType { value: value.to_string(), label: crate::t!(key) })
-            .collect();
+        let types: Vec<BedType> = list.iter().map(|(value, key)| BedType { value: value.to_string(), label: crate::t!(key) }).collect();
         let default = cfg
             .get("default_bed_type")
             .and_then(|v| v.as_str())
@@ -529,14 +489,7 @@ impl Index {
 
     /// Number of heads a machine declares.
     pub fn extruder_count(&self, machine: &str) -> usize {
-        self.flatten(machine)
-            .and_then(|m| {
-                m.get("nozzle_diameter")
-                    .and_then(|v| v.as_array())
-                    .map(|a| a.len())
-            })
-            .unwrap_or(1)
-            .max(1)
+        self.flatten(machine).and_then(|m| m.get("nozzle_diameter").and_then(|v| v.as_array()).map(|a| a.len())).unwrap_or(1).max(1)
     }
 }
 
@@ -705,10 +658,7 @@ pub fn prepare(
     let count = index.extruder_count(machine);
     let mut paths = Vec::new();
     for i in 0..count {
-        let name = filaments
-            .get(i)
-            .or_else(|| filaments.first())
-            .ok_or_else(|| anyhow!(crate::t!("err.no_filament")))?;
+        let name = filaments.get(i).or_else(|| filaments.first()).ok_or_else(|| anyhow!(crate::t!("err.no_filament")))?;
         if index.kind_of(name) != Some(Kind::Filament) {
             return Err(anyhow!(crate::t!("err.unknown_filament", name = name)));
         }
@@ -730,11 +680,7 @@ pub fn prepare(
         paths.push(write_config(dir, Kind::Filament, name, cfg, &format!("_{i}"))?);
     }
 
-    Ok(Prepared {
-        machine: machine_path,
-        process: process_path,
-        filaments: paths,
-    })
+    Ok(Prepared { machine: machine_path, process: process_path, filaments: paths })
 }
 
 #[cfg(test)]
@@ -755,7 +701,10 @@ mod tests {
     #[test]
     fn save_user_process_writes_a_differential() {
         let mut entries = HashMap::new();
-        entries.insert("0.20mm Standard".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "0.20mm Standard", "layer_height": "0.2"}), user: false });
+        entries.insert(
+            "0.20mm Standard".to_string(),
+            Entry { kind: Kind::Process, json: serde_json::json!({"name": "0.20mm Standard", "layer_height": "0.2"}), user: false },
+        );
         let idx = Index { entries, renamed: HashMap::new(), selected: Default::default() };
         let dir = std::env::temp_dir().join("snapstudio-save-process");
         let _ = std::fs::remove_dir_all(&dir);
@@ -781,12 +730,7 @@ mod tests {
         };
         let procs = idx.processes_for(&user_machine.name);
         let fils = idx.filaments_for(&user_machine.name);
-        println!(
-            "custom preset “{}”: {} processes, {} filaments",
-            user_machine.name,
-            procs.len(),
-            fils.len()
-        );
+        println!("custom preset “{}”: {} processes, {} filaments", user_machine.name, procs.len(), fils.len());
         assert!(!procs.is_empty(), "the parent's processes stay compatible");
         assert!(!fils.is_empty(), "the parent's filaments stay compatible");
     }
@@ -796,10 +740,7 @@ mod tests {
         let Some(idx) = index() else { return };
         let machines = idx.machines();
         println!("{} machines offered", machines.len());
-        let u1 = machines
-            .iter()
-            .find(|m| m.name == "Snapmaker U1 (0.4 nozzle)")
-            .expect("the U1 0.4 is offered");
+        let u1 = machines.iter().find(|m| m.name == "Snapmaker U1 (0.4 nozzle)").expect("the U1 0.4 is offered");
         println!("current selection: {:?}", idx.selected.get("machine"));
 
         let flat = idx.flatten(&u1.name).unwrap();
@@ -814,14 +755,8 @@ mod tests {
         println!("{} processes, {} filaments compatible", procs.len(), fils.len());
         assert!(!procs.is_empty() && !fils.is_empty());
         // The naming trap: 0.4 nozzle filaments have no suffix.
-        assert!(
-            fils.iter().any(|f| f.name.contains("PLA")),
-            "at least one compatible PLA"
-        );
-        assert!(
-            !fils.iter().any(|f| f.name.contains("0.2 nozzle")),
-            "no filament for another nozzle"
-        );
+        assert!(fils.iter().any(|f| f.name.contains("PLA")), "at least one compatible PLA");
+        assert!(!fils.iter().any(|f| f.name.contains("0.2 nozzle")), "no filament for another nozzle");
     }
 
     /// Profiles of OrcaSlicer's reference clone, if it is there (not versioned).
@@ -895,10 +830,7 @@ mod tests {
         assert_eq!(m["from"], "system");
         let pr: Value = serde_json::from_slice(&std::fs::read(&p.process).unwrap()).unwrap();
         assert_eq!(pr["type"], "process");
-        assert!(
-            pr.get("nozzle_diameter").is_some(),
-            "nozzle_diameter copied: it is what avoids the crash"
-        );
+        assert!(pr.get("nozzle_diameter").is_some(), "nozzle_diameter copied: it is what avoids the crash");
         assert_eq!(pr["curr_bed_type"], "Textured PEI Plate", "the U1's default plate");
         println!("process “{process}”, filament “{filament}” → {}", dir.display());
     }
@@ -937,30 +869,23 @@ mod tests {
         let out = dir.join("out");
         std::fs::create_dir_all(&out).unwrap();
         let settings = format!("{};{}", p.machine.display(), p.process.display());
-        let fils = p
-            .filaments
-            .iter()
-            .map(|f| f.display().to_string())
-            .collect::<Vec<_>>()
-            .join(";");
+        let fils = p.filaments.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(";");
         let t = std::time::Instant::now();
         let out_cmd = std::process::Command::new(crate::slicers::executable(&app()).unwrap())
             .args(["--arrange", "0", "--allow-newer-file", "--slice", "0"])
-            .arg("--load-settings").arg(&settings)
-            .arg("--load-filaments").arg(&fils)
-            .arg("--outputdir").arg(&out)
+            .arg("--load-settings")
+            .arg(&settings)
+            .arg("--load-filaments")
+            .arg(&fils)
+            .arg("--outputdir")
+            .arg(&out)
             .arg(&model)
             .output()
             .expect("engine can be started");
         let status = out_cmd.status;
         let mut msg = String::from_utf8_lossy(&out_cmd.stdout).to_string();
         msg.push_str(&String::from_utf8_lossy(&out_cmd.stderr));
-        let tail: Vec<&str> = msg
-            .lines()
-            .filter(|l| !l.contains("sentry") && !l.contains("StaticPrintConfigs"))
-            .rev()
-            .take(4)
-            .collect();
+        let tail: Vec<&str> = msg.lines().filter(|l| !l.contains("sentry") && !l.contains("StaticPrintConfigs")).rev().take(4).collect();
         println!("engine: {:?}", tail);
 
         let produced: Vec<_> = std::fs::read_dir(&out)
@@ -989,12 +914,8 @@ mod tests {
     #[ignore = "reads the user's own Orca presets"]
     fn the_users_presets_all_resolve() {
         let Ok(idx) = Index::build_scoped(&app(), Scope::WithUser) else { return };
-        let broken: Vec<String> = idx
-            .entries
-            .iter()
-            .filter(|(_, e)| e.user)
-            .filter_map(|(n, _)| idx.resolve(n).err().map(|e| format!("{e:#}")))
-            .collect();
+        let broken: Vec<String> =
+            idx.entries.iter().filter(|(_, e)| e.user).filter_map(|(n, _)| idx.resolve(n).err().map(|e| format!("{e:#}"))).collect();
         assert!(broken.is_empty(), "{broken:#?}");
     }
 
@@ -1021,9 +942,26 @@ mod inheritance_tests {
     #[test]
     fn a_missing_parent_resolves_to_nothing() {
         let mut entries = HashMap::new();
-        entries.insert("Child".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Child", "inherits": "Gone", "layer_height": "0.2"}), user: true });
-        entries.insert("Whole".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Whole", "inherits": "Base", "layer_height": "0.2"}), user: true });
-        entries.insert("Base".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Base", "wall_loops": "2"}), user: false });
+        entries.insert(
+            "Child".to_string(),
+            Entry {
+                kind: Kind::Process,
+                json: serde_json::json!({"name": "Child", "inherits": "Gone", "layer_height": "0.2"}),
+                user: true,
+            },
+        );
+        entries.insert(
+            "Whole".to_string(),
+            Entry {
+                kind: Kind::Process,
+                json: serde_json::json!({"name": "Whole", "inherits": "Base", "layer_height": "0.2"}),
+                user: true,
+            },
+        );
+        entries.insert(
+            "Base".to_string(),
+            Entry { kind: Kind::Process, json: serde_json::json!({"name": "Base", "wall_loops": "2"}), user: false },
+        );
         let idx = Index { entries, renamed: HashMap::new(), selected: Default::default() };
         assert!(idx.flatten("Child").is_none(), "no partial configuration for a parent that is not there");
         let whole = idx.flatten("Whole").unwrap();
@@ -1034,9 +972,26 @@ mod inheritance_tests {
     #[test]
     fn a_renamed_parent_resolves_to_its_new_name() {
         let mut entries = HashMap::new();
-        entries.insert("Mine".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Mine", "inherits": "0.08 Extra Fine", "wall_loops": "4"}), user: true });
-        entries.insert("0.08mm Standard".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "0.08mm Standard", "layer_height": "0.08", "wall_loops": "2"}), user: false });
-        entries.insert("Orphan".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Orphan", "inherits": "Gone"}), user: true });
+        entries.insert(
+            "Mine".to_string(),
+            Entry {
+                kind: Kind::Process,
+                json: serde_json::json!({"name": "Mine", "inherits": "0.08 Extra Fine", "wall_loops": "4"}),
+                user: true,
+            },
+        );
+        entries.insert(
+            "0.08mm Standard".to_string(),
+            Entry {
+                kind: Kind::Process,
+                json: serde_json::json!({"name": "0.08mm Standard", "layer_height": "0.08", "wall_loops": "2"}),
+                user: false,
+            },
+        );
+        entries.insert(
+            "Orphan".to_string(),
+            Entry { kind: Kind::Process, json: serde_json::json!({"name": "Orphan", "inherits": "Gone"}), user: true },
+        );
         let renamed = HashMap::from([("0.08 Extra Fine".to_string(), "0.08mm Standard".to_string())]);
         let idx = Index { entries, renamed, selected: Default::default() };
         let flat = idx.resolve("Mine").unwrap();

@@ -24,18 +24,13 @@ pub struct Printer {
 }
 
 fn store_path() -> PathBuf {
-    let dir = dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("fr.carlini.snapstudio");
+    let dir = dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("fr.carlini.snapstudio");
     let _ = std::fs::create_dir_all(&dir);
     dir.join("printers.json")
 }
 
 pub fn load() -> Vec<Printer> {
-    std::fs::read(store_path())
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+    std::fs::read(store_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
 pub fn save(list: &[Printer]) -> Result<()> {
@@ -43,10 +38,7 @@ pub fn save(list: &[Printer]) -> Result<()> {
 }
 
 pub fn new_id() -> String {
-    let n = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+    let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     format!("{:x}", crate::util::fnv1a(&[&n.to_le_bytes()]))
 }
 
@@ -173,10 +165,7 @@ fn f32_of(v: &Value) -> Option<f32> {
 
 fn temp_of(v: Option<&Value>) -> Option<Temp> {
     let o = v?;
-    Some(Temp {
-        current: f32_of(o.get("temperature")?)?,
-        target: o.get("target").and_then(f32_of).unwrap_or(0.0),
-    })
+    Some(Temp { current: f32_of(o.get("temperature")?)?, target: o.get("target").and_then(f32_of).unwrap_or(0.0) })
 }
 
 // ------------------------------------------------------------ sending a print
@@ -185,11 +174,7 @@ fn temp_of(v: Option<&Value>) -> Option<Temp> {
 fn long_client() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| {
-        reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(4))
-            .user_agent("Snap-Studio")
-            .build()
-            .expect("client HTTP")
+        reqwest::Client::builder().connect_timeout(Duration::from_secs(4)).user_agent("Snap-Studio").build().expect("client HTTP")
     })
 }
 
@@ -252,21 +237,13 @@ pub fn map_script(tools: &[u8], map: &[(u8, u8)]) -> String {
 /// sent for what it is worth, the options of the start request are what
 /// count.
 pub fn preference_script(opts: &StartOptions) -> String {
-    opts.orca_entries()
-        .iter()
-        .map(|(k, v)| format!("SET_PRINT_PREFERENCE KEY={k} VALUE={v}"))
-        .collect::<Vec<_>>()
-        .join("\n")
+    opts.orca_entries().iter().map(|(k, v)| format!("SET_PRINT_PREFERENCE KEY={k} VALUE={v}")).collect::<Vec<_>>().join("\n")
 }
 
 /// The options in one `SET_PRINT_PREFERENCES`, for a start without
 /// `start_local_print`: `BED_LEVEL=1 FLOW_CALIBRATE=0 TIME_LAPSE_CAMERA=1`.
 pub fn legacy_preferences_script(opts: &StartOptions) -> String {
-    let kv: Vec<String> = opts
-        .orca_entries()
-        .iter()
-        .map(|(k, v)| format!("{}={v}", k.to_uppercase()))
-        .collect();
+    let kv: Vec<String> = opts.orca_entries().iter().map(|(k, v)| format!("{}={v}", k.to_uppercase())).collect();
     format!("SET_PRINT_PREFERENCES {}", kv.join(" "))
 }
 
@@ -308,10 +285,7 @@ pub fn is_remap(map: &[(u8, u8)]) -> bool {
 /// the tools a print uses: after a print sent with a substitution, a print
 /// started elsewhere (the printer's screen) could inherit it.
 pub fn identity_map_script() -> String {
-    (0..4u8)
-        .map(|h| format!("SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER={h} MAP_EXTRUDER={h}"))
-        .collect::<Vec<_>>()
-        .join("\n")
+    (0..4u8).map(|h| format!("SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER={h} MAP_EXTRUDER={h}")).collect::<Vec<_>>().join("\n")
 }
 
 /// Head printing a G-code tool: its substitute, otherwise the same number.
@@ -353,10 +327,7 @@ pub async fn gcode_script_for(host: &str, port: u16, script: &str, timeout: Dura
     }
     let code = r.status().as_u16();
     let body: Value = r.json().await.unwrap_or(Value::Null);
-    let msg = body
-        .pointer("/error/message")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unexpected response");
+    let msg = body.pointer("/error/message").and_then(|v| v.as_str()).unwrap_or("unexpected response");
     Err(anyhow!("HTTP {code}: {msg}"))
 }
 
@@ -367,11 +338,7 @@ pub fn unknown_commands(responses: &[String], script: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for r in responses {
         let Some(i) = r.find("Unknown command") else { continue };
-        let name = r[i..]
-            .split('"')
-            .nth(1)
-            .map(|n| n.trim().to_string())
-            .unwrap_or_default();
+        let name = r[i..].split('"').nth(1).map(|n| n.trim().to_string()).unwrap_or_default();
         let known = ours.iter().any(|c| c.eq_ignore_ascii_case(&name));
         if known && !out.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
             out.push(name);
@@ -383,14 +350,8 @@ pub fn unknown_commands(responses: &[String], script: &str) -> Vec<String> {
 /// Runs a G-code script over the websocket, reading Klipper's responses: a
 /// command it does not know is a failure, not a silent success.
 pub async fn gcode_script_checked(host: &str, port: u16, script: &str) -> Result<()> {
-    let (_, responses) = ws_session(
-        host,
-        port,
-        "printer.gcode.script",
-        serde_json::json!({ "script": script }),
-        Duration::from_secs(30),
-    )
-    .await?;
+    let (_, responses) =
+        ws_session(host, port, "printer.gcode.script", serde_json::json!({ "script": script }), Duration::from_secs(30)).await?;
     let unknown = unknown_commands(&responses, script);
     if !unknown.is_empty() {
         return Err(anyhow!(crate::t!("err.unknown_command", cmd = unknown.join(", "))));
@@ -413,14 +374,7 @@ pub enum StartRoute {
 /// answer) gets the options in `SET_PRINT_PREFERENCES`, then a plain start.
 /// A printer that refuses the print itself (busy, nozzle mismatch…) is not
 /// asked again another way.
-pub async fn start_print(
-    host: &str,
-    port: u16,
-    path: &str,
-    opts: &StartOptions,
-    tools: &[u8],
-    map: &[(u8, u8)],
-) -> Result<StartRoute> {
+pub async fn start_print(host: &str, port: u16, path: &str, opts: &StartOptions, tools: &[u8], map: &[(u8, u8)]) -> Result<StartRoute> {
     let req = start_request(path, opts, tools, map);
     let err = match ws_session(host, port, "server.files.start_local_print", req, Duration::from_secs(45)).await {
         Ok((v, _)) => {
@@ -473,10 +427,7 @@ pub async fn print_action(host: &str, port: u16, action: &str) -> Result<()> {
         "pause" | "resume" | "cancel" => action,
         _ => return Err(anyhow!("unknown action: {action}")),
     };
-    let r = client()
-        .post(format!("{}/printer/print/{action}", base(host, port)))
-        .send()
-        .await?;
+    let r = client().post(format!("{}/printer/print/{action}", base(host, port))).send().await?;
     if !r.status().is_success() {
         return Err(anyhow!(crate::t!("err.printer_refuses", status = r.status())));
     }
@@ -518,7 +469,8 @@ pub async fn upload(
     // Read as it is sent, 64 KiB at a time: a G-code of hundreds of
     // megabytes is not held in memory (it was, twice over).
     let total = std::fs::metadata(path).with_context(|| format!("reading {}", path.display()))?.len();
-    let mut file = std::io::BufReader::with_capacity(256 * 1024, std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?);
+    let mut file =
+        std::io::BufReader::with_capacity(256 * 1024, std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?);
     let mut sent = 0u64;
     let stream = futures_util::stream::iter(std::iter::from_fn(move || {
         let mut buf = vec![0u8; 64 * 1024];
@@ -536,15 +488,9 @@ pub async fn upload(
     let part = reqwest::multipart::Part::stream_with_length(reqwest::Body::wrap_stream(stream), total)
         .file_name(remote_name.to_string())
         .mime_str("application/octet-stream")?;
-    let form = reqwest::multipart::Form::new()
-        .text("root", "gcodes")
-        .text("print", if start { "true" } else { "false" })
-        .part("file", part);
-    let r = long_client()
-        .post(format!("{}/server/files/upload", base(host, port)))
-        .multipart(form)
-        .send()
-        .await?;
+    let form =
+        reqwest::multipart::Form::new().text("root", "gcodes").text("print", if start { "true" } else { "false" }).part("file", part);
+    let r = long_client().post(format!("{}/server/files/upload", base(host, port))).multipart(form).send().await?;
     if !r.status().is_success() {
         let code = r.status().as_u16();
         let body: Value = r.json().await.unwrap_or(Value::Null);
@@ -565,13 +511,7 @@ pub async fn ws_call(host: &str, port: u16, method: &str, params: Value) -> Resu
 
 /// The same, with its own timeout, also returning the G-code responses
 /// Moonraker relayed meanwhile (`notify_gcode_response`).
-pub async fn ws_session(
-    host: &str,
-    port: u16,
-    method: &str,
-    params: Value,
-    timeout: Duration,
-) -> Result<(Value, Vec<String>)> {
+pub async fn ws_session(host: &str, port: u16, method: &str, params: Value, timeout: Duration) -> Result<(Value, Vec<String>)> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
     let url = ws_url(host, port);
@@ -606,9 +546,7 @@ pub async fn ws_session(
         }
         Err(anyhow!(crate::t!("err.ws_closed", method = method)))
     };
-    tokio::time::timeout(timeout, run)
-        .await
-        .map_err(|_| WsError::Timeout { method: method.to_string() })?
+    tokio::time::timeout(timeout, run).await.map_err(|_| WsError::Timeout { method: method.to_string() })?
 }
 
 /// What a WebSocket request can fail on, when the caller must tell them
@@ -618,8 +556,14 @@ pub async fn ws_session(
 pub enum WsError {
     /// Answered with a JSON-RPC error. `code` -32601 is a method the
     /// firmware does not have, as opposed to a request it refused.
-    Rpc { method: String, code: i64, message: String },
-    Timeout { method: String },
+    Rpc {
+        method: String,
+        code: i64,
+        message: String,
+    },
+    Timeout {
+        method: String,
+    },
 }
 
 impl WsError {
@@ -654,9 +598,7 @@ pub async fn camera_start(host: &str, port: u16) -> Result<()> {
 }
 
 pub async fn camera_stop(host: &str, port: u16) -> Result<()> {
-    ws_call(host, port, "camera.stop_monitor", serde_json::json!({ "domain": "lan" }))
-        .await
-        .map(|_| ())
+    ws_call(host, port, "camera.stop_monitor", serde_json::json!({ "domain": "lan" })).await.map(|_| ())
 }
 
 /// Latest camera image (JPEG), as Snapmaker Orca reads it.
@@ -670,14 +612,12 @@ pub async fn camera_frame(host: &str, port: u16) -> Result<Vec<u8>> {
 }
 
 /// Klipper objects queried at each refresh.
-const OBJECTS: &str = "print_task_config&print_stats&display_status&virtual_sdcard&extruder&extruder1&extruder2&extruder3&heater_bed&toolhead&gcode_move&fan";
+const OBJECTS: &str =
+    "print_task_config&print_stats&display_status&virtual_sdcard&extruder&extruder1&extruder2&extruder3&heater_bed&toolhead&gcode_move&fan";
 
 pub async fn status(host: &str, port: u16) -> Status {
     let b = base(host, port);
-    let mut st = Status {
-        state: "offline".into(),
-        ..Default::default()
-    };
+    let mut st = Status { state: "offline".into(), ..Default::default() };
 
     // 1. Is Moonraker reachable and Klipper ready?
     match get_json(&format!("{b}/server/info")).await {
@@ -721,11 +661,7 @@ pub async fn status(host: &str, port: u16) -> Status {
 
 /// Turns the `/printer/objects/query` answer into a displayable status.
 pub fn apply_objects(v: &Value, st: &mut Status) {
-    let s = v
-        .get("result")
-        .and_then(|r| r.get("status"))
-        .cloned()
-        .unwrap_or(Value::Null);
+    let s = v.get("result").and_then(|r| r.get("status")).cloned().unwrap_or(Value::Null);
     apply_status(&s, st);
 }
 
@@ -735,11 +671,7 @@ pub fn apply_status(s: &Value, st: &mut Status) {
         if let Some(state) = ps.get("state").and_then(|x| x.as_str()) {
             st.state = state.to_string();
         }
-        st.job = ps
-            .get("filename")
-            .and_then(|x| x.as_str())
-            .filter(|f| !f.is_empty())
-            .map(String::from);
+        st.job = ps.get("filename").and_then(|x| x.as_str()).filter(|f| !f.is_empty()).map(String::from);
         st.elapsed_s = ps.get("print_duration").and_then(f32_of);
         st.filament_mm = ps.get("filament_used").and_then(f32_of);
         // Given, even empty, it is the printer's word: a message it has
@@ -771,21 +703,11 @@ pub fn apply_status(s: &Value, st: &mut Status) {
     }
 
     // Active head: `toolhead.extruder` gives its name ("extruder1" for instance).
-    let active = s
-        .get("toolhead")
-        .and_then(|t| t.get("extruder"))
-        .and_then(|x| x.as_str())
-        .unwrap_or("extruder")
-        .to_string();
+    let active = s.get("toolhead").and_then(|t| t.get("extruder")).and_then(|x| x.as_str()).unwrap_or("extruder").to_string();
     for i in 0..4u8 {
         let key = if i == 0 { "extruder".to_string() } else { format!("extruder{i}") };
         if let Some(t) = temp_of(s.get(&key)) {
-            st.nozzles.push(Nozzle {
-                index: i,
-                current: t.current,
-                target: t.target,
-                active: key == active,
-            });
+            st.nozzles.push(Nozzle { index: i, current: t.current, target: t.target, active: key == active });
         }
     }
 
@@ -794,10 +716,7 @@ pub fn apply_status(s: &Value, st: &mut Status) {
     st.bed = temp_of(s.get("heater_bed"));
     st.chamber = temp_of(s.get("chamber"));
     st.fan = s.get("fan").and_then(|f| f.get("speed")).and_then(f32_of);
-    st.speed_factor = s
-        .get("gcode_move")
-        .and_then(|g| g.get("speed_factor"))
-        .and_then(f32_of);
+    st.speed_factor = s.get("gcode_move").and_then(|g| g.get("speed_factor")).and_then(f32_of);
 }
 
 #[derive(Serialize)]
@@ -838,10 +757,7 @@ async fn probe_one(host: &str, port: u16) -> Probe {
                     "probe.moonraker",
                     port = port,
                     state = state,
-                    host = hostname
-                        .as_deref()
-                        .map(|h| crate::t!("probe.host", host = h))
-                        .unwrap_or_default()
+                    host = hostname.as_deref().map(|h| crate::t!("probe.host", host = h)).unwrap_or_default()
                 ),
                 hostname,
                 api: Some("moonraker".into()),
@@ -856,23 +772,15 @@ async fn probe_one(host: &str, port: u16) -> Probe {
                     detail: crate::t!(
                         "probe.octoprint",
                         port = port,
-                        name = v
-                            .get("text")
-                            .and_then(|s| s.as_str())
-                            .map(String::from)
-                            .unwrap_or_else(|| crate::t!("probe.the_printer"))
+                        name = v.get("text").and_then(|s| s.as_str()).map(String::from).unwrap_or_else(|| crate::t!("probe.the_printer"))
                     ),
                     hostname: None,
                     api: Some("octoprint".into()),
                     port,
                 },
-                Err(e2) => Probe {
-                    ok: false,
-                    detail: crate::t!("probe.none", port = port, e1 = e1, e2 = e2),
-                    hostname: None,
-                    api: None,
-                    port,
-                },
+                Err(e2) => {
+                    Probe { ok: false, detail: crate::t!("probe.none", port = port, e1 = e1, e2 = e2), hostname: None, api: None, port }
+                }
             }
         }
     }
@@ -1133,16 +1041,16 @@ mod tests {
 /// subtype and vendor as "NONE": read as nothing.
 fn str_at(v: Option<&Value>, i: usize) -> String {
     let s = v.and_then(|a| a.get(i)).and_then(|x| x.as_str()).unwrap_or("").trim();
-    if s.eq_ignore_ascii_case("none") { String::new() } else { s.to_string() }
+    if s.eq_ignore_ascii_case("none") {
+        String::new()
+    } else {
+        s.to_string()
+    }
 }
 
 /// Color of a slot: "RRGGBBAA" string or ARGB integer depending on firmware.
 fn slot_color(cfg: &Value, i: usize) -> Option<String> {
-    if let Some(s) = cfg
-        .get("filament_color_rgba")
-        .and_then(|a| a.get(i))
-        .and_then(|x| x.as_str())
-    {
+    if let Some(s) = cfg.get("filament_color_rgba").and_then(|a| a.get(i)).and_then(|x| x.as_str()) {
         let h = s.trim().trim_start_matches('#');
         // `get`: a non-ASCII character at the cut (a firmware's string) must
         // not panic, least of all in the jobs monitor.
@@ -1179,11 +1087,7 @@ pub fn apply_filaments(cfg: Option<&Value>, st: &mut Status) {
     for i in 0..len {
         let kind = str_at(cfg.get("filament_type"), i);
         let color = slot_color(cfg, i);
-        let present = cfg
-            .get("filament_exist")
-            .and_then(|a| a.get(i))
-            .and_then(|x| x.as_bool())
-            .unwrap_or(!kind.is_empty());
+        let present = cfg.get("filament_exist").and_then(|a| a.get(i)).and_then(|x| x.as_bool()).unwrap_or(!kind.is_empty());
         if kind.is_empty() && color.is_none() && !present {
             continue;
         }

@@ -39,9 +39,7 @@ pub struct PlateItem {
 }
 
 fn is_stl(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("stl"))
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("stl"))
 }
 
 /// Mesh of an object, centered; also returns its center in the file.
@@ -174,10 +172,7 @@ pub fn pieces(path: &Path, index: usize, piece: Option<usize>) -> Result<Vec<Pie
 
 /// A file's objects, ready to put on the plate.
 pub fn items(path: &Path) -> Result<Vec<PlateItem>> {
-    let stem = path
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "object".into());
+    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "object".into());
     if is_stl(path) {
         let (m, c) = load(path, 0, None, FULL_BUDGET)?;
         return Ok(vec![PlateItem {
@@ -203,10 +198,7 @@ pub fn items(path: &Path) -> Result<Vec<PlateItem>> {
         }
         out.push(PlateItem {
             index: i,
-            name: names
-                .get(&b.objid)
-                .cloned()
-                .unwrap_or_else(|| if many { format!("{stem} {}", i + 1) } else { stem.clone() }),
+            name: names.get(&b.objid).cloned().unwrap_or_else(|| if many { format!("{stem} {}", i + 1) } else { stem.clone() }),
             center: it.center,
             size: size_of(&it.mesh),
             triangles: it.mesh.tris.len(),
@@ -240,10 +232,8 @@ pub fn filament_colored(zip: &mut crate::model3mf::Zip, m: &mut MeshData) {
     if m.extruders.len() != m.tris.len() {
         return;
     }
-    let colors: Vec<Option<[u8; 3]>> = crate::model3mf::project_filaments(zip)
-        .iter()
-        .map(|f| f.color.as_deref().and_then(hex_rgb))
-        .collect();
+    let colors: Vec<Option<[u8; 3]>> =
+        crate::model3mf::project_filaments(zip).iter().map(|f| f.color.as_deref().and_then(hex_rgb)).collect();
     for (t, e) in m.tris.iter_mut().zip(&m.extruders) {
         if t.c == crate::render::DEFAULT_COLOR {
             if let Some(Some(c)) = colors.get(e.saturating_sub(1) as usize) {
@@ -350,7 +340,13 @@ pub fn write_scene(scene: &[SceneItem], pillars: &[Pillar], bed: (f32, f32), dst
 /// a plate with a virtual head (`Some(on)`), in the project's settings as
 /// Orca keeps them; Snap Studio's own tower data (the kind of tower, the
 /// pillars' places) beside it, which Orca ignores.
-pub fn save_scene(scene: &[SceneItem], tower: Option<TowerPlace>, smooth_mix: Option<bool>, snap: Option<&serde_json::Value>, dst: &Path) -> Result<()> {
+pub fn save_scene(
+    scene: &[SceneItem],
+    tower: Option<TowerPlace>,
+    smooth_mix: Option<bool>,
+    snap: Option<&serde_json::Value>,
+    dst: &Path,
+) -> Result<()> {
     write_items(scene, &[], None, dst)?;
     let mut settings = tower.map(|t| t.settings()).unwrap_or_else(|| serde_json::json!({}));
     if let Some(on) = smooth_mix {
@@ -500,7 +496,8 @@ pub fn tower_of(path: &Path) -> Option<FileTower> {
         return None;
     }
     let mut zip = crate::model3mf::open(path).ok()?;
-    let settings = crate::model3mf::read_entry(&mut zip, PROJECT_SETTINGS).and_then(|data| serde_json::from_slice::<serde_json::Value>(&data).ok());
+    let settings =
+        crate::model3mf::read_entry(&mut zip, PROJECT_SETTINGS).and_then(|data| serde_json::from_slice::<serde_json::Value>(&data).ok());
     let place = settings.as_ref().and_then(|v| {
         let num = |k: &str| -> Option<f32> {
             let x = v.get(k)?;
@@ -524,10 +521,8 @@ pub fn tower_of(path: &Path) -> Option<FileTower> {
     };
     // Smooth mix as saved (its first key): an Orca project's is its own
     // profile's, not a choice made here.
-    let smooth_mix = settings
-        .as_ref()
-        .filter(|_| ours)
-        .and_then(|v| v.get(crate::slice::SMOOTH_MIX_OVERRIDES[0])?.as_str().map(|s| s == "1"));
+    let smooth_mix =
+        settings.as_ref().filter(|_| ours).and_then(|v| v.get(crate::slice::SMOOTH_MIX_OVERRIDES[0])?.as_str().map(|s| s == "1"));
     if place.is_none() && snap.is_none() && smooth_mix.is_none() {
         return None;
     }
@@ -582,9 +577,7 @@ fn write_items(scene: &[SceneItem], pillars: &[Pillar], bed: Option<(f32, f32)>,
             }
         }
 
-        let head_of = |e: u8| -> u8 {
-            it.extruder_map.get(e.saturating_sub(1) as usize).copied().unwrap_or(0).min(15)
-        };
+        let head_of = |e: u8| -> u8 { it.extruder_map.get(e.saturating_sub(1) as usize).copied().unwrap_or(0).min(15) };
         let mirrored = it.scale[0] * it.scale[1] * it.scale[2] < 0.0;
         let parts = parts_by_head(&name, m, head_of, mirrored);
         objects.push(crate::write3mf::Object { name, parts, settings: Vec::new() });
@@ -685,10 +678,12 @@ mod tests {
     use crate::mesh::Mat;
 
     fn cube(z0: f32, s: f32) -> Vec<Tri> {
+        #[rustfmt::skip]
         let p = [
             [0., 0., z0], [s, 0., z0], [s, s, z0], [0., s, z0],
             [0., 0., z0 + s], [s, 0., z0 + s], [s, s, z0 + s], [0., s, z0 + s],
         ];
+        #[rustfmt::skip]
         let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
                  [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
         f.iter().map(|t| Tri { v: [p[t[0]], p[t[1]], p[t[2]]], c: [100, 100, 100] }).collect()
@@ -848,12 +843,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("one.3mf");
-        crate::write3mf::write_scene(&src, &[
-            crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
-        ]).unwrap();
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
         let item = SceneItem {
-            path: src.to_string_lossy().to_string(), item: 0, name: "part".into(), pos: [135.0, 135.0],
-            rot: [0.0; 3], scale: unit_scale(), extruder_map: vec![2], piece: None,
+            path: src.to_string_lossy().to_string(),
+            item: 0,
+            name: "part".into(),
+            pos: [135.0, 135.0],
+            rot: [0.0; 3],
+            scale: unit_scale(),
+            extruder_map: vec![2],
+            piece: None,
         };
         let out = tmp.join("scene.3mf");
         let w = write_scene(std::slice::from_ref(&item), &[pillar(20.0, 250.0)], (270.0, 270.0), &out).unwrap();
@@ -863,7 +866,14 @@ mod tests {
         let blocks: Vec<&str> = cfg.split("<object ").skip(1).collect();
         assert_eq!(blocks.len(), 2);
         assert!(blocks[0].contains("Prime tower · PLA"), "the pillar first: {cfg}");
-        for kv in ["sparse_infill_density\" value=\"0%", "top_shell_layers\" value=\"0", "bottom_shell_layers\" value=\"0", "wall_loops\" value=\"2", "brim_type\" value=\"outer_only", "enable_support\" value=\"0"] {
+        for kv in [
+            "sparse_infill_density\" value=\"0%",
+            "top_shell_layers\" value=\"0",
+            "bottom_shell_layers\" value=\"0",
+            "wall_loops\" value=\"2",
+            "brim_type\" value=\"outer_only",
+            "enable_support\" value=\"0",
+        ] {
             assert!(blocks[0].contains(kv), "{kv}: {cfg}");
         }
         assert!(blocks[0].contains(r#"<metadata key="extruder" value="2"/>"#), "the outer ring's head: {cfg}");
@@ -873,7 +883,8 @@ mod tests {
         heads.dedup();
         assert_eq!(heads, vec![2, 1, 3], "outer ring T1, inner ring T0, then the part on T2");
         // Each ring as tall as its head's last layer.
-        let top = |e: u8| m.tris.iter().zip(&m.extruders).filter(|(_, x)| **x == e).flat_map(|(t, _)| t.v.map(|v| v[2])).fold(0.0f32, f32::max);
+        let top =
+            |e: u8| m.tris.iter().zip(&m.extruders).filter(|(_, x)| **x == e).flat_map(|(t, _)| t.v.map(|v| v[2])).fold(0.0f32, f32::max);
         assert!((top(2) - 30.05).abs() < 1e-3 && (top(1) - 10.05).abs() < 1e-3, "{} {}", top(2), top(1));
         // Off the plate, or a ring that makes no sense: refused.
         let err = write_scene(std::slice::from_ref(&item), &[pillar(5.0, 250.0)], (270.0, 270.0), &out).unwrap_err();
@@ -895,12 +906,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("one.3mf");
-        crate::write3mf::write_scene(&src, &[
-            crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
-        ]).unwrap();
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
         let item = SceneItem {
-            path: src.to_string_lossy().to_string(), item: 0, name: "a".into(), pos: [100.0, 100.0],
-            rot: [0.0; 3], scale: unit_scale(), extruder_map: vec![], piece: None,
+            path: src.to_string_lossy().to_string(),
+            item: 0,
+            name: "a".into(),
+            pos: [100.0, 100.0],
+            rot: [0.0; 3],
+            scale: unit_scale(),
+            extruder_map: vec![],
+            piece: None,
         };
         let out = tmp.join("saved.3mf");
         let place = TowerPlace { on: true, x: 15.0, y: 220.0, rot: 0.0 };
@@ -956,12 +975,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("one.3mf");
-        crate::write3mf::write_scene(&src, &[
-            crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
-        ]).unwrap();
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
         let item = SceneItem {
-            path: src.to_string_lossy().to_string(), item: 0, name: "a".into(), pos: [100.0, 100.0],
-            rot: [0.0; 3], scale: unit_scale(), extruder_map: vec![4], piece: None,
+            path: src.to_string_lossy().to_string(),
+            item: 0,
+            name: "a".into(),
+            pos: [100.0, 100.0],
+            rot: [0.0; 3],
+            scale: unit_scale(),
+            extruder_map: vec![4],
+            piece: None,
         };
         let out = tmp.join("scene.3mf");
         write_scene(&[item], &[], (270.0, 270.0), &out).unwrap();
@@ -979,12 +1006,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("one.3mf");
-        crate::write3mf::write_scene(&src, &[
-            crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None },
-        ]).unwrap();
+        crate::write3mf::write_scene(
+            &src,
+            &[crate::write3mf::SceneObject { name: "a".into(), tris: cube(0., 10.), transform: Mat::IDENTITY, extruder: None }],
+        )
+        .unwrap();
         let item = SceneItem {
-            path: src.to_string_lossy().to_string(), item: 0, name: "a".into(), pos: [100.0, 100.0],
-            rot: [0.0; 3], scale: unit_scale(), extruder_map: vec![], piece: None,
+            path: src.to_string_lossy().to_string(),
+            item: 0,
+            name: "a".into(),
+            pos: [100.0, 100.0],
+            rot: [0.0; 3],
+            scale: unit_scale(),
+            extruder_map: vec![],
+            piece: None,
         };
         let out = tmp.join("saved.3mf");
         let place = TowerPlace { on: true, x: 12.5, y: 210.25, rot: 90.0 };
@@ -1053,10 +1088,18 @@ mod tests {
     /// Two separate cubes in one object, the second painted with filament 2.
     fn two_cubes(dst: &Path) {
         let cube = |x: f32| -> Vec<Tri> {
+            #[rustfmt::skip]
             let p = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.], [0., 0., 10.], [10., 0., 10.], [10., 10., 10.], [0., 10., 10.]];
+            #[rustfmt::skip]
             let f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
             f.iter()
-                .map(|t| Tri { v: [t[0], t[1], t[2]].map(|i: usize| { let v: [f32; 3] = p[i]; [v[0] + x, v[1], v[2]] }), c: [200, 200, 200] })
+                .map(|t| Tri {
+                    v: [t[0], t[1], t[2]].map(|i: usize| {
+                        let v: [f32; 3] = p[i];
+                        [v[0] + x, v[1], v[2]]
+                    }),
+                    c: [200, 200, 200],
+                })
                 .collect()
         };
         let mut tris = cube(0.0);
@@ -1115,7 +1158,6 @@ mod tests {
         assert_eq!(b.extruders, vec![2; 12], "color 2 → T1, written 2");
     }
 }
-
 
 #[cfg(test)]
 mod hex_tests {
