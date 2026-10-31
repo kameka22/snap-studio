@@ -32,8 +32,9 @@
   again before a print starts.
 - **More colors than heads** — mix two spools into a new color, and give
   materials that do not bond with each other a prime tower each.
-- **Design with AI** — describe a change or a new part; Claude models it,
-  you watch it take shape in 3D, version by version.
+- **Design with AI** — describe a change or a new part, or start from your
+  own STL or 3MF; Claude models it, you watch it take shape in 3D, version
+  by version.
 - **In nine languages** — English, French, German, Spanish, Brazilian
   Portuguese, Italian, Japanese, Simplified Chinese and Korean.
 
@@ -136,6 +137,8 @@ Different materials that do not bond with each other on one plate, without a pri
 
 Claude modifies a part or creates one from a description.
 
+- Attach your own STL or 3MF models, at the start or during a conversation,
+  for Claude to modify or build on.
 - A chat with a live 3D preview, every version kept.
 - Results are multicolor 3MF files that slice as they are.
 - Conversations can be searched, pinned, renamed, duplicated; see
@@ -420,8 +423,10 @@ Under each printer, **Files** shows what is stored on it, read live.
   head, size, the result of their last print; search and sort. **Print** opens
   the same sheet as after a slice — start it there, queue it, or print it on
   another printer — and the heads it uses are read from the file itself.
-  Download, rename, delete, several at once; the file being printed is
-  protected.
+  Download, rename, delete, several at once: pick them in Select mode, or
+  with Ctrl-click (Cmd-click on macOS) and Shift-click for a range; the
+  selection bar and the right-click menu act on every file picked. The
+  file being printed is protected.
 - **Timelapses**, played straight from the printer (speed 0.5×–4×, full
   screen, previous / next), downloaded or deleted.
 - **Share** a file or a video: the macOS share menu (AirDrop, Messages,
@@ -567,7 +572,8 @@ spot selects with a rectangle, ⇧-click in the list selects a range.
 In the AI list: ⌘F search, ↑ / ↓ and ⏎ open, F2 rename, ⌫ delete. In a
 conversation: ⌘⏎ send, Esc stop Claude.
 
-In a printer's files: ⏎ details, Esc close; in the player: ← / → previous /
+In a printer's files: ⏎ details, Esc close, ⌘-click (Ctrl-click) adds or
+removes a file, ⇧-click picks a range; in the player: ← / → previous /
 next video, Space pause, Esc back.
 
 ## Roadmap

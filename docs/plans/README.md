@@ -12,7 +12,7 @@ lists below.
 | [ai-chat.md](ai-chat.md) | AI conversations as a real chat view (Claude Code stream-json), terminal kept as advanced view | Implemented, with the Claude sign-in window; since #25 the Terminal tab shows the chat's own session (read only). Container mode and macOS checks left (see the plan) |
 | [prime-tower-per-material.md](prime-tower-per-material.md) | One prime tower per material: pillars per group of materials that bond (concentric rings, one per head), engine tower off, list order | Implemented in draft PR [#37](https://github.com/kameka22/snap-studio/pull/37); checks on the U1 left (see the plan) |
 | [languages.md](languages.md) | German, Spanish, Brazilian Portuguese and Italian (wave 1); Japanese, Simplified Chinese and Korean next (wave 2); Weblate for review | Wave 1 implemented in draft PR [#72](https://github.com/kameka22/snap-studio/pull/72) |
-| [printer-files-multi-delete.md](printer-files-multi-delete.md) | Printer files: right-click → Delete on picked files deletes them all and keeps the other picks; Ctrl/Cmd and Shift-click picking outside Select mode | Implemented in draft PR [#84](https://github.com/kameka22/snap-studio/pull/84); checks on a printer left (see the plan) |
+| [printer-files-multi-delete.md](printer-files-multi-delete.md) | Printer files: right-click → Delete on picked files deletes them all and keeps the other picks; Ctrl/Cmd and Shift-click picking outside Select mode | Merged in [#84](https://github.com/kameka22/snap-studio/pull/84), in 0.18.0; checks on a printer left (see the plan) |
 
 ## Planned
 
@@ -22,10 +22,10 @@ lists below.
 | [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
 | [virtual-heads.md](virtual-heads.md) | Virtual heads: color mixing of two spools (Snapmaker Orca's Full Spectrum), one head token per color in Prepare | Written, draft PR |
-| [virtual-heads-smooth-mix.md](virtual-heads-smooth-mix.md) | Virtual heads: smooth mix (Subdivide Mix Layer sent to the engine, on by default) and a warning for colors too far apart | Written, draft PR |
-| [rust-review.md](rust-review.md) | Rust review of `src-tauri/`: renamed Orca presets, protocol pool panics, commands on the UI thread, error context, tests, formatting | Implemented in draft PR [#82](https://github.com/kameka22/snap-studio/pull/82); *Consider* items left |
+| [virtual-heads-smooth-mix.md](virtual-heads-smooth-mix.md) | Virtual heads: smooth mix (Subdivide Mix Layer sent to the engine, on by default) and a warning for colors too far apart | Merged in [#81](https://github.com/kameka22/snap-studio/pull/81), in 0.17.1 |
+| [rust-review.md](rust-review.md) | Rust review of `src-tauri/`: renamed Orca presets, protocol pool panics, commands on the UI thread, error context, tests, formatting | Merged in [#82](https://github.com/kameka22/snap-studio/pull/82), in 0.18.0; *Consider* items left |
 | [prints-redesign.md](prints-redesign.md) | Prints page redesign: list and record (C, chosen from three mockup directions; the stats go to the printer page and a Statistics page in a follow-up) | Implemented in draft PR [#65](https://github.com/kameka22/snap-studio/pull/65) |
-| [ai-source-models.md](ai-source-models.md) | STL and 3MF files as source models in AI conversations (creation sheet and chat); dropped files reach the AI view; a message for files that can't be attached | Implemented in draft PR [#83](https://github.com/kameka22/snap-studio/pull/83); checks in the app on the three systems left |
+| [ai-source-models.md](ai-source-models.md) | STL and 3MF files as source models in AI conversations (creation sheet and chat); dropped files reach the AI view; a message for files that can't be attached | Merged in [#83](https://github.com/kameka22/snap-studio/pull/83), in 0.18.0; checks in the app on the three systems left |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
