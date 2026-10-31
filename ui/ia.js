@@ -731,6 +731,9 @@ async function iaDropPaths(target, paths) {
       toast(tr("chat.drop_locked"), true);
       return;
     }
+    // In the terminal view the message field is hidden: files dropped there
+    // would wait unseen for the next message. The chat shows them.
+    if (IA.view !== "chat") iaSwitchView("chat");
     await chatAttachPaths(paths, CHAT.attach);
     chatRenderAttachments();
   }
