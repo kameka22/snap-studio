@@ -116,6 +116,66 @@ assert.deepEqual(
 assert.deepEqual(L.pflDeleteBatches([{ root: "gcodes", path: "a.gcode" }]), [{ root: "gcodes", paths: ["a.gcode"] }]);
 assert.deepEqual(L.pflDeleteBatches([]), []);
 
+// Right-click: a picked file stands for every picked one, in list order.
+{
+  const order = ["gcodes/a", "gcodes/b", "gcodes/c", "gcodes/d"];
+  const picked = new Set(["gcodes/c", "gcodes/a", "gcodes/b"]);
+  assert.deepEqual(L.pflMenuTargets(true, picked, "gcodes/b", order), ["gcodes/a", "gcodes/b", "gcodes/c"]);
+  // A file not picked: itself alone, and the picks stay as they were.
+  assert.deepEqual(L.pflMenuTargets(true, picked, "gcodes/d", order), ["gcodes/d"]);
+  assert.deepEqual([...picked], ["gcodes/c", "gcodes/a", "gcodes/b"]);
+  // Outside Select mode, the clicked file only, picks or not.
+  assert.deepEqual(L.pflMenuTargets(false, picked, "gcodes/b", order), ["gcodes/b"]);
+  // Nothing picked.
+  assert.deepEqual(L.pflMenuTargets(true, new Set(), "gcodes/a", order), ["gcodes/a"]);
+}
+
+// Shift-click: from the anchor to the clicked key, either way, in list order.
+{
+  const order = ["a", "b", "c", "d", "e"];
+  assert.deepEqual(L.pflRangeKeys(order, "b", "d"), ["b", "c", "d"]);
+  assert.deepEqual(L.pflRangeKeys(order, "d", "b"), ["b", "c", "d"]);
+  assert.deepEqual(L.pflRangeKeys(order, "gone", "c"), ["c"], "an anchor no longer listed");
+  assert.deepEqual(L.pflRangeKeys(order, "a", "gone"), []);
+}
+
+// Ctrl/Cmd and Shift-click outside Select mode, as in the Files view.
+{
+  const order = ["a", "b", "c", "d", "e"];
+  const none = { picked: new Set(), sel: null, anchor: null };
+  const pick = (st, k, mods) => {
+    const r = L.pflPickClick(st, k, order, mods);
+    return { picked: [...r.picked], sel: r.sel, anchor: r.anchor, next: r };
+  };
+  // Plain click: one file, the picks gone, the anchor there.
+  assert.deepEqual(pick({ picked: new Set(["a", "b"]), sel: null, anchor: "a" }, "c").next, { picked: new Set(), sel: "c", anchor: "c" });
+  // Ctrl-click adds to the file already selected.
+  let r = pick({ picked: new Set(), sel: "b", anchor: "b" }, "d", { toggle: true });
+  assert.deepEqual([r.picked, r.sel, r.anchor], [["b", "d"], null, "d"]);
+  // Again on a picked one: out; down to one file, back to a single selection.
+  r = pick(r.next, "b", { toggle: true });
+  assert.deepEqual([r.picked, r.sel, r.anchor], [[], "d", "b"]);
+  // Ctrl-click with nothing selected: that file alone.
+  r = pick(none, "c", { toggle: true });
+  assert.deepEqual([r.picked, r.sel], [[], "c"]);
+  // Shift-click: the range from the selected file, which stays the anchor.
+  r = pick({ picked: new Set(), sel: "b", anchor: null }, "d", { range: true });
+  assert.deepEqual([r.picked, r.sel, r.anchor], [["b", "c", "d"], null, "b"]);
+  // A second Shift-click replaces the range from the same anchor.
+  r = pick(r.next, "a", { range: true });
+  assert.deepEqual([r.picked, r.anchor], [["a", "b"], "b"]);
+  // Shift-click on the anchor itself: one file.
+  r = pick({ picked: new Set(), sel: "c", anchor: "c" }, "c", { range: true });
+  assert.deepEqual([r.picked, r.sel], [[], "c"]);
+  // A selected file hidden by a search does not start the picks.
+  r = pick({ picked: new Set(), sel: "hidden", anchor: "hidden" }, "c", { toggle: true });
+  assert.deepEqual([r.picked, r.sel], [[], "c"]);
+  // The state passed in is never changed.
+  const st = { picked: new Set(["a", "b"]), sel: null, anchor: "a" };
+  L.pflPickClick(st, "c", order, { toggle: true });
+  assert.deepEqual([...st.picked], ["a", "b"]);
+}
+
 // prn: addresses: a space is %20 (Rust decodes it; a "+" would stay "+").
 assert.equal(L.pflPrnQuery("p 1", "gcodes", ".thumbs/Support écran+1.png"), "/f?id=p%201&root=gcodes&p=.thumbs%2FSupport%20%C3%A9cran%2B1.png");
 

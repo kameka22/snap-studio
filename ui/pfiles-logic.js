@@ -157,5 +157,45 @@ function pflDeleteBatches(files) {
   return out;
 }
 
+/* What a right-click acts on. In Select mode, a picked file stands for
+   every picked one (in list order); a file that is not picked, and any file
+   outside Select mode, for itself alone. `picked` is not changed. */
+function pflMenuTargets(selMode, picked, key, order) {
+  if (!selMode || !picked.has(key)) return [key];
+  return order.filter((k) => picked.has(k));
+}
+
+/* Shift-click: the keys from the anchor to the clicked one, both included,
+   in the displayed order. Without an anchor still listed, only the clicked
+   one. */
+function pflRangeKeys(order, anchor, key) {
+  const a = order.indexOf(anchor), b = order.indexOf(key);
+  if (b < 0) return [];
+  if (a < 0) return [key];
+  return order.slice(Math.min(a, b), Math.max(a, b) + 1);
+}
+
+/* Ctrl/Cmd-click (`toggle`) or Shift-click (`range`) outside Select mode, as
+   in the app's Files view: the next `{ picked, sel, anchor }`. The single
+   selection `sel` starts the picks; fewer than two picks fall back to it,
+   so one file keeps its own panel and bar. `order` is the tab's displayed
+   keys: a range never leaves them. */
+function pflPickClick({ picked, sel, anchor }, key, order, { toggle = false, range = false } = {}) {
+  let next;
+  if (range) {
+    anchor = anchor ?? sel;
+    next = new Set(pflRangeKeys(order, anchor, key));
+  } else if (toggle) {
+    // The selected file starts the picks only if it is shown (a search may
+    // hide it): a pick never includes a file the user cannot see.
+    next = pflToggle(picked.size ? picked : new Set(order.includes(sel) ? [sel] : []), key);
+    anchor = key;
+  } else {
+    return { picked: new Set(), sel: key, anchor: key };
+  }
+  if (next.size > 1) return { picked: next, sel: null, anchor };
+  return { picked: new Set(), sel: [...next][0] ?? null, anchor };
+}
+
 if (typeof module !== "undefined")
-  module.exports = { pflPrnQuery, PFL_SORTS, PFL_SPEEDS, pflFold, pflKey, pflName, pflVideoDate, pflVideoTitle, pflDuration, pflDate, pflTitle, pflMatches, pflSort, pflSummary, pflFilaments, pflSendStats, pflCanChange, pflNeighbor, pflNextSpeed, pflClock, pflToggle, pflDeleteBatches };
+  module.exports = { pflPrnQuery, PFL_SORTS, PFL_SPEEDS, pflFold, pflKey, pflName, pflVideoDate, pflVideoTitle, pflDuration, pflDate, pflTitle, pflMatches, pflSort, pflSummary, pflFilaments, pflSendStats, pflCanChange, pflNeighbor, pflNextSpeed, pflClock, pflToggle, pflDeleteBatches, pflMenuTargets, pflRangeKeys, pflPickClick };
