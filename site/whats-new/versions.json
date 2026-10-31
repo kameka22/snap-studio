@@ -24,8 +24,8 @@
           },
           "title": { "en": "Start from your own model", "fr": "Partir de votre propre modèle" },
           "text": {
-            "en": "Drop, choose or paste STL and 3MF files when you start an AI conversation or during one, up to three per message. Claude modifies them or builds on them; with a single model, the conversation starts from it. A file that can’t be attached says why.",
-            "fr": "Déposez, choisissez ou collez des fichiers STL et 3MF au début d’une conversation IA ou pendant, jusqu’à trois par message. Claude les modifie ou s’en sert de base ; avec un seul modèle, la conversation part de lui. Un fichier qui ne peut pas être joint dit pourquoi."
+            "en": "Drop, choose or paste STL and 3MF files when you start an AI conversation or during one, up to three per message. Claude modifies them or builds on them; with a single model, the conversation starts from it. Drag and drop now works for images too, and a file that can’t be attached says why.",
+            "fr": "Déposez, choisissez ou collez des fichiers STL et 3MF au début d’une conversation IA ou pendant, jusqu’à trois par message. Claude les modifie ou s’en sert de base ; avec un seul modèle, la conversation part de lui. Le glisser-déposer marche maintenant aussi pour les images, et un fichier qui ne peut pas être joint dit pourquoi."
           },
           "alt": { "en": "A model in an AI conversation’s 3D preview", "fr": "Un modèle dans l’aperçu 3D d’une conversation IA" }
         },
@@ -74,8 +74,8 @@
           "icon": "check", "color": "#30d158",
           "title": { "en": "Fixes", "fr": "Corrections" },
           "text": {
-            "en": "AI versions show right away. Presets made with Snapmaker Orca 2.3 slice again. Long file operations no longer freeze the window, and previews keep loading after an error in one file. Right-click › Delete on a printer deletes every picked file. Error messages name the file.",
-            "fr": "Les versions IA s’affichent tout de suite. Les profils créés avec Snapmaker Orca 2.3 découpent de nouveau. Les longues opérations sur les fichiers ne bloquent plus la fenêtre, et les aperçus continuent de charger après une erreur sur un fichier. Clic droit › Supprimer sur une imprimante supprime tous les fichiers choisis. Les messages d’erreur nomment le fichier."
+            "en": "AI versions show right away. Presets made with Snapmaker Orca 2.3 slice again. Long file operations no longer freeze the window, and previews keep loading after an error in one file. Right-click › Delete on a printer deletes every picked file. An error message now says which file is at fault.",
+            "fr": "Les versions IA s’affichent tout de suite. Les profils créés avec Snapmaker Orca 2.3 découpent de nouveau. Les longues opérations sur les fichiers ne bloquent plus la fenêtre, et les aperçus continuent de charger après une erreur sur un fichier. Clic droit › Supprimer sur une imprimante supprime tous les fichiers choisis. Un message d’erreur indique maintenant quel fichier pose problème."
           }
         }
       ]
