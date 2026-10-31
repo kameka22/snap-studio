@@ -238,9 +238,7 @@ impl Simple {
 pub fn defaults(process: &str) -> Result<Simple> {
     let app = engine().ok_or_else(|| anyhow!(crate::engine::missing()))?;
     let idx = index_for(&app)?;
-    let cfg = idx
-        .flatten(process)
-        .ok_or_else(|| anyhow!(crate::t!("err.unknown_preset", name = process)))?;
+    let cfg = idx.resolve(process)?;
     Ok(Simple::from_config(&cfg))
 }
 

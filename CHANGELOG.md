@@ -20,6 +20,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   Display → "Use the system title bar" to get the desktop's own back. macOS
   is unchanged (#27).
 
+### Fixed
+- **Presets made with Snapmaker Orca 2.3**: a custom print profile based on
+  a system profile that Orca 2.4 renamed (e.g. "0.08 Extra Fine" → "0.08mm
+  Standard") slices again instead of failing with "unresolvable
+  inheritance". When a parent really is missing, the message now names it.
+
 ## [0.17.1] — 2026-10-28
 
 ### Added

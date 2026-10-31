@@ -50,8 +50,19 @@ struct Entry {
 
 pub struct Index {
     entries: HashMap<String, Entry>,
+    /// Former names of system presets (`renamed_from`) → current name: user
+    /// presets made with an older Orca still inherit the old one.
+    renamed: HashMap<String, String>,
     /// Presets selected in Snapmaker Orca, if readable.
     pub selected: HashMap<String, String>,
+}
+
+/// Why a preset's inheritance does not resolve.
+enum Unresolved {
+    /// This preset, or an ancestor, is not in the index.
+    Missing(String),
+    /// A cycle, or a chain deeper than 16.
+    Loop,
 }
 
 /// Preset bookkeeping keys, of no interest to the user.
@@ -168,7 +179,8 @@ impl Index {
             return Err(anyhow!(crate::t!("err.not_orca", path = app.display())));
         };
         let mut entries = HashMap::new();
-        let add = |dir: PathBuf, kind: Kind, user: bool, entries: &mut HashMap<String, Entry>| {
+        let mut renamed = HashMap::new();
+        let mut add = |dir: PathBuf, kind: Kind, user: bool, entries: &mut HashMap<String, Entry>| {
             let Ok(rd) = std::fs::read_dir(&dir) else { return };
             for e in rd.flatten() {
                 let p = e.path();
@@ -181,6 +193,13 @@ impl Index {
                     .and_then(|v| v.as_str())
                     .map(String::from)
                     .unwrap_or_else(|| p.file_stem().unwrap_or_default().to_string_lossy().to_string());
+                if !user {
+                    // Several former names, separated by `;`.
+                    let old = json.get("renamed_from").and_then(|v| v.as_str()).unwrap_or_default();
+                    for alias in old.split(';').map(str::trim).filter(|a| !a.is_empty()) {
+                        renamed.entry(alias.to_string()).or_insert_with(|| name.clone());
+                    }
+                }
                 // A user preset hides the system one of the same name.
                 if user || !entries.contains_key(&name) {
                     entries.insert(name, Entry { kind, json, user });
@@ -202,21 +221,50 @@ impl Index {
 
         Ok(Index {
             entries,
+            renamed,
             selected: read_selected(),
         })
     }
 
-    /// Complete configuration of a preset, inheritance resolved.
-    pub fn flatten(&self, name: &str) -> Option<Map<String, Value>> {
-        self.flatten_inner(name, &mut HashSet::new(), 0)
+    /// A preset's current name: `name` itself, or the system preset that
+    /// was renamed from it.
+    fn canonical<'a>(&'a self, name: &'a str) -> &'a str {
+        if self.entries.contains_key(name) {
+            return name;
+        }
+        self.renamed.get(name).map_or(name, String::as_str)
     }
 
-    fn flatten_inner(&self, name: &str, seen: &mut HashSet<String>, depth: u32) -> Option<Map<String, Value>> {
+    fn entry(&self, name: &str) -> Option<&Entry> {
+        self.entries.get(self.canonical(name))
+    }
+
+    /// Complete configuration of a preset, inheritance resolved.
+    pub fn flatten(&self, name: &str) -> Option<Map<String, Value>> {
+        self.flatten_inner(name, &mut HashSet::new(), 0).ok()
+    }
+
+    /// As [`Index::flatten`], with an error naming what breaks the chain.
+    pub fn resolve(&self, name: &str) -> Result<Map<String, Value>> {
+        self.flatten_inner(name, &mut HashSet::new(), 0).map_err(|e| match e {
+            Unresolved::Missing(parent) if parent != name => {
+                anyhow!(crate::t!("err.inheritance_missing", name = name, parent = parent))
+            }
+            Unresolved::Missing(_) => anyhow!(crate::t!("err.unknown_preset", name = name)),
+            Unresolved::Loop => anyhow!(crate::t!("err.inheritance", name = name)),
+        })
+    }
+
+    fn flatten_inner(&self, name: &str, seen: &mut HashSet<String>, depth: u32) -> Result<Map<String, Value>, Unresolved> {
+        let name = self.canonical(name);
         if depth > 16 || !seen.insert(name.to_string()) {
-            return None;
+            return Err(Unresolved::Loop);
         }
-        let e = self.entries.get(name)?;
-        let obj = e.json.as_object()?;
+        let obj = self
+            .entries
+            .get(name)
+            .and_then(|e| e.json.as_object())
+            .ok_or_else(|| Unresolved::Missing(name.to_string()))?;
         let mut out = match obj.get("inherits").and_then(|v| v.as_str()) {
             // A parent that is missing (a user preset from another Orca
             // version), in a cycle or too deep: no configuration at all,
@@ -230,17 +278,17 @@ impl Index {
             }
             out.insert(k.clone(), v.clone());
         }
-        Some(out)
+        Ok(out)
     }
 
     pub fn kind_of(&self, name: &str) -> Option<Kind> {
-        self.entries.get(name).map(|e| e.kind)
+        self.entry(name).map(|e| e.kind)
     }
 
     /// Inheritance chain, from the preset to its ancestors.
     pub fn chain(&self, name: &str) -> Vec<String> {
         let mut out = vec![];
-        let mut cur = Some(name.to_string());
+        let mut cur = Some(self.canonical(name).to_string());
         while let Some(n) = cur.take() {
             if out.contains(&n) || out.len() > 16 {
                 break;
@@ -251,7 +299,7 @@ impl Index {
                 .and_then(|e| e.json.get("inherits"))
                 .and_then(|v| v.as_str())
                 .filter(|p| !p.is_empty())
-                .map(String::from);
+                .map(|p| self.canonical(p).to_string());
             out.push(n);
         }
         out
@@ -260,7 +308,7 @@ impl Index {
     /// Content of a preset as it goes to the engine: inheritance resolved, then
     /// `extra`, what Snap Studio adds for this slice.
     pub fn details(&self, name: &str, extra: &Map<String, Value>) -> Option<Details> {
-        let e = self.entries.get(name)?;
+        let e = self.entry(name)?;
         let mut values = self.flatten(name)?;
         let mut snap = vec![];
         for (k, v) in extra {
@@ -323,16 +371,20 @@ impl Index {
         let mut cur = machine.to_string();
         for _ in 0..16 {
             let Some(parent) = self
-                .entries
-                .get(&cur)
+                .entry(&cur)
                 .and_then(|e| e.json.get("inherits"))
                 .and_then(|v| v.as_str())
                 .filter(|p| !p.is_empty())
             else {
                 break;
             };
+            // Both names: lists written before the renaming cite the old one.
             out.push(parent.to_string());
-            cur = parent.to_string();
+            let current = self.canonical(parent);
+            if current != parent {
+                out.push(current.to_string());
+            }
+            cur = current.to_string();
         }
         out
     }
@@ -615,12 +667,8 @@ pub fn prepare(
     if index.kind_of(process) != Some(Kind::Process) {
         return Err(anyhow!(crate::t!("err.unknown_process", name = process)));
     }
-    let machine_cfg = index
-        .flatten(machine)
-        .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = machine)))?;
-    let mut process_cfg = index
-        .flatten(process)
-        .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = process)))?;
+    let machine_cfg = index.resolve(machine)?;
+    let mut process_cfg = index.resolve(process)?;
 
     // Without this copy, `normalize_fdm` looks for `nozzle_diameter` next to
     // `wipe_tower_filament` and hits a null pointer.
@@ -647,9 +695,7 @@ pub fn prepare(
         if index.kind_of(name) != Some(Kind::Filament) {
             return Err(anyhow!(crate::t!("err.unknown_filament", name = name)));
         }
-        let mut cfg = index
-            .flatten(name)
-            .ok_or_else(|| anyhow!(crate::t!("err.inheritance", name = name)))?;
+        let mut cfg = index.resolve(name)?;
         declare_compatible(&mut cfg, machine);
         for (k, v) in filament_extra(colors.get(i).and_then(|c| c.as_deref())) {
             cfg.insert(k, v);
@@ -693,7 +739,7 @@ mod tests {
     fn save_user_process_writes_a_differential() {
         let mut entries = HashMap::new();
         entries.insert("0.20mm Standard".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "0.20mm Standard", "layer_height": "0.2"}), user: false });
-        let idx = Index { entries, selected: Default::default() };
+        let idx = Index { entries, renamed: HashMap::new(), selected: Default::default() };
         let dir = std::env::temp_dir().join("snapstudio-save-process");
         let _ = std::fs::remove_dir_all(&dir);
         let mut v = Map::new();
@@ -945,10 +991,26 @@ mod inheritance_tests {
         entries.insert("Child".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Child", "inherits": "Gone", "layer_height": "0.2"}), user: true });
         entries.insert("Whole".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Whole", "inherits": "Base", "layer_height": "0.2"}), user: true });
         entries.insert("Base".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Base", "wall_loops": "2"}), user: false });
-        let idx = Index { entries, selected: Default::default() };
+        let idx = Index { entries, renamed: HashMap::new(), selected: Default::default() };
         assert!(idx.flatten("Child").is_none(), "no partial configuration for a parent that is not there");
         let whole = idx.flatten("Whole").unwrap();
         assert_eq!(whole["wall_loops"], "2");
         assert_eq!(whole["layer_height"], "0.2");
+    }
+
+    #[test]
+    fn a_renamed_parent_resolves_to_its_new_name() {
+        let mut entries = HashMap::new();
+        entries.insert("Mine".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Mine", "inherits": "0.08 Extra Fine", "wall_loops": "4"}), user: true });
+        entries.insert("0.08mm Standard".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "0.08mm Standard", "layer_height": "0.08", "wall_loops": "2"}), user: false });
+        entries.insert("Orphan".to_string(), Entry { kind: Kind::Process, json: serde_json::json!({"name": "Orphan", "inherits": "Gone"}), user: true });
+        let renamed = HashMap::from([("0.08 Extra Fine".to_string(), "0.08mm Standard".to_string())]);
+        let idx = Index { entries, renamed, selected: Default::default() };
+        let flat = idx.resolve("Mine").unwrap();
+        assert_eq!((flat["layer_height"].as_str(), flat["wall_loops"].as_str()), (Some("0.08"), Some("4")));
+        assert_eq!(idx.chain("Mine"), ["Mine", "0.08mm Standard"]);
+        assert_eq!(idx.kind_of("0.08 Extra Fine"), Some(Kind::Process));
+        let err = idx.resolve("Orphan").unwrap_err().to_string();
+        assert!(err.contains("Orphan") && err.contains("Gone"), "{err}");
     }
 }

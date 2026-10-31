@@ -989,6 +989,7 @@
   "err.bad_preset_name": "nome del profilo non valido",
   "err.preset_exists": "esiste già un profilo di sistema chiamato {name}",
   "err.inheritance": "ereditarietà irrisolvibile per {name}",
+  "err.inheritance_missing": "{name}: manca il preset padre «{parent}» (creato con un'altra versione di Snapmaker Orca?)",
   "err.no_filament": "nessun filamento scelto",
   "err.unknown_filament": "profilo filamento sconosciuto: {name}",
   "err.not_orca": "profili non trovati in {path}: questa applicazione non è Snapmaker Orca",

@@ -957,6 +957,7 @@
   "err.bad_preset_name": "配置名称无效",
   "err.preset_exists": "已有名为 {name} 的系统配置",
   "err.inheritance": "无法解析 {name} 的继承关系",
+  "err.inheritance_missing": "{name}：找不到其父预设“{parent}”（是否由其他版本的 Snapmaker Orca 创建？）",
   "err.no_filament": "未选择耗材",
   "err.unknown_filament": "未知耗材预设：{name}",
   "err.not_orca": "在 {path} 中未找到配置：此应用程序不是 Snapmaker Orca",
