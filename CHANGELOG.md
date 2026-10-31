@@ -19,6 +19,11 @@ with its packages for macOS, Windows and Linux. What comes next:
   desktop's button layout puts them, with rounded corners, and Settings →
   Display → "Use the system title bar" to get the desktop's own back. macOS
   is unchanged (#27).
+- **Picking several files on a printer with the mouse**: in Printer ›
+  Files, Ctrl-click (Cmd-click on macOS) adds or removes a file and
+  Shift-click picks a range, as in the Files view, without entering Select
+  mode first. The selection bar and the right-click menu act on the files
+  picked (#84).
 
 ### Fixed
 - **Presets made with Snapmaker Orca 2.3**: a custom print profile based on
@@ -32,6 +37,9 @@ with its packages for macOS, Windows and Linux. What comes next:
 - **Previews and thumbnails no longer stop loading for good** after an
   error in one file: the faulty file answers with an error and the others
   keep loading.
+- **Deleting several files on a printer**: with files picked in Select mode,
+  right-click → Delete now deletes every picked file ("Delete {n} files"),
+  instead of only the one clicked, and the other picks are kept (#84).
 
 ## [0.17.1] — 2026-10-28
 

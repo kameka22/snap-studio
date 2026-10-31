@@ -1,5 +1,8 @@
 # Printer files: deleting several files deletes only one
 
+Implemented in #84, with Ctrl/Cmd and Shift-click picking added (see
+[Multi-selection outside Select mode](#multi-selection-outside-select-mode)).
+
 A printer's Files page (Printer › Files, `ui/printer-files.js`): with
 several files picked in Select mode, a delete often removes a single file,
 and the other files are no longer picked afterwards.
@@ -70,6 +73,30 @@ delete while the first one runs. Keys are escaped the same way on both sides
 
 No Rust change: `pf_delete` already takes a list.
 
+## Multi-selection outside Select mode
+
+Added to the same PR at the owner's request, as in the app's Files view
+(`ui/app.js`, `clickItem`):
+
+- **Ctrl-click** (Cmd-click on macOS) adds or removes a file; the file
+  selected before starts the picks. **Shift-click** picks the range from the
+  anchor (the last file clicked) to the clicked one, in the tab's displayed
+  order (sort, search and tab respected; a range never mixes tabs). A plain
+  click goes back to one file, Esc clears the picks.
+- The picks are `PFL.picked`, as in Select mode, so the selection bar
+  (count, Download, Delete) and the context menu (`pflMenuTargets`) act on
+  them. Pure logic in `ui/pfiles-logic.js`: `pflRangeKeys` and
+  `pflPickClick`, tested in `scripts/test-pfiles.js`.
+- Print files picked are always two or more: one left becomes the selected
+  file again, with its panel and its one-file bar. Videos have no single
+  selection (a click plays), so one video can stay picked.
+- Items are marked in place (`pflRenderPicks`), not re-rendered: a full
+  render would reload every thumbnail.
+- **Download** with several targets sends one `pf_download` per root, as
+  delete does: the Videos tab can mix `timelapse` and `camera` (this also
+  fixes the selection bar's Download, which sent everything under the first
+  file's root).
+
 ## Tests
 
 - `scripts/test-pfiles.js`: `pflMenuTargets` covers several picked files
@@ -90,3 +117,10 @@ No Rust change: `pf_delete` already takes a list.
 4. The selection bar's Delete with 3 picked files still deletes the 3.
 5. A file that is printing stays protected, from the menu and from the bar.
 6. Outside Select mode, right-click → Delete still deletes one file.
+7. Outside Select mode: click a file, Cmd-click (Ctrl-click on Windows and
+   Linux) two others: the 3 are highlighted and the bar says 3. Shift-click
+   another file: the range from the last Cmd-clicked file. Right-click one
+   of them → "Delete {n} files". A plain click, or Esc, goes back to one
+   file.
+8. Videos tab: Cmd-click a timelapse and a camera video, right-click →
+   Download: both are saved (one call per root).
