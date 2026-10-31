@@ -1004,9 +1004,9 @@ pub fn close(id: &str) {
     }
     #[cfg(unix)]
     {
-        unsafe {
+        if let Ok(pgid) = libc::pid_t::try_from(sess.child.id()) {
             // SAFETY: plain signal to the process group we created.
-            libc::killpg(sess.child.id() as i32, libc::SIGTERM);
+            unsafe { libc::killpg(pgid, libc::SIGTERM) };
         }
         if ended_within(&mut sess.child, TERM_GRACE) {
             return;

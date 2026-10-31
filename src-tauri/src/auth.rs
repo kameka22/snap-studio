@@ -258,8 +258,9 @@ fn run(argv: &[String], envs: &[(String, String)], deadline: Duration, enough: i
 /// to the container), forced after a moment.
 fn stop(child: &mut std::process::Child) {
     #[cfg(unix)]
-    unsafe {
-        libc::killpg(child.id() as i32, libc::SIGTERM);
+    if let Ok(pgid) = libc::pid_t::try_from(child.id()) {
+        // SAFETY: plain signal to the process group we created.
+        unsafe { libc::killpg(pgid, libc::SIGTERM) };
     }
     let end = Instant::now() + Duration::from_secs(3);
     while Instant::now() < end {

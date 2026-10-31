@@ -1349,8 +1349,10 @@ fn job_percent(engine: f32) -> f32 {
 
 #[cfg(unix)]
 fn terminate(pid: u32) {
+    // A pid that does not fit would wrap negative: a whole process group.
+    let Ok(pid) = libc::pid_t::try_from(pid) else { return };
     // SAFETY: plain signal sent to a process we started.
-    unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+    unsafe { libc::kill(pid, libc::SIGTERM) };
 }
 
 #[cfg(windows)]
