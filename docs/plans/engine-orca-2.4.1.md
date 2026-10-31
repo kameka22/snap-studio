@@ -1,6 +1,6 @@
 # Engine: Snapmaker Orca 2.4.0 → 2.4.1
 
-**State: plan, awaiting a go.** Nothing in this plan is implemented: the
+**State: plan, decisions taken on 2026-10-31 (D2 after test T2), awaiting the implementation go.** Nothing in this plan is implemented: the
 bundled engine stays at 2.4.0 (`src-tauri/engine.json`), no engine
 workflow was started and no `engine-orca-2.4.1` release exists.
 
@@ -104,7 +104,7 @@ questions for the measurements.
   line, and Prepare always sends its own `wipe_tower_x` / `_y` /
   `_rotation_angle` (`prTowerOverrides`). The 15 / 220 fallback in
   `ptSpot` and the `plate.rs` tests remain the engine's defaults. Adopting
-  the new place would be a product choice (decision D3).
+  the new place was a product choice: D3 keeps ours.
 
 ### 3. Changed defaults and limits
 
@@ -206,66 +206,78 @@ For Snap Studio:
 | `src-tauri/engine.json` | 2.4.0, four archives of the `engine-orca-2.4.0` release | Rewritten by `scripts/engine.sh 2.4.1` (never by hand) |
 | `scripts/engine.sh`, `.github/workflows/engine.yml` | Generic per version | **No change needed.** The official v2.4.1 assets have the names the workflow builds (one `.dmg` serves both macOS builds): `Snapmaker_Orca_Mac_universal_V2.4.1.dmg`, `Snapmaker_Orca_Windows_V2.4.1_portable.zip`, `Snapmaker_Orca_Linux_AppImage_Ubuntu2404_V2.4.1.AppImage` (checked through the API) |
 | `ui/tower-logic.js` `ptEstimate` | One block: depth = (heads − 1) × lines per tool change, calibrated on 2.4.0 | **Depth = sum of one estimate per category used.** The rib square and the brim margin are recomputed from that depth. A plate with a single category should keep today's size; to re-measure |
-| `ui/tower-logic.js` `ptSpot` | Fallback X 15, Y 220, back-left corner first | Unchanged unless D3 |
+| `ui/tower-logic.js` `ptSpot` | Fallback X 15, Y 220, back-left corner first | Unchanged (D3) |
 | `ui/prepare-tower.js` | Sends `wipe_tower_x/y/rotation_angle`, reads the sliced size back (`gcode.rs` `TowerBox`) | Unchanged. The real size after slicing stays the reference |
 | `ui/slice-adv.js` `ADV_ENGINE_DEFAULTS` | Copied from 2.4.0 | Header says 2.4.1. No listed key changes default. `max_bridge_length` and `raft_first_layer_expansion` are not in the list (they come from the profile or the engine) |
 | `ui/slice-adv.js` steps / ranges | `bridge_flow` step only | If the catalog carries limits: `bridge_density` up to 120 %, `support_threshold_angle` from 1 |
 | `ui/speed.js` `SPD_ENGINE_DEFAULTS` | Copied from 2.4.0 | **No change of value** (none of its keys changed). Header comment only. The new `first_layer_travel_acceleration` / `_jerk` are left to the engine |
 | `ui/assets/orca-settings.*.json` | Generated from v2.4.0 (`scripts/gen-orca-settings.py`) | Regenerate from v2.4.1 for the new settings, labels and translations, and check the `FIXES` table still applies |
-| `ui/spoolcheck.js` `spBonds`, `spTowerAdvice` | Our table of families that bond | Compare with upstream's categories (D4). They agree on ABS/ASA, PETG/PET/PCTG and the PLA variants. **We say PLA and PVA bond, while upstream puts them in different blocks.** We don't know about PA and PC; upstream gives each its own category |
+| `ui/spoolcheck.js` `spBonds`, `spTowerAdvice` | Our table of families that bond | Aligned on upstream's categories (D4). They already agree on ABS/ASA, PETG/PET/PCTG and the PLA variants. PLA and PVA stop bonding, and PA and PC get their own categories. The same table gives the `filament_adhesiveness_category` Snap Studio sends (D6) |
 | `slice.tower.conflict` (9 languages), `slice.tower.walled` | "The prime tower mixes materials that do not bond… may come off or collapse", with "No tower" / "Outer wall in X" | **Probably wrong as worded** with "One tower" on 2.4.1, if the blocks hold (D2). The "outer wall in one material" fix may no longer make sense |
-| `ui/pillar-logic.js`, `plate.rs` pillars (#37) | Engine tower off (`enable_prime_tower 0`), ring pillars, `print_order as_obj_list` | Still valid (nothing engine-side changed for them), but no longer the only way to keep materials apart (D1). Re-check `as_obj_list` and the per-object walls-only settings on 2.4.1 |
+| `ui/pillar-logic.js`, `plate.rs` pillars (#37) | Engine tower off (`enable_prime_tower 0`), ring pillars, `print_order as_obj_list` | Still valid (nothing engine-side changed for them), kept as an option next to the engine's block tower, which becomes the default (D1). Re-check `as_obj_list` and the per-object walls-only settings on 2.4.1 |
 | `src-tauri/src/slice.rs` `engine_prime_tower_position` | Opt-in test on 2.4.0 | Run on 2.4.1. Add a case with two categories (PLA + PETG) that checks a tower at the requested corner and its depth |
 | `scripts/test-tower.js` | Real depths measured on 2.4.0 | Re-measure on 2.4.1 and add cases with two categories |
 | `scripts/test-adv.js`, `test-pillars.js` | Assert the conflict message and the pillar overrides | Follow D1 / D2 |
 | `src-tauri/src/slicers.rs` | Detects an installed Snapmaker Orca, comment "V2.4.0" | Comment only |
 | Docs: `docs/technical-overview.md` (tower section), `docs/plans/prime-tower-per-material.md`, README / README.fr (engine version, if mentioned), CHANGELOG | 2.4.0 | Updated with the implementation PR. One CHANGELOG line: "Slicing engine updated to Snapmaker Orca 2.4.1", with its user-visible effects |
 
-## Open decisions
+## Decisions
 
-- **D1. #37's per-material towers.** Choose one:
-  - keep them as an **option** ("faster" / "separate pillars") next to
-    the engine's block tower, which becomes the default for plates whose
-    materials don't bond;
-  - keep them as the default, and the block tower the option;
-  - remove them.
+Decided by kameka22 on 2026-10-31, except D2. The implementation go has
+**not** been given yet.
 
-  *Proposal: keep them as an option until T3 / T4 compare both on a real
-  U1 (time, material, tower stability).*
-- **D2. The conflict message (#35).** If 2.4.1's blocks really keep
-  materials that don't bond apart:
-  - drop the warning with one tower, or turn it into an information line
-    ("The tower keeps materials that don't bond in separate blocks");
+- **D1. #37's per-material towers: kept as an option.** The engine's
+  block tower becomes the default "One tower" mode, also on plates whose
+  materials don't bond. The per-material pillars stay available as a
+  choice next to it.
+- **D2. The conflict message (#35): open, to decide after T2.** If
+  2.4.1's blocks keep materials that don't bond apart, the choice is
+  between two options:
+  - drop `slice.tower.conflict` in "One tower" mode, or turn it into an
+    information line;
   - drop the "outer wall in one material" fix.
 
-  If the shared outer wall still mixes them (T2), rewrite the warning
-  instead. *Wording to decide after T2, in English and French first.*
-- **D3. Default tower position.** Choose one:
-  - keep ours (back-left corner first, then the other corners, then the
-    first free spot);
-  - follow the new GUI default (X 13, middle of the left edge).
+  If the shared outer wall still mixes them, the warning is rewritten
+  instead. kameka22 decides once T2's results are in. Until then the
+  implementation keeps today's strings and behavior.
+- **D3. Default tower position: ours is kept.** That is X 15, Y 220, the
+  back-left corner first, then the other corners and the first free
+  spot (`ptSpot`). The new GUI default (middle of the left edge) is not
+  followed.
+- **D4. Material table: aligned on upstream's categories.** `spBonds`
+  follows `filament_adhesiveness_category`: two families bond when they
+  share a category. Compared with today's table:
+  - PLA and PVA **no longer bond** (100 vs 704);
+  - PA and PC are **known**, each in its own category (400, 500), so they
+    don't bond with each other or with other families;
+  - ABS/ASA (200) and PETG/PET/PCTG (300) are unchanged.
 
-  *Proposal: keep ours. The command line didn't change and existing
-  projects keep their place.*
-- **D4. Material table.** Choose one:
-  - align `spBonds` with upstream's categories, at least for PLA/PVA and
-    PA/PC;
-  - keep our table and only use upstream's categories in the tower estimate.
-- **D5. New bridge defaults.** Nothing to do if we follow the U1 profile:
-  0.20 mm Standard gets bridge flow 1 and density 100 %, and every
-  profile gets `max_bridge_length` 0. The other choice is to pin the 2.4.0
-  values for continuity. *Proposal: follow the profile, and say so in the
-  CHANGELOG.*
-- **D6. Filaments without a category.** User or third-party filament
-  profiles that don't inherit a Snapmaker base profile fall to category
-  100, the PLA one. Choose one:
-  - send `filament_adhesiveness_category` ourselves, derived from the
-    filament type;
-  - leave it to the engine.
-- **D7. New 2.4.1 settings in the slice sheet**, for example internal
-  ribs, paint penetration layers or minimum support contact area: none in
-  this upgrade, or some. *Proposal: none in this upgrade, a follow-up if
-  wanted.*
+  Families with no upstream category, such as TPE, keep today's
+  entries.
+- **D5. Bridge defaults: 2.4.1's are adopted.** `max_bridge_length` 0, and
+  bridge flow 1 and density 100 % in the U1 0.20 mm Standard 0.4
+  profile. They come with the engine and its profiles, and nothing is
+  pinned to 2.4.0. The CHANGELOG line says so.
+- **D6. Snap Studio sends `filament_adhesiveness_category` itself.** The
+  value comes from the filament's material type (`filament_type`, else
+  the family from its name), mapped with upstream's table (§ 1). That
+  way a user or third-party filament that doesn't inherit a Snapmaker
+  base profile gets the right block, instead of 100.
+  - A value the flattened profile already carries is kept.
+  - A type with no known category is not sent, so the engine default
+    applies.
+- **D7. New 2.4.1 settings: exposed in this upgrade.** They go in the
+  slice sheet, in the groups Orca puts them in (the catalog regenerated
+  from `Tab.cpp`):
+  - internal ribs (`prime_tower_enable_framework`);
+  - top and bottom paint penetration layers;
+  - minimum support contact area;
+  - the support transition settings;
+  - first layer travel acceleration and jerk.
+
+  The options Orca shows only in Developer mode (tower interface
+  features, adhesiveness category) are not shown, because the category
+  is handled by D6.
 
 ## Implementation plan (after the go)
 
@@ -277,19 +289,50 @@ For Snap Studio:
    runs it, or it needs an explicit OK.*
 2. **Catalog**: `python3 scripts/gen-orca-settings.py <OrcaSlicer at
    v2.4.1>`, then `python3 scripts/check-i18n.py`.
-3. **Defaults**: the 2.4.1 headers in `slice-adv.js` and `speed.js`;
-   values only where the script diff says so (none today); ranges for
-   `bridge_density` and `support_threshold_angle` if needed.
-4. **Tower estimate**: `ptEstimate` takes the heads' categories (from
-   the filament's type, mapped as upstream, or D6's value). Its depth is
-   the sum of the blocks. Recalibrate on 2.4.1 slices.
-5. **Warnings and pillars**: per D1 / D2 / D4. Update the strings in the
-   nine languages and the tests.
-6. **Tests**: `node scripts/test-tower.js`, `test-adv.js`,
-   `test-pillars.js`, `test-spoolcheck.js`, the other `scripts/test-*.js`,
-   `cargo test --lib`, and `engine_prime_tower_position` with
-   `SNAPSTUDIO_ENGINE` pointing to 2.4.1.
-7. **Docs and CHANGELOG**: as in the table.
+3. **Defaults** (D5):
+   - the 2.4.1 headers in `slice-adv.js` and `speed.js`;
+   - values only where the script diff says so (none today);
+   - the `bridge_density` range up to 120 % and `support_threshold_angle`
+     from 1;
+   - no 2.4.0 bridge values pinned.
+4. **New settings** (D7): add the settings listed in D7 to the slice
+   sheet's groups (`slice-adv.js`) with their engine defaults in
+   `ADV_ENGINE_DEFAULTS`, labels from the regenerated catalog, and tests
+   in `test-adv.js`.
+5. **Categories** (D4, D6):
+   - one table of upstream's categories per family in `spoolcheck.js`;
+   - `spBonds` derived from it: same category bonds, and TPE and other
+     families without a category keep their entries;
+   - the request sends `filament_adhesiveness_category` per filament
+     (`slice.rs`, next to the other per-filament keys), except when the
+     profile already sets it;
+   - tests in `test-spoolcheck.js` and a Rust test on the sent value.
+6. **Tower modes** (D1, D3):
+   - "One tower" is the engine's block tower, the default on every
+     multi-head plate;
+   - the per-material pillars of #37 stay an option of the « Tour
+     d'amorçage » switch, offered on plates whose materials don't bond;
+   - `ptSpot` and its 15 / 220 fallback are unchanged;
+   - Prepare's copy and `test-pillars.js` are updated where they present
+     the pillars as the fix.
+7. **Tower estimate**: `ptEstimate` takes the heads' categories (D6's
+   value). Its depth is the sum of the blocks. Recalibrate on 2.4.1
+   slices (T1).
+8. **Warnings** (D2): keep `slice.tower.conflict` and `slice.tower.walled`
+   as they are until kameka22 decides after T2. Then reword in English
+   and French first, the other seven languages after, and update
+   `test-adv.js`.
+9. **Tests**:
+   - `node scripts/test-tower.js`, `test-adv.js`, `test-pillars.js`,
+     `test-spoolcheck.js` and the other `scripts/test-*.js`;
+   - `cargo test --lib`;
+   - `engine_prime_tower_position` with `SNAPSTUDIO_ENGINE` pointing to
+     2.4.1.
+10. **Docs and CHANGELOG**:
+    - the docs listed in the impact table;
+    - one CHANGELOG line for the engine upgrade and its visible effects:
+      the tower in blocks per material by default, the new settings, and
+      the bridge defaults.
 
 ## Test plan
 
