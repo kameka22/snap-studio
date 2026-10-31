@@ -34,9 +34,8 @@
           "icon": "windows",
           "color": "#64d2ff",
           "edge": "linear-gradient(90deg, #64d2ff, #0a84ff)",
-          "image": "../assets/display.webp",
-          "position": "100% 0%",
-          "zoom": 1.3,
+          "image": "../assets/title-bar.webp",
+          "position": "50% 0%",
           "tag": { "en": "Window", "fr": "Fenêtre" },
           "chip": {
             "en": "Integrated title bar", "fr": "Barre de titre intégrée", "de": "Integrierte Titelleiste", "es": "Barra de título integrada", "pt-BR": "Barra de título integrada",
@@ -47,7 +46,7 @@
             "en": "On Windows and Linux, the window buttons now sit in the app’s own top band, as on macOS: Windows 11 style on Windows, GNOME style with rounded corners on Linux. On Linux, Settings › Display brings the desktop’s title bar back.",
             "fr": "Sous Windows et Linux, les boutons de la fenêtre sont maintenant dans la bande du haut de l’app, comme sous macOS : style Windows 11 sous Windows, style GNOME aux coins arrondis sous Linux. Sous Linux, Réglages › Affichage remet la barre de titre du bureau."
           },
-          "alt": { "en": "Settings › Display, under the app’s top band", "fr": "Réglages › Affichage, sous la bande du haut de l’app" }
+          "alt": { "en": "The integrated title bar on Windows (top) and Ubuntu (bottom)", "fr": "La barre de titre intégrée sous Windows (en haut) et Ubuntu (en bas)" }
         },
         {
           "id": "printer-multi-pick",
