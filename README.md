@@ -513,8 +513,9 @@ how to install what is missing; a mode opens once everything is ready.
 
 **A conversation**, from a file ("Edit with AI" in Files) or from scratch:
 describe what you want — ideas are offered — add images (sketches,
-photos: dropped, pasted or chosen), choose where it runs and the Claude
-model. The 3D preview and the chat sit side by side: every version
+photos) or 3D models (STL, 3MF) for Claude to modify or build on: dropped,
+pasted or chosen. With a single model, the conversation can start from it,
+as "Edit with AI" does. Choose where it runs and the Claude model. The 3D preview and the chat sit side by side: every version
 Claude exports is kept, measured (size, weight, watertight) and can be shown
 again; **Save** puts the version shown in your files, **Slice** sends it to
 Prepare. **Stop Claude** (or Esc) interrupts an answer; the **Terminal** tab

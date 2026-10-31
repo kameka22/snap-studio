@@ -1,7 +1,8 @@
 # AI conversations: STL and 3MF files as source models
 
-Spec only: nothing here is implemented yet. Rust line numbers are those of
-`main` at `ced75c5` (after #82); UI line numbers did not move.
+Implemented in [#83](https://github.com/kameka22/snap-studio/pull/83) (the
+plan was written first; line numbers are those of `main` at `ced75c5`, before
+the implementation).
 
 ## Why
 

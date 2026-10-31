@@ -110,6 +110,8 @@ ui/               HTML/CSS/JS interface, one file per view (no build step)
   virtual.js virtual-logic.js   virtual heads (two spools mixed layer by
                   layer): Heads and spools section, creation sheet, the rules
                   (virtual-logic.js, tested by scripts/test-virtual.js)
+  attach-logic.js   files attached to an AI message: kinds, limits, where a
+                  drop goes, paths of a paste (tested by scripts/test-attach.js)
   i18n.js         translation, number and date formats, language switching
   window-controls.js   window buttons on Windows and Linux (minimize,
                   maximize/restore, close) in the 52 px title band
@@ -135,6 +137,8 @@ src-tauri/src/
   ia_tools/       what Claude gets in each workspace: mf.py (3MF), export.py,
                   measure.py, the export-3mf skill
   chat.rs         AI chat view: Claude Code in stream-json mode, log, attachments
+  ia_attach.rs    files attached to an AI message: checks (type, size, mesh),
+                  STL/3MF models copied into the workspace's sources/ as 3MF
   auth.rs         Claude sign-in: sandbox token (Keychain), checks, sign-in terminal
   setup.rs        what the AI needs, per mode (Claude Code, engines, Python)
   menu.rs         native menus                 migrate.rs    3MF Studio carry-over

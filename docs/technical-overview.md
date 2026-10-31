@@ -84,10 +84,10 @@ plan: [plans/virtual-heads.md](plans/virtual-heads.md)).
 |---|---|---|
 | Shell | [Tauri 2](https://tauri.app), a native window with the system webview (WKWebView, WebView2, WebKitGTK). The title bar is integrated on every OS: macOS overlays its traffic lights (`tauri.macos.conf.json`); on Windows and Linux the window has no system decorations and the app draws its own buttons in the same 52 px band, with its own edge resizing and rounded corners on Linux, and a switch back to the system title bar there | `src-tauri/`, `titlebar.rs`, `ui/window-controls.js` |
 | Backend | Rust, about 28k lines (tests included): printers, slicing, presets, 3MF read/write, G-code, jobs, camera, sharing, updates | `src-tauri/src/*.rs` |
-| Interface | Vanilla JavaScript, no framework or bundler, 63 modules. The pure logic is split into `*-logic.js` files so it can be tested in Node | `ui/` |
+| Interface | Vanilla JavaScript, no framework or bundler, 65 modules. The pure logic is split into `*-logic.js` files so it can be tested in Node | `ui/` |
 | 3D | three.js for the plate, the G-code preview and the parametric U1 model (made by kameka22 for Snap Studio, `ui/printer3d/`) | `ui/printer3d*.js`, `ui/viewer.js` |
 | Slicing engine | The official **Snapmaker Orca** package, slimmed down by a CI workflow and run **as a separate headless process**. The app downloads it on first use (about 30 MB), checks its SHA-256 and installs it atomically, so a half-installed engine is never used | `engine.rs`, `slice.rs`, `.github/workflows/engine.yml` |
-| AI | Claude Code, run by the app in a sandbox (Claude Code's built-in one on macOS and Linux, or a container) | `ia.rs`, `chat.rs`, `ia_tools/` |
+| AI | Claude Code, run by the app in a sandbox (Claude Code's built-in one on macOS and Linux, or a container). Images and STL/3MF models can be attached; models are copied into the conversation's folder as 3MF, the only place the sandbox reads | `ia.rs`, `chat.rs`, `ia_attach.rs`, `ia_tools/` |
 
 The engine runs headless with complete configurations written by the app (`presets.rs`). Two flags are essential: `--arrange 0`, without which the engine rearranges the plate (measured: with it, parts stay within 0.3 mm of the requested placement), and `--allow-newer-file`.
 
