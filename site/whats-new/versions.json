@@ -14,9 +14,7 @@
           "icon": "create",
           "color": "#bf5af2",
           "edge": "linear-gradient(90deg, #bf5af2, #0a84ff)",
-          "image": "../assets/ai-chat.webp",
-          "position": "25% 80%",
-          "zoom": 2,
+          "image": "../assets/ai-source-models.webp",
           "tag": { "en": "Create", "fr": "Créer" },
           "chip": {
             "en": "STL and 3MF in AI", "fr": "STL et 3MF dans l’IA", "de": "STL und 3MF in der KI", "es": "STL y 3MF en la IA", "pt-BR": "STL e 3MF na IA",
@@ -27,7 +25,7 @@
             "en": "Drop, choose or paste STL and 3MF files when you start an AI conversation or during one, up to three per message. Claude modifies them or builds on them; with a single model, the conversation starts from it. Drag and drop now works for images too, and a file that can’t be attached says why.",
             "fr": "Déposez, choisissez ou collez des fichiers STL et 3MF au début d’une conversation IA ou pendant, jusqu’à trois par message. Claude les modifie ou s’en sert de base ; avec un seul modèle, la conversation part de lui. Le glisser-déposer marche maintenant aussi pour les images, et un fichier qui ne peut pas être joint dit pourquoi."
           },
-          "alt": { "en": "A model in an AI conversation’s 3D preview", "fr": "Un modèle dans l’aperçu 3D d’une conversation IA" }
+          "alt": { "en": "The New Object sheet with two STL models attached", "fr": "La fenêtre Nouvel objet avec deux modèles STL joints" }
         },
         {
           "id": "integrated-title-bar",
@@ -53,9 +51,7 @@
           "icon": "folder",
           "color": "#30d158",
           "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
-          "image": "../assets/printer-files.webp",
-          "position": "50% 100%",
-          "zoom": 2.8,
+          "image": "../assets/printer-multi-pick.webp",
           "tag": { "en": "Printer files", "fr": "Fichiers de l’imprimante" },
           "chip": {
             "en": "Pick several files", "fr": "Plusieurs fichiers", "de": "Mehrere Dateien", "es": "Varios archivos", "pt-BR": "Vários arquivos",
@@ -66,7 +62,7 @@
             "en": "In a printer’s Files, Ctrl-click (Cmd-click on macOS) adds or removes a file and Shift-click picks a range, as in the Files view, without Select mode. The selection bar and the right-click menu act on every file picked.",
             "fr": "Dans les Fichiers d’une imprimante, Ctrl-clic (Cmd-clic sous macOS) ajoute ou retire un fichier et Maj-clic choisit une plage, comme dans la vue Fichiers, sans passer par le mode Sélection. La barre de sélection et le menu du clic droit agissent sur tous les fichiers choisis."
           },
-          "alt": { "en": "A printer’s files and the selection bar", "fr": "Les fichiers d’une imprimante et la barre de sélection" }
+          "alt": { "en": "Ten files picked in a printer’s Files, the selection bar and the delete confirmation", "fr": "Dix fichiers choisis dans les Fichiers d’une imprimante, la barre de sélection et la confirmation de suppression" }
         }
       ],
       "small": [
