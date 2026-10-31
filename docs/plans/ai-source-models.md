@@ -1,4 +1,4 @@
-# AI conversations: STL, 3MF and OBJ files as source models
+# AI conversations: STL and 3MF files as source models
 
 Spec only: nothing here is implemented yet. Rust line numbers are those of
 `main` at `ced75c5` (after #82); UI line numbers did not move.
@@ -32,7 +32,7 @@ Also, pasting a file copied in a file manager gives a `text/uri-list`, not a
 
 ## Goals
 
-- Attach **STL, 3MF and OBJ** files, in the creation sheet and in a conversation,
+- Attach **STL and 3MF** files, in the creation sheet and in a conversation,
   as **source models** that Claude reads, modifies or builds on.
 - One way in for every gesture: **drop** (fixed), **choose** (button),
   **paste** of copied files when the system gives paths.
@@ -45,7 +45,11 @@ Also, pasting a file copied in a file manager gives a `text/uri-list`, not a
 ## Non-goals
 
 - STEP, AMF, PLY (later, if asked: STEP needs a CAD kernel).
-- OBJ materials and textures (`.mtl`, `usemtl`, `vt`): ignored.
+- **Later: OBJ** (decision 6, deferred). Nothing reads OBJ today; the
+  approach kept for later is a small hand-written `src-tauri/src/obj.rs`
+  like `stl.rs` (one part per `o`/`g`, n-gons fanned, negative indices,
+  materials ignored, mm assumed, no axis change), `tobj` as the fallback.
+  The full write-up is in this plan's history (commit `767ae50`).
 - Listing STL files in the Library / Files screen, or "Edit with AI" on an
   STL from there (the Files screen only scans 3MF, `scan.rs` `kind_of`).
 - Choosing one plate or one object of a multi-plate 3MF: everything is
@@ -73,13 +77,12 @@ Also, pasting a file copied in a file manager gives a `text/uri-list`, not a
   `ia::create`, `ia.rs:590`) converts the original with `parts_of_3mf`
   (`ia.rs:490`, one part per head, painted colors kept) and writes it with
   `write_3mf` (`ia.rs:527`, centered on the U1 plate). STL already has a
-  converter: `stl_to_3mf` (`ia.rs:517`). **There is no OBJ reader** in the
-  codebase and no OBJ crate in `Cargo.lock`. Claude reads parts with
+  converter: `stl_to_3mf` (`ia.rs:517`). Claude reads parts with
   `mf.read(...)` (`ia_tools/mf.py`) and installs results with
   `tools/export.py`. **This is the mechanism to reuse.**
 - **Tools available to Claude**: `trimesh`, `manifold3d`, `numpy` (the
   checks in `setup.rs:24` `MODULES`, the container's `DOCKERFILE`,
-  `ia.rs:1647`). `trimesh.load("x.stl")` (and `.obj`) works with these alone, but
+  `ia.rs:1647`). `trimesh.load("x.stl")` works with these alone, but
   **trimesh's 3MF loader needs `lxml` and `networkx`**, which are not
   installed (trimesh 5.2 `exchange/threemf.py:514-517`). So 3MF files must
   reach Claude in the app's layout, readable by `mf.read`.
@@ -113,7 +116,6 @@ New Tauri command `ia_attach_files(paths: Vec<String>) -> Vec<Staged>`
 | `png jpg jpeg gif webp` | ≤ 30 MB | `{kind:"image", name, media_type, data}` (base64) — the view then runs it through `chatReadImage` (scaling) as a `Blob` |
 | `stl` | ≤ 200 MB, parses (`stl::read`), ≥ 1 triangle | `{kind:"model", path, name, bytes, tris, parts:1, size_mm:[x,y,z]}` |
 | `3mf` | ≤ 200 MB, parses (`parts_of_3mf`) | `{kind:"model", path, name, bytes, tris, parts:n, size_mm}` |
-| `obj` | ≤ 200 MB, parses (`obj::read`, below), ≥ 1 triangle | `{kind:"model", path, name, bytes, tris, parts:n, size_mm}` |
 | anything else, folders | — | `{kind:"rejected", name, reason:"type"\|"size"\|"unreadable"}` |
 
 Read only, never writes; parsing runs off the main thread
@@ -128,9 +130,7 @@ parsed once here for the chip's numbers; it is copied at send time.
   creation sheet (`#iamodal`) is open, or the AI view is shown with a
   conversation open, **all** dropped paths go to that surface
   (`iaAddPaths` / `chatAddPaths`) and nothing opens in Files. Otherwise the
-  current behavior stays (a model file opens its folder; decision 5 — an
-  `.obj` follows the same rule as `.stl`, so the regex of `app.js:1149`
-  already covers it). The routing is a
+  current behavior stays (a model file opens its folder; decision 5). The routing is a
   pure function (`attachTarget({sheetOpen, iaVisible, convOpen})`) so it can
   be tested. `tauri://drag-enter` / `drag-leave` (`app.js:1140-1141`) also
   toggle the existing `.over` state of `#ia-drop` and a drop hint on the
@@ -138,7 +138,7 @@ parsed once here for the chip's numbers; it is copied at send time.
   `ia.js:705-719`) go.
 - **Choose**: the button opens the native dialog
   (`plugin:dialog|open`, `multiple: true`, filters "Images and 3D models"
-  `png jpg jpeg gif webp stl 3mf obj`, then "Images", "3D models") instead of
+  `png jpg jpeg gif webp stl 3mf`, then "Images", "3D models") instead of
   the hidden `<input type="file">` (`index.html:856`, `:1412`): we get
   paths, so the same `ia_attach_files` path. `dialog:default` already
   allows `open` (`capabilities/default.json`).
@@ -158,10 +158,10 @@ parsed once here for the chip's numbers; it is copied at send time.
 - Limits (decision 2): **5 images + 3 models per message**
   (`CHAT_MAX_MODELS = 3`), **200 MB per model**. Over a limit: a toast, the others are kept.
 - Texts: the button title and the sheet's drop line say "images or 3D
-  models (STL, 3MF, OBJ)".
+  models (STL, 3MF)".
 - **Messages** (toasts, all 9 languages):
   - `chat.unsupported_file`: "{name} can't be attached: only images (PNG,
-    JPEG, GIF, WebP) and 3D models (STL, 3MF, OBJ)"
+    JPEG, GIF, WebP) and 3D models (STL, 3MF)"
   - `chat.file_too_big`: "{name} is too large (at most {max})"
   - `chat.model_unreadable`: "{name} could not be read as a 3D model"
   - `chat.too_many_models`: "At most {n} 3D models per message"
@@ -174,9 +174,8 @@ parsed once here for the chip's numbers; it is copied at send time.
   `chat::send` (`chat.rs:883`) stages them **before** the message is
   written to Claude:
   - each model becomes `sources/NNN-<clean name>.3mf` in the workspace,
-    written with `write_3mf` from `parts_of_3mf` (3MF), the `stl_to_3mf`
-    path (STL: one part, head 1) or `obj_parts` (OBJ: one part per object
-    or group, head 1); `NNN` numbered like `attachment_name`
+    written with `write_3mf` from `parts_of_3mf` (3MF) or the `stl_to_3mf`
+    path (STL: one part, head 1); `NNN` numbered like `attachment_name`
     (`chat.rs:518`, same cleaning, never a path). The original is not
     kept: the app-layout 3MF has everything Claude needs and `mf.read`
     reads it.
@@ -197,13 +196,11 @@ parsed once here for the chip's numbers; it is copied at send time.
 - `CLAUDE.md` (`instructions`, `instructions_creation`, `ia.rs:772/833`)
   gets a section, present in both:
 
-  > `sources/` — 3D models the user attached (STL, 3MF and OBJ, converted
-  > to 3MF). Read them with `mf.read("sources/…")`. Never modify them. To
+  > `sources/` — 3D models the user attached (STL and 3MF, converted to
+  > 3MF). Read them with `mf.read("sources/…")`. Never modify them. To
   > build on one, read its parts, change or combine them, and install the
-  > result with `tools/export.py`, as usual. STL and OBJ have no unit:
+  > result with `tools/export.py`, as usual. STL has no unit:
   > millimeters are assumed; if a size looks wrong (under 1 mm or over 1 m), ask.
-  > An OBJ may come lying on its side (Y up): check `preview/` and lay it
-  > on its base if needed.
 
 ### 5. At creation (the sheet)
 
@@ -213,9 +210,9 @@ parsed once here for the chip's numbers; it is copied at send time.
   the first `chatSend` copies them into `sources/`.
 - **Decision 1**: with **exactly one** model in a "create" sheet, a switch
   "Start from this model", **on by default**, makes it an **edit**
-  conversation instead: `ia_create` with that path, extended to STL and OBJ
-  (`ia::create`, `ia.rs:590`, converts with `stl_to_3mf` / `obj_parts` by
-  extension), so it becomes `source.3mf` / `out/current.3mf` / v1
+  conversation instead: `ia_create` with that path, extended to STL
+  (`ia::create`, `ia.rs:590`, converts with `stl_to_3mf` when the
+  extension is `stl`), so it becomes `source.3mf` / `out/current.3mf` / v1
   and shows at once in the 3D pane. Save then goes next to the original
   (`save_to_files`, `ia.rs:1847`), or to the chosen folder if the original
   is gone. Off, or with several models: a creation conversation with the
@@ -230,47 +227,6 @@ previews `out/current.3mf`, **Save** writes `<stem>-ai.3mf`
 of the folder (the chat log is not copied, so the new conversation starts
 without the chips, as today with images).
 
-### 7. OBJ: a small reader of our own
-
-Nothing in the codebase reads OBJ, and no OBJ crate is in `Cargo.lock`.
-The format needed here is small, and `stl.rs` already reads STL by hand, so
-a **new `src-tauri/src/obj.rs`** (about 120 lines and its tests) rather than
-a new dependency. (`tobj` 4 would do the same in one call; kept as the
-fallback if the reader grows, but it brings MTL/texture handling we ignore.)
-
-`obj::read(path) -> Result<Vec<(String, MeshData)>>`, one entry per object or
-group, called through `access::ensure_file` like `stl::read`
-(`stl.rs:83-84`):
-
-- `v x y z [w]` → vertex (a fourth `w` and per-vertex colors `v x y z r g b`
-  are ignored).
-- `f a b c …` with `a`, `a/t`, `a//n`, `a/t/n` → the vertex index only;
-  **negative indices** are relative to the vertices read so far; an index
-  out of range makes the file **unreadable** (no silent hole).
-- **Quads and n-gons**: fan triangulation from the first vertex (exact for
-  convex faces, which is what exporters write; a concave n-gon is rare
-  enough to accept). Degenerate triangles (two equal indices) are dropped.
-- `o name` starts a new object, `g name` a new group: each non-empty one
-  becomes a **part** named after it (`o`/`g` name cleaned; `part-N`
-  otherwise). Faces before any `o`/`g` go to `part-1`. `g` with several
-  names takes the first. More than **64** parts → everything merged into one
-  part (a CAD export with thousands of groups would make an unusable
-  3MF).
-- `vt`, `vn`, `s`, `l`, `p`, `mtllib`, `usemtl`, curves, comments: ignored.
-  **Colors and materials are ignored**: every part gets the default color
-  (`render::DEFAULT_COLOR`) and **head 1**; Claude recolors on request.
-- Lines joined by a trailing `\`, CRLF and blank lines handled; read as
-  UTF-8 lossy.
-- Over 8 M triangles (`READ_CAP`) → refused, like the other models.
-- Axes: OBJ files are often **Y-up**; the app's 3MF is Z-up. The reader
-  does **not** rotate (we cannot know the exporter); the chip shows the
-  dimensions, and `CLAUDE.md` says to check the orientation on
-  `preview/` and lay the part on its base if it looks lying down.
-
-`ia::obj_parts(src)` turns the entries into `write3mf::Part`s
-(`write3mf.rs:180`), written with `write_3mf` (`ia.rs:527`) like the other
-sources.
-
 ## Edge cases
 
 - **Multi-object / multi-plate 3MF** (decision 3): `load_mesh` takes every
@@ -282,7 +238,7 @@ sources.
 - **Position**: `write_3mf` centers on the U1 plate (`on_plate`,
   `ia.rs:536`): absolute positions of the original are not kept. Said in
   `CLAUDE.md`.
-- **Units**: STL and OBJ have none. Size under 1 mm or over 1000 mm on any axis →
+- **Units**: STL has none. Size under 1 mm or over 1000 mm on any axis →
   `chat.model_scale` toast on attach and a note in the message to Claude.
 - **Huge meshes**: 200 MB cap; over `READ_CAP` triangles (8 M) the reader
   samples (`mesh.rs:362`) — refuse above it instead (`unreadable` with a
@@ -297,7 +253,7 @@ sources.
 - **Drop outside the AI view**: unchanged (opens the folder in Files).
 - **macOS permissions**: reading a model in Downloads/Documents goes
   through `access::ensure_file` (`stl::read` and `model3mf::open` already
-  call it; `obj::read` must too).
+  call it).
 
 ## Files to change
 
@@ -313,14 +269,12 @@ sources.
   `kindOf(name)`, limits; tested by `scripts/test-attach.js`.
 - `ui/style.css` — model chip, drop hint.
 - `src-tauri/src/lib.rs` — `ia_attach_files`, `ia_chat_send(models)`
-  (`:1488`), `ia_create` accepting STL and OBJ (`:1607`), `mod obj;`.
-- New `src-tauri/src/obj.rs` — the OBJ reader (below).
+  (`:1488`), `ia_create` accepting STL (`:1607`).
 - `src-tauri/src/chat.rs` — staging in `send` (`:883`),
   `user_message` text block (`:255`), `save_attachments` model blocks
   (`:541`).
-- `src-tauri/src/ia.rs` — `create` for STL and OBJ (`:590`), `sources/`
-  section in `instructions` / `instructions_creation` (`:772`, `:833`), an
-  `obj_parts` converter next to `stl_to_3mf` (`:517`), a
+- `src-tauri/src/ia.rs` — `create` for STL (`:590`), `sources/`
+  section in `instructions` / `instructions_creation` (`:772`, `:833`), a
   `stage_model(ws, path) -> StagedModel` helper.
 - `ui/i18n/*.json` (9 languages) and `src-tauri` catalogs if a Rust error
   text is added; `python3 scripts/check-i18n.py`.
@@ -338,27 +292,19 @@ sources.
   - `user_message` with models: the text block lists relative paths, size,
     triangles; no absolute path anywhere in the message or the log.
   - `instructions*` mention `sources/`.
-  - `create` from an STL and from an OBJ: `source.3mf`, `out/current.3mf`,
-    `v1.3mf`.
-  - `obj::read`: triangles, a quad (2 triangles), a pentagon (3), `a/t/n`
-    and `a//n` forms, negative indices, an index out of range (error),
-    `o`/`g` → named parts, faces before any group, more than 64 groups →
-    one part, `usemtl`/`vt`/`vn` ignored, CRLF and `\` continuations,
-    empty file (error).
-  - `obj_parts` → 3MF readable by `parts_of_3mf`, one part per group,
-    head 1.
+  - `create` from an STL: `source.3mf`, `out/current.3mf`, `v1.3mf`.
   - Python side: `mf.read` on a staged STL (existing `IA_REAL` style test,
     optional).
 - **JS** (`scripts/test-attach.js`): `attachTarget` for each state,
   `pathsFromUriList` (spaces, `%20`, non-ASCII, comments `#`, CRLF),
-  `kindOf` (`.OBJ`, `.Stl`, `.3MF` included), limit messages.
+  `kindOf` (`.Stl`, `.3MF` included), limit messages.
 - **By hand**, on macOS, Ubuntu and Windows (ARM): drop, choose, paste an
   STL and a 3MF, in the sheet and in a conversation, with the sandbox and
   the container; Claude reads it and installs a modified version; Save.
 
 ## CHANGELOG (Unreleased)
 
-- *Added*: **3D models in AI conversations**: attach STL, 3MF and OBJ
+- *Added*: **3D models in AI conversations**: attach STL and 3MF
   files, when creating or during a conversation, for Claude to modify or
   build on; with one model, a new conversation starts from it.
 - *Fixed*: images and models dropped on the AI view or the creation sheet
@@ -373,5 +319,6 @@ sources.
 3. **Multi-plate 3MF**: **merge everything**, as "Edit with AI" does today.
 4. **Chip thumbnail**: **not in this PR**.
 5. **A model dropped outside the AI view** keeps opening its folder in
-   Files (STL and OBJ alike).
-6. **OBJ** is supported alongside STL and 3MF, with the reader of §7.
+   Files.
+6. **OBJ deferred**: not in this PR (see Non-goals for the approach kept
+   for later).
