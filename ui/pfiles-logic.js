@@ -186,7 +186,9 @@ function pflPickClick({ picked, sel, anchor }, key, order, { toggle = false, ran
     anchor = anchor ?? sel;
     next = new Set(pflRangeKeys(order, anchor, key));
   } else if (toggle) {
-    next = pflToggle(picked.size ? picked : new Set(sel ? [sel] : []), key);
+    // The selected file starts the picks only if it is shown (a search may
+    // hide it): a pick never includes a file the user cannot see.
+    next = pflToggle(picked.size ? picked : new Set(order.includes(sel) ? [sel] : []), key);
     anchor = key;
   } else {
     return { picked: new Set(), sel: key, anchor: key };

@@ -721,6 +721,8 @@ $("pfl-main").addEventListener("click", (e) => {
 });
 $("pfl-main").addEventListener("dblclick", (e) => {
   const item = e.target.closest("[data-k]");
+  // Not over picks: the panel would show one file and the bar the others.
+  if (e.metaKey || e.ctrlKey || e.shiftKey || PFL.picked.size) return;
   if (item && PFL.tab === "files" && !PFL.selMode) pflSelect(item.dataset.k, true);
 });
 $("pfl-main").addEventListener("contextmenu", (e) => {

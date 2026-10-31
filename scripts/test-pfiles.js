@@ -167,6 +167,9 @@ assert.deepEqual(L.pflDeleteBatches([]), []);
   // Shift-click on the anchor itself: one file.
   r = pick({ picked: new Set(), sel: "c", anchor: "c" }, "c", { range: true });
   assert.deepEqual([r.picked, r.sel], [[], "c"]);
+  // A selected file hidden by a search does not start the picks.
+  r = pick({ picked: new Set(), sel: "hidden", anchor: "hidden" }, "c", { toggle: true });
+  assert.deepEqual([r.picked, r.sel], [[], "c"]);
   // The state passed in is never changed.
   const st = { picked: new Set(["a", "b"]), sel: null, anchor: "a" };
   L.pflPickClick(st, "c", order, { toggle: true });
