@@ -111,6 +111,8 @@ ui/               HTML/CSS/JS interface, one file per view (no build step)
                   layer): Heads and spools section, creation sheet, the rules
                   (virtual-logic.js, tested by scripts/test-virtual.js)
   i18n.js         translation, number and date formats, language switching
+  window-controls.js   window buttons on Windows and Linux (minimize,
+                  maximize/restore, close) in the 52 px title band
   whatsnew.js whatsnew-logic.js   What's new: sidebar card, the site's page
                   in a sheet; whats-new.json, its highlights (scripts/whats-new.py)
   assets/orca-settings.<lang>.json   Orca's tabs and labels
@@ -148,6 +150,9 @@ src-tauri/src/
   engine.rs       bundled slicing engine: download, verification
   access.rs       first access to macOS protected folders (one prompt)
   i18n.rs         interface language, catalogs shared with ui/i18n
+  titlebar.rs     undecorated window on Windows and Linux: button layout
+                  (GTK), edge resizing, rounded corners, system title bar
+                  switch (tauri.windows.conf.json, tauri.linux.conf.json)
   scan.rs util.rs folder scanning, small shared helpers
 ```
 

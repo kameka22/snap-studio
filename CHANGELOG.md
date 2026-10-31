@@ -11,6 +11,15 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Added
+- **Integrated title bar on Windows and Linux**: the window draws its own
+  minimize, maximize and close buttons in the same top band as macOS's
+  traffic lights, with no system title bar above the app. Windows 11 style
+  at the top right on Windows; on Linux, GNOME style, on the side the
+  desktop's button layout puts them, with rounded corners, and Settings →
+  Display → "Use the system title bar" to get the desktop's own back. macOS
+  is unchanged (#27).
+
 ## [0.17.1] — 2026-10-28
 
 ### Added

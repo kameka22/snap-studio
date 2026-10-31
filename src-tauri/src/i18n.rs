@@ -96,9 +96,7 @@ fn settings_path() -> PathBuf {
 /// The language the user picked, if they ever did.
 #[cfg_attr(test, allow(dead_code))]
 fn stored() -> Option<String> {
-    let raw = std::fs::read(settings_path()).ok()?;
-    let v: Value = serde_json::from_slice(&raw).ok()?;
-    let l = v.get("language")?.as_str()?.to_string();
+    let l = stored_value("language")?.as_str()?.to_string();
     supported(&l).then_some(l)
 }
 
@@ -161,6 +159,22 @@ pub fn set(lang: &str) -> Result<()> {
     if !supported(lang) {
         return Err(anyhow!("unsupported language: {lang}"));
     }
+    store("language", Value::String(lang.into()))?;
+    *current().write().unwrap() = lang.to_string();
+    Ok(())
+}
+
+/// A value of the settings file read before the window exists (language,
+/// title bar), if it was ever written.
+#[cfg_attr(all(test, not(target_os = "linux")), allow(dead_code))]
+pub fn stored_value(key: &str) -> Option<Value> {
+    let raw = std::fs::read(settings_path()).ok()?;
+    let mut v: Value = serde_json::from_slice(&raw).ok()?;
+    v.get_mut(key).map(Value::take)
+}
+
+/// Writes one value of the settings file, keeping the others.
+pub fn store(key: &str, value: Value) -> Result<()> {
     let path = settings_path();
     if let Some(p) = path.parent() {
         std::fs::create_dir_all(p)?;
@@ -170,9 +184,8 @@ pub fn set(lang: &str) -> Result<()> {
         .and_then(|raw| serde_json::from_slice(&raw).ok())
         .filter(Value::is_object)
         .unwrap_or_else(|| Value::Object(Map::new()));
-    v["language"] = Value::String(lang.into());
+    v[key] = value;
     std::fs::write(&path, serde_json::to_vec_pretty(&v)?)?;
-    *current().write().unwrap() = lang.to_string();
     Ok(())
 }
 

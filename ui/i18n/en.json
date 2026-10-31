@@ -2434,5 +2434,11 @@
   "pfiles.stale": "{name} does not answer: the list may be out of date.",
   "ctl.read_err": "The printer answered with an error: {err}",
   "pfiles.load_err": "The printer's files could not be read: {err}",
-  "pfiles.stale_err": "The list could not be refreshed: {err}"
+  "pfiles.stale_err": "The list could not be refreshed: {err}",
+  "window.minimize": "Minimize",
+  "window.maximize": "Maximize",
+  "window.restore": "Restore Down",
+  "window.close": "Close",
+  "display.system_titlebar": "Use the system title bar",
+  "display.system_titlebar.sub": "The desktop's own title bar and window buttons, in place of Snap Studio's"
 }
