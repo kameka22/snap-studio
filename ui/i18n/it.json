@@ -648,6 +648,7 @@
   "ia.new.need_prompt": "Descrivi l'oggetto da creare.",
   "ia.new.need_dest": "Scegli dove salvare l'oggetto.",
   "ia.new.preparing": "Preparazione dello spazio di lavoro…",
+  "ia.new.checking": "Verifica dei file allegati… Riprova tra un attimo.",
   "ia.new.drop": "Trascina qui immagini o modelli 3D (STL, 3MF) o fai clic per sceglierli",
   "ia.new.from_model": "Parti da questo modello",
   "ia.new.from_model_sub": "Claude modifica {name}; disattivato, è solo un riferimento",

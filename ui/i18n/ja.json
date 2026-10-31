@@ -633,6 +633,7 @@
   "ia.new.need_prompt": "作成するオブジェクトを説明してください。",
   "ia.new.need_dest": "オブジェクトの保存先を選んでください。",
   "ia.new.preparing": "作業フォルダを準備中…",
+  "ia.new.checking": "添付ファイルを確認しています… 少し待ってからもう一度お試しください。",
   "ia.new.drop": "ここに画像または 3D モデル（STL、3MF）をドロップするか、クリックして選択",
   "ia.new.from_model": "このモデルから始める",
   "ia.new.from_model_sub": "Claude が {name} を編集します。オフにすると参考資料としてのみ使われます",

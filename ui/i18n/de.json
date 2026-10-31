@@ -648,6 +648,7 @@
   "ia.new.need_prompt": "Beschreiben Sie das zu erstellende Objekt.",
   "ia.new.need_dest": "Wählen Sie, wo das Objekt gespeichert werden soll.",
   "ia.new.preparing": "Arbeitsbereich wird vorbereitet …",
+  "ia.new.checking": "Angehängte Dateien werden geprüft… Gleich noch einmal versuchen.",
   "ia.new.drop": "Bilder oder 3D-Modelle (STL, 3MF) hier ablegen oder zum Auswählen klicken",
   "ia.new.from_model": "Von diesem Modell ausgehen",
   "ia.new.from_model_sub": "Claude ändert {name}; ausgeschaltet dient es nur als Referenz",

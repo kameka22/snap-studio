@@ -645,6 +645,7 @@
   "ia.new.need_prompt": "Describe the object to create.",
   "ia.new.need_dest": "Choose where to save the object.",
   "ia.new.preparing": "Preparing the workspace…",
+  "ia.new.checking": "Checking the attached files… Create again in a moment.",
   "ia.new.drop": "Drop images or 3D models (STL, 3MF) here, or click to choose",
   "ia.new.from_model": "Start from this model",
   "ia.new.from_model_sub": "Claude modifies {name}; off, it is only a reference",

@@ -711,12 +711,12 @@ function iaFromModel() {
   const models = IA.attach.filter((a) => a.kind === "model");
   return IA.mode === "create" && models.length === 1 && $("ia-from-model").checked ? models[0] : null;
 }
-$("ia-prompt").addEventListener("paste", (e) => chatPaste(e, IA.attach, iaRenderAttach));
+$("ia-prompt").addEventListener("paste", (e) => chatPaste(e, () => IA.attach, iaRenderAttach));
 $("ia-from-model").addEventListener("change", iaRenderAttach);
 $("ia-drop-add").addEventListener("click", async () => {
   const paths = await chatPickFiles();
   if (!paths.length || $("iamodal").classList.contains("hidden")) return;
-  await chatAttachPaths(paths, IA.attach);
+  await chatAttachPaths(paths, () => IA.attach);
   iaRenderAttach();
 });
 
@@ -724,7 +724,7 @@ $("ia-drop-add").addEventListener("click", async () => {
    the open sheet, or to the conversation shown. */
 async function iaDropPaths(target, paths) {
   if (target === "sheet") {
-    await chatAttachPaths(paths, IA.attach);
+    await chatAttachPaths(paths, () => IA.attach);
     iaRenderAttach();
   } else if (target === "chat") {
     if (IA.locked) {
@@ -734,7 +734,7 @@ async function iaDropPaths(target, paths) {
     // In the terminal view the message field is hidden: files dropped there
     // would wait unseen for the next message. The chat shows them.
     if (IA.view !== "chat") iaSwitchView("chat");
-    await chatAttachPaths(paths, CHAT.attach);
+    await chatAttachPaths(paths, () => CHAT.attach);
     chatRenderAttachments();
   }
 }
@@ -773,6 +773,12 @@ function iaBounds() {
 }
 
 async function iaCreate() {
+  // A file still being checked would be left out of the conversation.
+  if (ATTACH_CHECKING) {
+    $("ia-msg").textContent = tr("ia.new.checking");
+    $("ia-msg").className = "pf-test busy";
+    return;
+  }
   const create = IA.mode === "create";
   if (!create && !IA.source) return;
   if (!iaModes().includes(IA.engine)) {

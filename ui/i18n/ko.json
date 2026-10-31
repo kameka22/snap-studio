@@ -633,6 +633,7 @@
   "ia.new.need_prompt": "만들 객체를 설명하세요.",
   "ia.new.need_dest": "객체를 저장할 위치를 선택하세요.",
   "ia.new.preparing": "작업 공간을 준비하는 중…",
+  "ia.new.checking": "첨부 파일을 확인하는 중… 잠시 후 다시 시도하세요.",
   "ia.new.drop": "여기에 이미지 또는 3D 모델(STL, 3MF)을 끌어다 놓거나 클릭해 선택하세요",
   "ia.new.from_model": "이 모델에서 시작",
   "ia.new.from_model_sub": "Claude가 {name}을(를) 수정합니다. 끄면 참고용으로만 쓰입니다",

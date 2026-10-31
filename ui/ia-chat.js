@@ -713,6 +713,8 @@ async function chatSend(text, attachments) {
 function chatSubmit() {
   const input = $("chat-input");
   const text = input.value.trim();
+  // A file still being checked would miss the message (Enter too).
+  if (ATTACH_CHECKING) return;
   if (!text && !CHAT.attach.length) return;
   const attachments = CHAT.attach;
   CHAT.attach = [];
@@ -732,7 +734,7 @@ function chatGrow() {
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 220) + "px";
   }
-  $("chat-send").disabled = !input.value.trim() && !CHAT.attach.length;
+  $("chat-send").disabled = ATTACH_CHECKING > 0 || (!input.value.trim() && !CHAT.attach.length);
 }
 
 /* ------------------------------------------------------------ attachments */
@@ -775,26 +777,53 @@ function chatReadImage(file) {
 
 /* Reads images into `list`, up to CHAT_MAX_IMAGES: the message being
    written, or the creation sheet's (ia.js). */
-async function chatReadImages(files, list) {
-  for (const f of files) {
-    if (attachRoom(list, "image") <= 0) {
-      toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
-      break;
-    }
-    try {
-      list.push(await chatReadImage(f));
-    } catch (e) {
-      toast(e.message, true);
-    }
+/* Files being checked or read: a message or a new conversation waits for
+   them (chatSubmit, iaCreate), or it would leave without them. */
+let ATTACH_CHECKING = 0;
+async function chatAttachWait(fn) {
+  ATTACH_CHECKING++;
+  chatGrow();
+  try {
+    return await fn();
+  } finally {
+    ATTACH_CHECKING--;
+    chatGrow();
   }
+}
+
+/* `target()` gives the list files go to: re-read after every wait, and a
+   different list (another conversation, the sheet opened again) means the
+   user left, so the rest is dropped. */
+function chatReadImages(files, target) {
+  const list = target();
+  return chatAttachWait(async () => {
+    for (const f of files) {
+      if (attachRoom(list, "image") <= 0) {
+        toast(tr("chat.too_many", { n: CHAT_MAX_IMAGES }), true);
+        break;
+      }
+      try {
+        const img = await chatReadImage(f);
+        if (target() !== list) return;
+        list.push(img);
+      } catch (e) {
+        toast(e.message, true);
+      }
+    }
+  });
 }
 
 /* Files given by their paths — dropped on the window, chosen in the dialog,
    pasted from a file manager — checked by the app (ia_attach.rs), then
-   added to `list`: images scaled like any other, models as chips. A file
-   refused says why; none is skipped silently. */
-async function chatAttachPaths(paths, list) {
-  if (!paths?.length) return;
+   added to the list `target()` gives (see chatReadImages): images scaled
+   like any other, models as chips. A file refused says why; none is
+   skipped silently. */
+function chatAttachPaths(paths, target) {
+  if (!paths?.length) return Promise.resolve();
+  return chatAttachWait(() => chatAttachStaged(paths, target));
+}
+async function chatAttachStaged(paths, target) {
+  const list = target();
   let staged = [];
   try {
     staged = await invoke("ia_attach_files", { paths });
@@ -802,6 +831,8 @@ async function chatAttachPaths(paths, list) {
     toast(String(e), true);
     return;
   }
+  // Checking a big model takes seconds: the user may have left meanwhile.
+  if (target() !== list) return;
   for (const s of staged) {
     if (s.kind === "rejected") {
       const [key, params] = attachRejectMessage(s);
@@ -819,7 +850,9 @@ async function chatAttachPaths(paths, list) {
     } else {
       const bytes = Uint8Array.from(atob(s.data), (ch) => ch.charCodeAt(0));
       try {
-        list.push(await chatReadImage(new File([bytes], s.name, { type: s.media_type })));
+        const img = await chatReadImage(new File([bytes], s.name, { type: s.media_type }));
+        if (target() !== list) return;
+        list.push(img);
       } catch (e) {
         toast(e.message, true);
       }
@@ -850,18 +883,18 @@ async function chatPickFiles() {
    files copied in a file manager, which some systems give as paths
    (text/uri-list). A copied file without its path cannot be read here: the
    message says to drop or choose it. Plain text pastes as usual. */
-function chatPaste(e, list, after) {
+function chatPaste(e, target, after) {
   const paths = pathsFromUriList(e.clipboardData?.getData("text/uri-list"));
   const files = [...(e.clipboardData?.files || [])];
   if (!paths.length && !files.length) return;
   e.preventDefault();
   if (paths.length) {
-    chatAttachPaths(paths, list).then(after);
+    chatAttachPaths(paths, target).then(after);
     return;
   }
   const images = files.filter((f) => f.type.startsWith("image/"));
   for (const f of files) if (!f.type.startsWith("image/")) toast(tr("chat.paste_choose", { name: f.name || "?" }), true);
-  if (images.length) chatReadImages(images, list).then(after);
+  if (images.length) chatReadImages(images, target).then(after);
 }
 
 /* Width × depth × height of a model, as its chip says it. */
@@ -955,7 +988,7 @@ $("chat-input").addEventListener("keydown", (e) => {
     chatStop();
   }
 });
-$("chat-input").addEventListener("paste", (e) => chatPaste(e, CHAT.attach, chatRenderAttachments));
+$("chat-input").addEventListener("paste", (e) => chatPaste(e, () => CHAT.attach, chatRenderAttachments));
 $("chat-send").addEventListener("click", chatSubmit);
 $("chat-stop").addEventListener("click", chatStop);
 /* Esc stops Claude from anywhere in the conversation view, not only from the
@@ -975,7 +1008,7 @@ $("chat-add").addEventListener("click", async () => {
   const paths = await chatPickFiles();
   // The conversation may have changed while the dialog was open.
   if (paths.length && CHAT.id) {
-    await chatAttachPaths(paths, CHAT.attach);
+    await chatAttachPaths(paths, () => CHAT.attach);
     chatRenderAttachments();
   }
 });
