@@ -1594,6 +1594,10 @@
     "one": "Delete {n} video from the printer?",
     "other": "Delete {n} videos from the printer?"
   },
+  "pfiles.delete_many": {
+    "one": "Delete {n} file",
+    "other": "Delete {n} files"
+  },
   "pfiles.deleting": {
     "one": "Deleting…",
     "other": "Deleting {n} files…"

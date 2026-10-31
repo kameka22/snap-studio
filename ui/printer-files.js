@@ -22,7 +22,8 @@ const PFL = {
   picked: new Set(),
   player: null,
   busy: false,
-  menuKey: null,
+  // What the context menu acts on: one file, or every picked one.
+  menuKeys: [],
   durations: new Map(),
   counts: new Map(),
   countAt: new Map(),
@@ -428,7 +429,12 @@ async function pflDownload(files) {
   pflRenderSelbar();
   toast(tr("pfiles.downloading", { n: files.length }));
   try {
-    const saved = await invoke("pf_download", { printerId: PFL.pid, root, paths: files.map((f) => f.path), dir });
+    // One call per root: the videos tab can mix `timelapse` and `camera`.
+    const saved = [];
+    for (const r of new Set(files.map((f) => f.root))) {
+      const paths = files.filter((f) => f.root === r).map((f) => f.path);
+      saved.push(...(await invoke("pf_download", { printerId: PFL.pid, root: r, paths, dir })));
+    }
     const where = dir || saved[0]?.replace(/[\\/][^\\/]*$/, "") || "";
     toast(tr("pfiles.saved", { n: saved.length, folder: baseName(where) }), false, saved[0] ? { label: tr("pfiles.reveal"), run: () => invoke("reveal", { path: saved[0] }).catch((e) => toast(pflErr(e, "reveal"), true)) } : null);
     if (dir && dir === state.dir) refresh();
@@ -479,7 +485,9 @@ async function pflDelete(files) {
     PFL.busy = false;
   }
   if (PFL.player && files.some((f) => pflKey(f) === PFL.player)) pflClosePlayer();
-  PFL.picked = new Set();
+  // The files sent leave the picks; the others stay picked (a failed delete
+  // is still listed, pflLoad keeps what is there).
+  for (const f of files) PFL.picked.delete(pflKey(f));
   await pflLoad();
   pflRenderBusy();
 }
@@ -673,12 +681,25 @@ $("pfl-main").addEventListener("contextmenu", (e) => {
   const item = e.target.closest("[data-k]");
   if (!item) return;
   e.preventDefault();
-  const f = pflFind(item.dataset.k);
+  const k = item.dataset.k;
+  const f = pflFind(k);
   if (!f) return;
-  PFL.menuKey = item.dataset.k;
+  // In Select mode, on a picked file, every picked one; otherwise the file
+  // clicked alone (the picks stay).
+  const picking = PFL.selMode;
+  PFL.menuKeys = pflMenuTargets(picking, PFL.picked, k, pflShown().map(pflKey));
+  const files = PFL.menuKeys.map(pflFind).filter(Boolean);
+  if (files.length > 1) {
+    const can = files.every((x) => pflCanChange(x, PFL.data.printing).ok);
+    nativeMenu([
+      { id: "pfl:download", label: tr("common.download") },
+      ...(can ? [{}, { id: "pfl:delete", label: tr("pfiles.delete_many", { n: files.length }) }] : []),
+    ], e.clientX, e.clientY);
+    return;
+  }
   const can = pflCanChange(f, PFL.data.printing);
   if (PFL.tab === "files") {
-    pflSelect(item.dataset.k);
+    if (!picking) pflSelect(k);
     nativeMenu([
       { id: "pfl:print", label: tr("pfiles.print") },
       { id: "pfl:download", label: tr("common.download") },
@@ -695,13 +716,14 @@ $("pfl-main").addEventListener("contextmenu", (e) => {
   }
 });
 onMenu("pfl", (verb) => {
-  const f = pflFind(PFL.menuKey);
+  const files = PFL.menuKeys.map(pflFind).filter(Boolean);
+  const f = files[0];
   if (!f) return;
-  if (verb === "print") pflPrint(f);
-  else if (verb === "download") pflDownload([f]);
+  if (verb === "download") pflDownload(files);
+  else if (verb === "delete") pflDelete(files);
+  else if (verb === "print") pflPrint(f);
   else if (verb === "share") pfsOpen(f);
   else if (verb === "rename") pflRenameOpen(f);
-  else if (verb === "delete") pflDelete([f]);
   else if (verb === "play") pflPlay(pflKey(f));
 });
 

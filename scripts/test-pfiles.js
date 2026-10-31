@@ -116,6 +116,20 @@ assert.deepEqual(
 assert.deepEqual(L.pflDeleteBatches([{ root: "gcodes", path: "a.gcode" }]), [{ root: "gcodes", paths: ["a.gcode"] }]);
 assert.deepEqual(L.pflDeleteBatches([]), []);
 
+// Right-click: a picked file stands for every picked one, in list order.
+{
+  const order = ["gcodes/a", "gcodes/b", "gcodes/c", "gcodes/d"];
+  const picked = new Set(["gcodes/c", "gcodes/a", "gcodes/b"]);
+  assert.deepEqual(L.pflMenuTargets(true, picked, "gcodes/b", order), ["gcodes/a", "gcodes/b", "gcodes/c"]);
+  // A file not picked: itself alone, and the picks stay as they were.
+  assert.deepEqual(L.pflMenuTargets(true, picked, "gcodes/d", order), ["gcodes/d"]);
+  assert.deepEqual([...picked], ["gcodes/c", "gcodes/a", "gcodes/b"]);
+  // Outside Select mode, the clicked file only, picks or not.
+  assert.deepEqual(L.pflMenuTargets(false, picked, "gcodes/b", order), ["gcodes/b"]);
+  // Nothing picked.
+  assert.deepEqual(L.pflMenuTargets(true, new Set(), "gcodes/a", order), ["gcodes/a"]);
+}
+
 // prn: addresses: a space is %20 (Rust decodes it; a "+" would stay "+").
 assert.equal(L.pflPrnQuery("p 1", "gcodes", ".thumbs/Support écran+1.png"), "/f?id=p%201&root=gcodes&p=.thumbs%2FSupport%20%C3%A9cran%2B1.png");
 

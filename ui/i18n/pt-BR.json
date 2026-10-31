@@ -1597,6 +1597,10 @@
     "one": "Excluir {n} vídeo da impressora?",
     "other": "Excluir {n} vídeos da impressora?"
   },
+  "pfiles.delete_many": {
+    "one": "Excluir {n} arquivo",
+    "other": "Excluir {n} arquivos"
+  },
   "pfiles.deleting": {
     "one": "Excluindo…",
     "other": "Excluindo {n} arquivos…"

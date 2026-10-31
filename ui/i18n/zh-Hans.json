@@ -1544,6 +1544,9 @@
   "pfiles.del.title_videos": {
     "other": "从打印机删除 {n} 个视频？"
   },
+  "pfiles.delete_many": {
+    "other": "删除 {n} 个文件"
+  },
   "pfiles.deleting": {
     "other": "正在删除 {n} 个文件…"
   },

@@ -1544,6 +1544,9 @@
   "pfiles.del.title_videos": {
     "other": "{n} 本の動画をプリンターから削除しますか？"
   },
+  "pfiles.delete_many": {
+    "other": "{n} 個のファイルを削除"
+  },
   "pfiles.deleting": {
     "other": "{n} 個のファイルを削除中…"
   },

@@ -157,5 +157,13 @@ function pflDeleteBatches(files) {
   return out;
 }
 
+/* What a right-click acts on. In Select mode, a picked file stands for
+   every picked one (in list order); a file that is not picked, and any file
+   outside Select mode, for itself alone. `picked` is not changed. */
+function pflMenuTargets(selMode, picked, key, order) {
+  if (!selMode || !picked.has(key)) return [key];
+  return order.filter((k) => picked.has(k));
+}
+
 if (typeof module !== "undefined")
-  module.exports = { pflPrnQuery, PFL_SORTS, PFL_SPEEDS, pflFold, pflKey, pflName, pflVideoDate, pflVideoTitle, pflDuration, pflDate, pflTitle, pflMatches, pflSort, pflSummary, pflFilaments, pflSendStats, pflCanChange, pflNeighbor, pflNextSpeed, pflClock, pflToggle, pflDeleteBatches };
+  module.exports = { pflPrnQuery, PFL_SORTS, PFL_SPEEDS, pflFold, pflKey, pflName, pflVideoDate, pflVideoTitle, pflDuration, pflDate, pflTitle, pflMatches, pflSort, pflSummary, pflFilaments, pflSendStats, pflCanChange, pflNeighbor, pflNextSpeed, pflClock, pflToggle, pflDeleteBatches, pflMenuTargets };
