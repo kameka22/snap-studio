@@ -22,6 +22,7 @@ lists below.
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
 | [virtual-heads.md](virtual-heads.md) | Virtual heads: color mixing of two spools (Snapmaker Orca's Full Spectrum), one head token per color in Prepare | Written, draft PR |
 | [virtual-heads-smooth-mix.md](virtual-heads-smooth-mix.md) | Virtual heads: smooth mix (Subdivide Mix Layer sent to the engine, on by default) and a warning for colors too far apart | Written, draft PR |
+| [rust-review.md](rust-review.md) | Rust review of `src-tauri/`: renamed Orca presets, protocol pool panics, commands on the UI thread, error context, tests, formatting | Written, draft PR |
 | [prints-redesign.md](prints-redesign.md) | Prints page redesign: list and record (C, chosen from three mockup directions; the stats go to the printer page and a Statistics page in a follow-up) | Implemented in draft PR [#65](https://github.com/kameka22/snap-studio/pull/65) |
 
 The other planned features each have a draft pull request: see the
