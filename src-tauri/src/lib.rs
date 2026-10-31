@@ -1479,6 +1479,25 @@ fn pool() -> &'static Sender<Job> {
     })
 }
 
+/// Answers a request on the pool. A handler that panics answers 500: the
+/// thread survives (a dead one is never replaced, and once all are gone
+/// every preview and thumbnail would hang).
+fn serve_on_pool(responder: tauri::UriSchemeResponder, uri: String, handle: fn(&str) -> Response<Vec<u8>>) {
+    let _ = pool().send(Box::new(move || {
+        let response = std::panic::catch_unwind(|| handle(&uri)).unwrap_or_else(|_| {
+            eprintln!("[protocol] {uri}: the handler panicked");
+            Response::builder().status(500).body(Vec::new()).unwrap_or_default()
+        });
+        responder.respond(response);
+    }));
+}
+
+/// A message as a header value: `http` refuses control characters (a
+/// newline in an error would make the response builder fail).
+fn header_text(msg: &str) -> String {
+    msg.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
+}
+
 fn query_param(uri: &str, key: &str) -> Option<String> {
     let q = uri.split_once('?')?.1;
     for kv in q.split('&') {
@@ -1497,7 +1516,7 @@ fn handle_gcode(uri: &str) -> Response<Vec<u8>> {
         Response::builder()
             .status(code)
             .header("Access-Control-Allow-Origin", "*")
-            .header("X-Error", msg.to_string())
+            .header("X-Error", header_text(msg))
             .body(Vec::new())
             .unwrap()
     };
@@ -1804,7 +1823,7 @@ fn handle_mesh(uri: &str) -> Response<Vec<u8>> {
         Response::builder()
             .status(code)
             .header("Access-Control-Allow-Origin", "*")
-            .header("X-Error", msg.to_string())
+            .header("X-Error", header_text(msg))
             .body(Vec::new())
             .unwrap()
     };
@@ -1982,27 +2001,21 @@ pub fn run() {
                 return responder.respond(refused());
             }
             let uri = request.uri().to_string();
-            let _ = pool().send(Box::new(move || {
-                responder.respond(handle_gcode(&uri));
-            }));
+            serve_on_pool(responder, uri, handle_gcode);
         })
         .register_asynchronous_uri_scheme_protocol("mesh", |ctx, request: Request<Vec<u8>>, responder| {
             if !own_webview(&ctx) {
                 return responder.respond(refused());
             }
             let uri = request.uri().to_string();
-            let _ = pool().send(Box::new(move || {
-                responder.respond(handle_mesh(&uri));
-            }));
+            serve_on_pool(responder, uri, handle_mesh);
         })
         .register_asynchronous_uri_scheme_protocol("thumb", |ctx, request: Request<Vec<u8>>, responder| {
             if !own_webview(&ctx) {
                 return responder.respond(refused());
             }
             let uri = request.uri().to_string();
-            let _ = pool().send(Box::new(move || {
-                responder.respond(handle_thumb(&uri));
-            }));
+            serve_on_pool(responder, uri, handle_thumb);
         })
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .setup(|app| {
@@ -2215,6 +2228,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn error_header_never_breaks_the_response() {
+        let msg = "line one\nline two\r\u{7f}é";
+        assert!(Response::builder().header("X-Error", msg).body(()).is_err(), "raw: refused by http");
+        assert_eq!(header_text(msg), "line one line two  é");
+        assert!(Response::builder().header("X-Error", header_text(msg)).body(()).is_ok());
+    }
 
     #[test]
     fn creation_model_is_checked_first() {
