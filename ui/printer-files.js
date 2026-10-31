@@ -20,6 +20,8 @@ const PFL = {
   detail: false,
   selMode: false,
   picked: new Set(),
+  // Shift-click's start, outside Select mode.
+  anchor: null,
   player: null,
   busy: false,
   // What the context menu acts on: one file, or every picked one.
@@ -79,7 +81,7 @@ const pflOpen = () => !$("view-pfiles").classList.contains("hidden");
 function pflShow(pid) {
   if (PFL.pid !== pid) {
     pflClosePlayer();
-    Object.assign(PFL, { pid, data: null, err: null, sel: null, detail: false, selMode: false, picked: new Set(), q: "" });
+    Object.assign(PFL, { pid, data: null, err: null, sel: null, detail: false, selMode: false, picked: new Set(), anchor: null, q: "" });
     $("pfl-q").value = "";
   }
   switchView("pfiles");
@@ -102,6 +104,12 @@ async function pflLoad() {
     const keys = new Set([...data.files, ...data.videos].map(pflKey));
     if (PFL.sel && !keys.has(PFL.sel)) Object.assign(PFL, { sel: null, detail: false });
     PFL.picked = new Set([...PFL.picked].filter((k) => keys.has(k)));
+    // Outside Select mode, print files picked are two or more: one left is
+    // the selected file.
+    if (!PFL.selMode && PFL.tab === "files" && PFL.picked.size === 1) {
+      PFL.sel = [...PFL.picked][0];
+      PFL.picked = new Set();
+    }
     if (PFL.player && !keys.has(PFL.player)) pflClosePlayer();
   } catch (e) {
     if (seq !== PFL.seq) return;
@@ -228,8 +236,9 @@ const pflImg = (f, kind, lazy = true) => {
 };
 const pflCheck = (k) =>
   PFL.selMode ? `<input type="checkbox" class="pfl-check" tabindex="-1" aria-label="${esc(tr("pfiles.pick"))}"${PFL.picked.has(k) ? " checked" : ""} />` : "";
-const pflItemCls = (k) => (PFL.selMode ? (PFL.picked.has(k) ? " picked" : "") : PFL.sel === k ? " on" : "");
-const pflItemSel = (k) => (PFL.selMode ? PFL.picked.has(k) : PFL.sel === k);
+/* Picks outside Select mode (Ctrl/Cmd or Shift-click) show as a selection. */
+const pflItemSel = (k) => (PFL.selMode || PFL.picked.size ? PFL.picked.has(k) : PFL.sel === k);
+const pflItemCls = (k) => (pflItemSel(k) ? (PFL.selMode ? " picked" : " on") : "");
 const pflPrintingTag = (f) => (PFL.data.printing && pflCanChange(f, PFL.data.printing).reason === "printing" ? `<span class="pfl-tag busy">${esc(tr("pfiles.printing"))}</span>` : "");
 
 function pflFilesList(list) {
@@ -333,12 +342,16 @@ function pflRenderSelbar() {
   const bar = $("pfl-selbar");
   // One print file selected (not in Select mode, its panel closed): the
   // same bar, with that file's actions.
-  const one = !PFL.selMode && PFL.tab === "files" && !PFL.detail && !PFL.player && PFL.data ? pflFind(PFL.sel) : null;
-  const on = (PFL.selMode && !!PFL.data && !PFL.player) || !!one;
+  const one = !PFL.selMode && !PFL.picked.size && PFL.tab === "files" && !PFL.detail && !PFL.player && PFL.data ? pflFind(PFL.sel) : null;
+  // Files picked by Ctrl/Cmd or Shift-click: the Select mode bar,
+  // without Select all and Done (Esc or a plain click ends it).
+  const loose = !PFL.selMode && PFL.picked.size > 0;
+  const on = ((PFL.selMode || loose) && !!PFL.data && !PFL.player) || !!one;
   bar.classList.toggle("hidden", !on);
   bar.classList.toggle("single", !!one);
   // One file: its actions only, the selected row already says which.
-  for (const id of ["pfl-selcount", "pfl-selall", "pfl-seldone"]) $(id).classList.toggle("hidden", !!one);
+  $("pfl-selcount").classList.toggle("hidden", !!one);
+  for (const id of ["pfl-selall", "pfl-seldone"]) $(id).classList.toggle("hidden", !!one || loose);
   for (const id of ["pfl-selprint", "pfl-selshare", "pfl-selren"]) $(id).classList.toggle("hidden", !one);
   if (!on) return;
   if (one) {
@@ -360,6 +373,18 @@ function pflRenderSelbar() {
   $("pfl-seldel").title = busy ? pflWhy("printing") : "";
 }
 const pflPicked = () => pflList().filter((f) => PFL.picked.has(pflKey(f)));
+
+/* Picks changed outside Select mode: the items marked in place (a full
+   render would reload every thumbnail), then the panel and the bar. */
+function pflRenderPicks() {
+  document.querySelectorAll("#pfl-main [data-k]").forEach((el) => {
+    const on = pflItemSel(el.dataset.k);
+    el.classList.toggle(el.classList.contains("video") ? "picked" : "on", on);
+    el.setAttribute("aria-selected", String(on));
+  });
+  pflRenderDetail();
+  pflRenderSelbar();
+}
 
 function pflSetSelMode(on) {
   PFL.selMode = on;
@@ -609,6 +634,7 @@ $("pfl-tabs").addEventListener("click", (e) => {
   PFL.tab = b.dataset.tab;
   PFL.selMode = false;
   PFL.picked = new Set();
+  PFL.anchor = null;
   pflSave();
   pflRender();
 });
@@ -670,6 +696,26 @@ $("pfl-main").addEventListener("click", (e) => {
     pflRenderSelbar();
     return;
   }
+  // Ctrl/Cmd or Shift-click: several files, as in the Files view.
+  const toggle = e.metaKey || e.ctrlKey, range = e.shiftKey;
+  if (toggle || range) {
+    const order = pflShown().map(pflKey);
+    const sel = PFL.tab === "files" ? PFL.sel : null;
+    const next = pflPickClick({ picked: PFL.picked, sel, anchor: PFL.anchor }, k, order, { toggle, range });
+    // Videos have no single selection (a click plays): one video stays picked.
+    PFL.picked = PFL.tab === "files" || !next.sel ? next.picked : new Set([next.sel]);
+    PFL.anchor = next.anchor;
+    if (PFL.tab === "files") {
+      PFL.sel = next.sel;
+      if (next.picked.size) PFL.detail = false;
+    }
+    return pflRenderPicks();
+  }
+  PFL.anchor = k;
+  if (PFL.picked.size) {
+    PFL.picked = new Set();
+    pflRenderPicks();
+  }
   if (PFL.tab === "videos") pflPlay(k);
   else pflSelect(k);
 });
@@ -684,9 +730,9 @@ $("pfl-main").addEventListener("contextmenu", (e) => {
   const k = item.dataset.k;
   const f = pflFind(k);
   if (!f) return;
-  // In Select mode, on a picked file, every picked one; otherwise the file
-  // clicked alone (the picks stay).
-  const picking = PFL.selMode;
+  // On a picked file, every picked one; otherwise the file clicked alone
+  // (the picks stay).
+  const picking = PFL.selMode || PFL.picked.size > 0;
   PFL.menuKeys = pflMenuTargets(picking, PFL.picked, k, pflShown().map(pflKey));
   const files = PFL.menuKeys.map(pflFind).filter(Boolean);
   if (files.length > 1) {
@@ -749,7 +795,7 @@ $("pfl-selall").addEventListener("click", () => {
   pflRender();
 });
 /* The bar acts on the files picked, or on the one file selected. */
-const pflBarFiles = () => (PFL.selMode ? pflPicked() : [pflFind(PFL.sel)].filter(Boolean));
+const pflBarFiles = () => (PFL.selMode || PFL.picked.size ? pflPicked() : [pflFind(PFL.sel)].filter(Boolean));
 $("pfl-selprint").addEventListener("click", () => pflPrint(pflFind(PFL.sel)));
 $("pfl-selshare").addEventListener("click", () => pfsOpen(pflFind(PFL.sel)));
 $("pfl-selren").addEventListener("click", () => {
@@ -839,6 +885,10 @@ document.addEventListener("keydown", (e) => {
   if (typing) return;
   if (e.key === "Escape") {
     if (PFL.selMode) pflSetSelMode(false);
+    else if (PFL.picked.size) {
+      PFL.picked = new Set();
+      pflRenderPicks();
+    }
     else if (PFL.detail) {
       PFL.detail = false;
       pflRenderDetail();
