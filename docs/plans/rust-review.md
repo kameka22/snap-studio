@@ -84,6 +84,12 @@ CI (no Orca, `None`) and fail on a developer's Mac depending on its presets.
 Fix: build the `Index` from fixtures under `src-tauri/tests/fixtures/` and
 keep one `#[ignore]` test against the real Orca.
 
+Done differently: under test, `Index::build` reads the system profiles only
+(the user's presets and Orca's selection are what varied between machines),
+and the ignored `the_users_presets_all_resolve` checks the user's presets.
+Copying the U1's whole inheritance chain into fixtures was not worth it: the
+in-memory `Index` tests already cover the logic on its own.
+
 ### 6. One `unsafe` without `// SAFETY:` (`auth.rs:261`)
 
 The other four `unsafe` blocks have one. The `child.id() as i32` casts there
@@ -127,6 +133,11 @@ Add a `rustfmt.toml` matching the current style (`max_width = 140`), run
   `served_root` limits what is served.
 - Good test coverage of the pure logic (G-code, mesh, printer files, chat),
   with local HTTP servers for the network tests.
+
+## State
+
+Items 1 to 7 are implemented in draft PR #82, one commit each. *Consider*
+is left for a later decision.
 
 ## Order of work
 
