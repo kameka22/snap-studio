@@ -82,7 +82,7 @@ plan: [plans/virtual-heads.md](plans/virtual-heads.md)).
 
 | Layer | What | Where |
 |---|---|---|
-| Shell | [Tauri 2](https://tauri.app), a native window with the system webview (WKWebView, WebView2, WebKitGTK) | `src-tauri/` |
+| Shell | [Tauri 2](https://tauri.app), a native window with the system webview (WKWebView, WebView2, WebKitGTK). The title bar is integrated on every OS: macOS overlays its traffic lights (`tauri.macos.conf.json`); on Windows and Linux the window has no system decorations and the app draws its own buttons in the same 52 px band, with its own edge resizing and rounded corners on Linux, and a switch back to the system title bar there | `src-tauri/`, `titlebar.rs`, `ui/window-controls.js` |
 | Backend | Rust, about 28k lines (tests included): printers, slicing, presets, 3MF read/write, G-code, jobs, camera, sharing, updates | `src-tauri/src/*.rs` |
 | Interface | Vanilla JavaScript, no framework or bundler, 63 modules. The pure logic is split into `*-logic.js` files so it can be tested in Node | `ui/` |
 | 3D | three.js for the plate, the G-code preview and the parametric U1 model (made by kameka22 for Snap Studio, `ui/printer3d/`) | `ui/printer3d*.js`, `ui/viewer.js` |
@@ -131,7 +131,7 @@ No cloud and no account: everything goes over the LAN to the U1's own **Moonrake
 
 - **Rust**: `cargo test --lib` gives **255 passed, 0 failed, 23 ignored** (the ignored tests need a local Snapmaker Orca or the engine). Several tests run against a small fake Moonraker on `127.0.0.1`, for file listing, deletion permissions and sharing. Another test checks that the print-start request matches Snapmaker Orca's.
 - **Interface logic**: **25 Node test scripts** (`scripts/test-*.js`, about 2,900 lines) cover Prepare, towers and pillars, virtual heads, the spool check, Prints, the camera, Control, bed mesh, printer files, the 3D printer model, themes and more.
-- **Translations**: `scripts/check-i18n.py` checks the 9 catalogs, with 2,236 keys each and 100 % coverage.
+- **Translations**: `scripts/check-i18n.py` checks the 9 catalogs, with 2,247 keys each and 100 % coverage.
 - **CI** (GitHub Actions): `test.yml` runs both jobs, "Rust unit tests" and "Interface logic and catalogs", on every pull request and every push to `main`. `build.yml` (started by hand) builds the release for macOS (universal), Windows x64 and Linux amd64/arm64, signs the update packages and publishes `latest.json` for the updater. `engine.yml` repackages each Snapmaker Orca version and runs a **real test slice** on every platform before publishing; if one platform fails, nothing is published. `pages.yml` deploys the website.
 
 ## 6. Documentation and languages

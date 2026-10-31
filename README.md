@@ -442,6 +442,9 @@ Settings → Display: light, dark or as the system.
 - Ten themes, each with a light and a dark version and a live preview.
 - The accent color: the theme's, the system's, a preset or your own.
 - Color-blind safe colors over any theme.
+- On Windows and Linux, the same integrated title bar as on macOS: the
+  window buttons sit in the app's top band. On Linux, "Use the system title
+  bar" puts the desktop's own back.
 
 <details>
 <summary>More details</summary>
@@ -579,7 +582,6 @@ with its pull request (drafts, approved or under discussion):
 | **Calibration assistants** — PID of nozzles and bed, and guided input shaper, offsets between heads and flow measurement, in Care & Tuning | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — your spool inventory (weight deducted after each print, low-stock alert) and filament deals | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Filament library** — complete filament management: brands, types and colors, custom and per-spool profiles, linked to the U1's spools (RFID) and used in Prepare; scope to define | [#79](https://github.com/kameka22/snap-studio/pull/79) |
-| **Integrated title bar on Windows and Linux** — the same clean window as on macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **More AI agents** — OpenCode next to Claude Code (OpenAI, Google, Mistral, local models…), one active at a time | [plan](docs/plans/ai-agents.md) |
 
 Work in progress, what remains to check on a real printer and ideas for later

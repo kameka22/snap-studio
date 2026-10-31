@@ -490,6 +490,9 @@ Réglages → Affichage : clair, sombre ou comme le système.
 - La couleur d'accent : celle du thème, du système, une couleur prédéfinie
   ou la vôtre.
 - Des couleurs adaptées au daltonisme, avec tous les thèmes.
+- Sous Windows et Linux, la même barre de titre intégrée que sous macOS :
+  les boutons de la fenêtre sont dans la bande du haut de l'app. Sous Linux,
+  « Utiliser la barre de titre du système » remet celle du bureau.
 
 <details>
 <summary>Plus de détails</summary>
@@ -635,7 +638,6 @@ chacun avec sa pull request (brouillons, validés ou en discussion) :
 | **Assistants de calibration** — PID des buses et du plateau, et input shaper, décalages entre têtes et mesure du débit guidés, dans Entretien et réglages | [#38](https://github.com/kameka22/snap-studio/pull/38) |
 | **Filaments** — l'inventaire de vos bobines (poids déduit après chaque impression, alerte de stock bas) et les bonnes affaires | [#19](https://github.com/kameka22/snap-studio/pull/19) |
 | **Bibliothèque de filaments** — la gestion complète des filaments : marques, types et couleurs, profils personnalisés et par bobine, liés aux bobines de la U1 (RFID) et utilisés dans Préparer ; périmètre à définir | [#79](https://github.com/kameka22/snap-studio/pull/79) |
-| **Barre de titre intégrée sous Windows et Linux** — la même fenêtre épurée que sous macOS | [#27](https://github.com/kameka22/snap-studio/pull/27) |
 | **D'autres agents IA** — OpenCode à côté de Claude Code (OpenAI, Google, Mistral, modèles locaux…), un seul actif à la fois | [plan](docs/plans/ai-agents.md) |
 
 Les travaux en cours, ce qui reste à vérifier sur une vraie imprimante et les
