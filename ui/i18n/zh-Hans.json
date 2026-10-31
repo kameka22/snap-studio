@@ -1410,6 +1410,9 @@
   "trace.images": {
     "other": "[{n} 张图片]"
   },
+  "trace.models": {
+    "other": "[{n} 个模型]"
+  },
   "ia.thumb.source_missing": "源文件已移动",
   "ia.thumb.unavailable": "无预览",
   "ia.status.running": "回答中",

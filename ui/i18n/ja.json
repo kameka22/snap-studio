@@ -1410,6 +1410,9 @@
   "trace.images": {
     "other": "[画像 {n} 枚]"
   },
+  "trace.models": {
+    "other": "[モデル {n} 個]"
+  },
   "ia.thumb.source_missing": "元ファイルが移動されました",
   "ia.thumb.unavailable": "プレビューなし",
   "ia.status.running": "回答中",

@@ -1455,6 +1455,10 @@
     "one": "[1 immagine]",
     "other": "[{n} immagini]"
   },
+  "trace.models": {
+    "one": "[1 modello]",
+    "other": "[{n} modelli]"
+  },
   "ia.thumb.source_missing": "Sorgente spostata",
   "ia.thumb.unavailable": "Nessuna anteprima",
   "ia.status.running": "Risponde",
