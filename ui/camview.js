@@ -24,23 +24,31 @@ document.addEventListener("click", (e) => {
   if (b) act(b.dataset.act);
 });
 
-/* The frames, one after the other (as printers.js camNext); a few misses
-   in a row: the printer does not answer, said instead of a frozen image. */
+/* The frames, one after the other (as camera.js camNext: read and decoded
+   aside, so a missed or cut frame never shows WebKit's broken-image
+   question mark; the last good one stays); a few misses in a row: the
+   printer does not answer, said instead of a frozen image. */
 let n = 0, fails = 0;
 function next() {
-  $("img").src = schemeUrl("cam", `/f?id=${encodeURIComponent(CV.id)}&n=${++n}`);
+  const img = new Image();
+  img.src = schemeUrl("cam", `/f?id=${encodeURIComponent(CV.id)}&n=${++n}`);
+  img.decode().then(
+    () => {
+      const shown = $("img");
+      for (const a of shown.attributes) if (a.name !== "src") img.setAttribute(a.name, a.value);
+      img.classList.remove("hidden");
+      shown.replaceWith(img);
+      fails = 0;
+      $("off").classList.add("hidden");
+      setTimeout(next, 200);
+    },
+    () => {
+      if (++fails >= 3) {
+        $("off").classList.remove("hidden");
+        $("img").classList.add("hidden");
+      }
+      setTimeout(next, fails >= 3 ? 3000 : 1000);
+    },
+  );
 }
-$("img").addEventListener("load", () => {
-  fails = 0;
-  $("off").classList.add("hidden");
-  $("img").classList.remove("hidden");
-  setTimeout(next, 200);
-});
-$("img").addEventListener("error", () => {
-  if (++fails >= 3) {
-    $("off").classList.remove("hidden");
-    $("img").classList.add("hidden");
-  }
-  setTimeout(next, fails >= 3 ? 3000 : 1000);
-});
 if (CV.id) next();

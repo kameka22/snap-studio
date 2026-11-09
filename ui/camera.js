@@ -135,36 +135,58 @@ function camStop() {
   camPlace();
 }
 
-/* The next frame, unless one is in flight or nothing would show it. */
+/* The next frame, unless one is in flight or nothing would show it. It is
+   read and decoded aside, and only a whole picture takes the shown one's
+   place: a missed or cut frame (the printer rewrites its JPEG while it is
+   read) never reaches the screen, where WebKit would draw its broken-image
+   question mark; the last good frame stays meanwhile. */
 function camNext() {
   clearTimeout(CAM.timer);
   CAM.timer = 0;
   if (!CAM.on || CAM.busy || document.hidden || CAM.overlay) return;
   CAM.busy = true;
-  camImg().src = schemeUrl("cam", `/f?id=${encodeURIComponent(CAM.id)}&n=${++CAM.n}`);
+  const id = CAM.id, gen = CAM.gen;
+  const next = new Image();
+  next.src = schemeUrl("cam", `/f?id=${encodeURIComponent(id)}&n=${++CAM.n}`);
+  next.decode().then(
+    () => camFrame(next, id, gen),
+    () => camMiss(id, gen),
+  );
 }
+
+/* The same stream still: not stopped, nor another printer's since. */
+const camSame = (id, gen) => CAM.on && CAM.id === id && CAM.gen === gen;
 
 /* The window shown again, the site's view gone: the frames go on. */
 function camResume() {
   if (CAM.on) camNext();
 }
 
-camImg().addEventListener("load", () => {
+/* A read of a stream since stopped or replaced is dropped: its end does
+   not free the new stream's read (camStop already did). */
+function camFrame(next, id, gen) {
+  if (!camSame(id, gen)) return;
   CAM.busy = false;
-  if (!CAM.on) return;
+  // The new picture takes the element's place, with its id, classes and
+  // texts (the old one's handlers: none, the reads are made aside).
+  const img = CAM_EL.img;
+  for (const a of img.attributes) if (a.name !== "src") next.setAttribute(a.name, a.value);
+  img.replaceWith(next);
+  CAM_EL.img = next;
   camNote("");
   CAM.fails = 0;
   if (CAM.offline) camOffline(false);
   CAM.timer = setTimeout(camNext, camRetryDelay(0));
-});
-camImg().addEventListener("error", () => {
+}
+
+function camMiss(id, gen) {
+  if (!camSame(id, gen)) return;
   CAM.busy = false;
-  if (!CAM.on) return;
   camNote(tr("printers.cam.retry"));
   // A few misses in a row: the printer is gone. Tried again, less often.
   if (++CAM.fails >= 3) camOffline(true);
   CAM.timer = setTimeout(camNext, camRetryDelay(CAM.fails, CAM.offline));
-});
+}
 document.addEventListener("visibilitychange", camResume);
 
 /* The printer does not answer: said plainly over the camera, never its

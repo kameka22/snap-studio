@@ -11,6 +11,10 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Fixed
+- **Camera**: a missed or incomplete image from the printer no longer shows
+  a question mark icon; the last image stays until the next one arrives.
+
 ## [0.19.0] — 2026-11-08
 
 ### Added
