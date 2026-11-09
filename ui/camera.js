@@ -214,6 +214,9 @@ function camPlace() {
   // The screen's choices apply to its own printer's stream.
   const o = CAM.home && (!CAM.on || CAM.home.id === CAM.id) ? CAM.home.opts : {};
   CAM_EL.size.classList.toggle("hidden", !o.enlarge);
+  // Enlarged on a screen that offers it only: not carried into another
+  // one (the pinned window, a record) where no button would shrink it.
+  if (!o.enlarge) CAM_EL.box.classList.remove("big");
   CAM_EL.close.classList.toggle("hidden", o.close === false);
   CAM_EL.tag.classList.toggle("hidden", !o.tag);
   CAM_EL.tag.classList.toggle("paused", o.tag === "paused");
@@ -226,6 +229,7 @@ function camPlace() {
   };
   label(CAM_EL.pin, CAM.pinned ? "printers.cam.unpin" : "printers.cam.pin");
   label(CAM_EL.fullBtn, CAM.full ? "printers.cam.full_exit" : "printers.cam.full");
+  label(CAM_EL.size, CAM_EL.box.classList.contains("big") ? "printers.cam.shrink" : "printers.cam.enlarge");
   camOverlay(name);
   camChanged();
 }
@@ -248,8 +252,8 @@ function camFull(on) {
 
 /* Enlarge, where the screen allows it: its button (shown on hover). */
 function camToggleSize() {
-  const big = CAM_EL.box.classList.toggle("big");
-  CAM_EL.size.title = tr(big ? "printers.cam.shrink" : "printers.cam.enlarge");
+  CAM_EL.box.classList.toggle("big");
+  camPlace();
 }
 
 /* ------------------------------------------------------------ overlay */
@@ -340,9 +344,12 @@ $("cam-pip-head").addEventListener("pointerdown", (e) => {
     pip.style.left = `${Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx))}px`;
     pip.style.top = `${Math.max(0, Math.min(innerHeight - r.height, ev.clientY - dy))}px`;
   };
-  const up = (ev) => {
+  // Let go, or the drag taken away (pointercancel): settled all the same,
+  // never left dragging with its handlers on.
+  const up = () => {
     pip.removeEventListener("pointermove", move);
     pip.removeEventListener("pointerup", up);
+    pip.removeEventListener("pointercancel", up);
     // Measured while still dragged (its corner's anchors would stretch it).
     const q = pip.getBoundingClientRect();
     pip.classList.remove("dragging");
@@ -353,6 +360,7 @@ $("cam-pip-head").addEventListener("pointerdown", (e) => {
   };
   pip.addEventListener("pointermove", move);
   pip.addEventListener("pointerup", up);
+  pip.addEventListener("pointercancel", up);
 });
 
 window.addEventListener("langchange", () => {

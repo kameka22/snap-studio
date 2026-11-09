@@ -27,9 +27,15 @@ document.addEventListener("click", (e) => {
 /* The frames, one after the other (as camera.js camNext: read and decoded
    aside, so a missed or cut frame never shows WebKit's broken-image
    question mark; the last good one stays); a few misses in a row: the
-   printer does not answer, said instead of a frozen image. */
-let n = 0, fails = 0;
+   printer does not answer, said instead of a frozen image.
+   Hidden (no site shown: the interface reads its own frames then), it
+   reads nothing; shown again, it goes on. */
+let n = 0, fails = 0, timer = 0, busy = false;
 function next() {
+  clearTimeout(timer);
+  timer = 0;
+  if (busy || document.hidden || !CV.id) return;
+  busy = true;
   const img = new Image();
   img.src = schemeUrl("cam", `/f?id=${encodeURIComponent(CV.id)}&n=${++n}`);
   img.decode().then(
@@ -40,15 +46,18 @@ function next() {
       shown.replaceWith(img);
       fails = 0;
       $("off").classList.add("hidden");
-      setTimeout(next, 200);
+      busy = false;
+      timer = setTimeout(next, 200);
     },
     () => {
       if (++fails >= 3) {
         $("off").classList.remove("hidden");
         $("img").classList.add("hidden");
       }
-      setTimeout(next, fails >= 3 ? 3000 : 1000);
+      busy = false;
+      timer = setTimeout(next, fails >= 3 ? 3000 : 1000);
     },
   );
 }
-if (CV.id) next();
+document.addEventListener("visibilitychange", next);
+next();
