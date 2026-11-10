@@ -25,6 +25,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
+| [plugin-api-v1.md](plugin-api-v1.md) | Plugin system steps 1 and 2: API v1 (manifest, lifecycle, permissions, host actions, tabs, actions, badges, schedules) and the Care tab of Care & Tuning as the first built-in plugin, with no visible change | Written, draft PR; follows the direction of [#93](https://github.com/kameka22/snap-studio/pull/93) |
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
 | [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
