@@ -38,8 +38,25 @@ function next() {
   busy = true;
   const img = new Image();
   img.src = schemeUrl("cam", `/f?id=${encodeURIComponent(CV.id)}&n=${++n}`);
+  // A decode that never ends counts as a miss (as camera.js camNext).
+  let done = false;
+  const once = (f) => () => {
+    if (done) return;
+    done = true;
+    clearTimeout(guard);
+    f();
+  };
+  const miss = () => {
+    if (++fails >= 3) {
+      $("off").classList.remove("hidden");
+      $("img").classList.add("hidden");
+    }
+    busy = false;
+    timer = setTimeout(next, fails >= 3 ? 3000 : 1000);
+  };
+  const guard = setTimeout(once(miss), 6000);
   img.decode().then(
-    () => {
+    once(() => {
       const shown = $("img");
       for (const a of shown.attributes) if (a.name !== "src") img.setAttribute(a.name, a.value);
       img.classList.remove("hidden");
@@ -48,15 +65,8 @@ function next() {
       $("off").classList.add("hidden");
       busy = false;
       timer = setTimeout(next, 200);
-    },
-    () => {
-      if (++fails >= 3) {
-        $("off").classList.remove("hidden");
-        $("img").classList.add("hidden");
-      }
-      busy = false;
-      timer = setTimeout(next, fails >= 3 ? 3000 : 1000);
-    },
+    }),
+    once(miss),
   );
 }
 document.addEventListener("visibilitychange", next);

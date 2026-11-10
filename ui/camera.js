@@ -148,11 +148,25 @@ function camNext() {
   const id = CAM.id, gen = CAM.gen;
   const next = new Image();
   next.src = schemeUrl("cam", `/f?id=${encodeURIComponent(id)}&n=${++CAM.n}`);
+  // A decode that never ends (the read itself stops at 4 s, printers.rs)
+  // counts as a miss, so the stream never stays stuck on one frame; its
+  // late end is dropped then.
+  let done = false;
+  const once = (f) => () => {
+    if (done) return;
+    done = true;
+    clearTimeout(guard);
+    f();
+  };
+  const guard = setTimeout(once(() => camMiss(id, gen)), CAM_DECODE_MS);
   next.decode().then(
-    () => camFrame(next, id, gen),
-    () => camMiss(id, gen),
+    once(() => camFrame(next, id, gen)),
+    once(() => camMiss(id, gen)),
   );
 }
+
+/* Longer than a read may last (4 s), then some to decode it. */
+const CAM_DECODE_MS = 6000;
 
 /* The same stream still: not stopped, nor another printer's since. */
 const camSame = (id, gen) => CAM.on && CAM.id === id && CAM.gen === gen;
