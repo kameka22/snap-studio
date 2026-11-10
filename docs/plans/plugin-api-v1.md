@@ -1,10 +1,26 @@
 # Plugin API v1 and the first built-in plugin (Care)
 
-Plan only (draft PR). Step 1 and step 2 of the plugin system
+Plan only (draft PR). The first step of the plugin system
 (`plugin-system.md`, draft PR
 [#93](https://github.com/kameka22/snap-studio/pull/93)): the smallest API
 that a real feature can live on, and the **Care** tab of Care & Tuning
-moved onto it. No visible change for users; no user plugins yet (step 3).
+moved onto it. No visible change for users; no user plugins yet.
+
+## Steps of the plugin system
+
+#93 gives the direction and "first step proposed"; the steps below are
+this plan's breakdown of it (estimates are ours):
+
+1. **API v1** (this plan): manifest, lifecycle, permissions, host calls,
+   contributions. 4 to 6 days.
+2. **First built-in plugin** (this plan): Care. 2 to 3 days.
+3. **User plugins**: sandboxed origin, permissions granted by the user,
+   Settings › Plugins, safe mode. 1 to 2 weeks.
+4. **Live editing** in the app, Snappy writing plugins and calling every
+   plugin action. About 1 week.
+5. **Signed index**: signing, publishing, revocation. About 1 week.
+6. **Larger features moved** (Prepare, Control, Calibration…), one PR
+   each.
 
 ## Goal
 
@@ -21,8 +37,10 @@ moved onto it. No visible change for users; no user plugins yet (step 3).
 Chosen on 2026-11-10 among the three candidates of the direction
 (Maintenance, Favorites, bed mesh):
 
-- Small and self-contained: `ui/maint.js` (about 400 lines) and
-  `src-tauri/src/maintenance.rs` (about 230 lines, tested).
+- Small: `ui/maint.js` (about 400 lines) and
+  `src-tauri/src/maintenance.rs` (about 230 lines, tested). Not fully
+  self-contained: the bed mesh and the printer simulator rely on it (see
+  *Untangle* and *Simulator* below).
 - It exercises most of what plugins need, without writing to the printer:
   - **a tab** in an existing page (Care & Tuning: Control, Care, Bed
     Leveling);
@@ -67,10 +85,16 @@ One `plugin.json` per plugin. Same shape for built-in and user plugins.
 - `name`, `title`: built-ins use the app's i18n keys (`ui/i18n`); user
   plugins (step 3) bring their own texts per language.
 - `kind`: `builtin` (shipped with the app, every permission it lists) or
-  `user` (step 3, isolated, permissions granted by the user).
+  `user` (step 3, isolated, permissions granted by the user). In v1,
+  built-ins come inside the app's own package (already covered by the
+  updater's signature), with no separate plugin signature; #93's signed
+  bundles come with step 5.
 - `permissions`: what the plugin may call; a host call without its
   permission is refused and logged, for built-ins too, so the list stays
-  honest.
+  honest. In v1 this check is made by the loader (JavaScript): the Rust
+  commands do not know yet which plugin calls them. Enforcing it on the
+  Rust side, per origin, comes with the sandbox (step 3), and is required
+  before any user plugin runs.
 - `contributes`: where the plugin shows; the app draws it (below).
 
 ## Lifecycle
@@ -103,7 +127,7 @@ own style.
 | `actions` | A button in the page's toolbar, or an item in a menu; runs a plugin function. | Refresh |
 | `badges` | A count on the plugin's tab, and a dot on a printer in the side list; the plugin returns a number per printer. | yes |
 | `schedules` | A function run at start and/or every N minutes (minimum 5). | hourly check |
-| `snappy` | An action Snappy can call (open the plugin's tab on a printer). | open Care |
+| `snappy` | v1: only "open the plugin's tab on a printer". #93's goal (every plugin action is a Snappy tool, under the same permissions) comes with step 4. | open Care |
 
 Planned later, not in v1: slice recipes, G-code post-processing,
 Prepare tools, panels in the side bar, printer macros (#93's extension
@@ -118,19 +142,33 @@ against the manifest's permissions.
 |---|---|---|
 | `ctx.printers.list()`, `ctx.printers.current()` | none | the printer shown, every printer for the hourly check |
 | `ctx.printers.on("change", fn)` | none | a printer added, removed or renamed |
-| `ctx.printer.query(id, objects)` | `printer.read` | Moonraker objects (read only) |
+| `ctx.printer.maintenance(id)` | `printer.read` | the U1's counters: tool changes and errors per head, hours, jobs (today's `maintenance::usage`, unchanged) |
 | `ctx.printer.jobTotals(id)` | `printer.read` | hours and jobs |
 | `ctx.storage.get(key)`, `.set(key, value)` | `storage` | the log and the last counters read |
 | `ctx.open.url(url)` | `open.url` | guide and video |
 | `ctx.i18n.t(key, vars)`, `ctx.i18n.on("change", fn)` | none | texts, and a redraw when the language changes |
 | `ctx.ui.toast(text, error)` | none | errors |
-| `ctx.ui.badge(printerId, n)` | none | the ⚠ and the dot |
+| `ctx.ui.badge(printerId, { n, tip })` | none | the ⚠ and the dot, with the tab's tooltip |
 | `ctx.ui.showTab(printerId, tab)` | none | open itself (Snappy) |
 
-- `printer.read` only reads; nothing in v1 writes to the printer.
+- `printer.read` only reads; nothing in v1 writes to the printer. A
+  generic `query(objects)` is left for later: when it comes, object names
+  are checked against Moonraker's naming (letters, digits, `_`, one space)
+  and URL-encoded, as today's fixed list is safe only because it is fixed.
 - `storage` is one JSON store per plugin, in the app's data folder
   (`plugins/<id>.json`), read and written by the Rust side, size limited
-  (1 MB in v1).
+  (1 MB in v1). The Rust side checks the id before building the path
+  (`^[a-z0-9]+(\.[a-z0-9-]+)+$`, so no `/` or `..`) and that it is a
+  plugin of the index; anything else is refused.
+- `ctx.storage` replaces Care's `localStorage` keys too: the last
+  counters read (`snapstudio.maint.<printer>`) move into the plugin's
+  store, imported once. The last tab chosen (`snapstudio.mtab.<printer>`)
+  belongs to the Care & Tuning page, not to the plugin, and stays where
+  it is.
+- The badge function belongs to the app: plugins call it through `ctx`,
+  and the bed mesh (not a plugin yet) calls the same function directly.
+  Each badge carries its own tooltip (the bed's "out of tolerance" and
+  "measurement due" texts stay).
 - Built-ins call these from the main document (they are trusted). A
   check in `scripts/` makes sure files under `ui/plugins/` never call
   `invoke` or reach the DOM outside their box, so moving them to the
@@ -143,16 +181,27 @@ against the manifest's permissions.
     permissions, contributions);
   - `plugin_storage_get` / `plugin_storage_set` commands, keyed by plugin
     id, with the size limit;
-  - `printer_query` / `printer_job_totals`: read-only Moonraker calls,
+  - `printer_job_totals` (used by the plugin through `ctx` and by the bed
+    mesh directly) and the existing `printer_maintenance`: read-only
+    Moonraker calls,
     the same client as today (`printers.rs`, 4 s timeout).
-- `maintenance.rs`: the parsing of the counters (`parse`) moves to the
-  plugin (JavaScript) with its tests (`scripts/test-care.js`), using the
-  real U1 answers from the current Rust tests as fixtures. The
-  `printer_maintenance`, `maintenance_log`, `maintenance_done` and
-  `maintenance_remove` commands go once the plugin uses the host API.
-- **Migration**: at the first start, `maintenance.json` is copied into the
-  plugin's storage (`migrate.rs`, as the earlier migrations), then kept
-  as is for one release in case of a return to the previous version.
+- `maintenance.rs`: the counters stay read and parsed in Rust (`usage`,
+  `parse` and their tests unchanged), behind the `printer.read` host call
+  `ctx.printer.maintenance`. The log functions (`entries`, `done`,
+  `remove`) and the `maintenance_log`, `maintenance_done` and
+  `maintenance_remove` commands go: the log is the plugin's data, in its
+  store.
+- **Import of the log**: in `plugins.rs`, at the first read of
+  `snapstudio.care`'s store: store absent and `maintenance.json` present
+  → it is imported, never overwritten afterwards. (`migrate.rs` is the
+  one-time carry-over from "3MF Studio" and is not used.)
+  `maintenance.json` is left as it was; going back to the previous
+  version shows the log as it was at the import, without the tasks
+  marked done since.
+- **Simulator** (`sim/`, Cargo feature `sim`): `sim/mod.rs` writes the
+  scenario's log into the plugin's store (`plugins/snapstudio.care.json`)
+  instead of `maintenance.json`; `sim/tests.rs` keeps testing
+  `maintenance::usage`, unchanged since the parsing stays in Rust.
 
 ## Interface side
 
@@ -163,10 +212,15 @@ against the manifest's permissions.
 - `maint.js` keeps the Care & Tuning page and its other tabs (Control,
   Bed Leveling); its tab list becomes the built-in tabs plus the
   plugins' ones, in `order`.
-- Untangle: today `mtLoad` also reloads the bed mesh (`bmLoad`) and
-  `mtSideDots` adds the bed's warning to Care's count. The bed keeps its
-  own badge through the same `ctx.ui.badge` path, so the side dot is the
-  sum of every plugin's badges, as today.
+- Untangle, both ways:
+  - Care → bed: today `mtLoad` also reloads the bed mesh (`bmLoad`) and
+    `mtSideDots` adds the bed's warning to Care's count. The page calls
+    `bmLoad` itself, and the bed sets its own badge through the app's
+    badge function; the side dot is the sum of every badge, as today.
+  - Bed → Care: `bmJobsNow` (`bedmesh.js`) reads the job count from
+    Care's cache (`mtCached`) or `MT.usage`, for the "measurement due"
+    reminder. Both go with Care: the bed reads the count itself through
+    the app's `printer_job_totals` command, never through the plugin.
 - `snappy-actions.js`: `maintenance` opens the plugin's tab through its
   contribution instead of `maintShow(…, "care")`.
 - CSP: unchanged in v1 (built-ins are files of the app, `script-src
@@ -179,29 +233,36 @@ against the manifest's permissions.
 - Moving other features (one PR each, later).
 - Any change users can see.
 
-## Open questions for the owner
+## Decisions and open questions
 
-1. Name in the interface (needed at step 3 only): « Plugins »,
-   « Modules » or « Extensions » ?
-2. Counter parsing in JavaScript (proposed, so a plugin is whole and
-   reloadable) or kept in Rust behind a `printer.maintenance` host call
-   (less moved code, but an API made for one plugin)?
+- Decided here: the counters stay parsed in Rust behind
+  `ctx.printer.maintenance`. Moving them to JavaScript would also mean
+  rewriting the simulator and its tests for no visible gain; the cost is
+  one host call made for the U1, acceptable since Snap Studio targets the
+  U1. A generic read can replace it later.
+- Open, for the owner (needed at step 3 only): the name in the
+  interface, « Plugins », « Modules » or « Extensions » ?
 
 ## Testing
 
-- `src-tauri/tests`: manifest validation (missing field, unknown `api`,
-  unknown permission or contribution → disabled, no crash); storage per
-  plugin and size limit; migration of `maintenance.json` (present,
-  absent, corrupt).
+- Rust unit tests in `plugins.rs` (`#[cfg(test)]`, as the rest of the
+  project): manifest validation (missing field, unknown `api`, unknown
+  permission or contribution → disabled, no crash); storage per plugin,
+  size limit, ids refused (`../x`, `a/b`, unknown plugin); import of
+  `maintenance.json` (present, absent, corrupt, store already there).
+- `sim/tests.rs`: the simulated scenario's log is found in the plugin's
+  store.
 - `scripts/test-plugins.js`: lifecycle (activate, deactivate, reload
   leaves no tab, action, badge or schedule behind); a call without its
   permission is refused.
-- `scripts/test-care.js`: the counters and due tasks, on the fixtures of
-  today's Rust tests.
+- `scripts/test-care.js`: the due tasks (`mtProgress`), on counters
+  taken from today's Rust test fixtures.
 - `check-i18n.py`: no new text expected in v1.
 - In the app, before and after, on a U1: same tab, same counters, same
   ⚠ and side dot, a task marked done and undone, links, the hourly check,
-  Snappy opening Care, a printer offline (last counters, stale date).
+  Snappy opening Care, a printer offline (last counters, stale date), the
+  last tab remembered, the bed's "measurement due" reminder and its ⚠
+  tooltip, the log kept after the update.
 
 ## Docs and CHANGELOG
 
