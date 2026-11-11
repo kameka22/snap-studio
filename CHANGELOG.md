@@ -11,6 +11,11 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+### Changed
+- **Care & Tuning**: the Care tab now runs on the new plugin system, the
+  first step towards plugins (no visible change; see
+  [docs/plugins.md](docs/plugins.md)).
+
 ## [0.19.0] — 2026-11-08
 
 ### Added

@@ -1,0 +1,16 @@
+{
+  "id": "snapstudio.care",
+  "api": 1,
+  "version": "1.0.0",
+  "name": "maint.tab.care",
+  "kind": "builtin",
+  "entry": "main.js",
+  "permissions": ["printer.read", "storage", "open.url"],
+  "contributes": {
+    "tabs": [{ "id": "care", "page": "maint", "title": "maint.tab.care", "order": 20 }],
+    "actions": [{ "id": "refresh", "where": "toolbar", "page": "maint", "tab": "care", "title": "maint.refresh", "icon": "refresh" }],
+    "badges": ["tab", "printer"],
+    "schedules": [{ "id": "check", "every": "1h", "atStart": true }],
+    "snappy": [{ "id": "maintenance", "opens": "care" }]
+  }
+}

@@ -24,6 +24,7 @@ mod model3mf;
 mod orient;
 mod paint;
 mod plate;
+mod plugins;
 mod presets;
 mod printer_files;
 mod printers;
@@ -1304,22 +1305,29 @@ async fn printer_maintenance(host: String, port: u16) -> Result<maintenance::Usa
     maintenance::usage(&host, port).await.map_err(ui_err)
 }
 
-/// A printer's maintenance log.
+/// A printer's job count and print hours, for the bed mesh's reminder.
 #[tauri::command]
-fn maintenance_log(printer_id: String) -> Vec<maintenance::Entry> {
-    maintenance::entries(&printer_id)
+async fn printer_job_totals(host: String, port: u16) -> Result<maintenance::Totals, String> {
+    maintenance::totals(&host, port).await.map_err(ui_err)
 }
 
-/// Logs a maintenance task done now, with the counters at that moment.
+/// The built-in plugins and their manifests (or why one is off).
 #[tauri::command]
-fn maintenance_done(printer_id: String, task: String, print_hours: f64, swaps: Vec<u64>) -> Result<Vec<maintenance::Entry>, String> {
-    maintenance::done(&printer_id, &task, print_hours, swaps).map_err(ui_err)
+fn plugins_list(app: tauri::AppHandle) -> Vec<plugins::Found> {
+    use tauri::Manager;
+    plugins::found(|path| app.asset_resolver().get(path.to_string()).map(|a| a.bytes))
 }
 
-/// Forgets a log entry made by mistake.
+/// A key of a plugin's store; `null` when it is not set.
 #[tauri::command]
-fn maintenance_remove(printer_id: String, task: String, at: u64) -> Result<Vec<maintenance::Entry>, String> {
-    maintenance::remove(&printer_id, &task, at).map_err(ui_err)
+fn plugin_storage_get(plugin: String, key: String) -> Result<serde_json::Value, String> {
+    plugins::get(&plugin, &key).map_err(ui_err)
+}
+
+/// Sets a key of a plugin's store (`null` removes it).
+#[tauri::command]
+fn plugin_storage_set(plugin: String, key: String, value: serde_json::Value) -> Result<(), String> {
+    plugins::set(&plugin, &key, value).map_err(ui_err)
 }
 
 /// A printer's bed mesh now, with its settings and progress.
@@ -2365,9 +2373,10 @@ pub fn run() {
             printer_probe,
             printer_status,
             printer_maintenance,
-            maintenance_log,
-            maintenance_done,
-            maintenance_remove,
+            printer_job_totals,
+            plugins_list,
+            plugin_storage_get,
+            plugin_storage_set,
             bed_mesh_read,
             bed_mesh_history,
             bed_mesh_record,

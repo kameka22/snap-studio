@@ -146,12 +146,12 @@
   </div>
   <div class="tb-actions tb-tabs" data-for="maint">
     <div id="mt-tabs" class="seg" role="group" aria-label="Care &amp; Tuning" data-i18n-aria="maint.title">
-      <!-- Control first: the printer's actions, then its care and its bed. -->
-      <button class="seg-btn labeled" data-mtab="control"><span data-i18n="maint.tab.control">Control</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
-      <button class="seg-btn labeled" data-mtab="care"><span data-i18n="maint.tab.care">Care</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
-      <button class="seg-btn labeled" data-mtab="level"><span data-i18n="maint.tab.level">Bed Leveling</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+      <!-- Control first: the printer's actions, then its care (the Care
+           plugin, order 20) and its bed. Plugin tabs join by data-order. -->
+      <button class="seg-btn labeled" data-mtab="control" data-order="10"><span data-i18n="maint.tab.control">Control</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+      <button class="seg-btn labeled" data-mtab="level" data-order="30"><span data-i18n="maint.tab.level">Bed Leveling</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
       <!-- Calibration: #17's assistants; hidden until they land. -->
-      <button class="seg-btn labeled hidden" data-mtab="calib"><span data-i18n="maint.tab.calib">Calibration</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
+      <button class="seg-btn labeled hidden" data-mtab="calib" data-order="40"><span data-i18n="maint.tab.calib">Calibration</span><span class="tab-warn hidden" aria-hidden="true">⚠</span></button>
     </div>
   </div>
   <div class="tb-spacer" data-tauri-drag-region></div>
@@ -692,7 +692,6 @@
 </section>
 <section id="view-maint" class="view hidden">
   <div class="prn">
-    <section class="prn-main hv mt" id="mt-body"></section>
     <section class="prn-main hv bm hidden" id="bm-body"></section>
     <section class="prn-main hv ctl hidden" id="ct-body"></section>
   </div>
@@ -2354,6 +2353,8 @@
 <script src="bedmesh-logic.js"></script>
 <script src="maint.js"></script>
 <script src="bedmesh.js"></script>
+<script src="plugins-logic.js"></script>
+<script src="plugins.js"></script>
 <script src="control-logic.js"></script>
 <script src="control.js"></script>
 <script src="printer3d-logic.js"></script>

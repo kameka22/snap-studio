@@ -395,6 +395,9 @@ fn maintenance_counters() {
     assert_eq!(u.heads.iter().map(|h| h.switch_count).collect::<Vec<_>>(), [412, 388, 251, 240]);
     assert_eq!(u.jobs, 3);
     assert!(u.print_hours > 0.0 && u.purifier_hours.is_some());
+    // The bed mesh's reminder reads the history only.
+    let t = s.run(crate::maintenance::totals("127.0.0.1", s.port(0))).unwrap();
+    assert_eq!((t.jobs, t.print_hours), (u.jobs, u.print_hours));
 }
 
 #[test]
@@ -507,4 +510,19 @@ fn control_path() {
     assert!(!s.status(0).online);
     s.advance(21.0);
     assert!(s.status(0).online);
+}
+
+#[test]
+fn the_scenario_log_is_in_the_care_store() {
+    let s = start("solo");
+    let sc = load("solo").unwrap();
+    let dir = s.dir.join("app");
+    std::fs::create_dir_all(&dir).unwrap();
+    super::seed(&sc, &s.farm, &dir).unwrap();
+    let log = crate::plugins::get_in(&dir, crate::plugins::CARE, "log").unwrap();
+    let p = &sc.printers[0];
+    assert!(!p.maintenance.is_empty());
+    assert_eq!(log[&p.id].as_array().map(Vec::len), Some(p.maintenance.len()));
+    assert_eq!(log[&p.id][0]["task"], p.maintenance[0].task.as_str());
+    assert!(!dir.join("maintenance.json").exists());
 }

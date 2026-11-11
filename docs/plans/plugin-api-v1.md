@@ -141,13 +141,15 @@ against the manifest's permissions.
 | Call | Permission | Care uses it for |
 |---|---|---|
 | `ctx.printers.list()`, `ctx.printers.current()` | none | the printer shown, every printer for the hourly check |
-| `ctx.printers.on("change", fn)` | none | a printer added, removed or renamed |
+| `ctx.printers.on("change" \| "bed", fn)` | none | a printer added, removed or renamed; a printer's bed mesh read, measured or its settings changed (`fn(printerId)`) |
 | `ctx.printer.maintenance(id)` | `printer.read` | the U1's counters: tool changes and errors per head, hours, jobs (today's `maintenance::usage`, unchanged) |
-| `ctx.printer.jobTotals(id)` | `printer.read` | hours and jobs |
+| `ctx.printer.bed(id)` | `printer.read` | what the bed asks — `{ due: { kind, dev, at, limit, remind } \| null, meshes: [{ at, dev, status }] }` — for its row among the tasks, the badge (+1) and the log |
 | `ctx.storage.get(key)`, `.set(key, value)` | `storage` | the log and the last counters read |
 | `ctx.open.url(url)` | `open.url` | guide and video |
 | `ctx.i18n.t(key, vars)`, `ctx.i18n.on("change", fn)` | none | texts, and a redraw when the language changes |
-| `ctx.ui.toast(text, error)` | none | errors |
+| `ctx.i18n.num(n)`, `.dec(n, digits)`, `.locale()` | none | numbers and dates in the app's language |
+| `ctx.ui.toast(text, error, { label, run })` | none | errors, and "Undo" after a task marked done |
+| `ctx.ui.offline(text, attr)` | none | the app's "printer offline" line (HTML), its retry button carrying `attr` |
 | `ctx.ui.badge(printerId, { n, tip })` | none | the ⚠ and the dot, with the tab's tooltip |
 | `ctx.ui.showTab(printerId, tab)` | none | open itself (Snappy) |
 
@@ -181,10 +183,15 @@ against the manifest's permissions.
     permissions, contributions);
   - `plugin_storage_get` / `plugin_storage_set` commands, keyed by plugin
     id, with the size limit;
-  - `printer_job_totals` (used by the plugin through `ctx` and by the bed
-    mesh directly) and the existing `printer_maintenance`: read-only
-    Moonraker calls,
-    the same client as today (`printers.rs`, 4 s timeout).
+  - `plugins_list`: the built-ins and their checked manifests, read from
+    the app's own files (`include_str!` for the index, the asset
+    resolver for the manifests).
+- `maintenance.rs`: new `totals` and the `printer_job_totals` command, for
+  the bed mesh only (Care reads hours and jobs in
+  `ctx.printer.maintenance`, so the plugin has no `jobTotals` call). It
+  sits next to `usage`, whose parsing it shares, rather than in
+  `plugins.rs`: it is not a plugin call. Read-only Moonraker calls, the
+  same client as today (`printers.rs`, 4 s timeout).
 - `maintenance.rs`: the counters stay read and parsed in Rust (`usage`,
   `parse` and their tests unchanged), behind the `printer.read` host call
   `ctx.printer.maintenance`. The log functions (`entries`, `done`,
@@ -220,7 +227,13 @@ against the manifest's permissions.
   - Bed → Care: `bmJobsNow` (`bedmesh.js`) reads the job count from
     Care's cache (`mtCached`) or `MT.usage`, for the "measurement due"
     reminder. Both go with Care: the bed reads the count itself through
-    the app's `printer_job_totals` command, never through the plugin.
+    the app's `printer_job_totals` command, never through the plugin
+    (kept as `snapstudio.bm.jobsnow.<printer>`; Care's old cache is read
+    once as a fallback).
+  - The bed's badge sits on its own tab only: Care lists the bed among
+    its tasks and counts it in its own badge, so the printer's dot does
+    not count it twice. Care follows the bed through `ctx.printer.bed`
+    and the `"bed"` event.
 - `snappy-actions.js`: `maintenance` opens the plugin's tab through its
   contribution instead of `maintShow(…, "care")`.
 - CSP: unchanged in v1 (built-ins are files of the app, `script-src
@@ -255,9 +268,11 @@ against the manifest's permissions.
 - `scripts/test-plugins.js`: lifecycle (activate, deactivate, reload
   leaves no tab, action, badge or schedule behind); a call without its
   permission is refused.
-- `scripts/test-care.js`: the due tasks (`mtProgress`), on counters
-  taken from today's Rust test fixtures.
-- `check-i18n.py`: no new text expected in v1.
+- `scripts/test-care.js`: the due tasks (`progress`), and the plugin run
+  through the real lifecycle on a fake page: badge, bed (+1), offline
+  (last counters), deactivated.
+- `check-i18n.py`: no new text in v1; it now also reads `ui/plugins/`
+  (scripts and manifests).
 - In the app, before and after, on a U1: same tab, same counters, same
   ⚠ and side dot, a task marked done and undone, links, the hourly check,
   Snappy opening Care, a printer offline (last counters, stale date), the

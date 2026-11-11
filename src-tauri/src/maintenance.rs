@@ -1,19 +1,16 @@
-//! Printer maintenance: the counters the printer keeps, and the log of what
-//! was done.
+//! Printer maintenance: the counters the printer keeps.
 //!
 //! The Snapmaker U1 counts, per head, its tool changes (`switch_count`), the
 //! count at the last maintenance confirmed on its screen
 //! (`last_maintenance_count`), and its tool change errors and retries;
 //! Moonraker's history keeps the jobs, print hours and filament. Nothing
 //! resets the printer's maintenance count from outside: what was done is
-//! logged here, with the counters at that moment, and "since" is counted
-//! from there. Read only — nothing is written to the printer.
+//! logged by the Care plugin (`ui/plugins/care`), in its own store, with the
+//! counters at that moment. Read only — nothing is written to the printer.
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
-use std::collections::HashMap;
-use std::path::PathBuf;
 
 /// One head, as the printer counts it.
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
@@ -90,66 +87,19 @@ pub async fn usage(host: &str, port: u16) -> Result<Usage> {
     Ok(parse(&objects["result"]["status"], &totals["result"]))
 }
 
-// ------------------------------------------------------------ log
-
-/// A maintenance task done, with the counters at that moment.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct Entry {
-    pub task: String,
-    /// Unix seconds.
-    pub at: u64,
+/// A printer's job count and print hours (Moonraker's history only): the
+/// bed mesh's "measurement due" reminder counts prints with it.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Totals {
+    pub jobs: u64,
     pub print_hours: f64,
-    /// Each head's tool changes.
-    #[serde(default)]
-    pub swaps: Vec<u64>,
 }
 
-type Log = HashMap<String, Vec<Entry>>;
-
-fn log_path() -> PathBuf {
-    crate::util::app_dir().join("maintenance.json")
-}
-
-fn read_log(path: &std::path::Path) -> Log {
-    std::fs::read(path).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default()
-}
-
-fn write_log(path: &std::path::Path, log: &Log) -> Result<()> {
-    crate::util::write_atomic(path, &serde_json::to_vec_pretty(log)?)
-}
-
-/// A printer's log, oldest first.
-pub fn entries(printer: &str) -> Vec<Entry> {
-    read_log(&log_path()).remove(printer).unwrap_or_default()
-}
-
-fn add_in(path: &std::path::Path, printer: &str, entry: Entry) -> Result<Vec<Entry>> {
-    let mut log = read_log(path);
-    let list = log.entry(printer.to_string()).or_default();
-    list.push(entry);
-    let out = list.clone();
-    write_log(path, &log)?;
-    Ok(out)
-}
-
-fn remove_in(path: &std::path::Path, printer: &str, task: &str, at: u64) -> Result<Vec<Entry>> {
-    let mut log = read_log(path);
-    let list = log.entry(printer.to_string()).or_default();
-    list.retain(|e| !(e.task == task && e.at == at));
-    let out = list.clone();
-    write_log(path, &log)?;
-    Ok(out)
-}
-
-/// Logs a task done now.
-pub fn done(printer: &str, task: &str, print_hours: f64, swaps: Vec<u64>) -> Result<Vec<Entry>> {
-    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    add_in(&log_path(), printer, Entry { task: task.to_string(), at, print_hours, swaps })
-}
-
-/// Forgets an entry logged by mistake.
-pub fn remove(printer: &str, task: &str, at: u64) -> Result<Vec<Entry>> {
-    remove_in(&log_path(), printer, task, at)
+pub async fn totals(host: &str, port: u16) -> Result<Totals> {
+    let base = crate::printers::base(host, port);
+    let t = crate::printers::get_json(&format!("{base}/server/history/totals")).await?;
+    let u = parse(&Value::Null, &t["result"]);
+    Ok(Totals { jobs: u.jobs, print_hours: u.print_hours })
 }
 
 #[cfg(test)]
@@ -201,23 +151,6 @@ mod tests {
         assert_eq!(u.purifier_hours, None);
         // No history component: zeros, not an error.
         assert_eq!(parse(&status, &Value::Null).jobs, 0);
-    }
-
-    #[test]
-    fn the_log_keeps_each_printer_apart() {
-        let dir = std::env::temp_dir().join("snapstudio_maintenance");
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("maintenance.json");
-        let _ = std::fs::remove_file(&path);
-        let e = |task: &str, at| Entry { task: task.into(), at, print_hours: 500.0, swaps: vec![1604, 1439, 922, 1589] };
-        add_in(&path, "u1", e("contacts", 10)).unwrap();
-        add_in(&path, "u1", e("zscrews", 20)).unwrap();
-        let other = add_in(&path, "voron", e("contacts", 30)).unwrap();
-        assert_eq!(other.len(), 1);
-        assert_eq!(read_log(&path)["u1"].len(), 2);
-        let left = remove_in(&path, "u1", "contacts", 10).unwrap();
-        assert_eq!(left, vec![e("zscrews", 20)]);
-        assert_eq!(read_log(&path)["voron"].len(), 1);
     }
 
     /// A real printer: `MAINT_HOST=192.168.0.144 cargo test --lib real_printer -- --ignored --nocapture`.

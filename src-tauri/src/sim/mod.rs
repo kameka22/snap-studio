@@ -221,14 +221,17 @@ fn seed(s: &Scenario, farm: &Farm, dir: &std::path::Path) -> Result<()> {
         if !list.is_empty() {
             meshes.insert(p.id.clone(), serde_json::to_value(list)?);
         }
-        let entries: Vec<crate::maintenance::Entry> = p
+        // The Care plugin's log entries (`ui/plugins/care`).
+        let entries: Vec<serde_json::Value> = p
             .maintenance
             .iter()
-            .map(|m| crate::maintenance::Entry {
-                task: m.task.clone(),
-                at: now.saturating_sub((m.days_ago * 86_400.0) as u64),
-                print_hours: 30.0,
-                swaps: p.switch_counts.iter().map(|c| c.saturating_sub(150)).collect(),
+            .map(|m| {
+                serde_json::json!({
+                    "task": m.task,
+                    "at": now.saturating_sub((m.days_ago * 86_400.0) as u64),
+                    "print_hours": 30.0,
+                    "swaps": p.switch_counts.iter().map(|c| c.saturating_sub(150)).collect::<Vec<_>>(),
+                })
             })
             .collect();
         if !entries.is_empty() {
@@ -236,7 +239,7 @@ fn seed(s: &Scenario, farm: &Farm, dir: &std::path::Path) -> Result<()> {
         }
     }
     crate::util::write_atomic(&dir.join("bed_mesh.json"), &serde_json::to_vec(&meshes)?)?;
-    crate::util::write_atomic(&dir.join("maintenance.json"), &serde_json::to_vec_pretty(&log)?)?;
+    crate::plugins::set_in(dir, crate::plugins::CARE, "log", serde_json::Value::Object(log))?;
     Ok(())
 }
 
