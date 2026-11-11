@@ -101,6 +101,9 @@ pub struct Status {
     /// time-based `M73 P` in `progress` from the file position.
     #[serde(skip)]
     pub file_progress: Option<f32>,
+    /// Bytes of the file read (`virtual_sdcard.file_position`).
+    #[serde(skip)]
+    pub file_position: Option<u64>,
 }
 
 pub(crate) fn client() -> &'static reqwest::Client {
@@ -667,15 +670,20 @@ pub async fn status(host: &str, port: u16) -> Status {
 /// before another try (a printer busy at the start of a print).
 const ESTIMATE_RETRY: Duration = Duration::from_secs(30);
 
-/// The slicer's estimate of a job, and how the printer counts its progress.
+/// What the file's metadata tells of a job: the slicer's estimate, how the
+/// printer counts its progress, and where its G-code starts and ends.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SlicerEstimate {
-    /// `estimated_time`, in seconds.
+    /// `estimated_time`, in seconds; 0 when the file has none (another
+    /// slicer).
     pub seconds: f32,
     /// The progress follows the slicer's `M73 P`, a share of the time, rather
     /// than the file position. Kept for the whole job once seen: a percentage
     /// in whole numbers meets the file position now and then.
     pub time_based: bool,
+    /// `gcode_start_byte` and `gcode_end_byte`: the bytes of the print
+    /// itself, between the file's header and its trailing settings.
+    pub gcode: Option<(u64, u64)>,
 }
 
 /// The slicer's estimate of the job being printed, per printer.
@@ -686,6 +694,7 @@ struct JobEstimate {
     /// The printer answered the read (with an estimate or without one).
     answered: bool,
     estimate: Option<f32>,
+    gcode: Option<(u64, u64)>,
     time_based: bool,
     /// When the last read started.
     asked: Instant,
@@ -728,6 +737,7 @@ fn estimate_entry(
         active: false,
         answered: false,
         estimate: None,
+        gcode: None,
         time_based: false,
         asked: now,
         generation: 0,
@@ -738,6 +748,7 @@ fn estimate_entry(
         e.active = true;
         e.answered = false;
         e.estimate = None;
+        e.gcode = None;
         e.time_based = false;
     }
     e.time_based |= progress_is_time_based(st);
@@ -748,11 +759,16 @@ fn estimate_entry(
     } else {
         None
     };
-    (e.estimate.map(|seconds| SlicerEstimate { seconds, time_based: e.time_based }), fetch)
+    let known = (e.estimate.is_some() || e.gcode.is_some()).then(|| SlicerEstimate {
+        seconds: e.estimate.unwrap_or(0.0),
+        time_based: e.time_based,
+        gcode: e.gcode,
+    });
+    (known, fetch)
 }
 
 /// The slicer's estimate (`estimated_time`, seconds) of the printer's job,
-/// for the poll and the live feed alike.
+/// and its G-code bytes, for the poll and the live feed alike.
 ///
 /// Never waits: the file's metadata is read in the background and the
 /// estimate is there from a later status on; until then, `None`.
@@ -767,10 +783,13 @@ pub fn job_estimate(host: &str, port: u16, st: &Status) -> Option<SlicerEstimate
         tauri::async_runtime::spawn(async move {
             let Ok(v) = get_json(&url).await else { return };
             let est = v.pointer("/result/estimated_time").and_then(f32_of).filter(|e| *e > 0.0);
+            let byte = |k: &str| v.pointer(&format!("/result/{k}")).and_then(|x| x.as_u64());
+            let gcode = byte("gcode_start_byte").zip(byte("gcode_end_byte")).filter(|(a, b)| a < b);
             if let Ok(mut cache) = job_estimates().lock() {
                 if let Some(e) = cache.get_mut(&key).filter(|e| e.generation == generation) {
                     e.answered = true;
                     e.estimate = est;
+                    e.gcode = gcode;
                 }
             }
         });
@@ -786,9 +805,33 @@ pub fn job_estimate(host: &str, port: u16, st: &Status) -> Option<SlicerEstimate
 /// estimate. Neither is scaled by the speed factor. Without an estimate
 /// (G-code from another slicer), or once the print overruns it, the
 /// extrapolation stays.
+///
+/// Then the percentage, as the printer's screen counts it: the share of the
+/// print's G-code read (`gcode_start_byte` to `gcode_end_byte`), rather than
+/// the slicer's time-based `M73 P`. Measured on a U1: 38 % on the screen
+/// when `M73 P40` came, 17 % for `M73 P24`. The time left above still uses
+/// `M73 P`, a share of the time.
 pub fn apply_estimate(st: &mut Status, estimate: Option<SlicerEstimate>) {
-    let Some(est) = estimate.filter(|e| e.seconds > 0.0) else { return };
-    if st.state != "printing" {
+    let Some(est) = estimate else { return };
+    apply_time_left(st, &est);
+    if let (Some(range), Some(pos)) = (est.gcode, st.file_position) {
+        if matches!(st.state.as_str(), "printing" | "paused") {
+            st.progress = Some(share_of_gcode(pos, range));
+        }
+    }
+}
+
+/// The share of the print's G-code read, 0.0 to 1.0: the header before it
+/// counts as nothing, the settings after it as all.
+pub fn share_of_gcode(pos: u64, (start, end): (u64, u64)) -> f32 {
+    if end <= start {
+        return 0.0;
+    }
+    (pos.clamp(start, end) - start) as f32 / (end - start) as f32
+}
+
+fn apply_time_left(st: &mut Status, est: &SlicerEstimate) {
+    if est.seconds <= 0.0 || st.state != "printing" {
         return;
     }
     let (Some(p), Some(elapsed)) = (st.progress, st.elapsed_s) else { return };
@@ -833,6 +876,7 @@ pub fn apply_status(s: &Value, st: &mut Status) {
 
     // Progress: display_status if present, otherwise progress in the file.
     st.file_progress = s.get("virtual_sdcard").and_then(|d| d.get("progress")).and_then(f32_of);
+    st.file_position = s.get("virtual_sdcard").and_then(|d| d.get("file_position")).and_then(|x| x.as_u64());
     st.progress = s.get("display_status").and_then(|d| d.get("progress")).and_then(f32_of).or(st.file_progress);
 
     // Remaining time extrapolated from the progress (Moonraker does not give
@@ -1189,7 +1233,7 @@ mod tests {
     }
 
     fn est(seconds: f32) -> Option<SlicerEstimate> {
-        Some(SlicerEstimate { seconds, time_based: false })
+        Some(SlicerEstimate { seconds, time_based: false, gcode: None })
     }
 
     /// The progress follows the file: the estimate minus the time printed.
@@ -1217,7 +1261,7 @@ mod tests {
         // Once seen time-based, a whole percentage meeting the file position
         // keeps the same count (no jump by the print's lead or delay).
         let mut st = printing(0.60, 0.6023, 4000.0);
-        apply_estimate(&mut st, Some(SlicerEstimate { seconds: 6000.0, time_based: true }));
+        apply_estimate(&mut st, Some(SlicerEstimate { seconds: 6000.0, time_based: true, gcode: None }));
         assert!((st.remaining_s.unwrap() - 2400.0).abs() < 1.0, "{:?}", st.remaining_s);
     }
 
@@ -1294,6 +1338,64 @@ mod tests {
         assert_eq!(estimate_entry(&mut c, k, &a, t + ESTIMATE_RETRY * 3), (None, None));
     }
 
+    /// The share of the print's G-code read, header and trailing settings aside.
+    #[test]
+    fn share_of_the_gcode() {
+        // Bytes of a U1 print (Snapmaker Orca 2.4, 645 501 bytes).
+        let range = (50_673, 617_849);
+        assert_eq!(share_of_gcode(0, range), 0.0);
+        assert_eq!(share_of_gcode(50_673, range), 0.0);
+        assert!((share_of_gcode(334_261, range) - 0.5).abs() < 1e-4);
+        assert_eq!(share_of_gcode(617_849, range), 1.0);
+        assert_eq!(share_of_gcode(645_501, range), 1.0);
+        assert_eq!(share_of_gcode(10, (5, 5)), 0.0);
+    }
+
+    /// The percentage as on the printer's screen, the time left from `M73 P`.
+    #[test]
+    fn progress_as_on_the_screen() {
+        // Measured on a U1: M73 P24 at 22.6 % of the file, 17 % on the screen.
+        let mut st = printing(0.24, 0.226, 84.0);
+        st.file_position = Some(145_883);
+        let gcode = Some((50_673, 617_849));
+        apply_estimate(&mut st, Some(SlicerEstimate { seconds: 347.0, time_based: true, gcode }));
+        assert_eq!((st.progress.unwrap() * 100.0).round(), 17.0);
+        assert!((st.remaining_s.unwrap() - 347.0 * 0.76).abs() < 1.0, "{:?}", st.remaining_s);
+        // Paused: the percentage too.
+        let mut st = printing(0.24, 0.226, 84.0);
+        st.state = "paused".into();
+        st.file_position = Some(145_883);
+        apply_estimate(&mut st, Some(SlicerEstimate { seconds: 0.0, time_based: false, gcode }));
+        assert_eq!((st.progress.unwrap() * 100.0).round(), 17.0);
+        // Without the G-code bytes, or over: the printer's percentage stays.
+        let mut st = printing(0.24, 0.226, 84.0);
+        st.file_position = Some(145_883);
+        apply_estimate(&mut st, est(347.0));
+        assert_eq!(st.progress, Some(0.24));
+        let mut st = printing(1.0, 1.0, 360.0);
+        st.state = "complete".into();
+        st.file_position = Some(645_501);
+        apply_estimate(&mut st, Some(SlicerEstimate { seconds: 347.0, time_based: true, gcode }));
+        assert_eq!(st.progress, Some(1.0));
+    }
+
+    /// The file's G-code bytes are kept with the job, without an estimate too.
+    #[test]
+    fn gcode_bytes_kept_with_the_job() {
+        let mut c = std::collections::HashMap::new();
+        let k = "http://u1:7125";
+        let t = Instant::now();
+        let a = job(Some("a.gcode"), "printing", 0.1, 0.1);
+        estimate_entry(&mut c, k, &a, t);
+        let e = c.get_mut(k).unwrap();
+        e.answered = true;
+        e.gcode = Some((100, 900));
+        let known = Some(SlicerEstimate { seconds: 0.0, time_based: false, gcode: Some((100, 900)) });
+        assert_eq!(estimate_entry(&mut c, k, &a, t), (known, None));
+        estimate_entry(&mut c, k, &job(Some("b.gcode"), "printing", 0.1, 0.1), t);
+        assert_eq!(c[k].gcode, None);
+    }
+
     /// A time-based progress, once seen, holds for the job and not the next.
     #[test]
     fn time_based_progress_kept_for_the_job() {
@@ -1305,7 +1407,7 @@ mod tests {
         answer(&mut c, k, Some(5592.0));
         assert_eq!(estimate_entry(&mut c, k, &at(0.0, 0.0), t).0, est(5592.0));
         // Measured on a U1: M73 P20 while 10.9 % of the file is read.
-        let seen = Some(SlicerEstimate { seconds: 5592.0, time_based: true });
+        let seen = Some(SlicerEstimate { seconds: 5592.0, time_based: true, gcode: None });
         assert_eq!(estimate_entry(&mut c, k, &at(0.20, 0.1094), t).0, seen);
         // M73 P60 at 59.77 %: still time-based.
         assert_eq!(estimate_entry(&mut c, k, &at(0.60, 0.5977), t).0, seen);

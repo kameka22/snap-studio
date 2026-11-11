@@ -26,6 +26,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   sliced file's estimate, closer to what the printer's screen shows, and
   shown from the start of the print. Files from another slicer, without an
   estimate, keep the former calculation.
+- **A print's percentage matches the printer's screen**: it was the
+  slicer's time-based percentage, up to 8 points from the screen's; it is
+  now the share of the print read, as the U1's screen counts it.
 
 ## [0.19.0] — 2026-11-08
 

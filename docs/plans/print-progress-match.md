@@ -21,8 +21,33 @@ A 4-colour print sliced by Snapmaker Orca 2.4.0, read after it ended:
   (`machine_state_manager`, `print_task_config`, `filament_feed`, ...) none
   carries a percentage or a time, so the screen most likely reads Klipper's.
 
-Still to see during a print: whether `display_status.progress` follows
-`M73 P` on the U1, and what its screen shows at the same moments.
+## Measured during a print (U1, firmware 2.1.0, 2026-11-11)
+
+A 25-layer print (`estimated_time` 347 s), the printer read every 5 s and
+the screen's percentage noted next to Snap Studio's at the same moments
+(`scripts/measure-progress.sh` aside, a live log):
+
+| Screen | App (`M73 P`) | File | G-code bytes read |
+|---|---|---|---|
+| 5 | 9 | 10.7–11.6 % | 3–4 % |
+| 17 | 24 | 22.6–24.0 % | 16–18 % |
+| 25 | 33 | 29.1–30.7 % | 24–26 % |
+| 50 | 53 | 50.0–51.8 % | 48–50 % |
+| 60 | 60 | 59.8–61.8 % | 59–61 % |
+| 75 | 77 | 73.2–75.0 % | 74–76 % |
+| 90 | 89 | 84.8–86.6 % | 88–90 % |
+| 95 | 93 | 89.6–91.2 % | 93–95 % |
+
+- **`display_status.progress` follows `M73 P`** on the U1, a share of the
+  time: the app showed it.
+- **The screen shows the share of the print's G-code read**: the file
+  position between Moonraker's `gcode_start_byte` and `gcode_end_byte`
+  (the header with the thumbnails before, the slicer's settings after), as
+  Mainsail and Fluidd's "file relative" progress. It fits every reading
+  within the reading delay, and the earlier print too (`M73 P40` at 37.8 %,
+  38 on the screen). Neither the layers nor the filament used fit all of
+  them.
+- The time left on the screen is not measured yet.
 
 During a print, the percentage and the time left shown by Snap Studio
 (Printers, Prints, the 3D printer view, the send sheet) are not those shown
@@ -92,9 +117,12 @@ own, the app can only come close to it, from `estimated_time` and
 
    That tells which value the screen uses for each number, and whether
    the U1 exposes the time left it shows.
-2. **The same percentage as the screen**: in `apply_status`, take the
-   source the screen takes (expected: `display_status`, i.e. `M73 P` when
-   present). If the U1 exposes a field of its own, read it first.
+2. **The same percentage as the screen**: measured, the screen counts the
+   share of the print's G-code read, not `M73 P`. Done in `apply_estimate`
+   with `gcode_start_byte` and `gcode_end_byte`, read with the estimate,
+   while printing or paused; the time left keeps the time-based `M73 P`.
+   Control reads it the same way. Without those bytes, the printer's
+   percentage stays.
 3. **The same time left as the screen**: a slicer-based estimate instead of
    the extrapolation.
    - Read the job's `estimated_time` at each new job, not per file name
