@@ -25,6 +25,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
+| [print-progress-match.md](print-progress-match.md) | Print progress and time left as on the U1's screen: measure what the screen reads, then the same percentage, a slicer-based time left and the same rounding | Written, draft PR |
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
 | [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
