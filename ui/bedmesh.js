@@ -104,8 +104,8 @@ function bmDueOf(pid) {
 async function bmLoad(pid) {
   const hist = await invoke("bed_mesh_history", { printerId: pid }).catch(() => null);
   if (hist) BM.hist.set(pid, hist);
-  await bmReadJobs(pid);
-  bmMarkJobs(pid);
+  // The job count and the mesh at once: an offline printer waits once.
+  const jobs = bmReadJobs(pid);
   let live = null;
   try {
     live = await invoke("bed_mesh_read", { printerId: pid });
@@ -115,6 +115,8 @@ async function bmLoad(pid) {
   } catch (e) {
     BM.err.set(pid, String(e));
   }
+  await jobs;
+  bmMarkJobs(pid);
   if (live?.mesh && !live.mesh.partial && BM.run?.pid !== pid) await bmRecord(pid, live.mesh, false);
   return live;
 }

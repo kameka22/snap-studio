@@ -200,6 +200,8 @@ async function plgBoot() {
   });
   if (found.some((f) => f.id === "snapstudio.care" && f.manifest)) await plgImportCare();
   await PLG.load(found);
+  // The bed's badge counts on the printer's dot only without Care.
+  if (typeof P !== "undefined" && typeof mtBedBadge === "function") P.list.forEach((p) => mtBedBadge(p.id));
 }
 
 window.addEventListener("langchange", () => {

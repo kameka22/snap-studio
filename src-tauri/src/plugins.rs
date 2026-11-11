@@ -159,7 +159,15 @@ fn read_store(dir: &Path, id: &str) -> Result<Map<String, Value>> {
     }
     let mut store = Map::new();
     if id == CARE {
-        let old = std::fs::read(dir.join("maintenance.json")).ok().and_then(|d| serde_json::from_slice::<Value>(&d).ok());
+        // A corrupt file is not imported, and never retried: it is kept as
+        // it was, for whoever repairs it by hand.
+        let old = std::fs::read(dir.join("maintenance.json")).ok().and_then(|d| match serde_json::from_slice::<Value>(&d) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                eprintln!("[plugins] maintenance.json not imported: {e}");
+                None
+            }
+        });
         if let Some(log) = old.filter(Value::is_object) {
             store.insert("log".into(), log);
         }

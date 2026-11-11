@@ -80,6 +80,11 @@
     const due = new Map(); // printer → tasks due (its counters known)
     const shown = () => !!S.box && !S.box.classList.contains("hidden");
 
+    /* Every read-change-write of the store, one after the other: the
+       hourly check reads all printers at once, and a store key holds them
+       all. */
+    let queue = Promise.resolve();
+    const serial = (fn) => (queue = queue.then(fn, fn));
     const logOf = async (pid) => ((await ctx.storage.get("log")) || {})[pid] || [];
     const cacheOf = async (pid) => ((await ctx.storage.get("cache")) || {})[pid] || null;
 
@@ -99,9 +104,11 @@
         stale = null;
       try {
         usage = await ctx.printer.maintenance(pid);
-        const cache = (await ctx.storage.get("cache")) || {};
-        cache[pid] = { usage, at: Date.now() };
-        await ctx.storage.set("cache", cache);
+        await serial(async () => {
+          const cache = (await ctx.storage.get("cache")) || {};
+          cache[pid] = { usage, at: Date.now() };
+          await ctx.storage.set("cache", cache);
+        });
       } catch {
         const c = await cacheOf(pid).catch(() => null);
         if (c?.usage) (usage = c.usage), (stale = c.at);
@@ -315,12 +322,13 @@
     const bindHistory = () => S.box.querySelector(".mt-hist")?.addEventListener("toggle", (e) => (S.histOpen = e.target.open));
 
     /* The log of a printer, changed and saved; returns it. */
-    async function editLog(pid, change) {
-      const all = (await ctx.storage.get("log")) || {};
-      all[pid] = change(all[pid] || []);
-      await ctx.storage.set("log", all);
-      return all[pid];
-    }
+    const editLog = (pid, change) =>
+      serial(async () => {
+        const all = (await ctx.storage.get("log")) || {};
+        all[pid] = change(all[pid] || []);
+        await ctx.storage.set("log", all);
+        return all[pid];
+      });
 
     function afterLog(pid) {
       if (pid !== S.pid) return;
