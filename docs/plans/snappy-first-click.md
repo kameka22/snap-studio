@@ -1,5 +1,8 @@
 # Snappy's icon sometimes needs a second click
 
+Implemented in [#101](https://github.com/kameka22/snap-studio/pull/101)
+(steps 1 and 2); the checks in the app (step 3) are left.
+
 Clicking Snappy's icon (bottom of the sidebar, or beside the slice sheet)
 sometimes does nothing; the second click opens the card.
 
