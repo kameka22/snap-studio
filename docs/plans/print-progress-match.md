@@ -1,5 +1,11 @@
 # Print progress and time left: the app and the printer disagree
 
+Partly implemented in [#100](https://github.com/kameka22/snap-studio/pull/100):
+step 3 (the slicer-based time left) and its tests, before the measure; the
+measure itself has a script, `scripts/measure-progress.sh`. Left: step 1 on
+the U1, then steps 2 and 4 and the simulator case of step 5, which depend on
+it.
+
 During a print, the percentage and the time left shown by Snap Studio
 (Printers, Prints, the 3D printer view, the send sheet) are not those shown
 on the U1's screen.
@@ -61,6 +67,10 @@ own, the app can only come close to it, from `estimated_time` and
    - `/printer/objects/query?print_stats&display_status&virtual_sdcard`;
    - `/server/files/metadata` of the job (`estimated_time`), and whether
      the G-code contains `M73` (`P` and `R`).
+
+   `scripts/measure-progress.sh <address> [port] [label]` saves all of this
+   in one folder per moment (`measures/progress/`, not committed), with a
+   `screen.txt` to write what the screen shows.
 
    That tells which value the screen uses for each number, and whether
    the U1 exposes the time left it shows.

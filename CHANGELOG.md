@@ -20,6 +20,12 @@ with its packages for macOS, Windows and Linux. What comes next:
   no longer leave it stuck mid-drag.
 - **Snappy's icon opens on the first click**: a click sometimes did
   nothing and the card only opened on the second one (macOS and Linux).
+- **A print's time left follows the slicer's estimate**: it was guessed from
+  the percentage, too high at the start (heating, leveling) and wrong
+  whenever the speed changed (tool changes, first layer); it is now the
+  sliced file's estimate, closer to what the printer's screen shows, and
+  shown from the start of the print. Files from another slicer, without an
+  estimate, keep the former calculation.
 
 ## [0.19.0] — 2026-11-08
 

@@ -97,6 +97,10 @@ pub struct Status {
     /// print's, it does not prove the print is over.
     #[serde(skip)]
     pub partial: bool,
+    /// Position in the file (`virtual_sdcard.progress`), 0.0 to 1.0: tells a
+    /// time-based `M73 P` in `progress` from the file position.
+    #[serde(skip)]
+    pub file_progress: Option<f32>,
 }
 
 pub(crate) fn client() -> &'static reqwest::Client {
@@ -654,7 +658,108 @@ pub async fn status(host: &str, port: u16) -> Status {
         return st;
     };
     apply_objects(&v, &mut st);
+    let est = job_estimate(host, port, st.job.as_deref(), &st.state);
+    apply_estimate(&mut st, est);
     st
+}
+
+/// The slicer's estimate of the job being printed, per printer.
+struct JobEstimate {
+    job: String,
+    /// The job was printing or paused at the last status seen.
+    active: bool,
+    estimate: Option<f32>,
+    /// Bumped at each new job: a late answer for an older one is dropped.
+    generation: u64,
+}
+
+fn job_estimates() -> &'static std::sync::Mutex<std::collections::HashMap<String, JobEstimate>> {
+    static C: OnceLock<std::sync::Mutex<std::collections::HashMap<String, JobEstimate>>> = OnceLock::new();
+    C.get_or_init(Default::default)
+}
+
+/// What the cache knows of the printer's job: its estimate, and the
+/// generation to fetch when this status starts a new job.
+///
+/// A new job is a print that starts (the state turns to printing or paused)
+/// or another file name: the slicer can rewrite a file under the same name,
+/// so a name alone does not keep an old estimate.
+fn estimate_entry(
+    cache: &mut std::collections::HashMap<String, JobEstimate>,
+    key: &str,
+    job: Option<&str>,
+    state: &str,
+) -> (Option<f32>, Option<u64>) {
+    let active = matches!(state, "printing" | "paused");
+    let Some(job) = job.filter(|_| active) else {
+        if let Some(e) = cache.get_mut(key) {
+            e.active = false;
+        }
+        return (None, None);
+    };
+    match cache.get_mut(key) {
+        Some(e) if e.active && e.job == job => (e.estimate, None),
+        Some(e) => {
+            e.job = job.to_string();
+            e.active = true;
+            e.estimate = None;
+            e.generation += 1;
+            (None, Some(e.generation))
+        }
+        None => {
+            cache.insert(key.to_string(), JobEstimate { job: job.to_string(), active: true, estimate: None, generation: 1 });
+            (None, Some(1))
+        }
+    }
+}
+
+/// The slicer's estimate (`estimated_time`, seconds) of the printer's job,
+/// for the poll and the live feed alike.
+///
+/// Never waits: at a new job, the file's metadata is read in the background
+/// and the estimate is there from the next status on; until then, `None`.
+pub fn job_estimate(host: &str, port: u16, job: Option<&str>, state: &str) -> Option<f32> {
+    let key = base(host, port);
+    let (est, fetch) = {
+        let Ok(mut cache) = job_estimates().lock() else { return None };
+        estimate_entry(&mut cache, &key, job, state)
+    };
+    if let (Some(generation), Some(job)) = (fetch, job) {
+        let url = format!("{key}/server/files/metadata?filename={}", urlencoding::encode(job));
+        tauri::async_runtime::spawn(async move {
+            let est = get_json(&url).await.ok().and_then(|v| v.pointer("/result/estimated_time").and_then(f32_of)).filter(|e| *e > 0.0);
+            if let Ok(mut cache) = job_estimates().lock() {
+                if let Some(e) = cache.get_mut(&key).filter(|e| e.generation == generation) {
+                    e.estimate = est;
+                }
+            }
+        });
+    }
+    est
+}
+
+/// Time left from the slicer's estimate, as the printer's screen counts it,
+/// instead of the extrapolation of `apply_status`.
+///
+/// With a time-based `M73 P` (the progress differs from the file position),
+/// the share of the estimate still to print; otherwise the estimate minus
+/// the time printed, as Mainsail's "slicer" estimate. Neither is scaled by
+/// the speed factor. Without an estimate (G-code from another slicer), or
+/// once the print overruns it, the extrapolation stays.
+pub fn apply_estimate(st: &mut Status, estimate: Option<f32>) {
+    let Some(est) = estimate.filter(|e| *e > 0.0) else { return };
+    if st.state != "printing" {
+        return;
+    }
+    let (Some(p), Some(elapsed)) = (st.progress, st.elapsed_s) else { return };
+    if !(0.0..1.0).contains(&p) {
+        return;
+    }
+    let time_based = st.file_progress.is_some_and(|f| (f - p).abs() > 0.005);
+    let left = if time_based { est * (1.0 - p) } else { est - elapsed };
+    if left > 0.0 {
+        st.remaining_s = Some(left);
+    }
 }
 
 /// Turns the `/printer/objects/query` answer into a displayable status.
@@ -687,13 +792,11 @@ pub fn apply_status(s: &Value, st: &mut Status) {
     }
 
     // Progress: display_status if present, otherwise progress in the file.
-    st.progress = s
-        .get("display_status")
-        .and_then(|d| d.get("progress"))
-        .and_then(f32_of)
-        .or_else(|| s.get("virtual_sdcard").and_then(|d| d.get("progress")).and_then(f32_of));
+    st.file_progress = s.get("virtual_sdcard").and_then(|d| d.get("progress")).and_then(f32_of);
+    st.progress = s.get("display_status").and_then(|d| d.get("progress")).and_then(f32_of).or(st.file_progress);
 
-    // Remaining time estimated from the progress (Moonraker does not give it).
+    // Remaining time extrapolated from the progress (Moonraker does not give
+    // it); `apply_estimate` replaces it with the slicer's estimate when known.
     if let (Some(p), Some(e)) = (st.progress, st.elapsed_s) {
         if p > 0.02 && p < 1.0 && st.state == "printing" {
             st.remaining_s = Some(e * (1.0 - p) / p);
@@ -1032,6 +1135,80 @@ mod tests {
         assert!(st.progress.is_none());
         assert!(st.remaining_s.is_none());
         assert!(st.filaments.is_empty(), "no print_task_config on an ordinary Klipper");
+    }
+
+    fn printing(progress: f32, file: f32, elapsed: f32) -> Status {
+        let v = serde_json::json!({
+            "print_stats": {"state": "printing", "filename": "a.gcode", "print_duration": elapsed},
+            "display_status": {"progress": progress},
+            "virtual_sdcard": {"progress": file},
+        });
+        let mut st = Status::default();
+        apply_status(&v, &mut st);
+        st
+    }
+
+    /// The progress follows the file: the estimate minus the time printed.
+    #[test]
+    fn time_left_from_the_slicer_estimate() {
+        let v: Value = serde_json::from_str(SAMPLE).unwrap();
+        let mut st = Status::default();
+        apply_objects(&v, &mut st);
+        apply_estimate(&mut st, Some(5280.0));
+        // 5280 s estimated, 1832 s printed (the extrapolation gave ~3240 s).
+        assert!((st.remaining_s.unwrap() - 3448.0).abs() < 1.0, "{:?}", st.remaining_s);
+    }
+
+    /// A time-based `M73 P`, apart from the file position: its share of the estimate.
+    #[test]
+    fn time_left_from_a_time_based_progress() {
+        let mut st = printing(0.25, 0.60, 2000.0);
+        apply_estimate(&mut st, Some(6000.0));
+        assert!((st.remaining_s.unwrap() - 4500.0).abs() < 1.0, "{:?}", st.remaining_s);
+        // Shown from the start, where the extrapolation waits for 2 %.
+        let mut st = printing(0.0, 0.01, 240.0);
+        assert!(st.remaining_s.is_none());
+        apply_estimate(&mut st, Some(6000.0));
+        assert_eq!(st.remaining_s, Some(6000.0));
+    }
+
+    /// No estimate, an overrun estimate or no print: the extrapolation stays.
+    #[test]
+    fn extrapolation_without_a_usable_estimate() {
+        let extrapolated = printing(0.5, 0.5, 1000.0).remaining_s;
+        assert!((extrapolated.unwrap() - 1000.0).abs() < 1.0);
+        for est in [None, Some(0.0), Some(900.0)] {
+            let mut st = printing(0.5, 0.5, 1000.0);
+            apply_estimate(&mut st, est);
+            assert_eq!(st.remaining_s, extrapolated, "estimate {est:?}");
+        }
+        let mut st = printing(0.5, 0.5, 1000.0);
+        st.state = "paused".into();
+        apply_estimate(&mut st, Some(3000.0));
+        assert_eq!(st.remaining_s, extrapolated);
+    }
+
+    /// The estimate is read again at each new job, even under the same name.
+    #[test]
+    fn estimate_read_again_at_each_new_job() {
+        let mut c = std::collections::HashMap::new();
+        let k = "http://u1:7125";
+        // First status of a print: fetch, nothing known yet.
+        assert_eq!(estimate_entry(&mut c, k, Some("a.gcode"), "printing"), (None, Some(1)));
+        c.get_mut(k).unwrap().estimate = Some(600.0);
+        // Same job, paused then printing again: kept.
+        assert_eq!(estimate_entry(&mut c, k, Some("a.gcode"), "paused"), (Some(600.0), None));
+        assert_eq!(estimate_entry(&mut c, k, Some("a.gcode"), "printing"), (Some(600.0), None));
+        // Another file: a new job.
+        assert_eq!(estimate_entry(&mut c, k, Some("b.gcode"), "printing"), (None, Some(2)));
+        c.get_mut(k).unwrap().estimate = Some(900.0);
+        // Over, then the same name printed again (maybe rewritten by the slicer).
+        assert_eq!(estimate_entry(&mut c, k, Some("b.gcode"), "complete"), (None, None));
+        assert_eq!(estimate_entry(&mut c, k, Some("b.gcode"), "printing"), (None, Some(3)));
+        // Another printer has its own job.
+        assert_eq!(estimate_entry(&mut c, "http://u1b:7125", Some("b.gcode"), "printing"), (None, Some(1)));
+        // No job name: nothing to read.
+        assert_eq!(estimate_entry(&mut c, "http://u1c:7125", None, "printing"), (None, None));
     }
 }
 
