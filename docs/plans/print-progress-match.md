@@ -2,9 +2,27 @@
 
 Partly implemented in [#100](https://github.com/kameka22/snap-studio/pull/100):
 step 3 (the slicer-based time left) and its tests, before the measure; the
-measure itself has a script, `scripts/measure-progress.sh`. Left: step 1 on
-the U1, then steps 2 and 4 and the simulator case of step 5, which depend on
-it.
+measure itself has a script, `scripts/measure-progress.sh`. Left: step 1
+during a print on the U1, then steps 2 and 4 and the simulator case of
+step 5, which depend on it.
+
+## Measured on a finished print (U1, firmware 2.1.0, 2026-11-11)
+
+A 4-colour print sliced by Snapmaker Orca 2.4.0, read after it ended:
+
+- **The slicer's estimate holds**: `estimated_time` 5592 s, `print_duration`
+  5616 s at the end, 0.4 % apart. Step 3 rests on it.
+- **The file's `M73 P` is time-based**, with `R` (minutes left): 193 lines,
+  up to 12.7 points from the file position (`M73 P20` at 10.9 % of the file,
+  `P80` at 89.5 %), and close to it now and then (`P60` at 59.8 %). The
+  formula is therefore chosen once per job: time-based as soon as the
+  progress leaves the file position, kept until the next job.
+- **No other progress object**: among the firmware's own objects
+  (`machine_state_manager`, `print_task_config`, `filament_feed`, ...) none
+  carries a percentage or a time, so the screen most likely reads Klipper's.
+
+Still to see during a print: whether `display_status.progress` follows
+`M73 P` on the U1, and what its screen shows at the same moments.
 
 During a print, the percentage and the time left shown by Snap Studio
 (Printers, Prints, the 3D printer view, the send sheet) are not those shown

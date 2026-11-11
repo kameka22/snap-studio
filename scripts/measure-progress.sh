@@ -32,9 +32,10 @@ std = ("print_stats display_status virtual_sdcard gcode_move toolhead heater_bed
        "configfile webhooks motion_report query_endstops idle_timeout system_stats "
        "gcode_macro extruder heater_fan controller_fan temperature_sensor "
        "temperature_fan output_pin bed_mesh probe stepper_enable mcu exclude_object "
-       "firmware_retraction pause_resume tmc").split()
+       "firmware_retraction pause_resume gcode").split()
 objs = json.load(open(sys.argv[1]))["result"]["objects"]
-keep = [o for o in objs if not any(o == s or o.startswith(s + " ") or o.startswith(s) and o[len(s):].isdigit() for s in std)]
+# "extruder1", "tmc2209 stepper_x": a standard name, then digits or a section.
+keep = [o for o in objs if not o.startswith("tmc") and not any(o.split()[0] == s or o.split()[0][len(s):].isdigit() and o.startswith(s) for s in std)]
 print("&".join(urllib.parse.quote(o) for o in keep))
 PY
 )
@@ -45,7 +46,7 @@ if [ -n "$job" ]; then
   enc=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$job")
   curl -fsS -m 6 "$b/server/files/metadata?filename=$enc" > "$dir/metadata.json" || true
   # The first megabytes are enough to see whether the slicer writes M73 P and R.
-  curl -fsS -m 30 -r 0-4000000 "$b/server/files/gcodes/$enc" | grep -m 20 '^M73' > "$dir/m73.txt" || true
+  curl -sS -m 30 -r 0-4000000 "$b/server/files/gcodes/$enc" 2>/dev/null | grep -m 20 '^M73' > "$dir/m73.txt" || true
 fi
 : > "$dir/screen.txt"
 echo "Saved in $dir — write in $dir/screen.txt what the screen shows now."
