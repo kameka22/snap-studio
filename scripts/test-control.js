@@ -117,15 +117,18 @@ assert.equal(C.ctlSpoolInfo({ present: true, color: "red", kind: "" }).color, nu
 
 // The page: Control is Care & Tuning's first tab — [Control] [Care]
 // [Bed Leveling], Calibration hidden after them — and the printer card opens it.
+// Care is a plugin (ui/plugins/care): its tab joins by its order, 20.
 const fs = require("fs");
 const html = fs.readFileSync(require("path").join(__dirname, "..", "ui", "index.html"), "utf8");
 const tabs = html.slice(html.indexOf('id="mt-tabs"'), html.indexOf("</div>", html.indexOf('id="mt-tabs"')));
-const at = (t) => tabs.indexOf(`data-mtab="${t}"`);
-assert.ok(at("control") > 0 && at("control") < at("care") && at("care") < at("level") && at("level") < at("calib"), "Control, Care, Bed Leveling");
-assert.ok(/<button class="seg-btn labeled hidden" data-mtab="calib">/.test(html), "Calibration still hidden");
+const order = (t) => +(new RegExp(`data-mtab="${t}" data-order="(\\d+)"`).exec(tabs) || [])[1];
+const care = require("../ui/plugins/care/plugin.json").contributes.tabs.find((t) => t.id === "care").order;
+assert.ok(order("control") < care && care < order("level") && order("level") < order("calib"), "Control, Care, Bed Leveling");
+assert.ok(!/data-mtab="care"/.test(tabs), "Care's tab comes from its plugin");
+assert.ok(/<button class="seg-btn labeled hidden" data-mtab="calib"[ >]/.test(html), "Calibration still hidden");
 assert.ok(/id="prn-control"/.test(html) && /id="ct-body"/.test(html));
 const maint = fs.readFileSync(require("path").join(__dirname, "..", "ui", "maint.js"), "utf8");
-assert.ok(/const MT_TABS = \["care", "level", "control"\]/.test(maint));
+assert.ok(/const MT_OWN_TABS = \["control", "level"\]/.test(maint));
 // One service, one filament source, components with a compact mode, an opening with a context:
 // the printer page's shortcut goes through ctlOpen, as #34's quick panels will.
 const ui = (f) => fs.readFileSync(require("path").join(__dirname, "..", "ui", f), "utf8");

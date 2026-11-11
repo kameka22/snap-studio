@@ -10,6 +10,7 @@ const BM = {
   live: new Map(), // pid → what the printer said last
   err: new Map(), // pid → the last read's error
   readAt: new Map(),
+  jobs: new Map(), // pid → the printer's job count, last read
   loading: false,
   shown: null, // a stored mesh's `at`, "live", or null: the newest
   mode: localStorage.getItem("snapstudio.bm.mode") === "map" ? "map" : "3d",
@@ -41,11 +42,28 @@ const bmAlertOf = (pid) => (pid ? bmlAlert(BM.hist.get(pid) || [], bmSettingsOf(
 
 /* ------------------------------------------------------------ reminders */
 
-/* The printer's job count (Care reads it), or null. */
+/* The printer's job count, read with the bed (printer_job_totals), or the
+   last one read: kept across launches, as Care kept it before plugins. */
+const bmJobsNowKey = (pid) => `snapstudio.bm.jobsnow.${pid}`;
 function bmJobsNow(pid) {
-  const c = typeof mtCached === "function" ? mtCached(pid)?.usage?.jobs : null;
-  if (c != null) return c;
-  return MT.pid === pid && MT.usage ? MT.usage.jobs : null;
+  if (BM.jobs.has(pid)) return BM.jobs.get(pid);
+  try {
+    const n = JSON.parse(localStorage.getItem(bmJobsNowKey(pid)) || "null");
+    if (typeof n === "number") return n;
+    const old = JSON.parse(localStorage.getItem(`snapstudio.maint.${pid}`) || "null")?.usage?.jobs;
+    return typeof old === "number" ? old : null;
+  } catch {
+    return null;
+  }
+}
+async function bmReadJobs(pid) {
+  const p = P.list.find((x) => x.id === pid);
+  if (!p) return;
+  const t = await invoke("printer_job_totals", { host: p.host, port: p.port }).catch(() => null);
+  if (t && typeof t.jobs === "number") {
+    BM.jobs.set(pid, t.jobs);
+    localStorage.setItem(bmJobsNowKey(pid), JSON.stringify(t.jobs));
+  }
 }
 /* The job count when the newest measurement was stored: prints since. */
 const bmJobsKey = (pid) => `snapstudio.bm.jobs.${pid}`;
@@ -86,6 +104,7 @@ function bmDueOf(pid) {
 async function bmLoad(pid) {
   const hist = await invoke("bed_mesh_history", { printerId: pid }).catch(() => null);
   if (hist) BM.hist.set(pid, hist);
+  await bmReadJobs(pid);
   bmMarkJobs(pid);
   let live = null;
   try {
@@ -132,11 +151,8 @@ function bmShow(pid) {
 }
 
 function bmAfterChange() {
-  mtSideDots();
-  if (window.currentView === "maint" && MT.pid === BM.pid) {
-    if (MT.tab === "level") bmRender();
-    else mtRender();
-  }
+  mtBedChanged(BM.pid);
+  if (window.currentView === "maint" && MT.pid === BM.pid && MT.tab === "level") bmRender();
 }
 
 /* ------------------------------------------------------------ formats */

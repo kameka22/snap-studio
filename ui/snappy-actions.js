@@ -397,7 +397,12 @@ async function snappyPrinterOpen({ printer, tab = "status", camera }) {
   if (tab === "files") pflShow(p.id);
   else if (tab === "control") ctlOpen(p.id);
   else if (tab === "bed_mesh") await maintShow(p.id, "level");
-  else if (tab === "maintenance") await maintShow(p.id, "care");
+  else if (tab === "maintenance") {
+    // Care is a plugin: the tab its Snappy contribution opens, if active.
+    const to = PLG.snappy("maintenance");
+    if (!to) return snappyFail("The Care tab is off.");
+    await maintShow(p.id, to.tab);
+  }
   else {
     P.sel = p.id;
     prnRenderDetail();
