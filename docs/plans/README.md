@@ -25,7 +25,6 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
-| [snappy-first-click.md](snappy-first-click.md) | Snappy's icon sometimes needs a second click: the avatar redrawn under the pointer swallows the click; the avatar stops taking the pointer | Written, draft PR |
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
 | [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
 | [slice-basic-advanced.md](slice-basic-advanced.md) | Basic and Advanced levels for the slice sheet (title bar and Settings) | Written, draft PR |
@@ -39,6 +38,7 @@ lists below.
 | [library-nav-contrast.md](library-nav-contrast.md) | Explore: Back, Forward and Reload almost invisible over dark sites; adaptive pill (dark on light sites, light on dark sites), chosen | Merged in [#88](https://github.com/kameka22/snap-studio/pull/88), with the Linux flicker fix; checks on macOS and Windows still listed in the plan |
 | [plate-material-compatibility.md](plate-material-compatibility.md) | Plate and material compatibility: warnings and glue tip in Prepare and at start, plus the plate set per printer in Control, a check when a spool is loaded, a suggested bed temperature and a glue reminder | Merged in [#16](https://github.com/kameka22/snap-studio/pull/16). The pre-merge rule-table review has no comment on the pull request and is not asked again. Graphic Effect stays the least sure pair in the plan |
 | [usage-analytics.md](usage-analytics.md) | Anonymous usage count with Aptabase: one `app_started` event, announced in a friendly sheet at first launch, easy to turn off in Settings | Merged in [#90](https://github.com/kameka22/snap-studio/pull/90), in 0.19.0. Privacy doc, README, site footer and What's new are in place; the plan's first-launch text is the flow before [#95](https://github.com/kameka22/snap-studio/pull/95) |
+| [snappy-first-click.md](snappy-first-click.md) | Snappy's icon sometimes needs a second click: the avatar redrawn under the pointer swallows the click; the avatar stops taking the pointer | Written, draft PR |
 
 The other planned features each have a draft pull request: see the
 [Roadmap](../../README.md#roadmap).
