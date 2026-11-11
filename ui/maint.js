@@ -29,11 +29,13 @@ const mtTabOf = (pid) => {
 const mtBedDue = (pid) => (typeof bmDueOf === "function" ? bmDueOf(pid) : null);
 
 /* The bed's badge, on its tab: Care lists the bed among its tasks, so
-   Care's own count (on the printer's dot) includes it. */
+   Care's own count (on the printer's dot) includes it. Care off: the bed
+   counts on the dot itself, as before plugins. */
 function mtBedBadge(pid) {
   const due = mtBedDue(pid);
   const tip = due ? tr(due.kind === "out" ? "bm.alert_tab" : "bm.due_tab") : "";
-  appBadge("bed", pid, due ? { n: 1, tip } : null, ["tab"], "level");
+  const care = typeof PLG !== "undefined" && PLG.snappy("maintenance");
+  appBadge("bed", pid, due ? { n: 1, tip } : null, care ? ["tab"] : ["tab", "printer"], "level");
 }
 
 /* The bed as plugins read it (ctx.printer.bed): what it asks, and the

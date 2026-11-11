@@ -104,6 +104,9 @@ refused (rejected, and logged).
 - Storage: one JSON file per plugin in the app's data folder
   (`plugins/<id>.json`), 1 MB at most; keys are `[A-Za-z0-9._-]`, 64
   characters at most.
+- Two calls of a plugin may run at once (a schedule over every printer):
+  when a key holds several printers, chain its read-change-write steps
+  one after the other, as Care does.
 - `printer.read` only reads: nothing in v1 writes to a printer.
 - Plugin files never use `invoke`, `document`, `window`, `localStorage`
   or `fetch`: `scripts/test-plugins.js` checks it, so that plugins can

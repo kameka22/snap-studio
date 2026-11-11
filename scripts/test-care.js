@@ -114,6 +114,34 @@ assert.equal(progress(task("contacts"), usage(), [c], now).left, 99000);
   await tick();
   assert.equal(badges.get("p1").n, 1, "from the cache");
 
+  // Two printers read at once (the hourly check): neither one's counters
+  // nor a task marked meanwhile are lost, whatever the store's delays.
+  {
+    const store2 = {};
+    const slow = () => new Promise((r) => setTimeout(r, Math.random() * 5));
+    const host2 = {
+      ...host,
+      badge() {},
+      loadScript: () => Promise.resolve(PLG2.register(care)),
+      async call(name, plugin, ...a) {
+        await slow();
+        switch (name) {
+          case "printers.list": return [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }];
+          case "printer.maintenance": return usage();
+          case "printer.bed": return null;
+          case "storage.get": { const v = store2[a[0]]; await slow(); return v == null ? null : JSON.parse(JSON.stringify(v)); }
+          case "storage.set": await slow(); store2[a[0]] = a[1]; return null;
+        }
+        throw new Error(name);
+      },
+    };
+    const PLG2 = plgCreate(host2);
+    await PLG2.load([{ id: manifest.id, dir: "care", manifest }]);
+    PLG2.printersKnown();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.deepEqual(Object.keys(store2.cache).sort(), ["a", "b", "c"], "every printer's counters kept");
+  }
+
   console.log("care: ok");
 })().catch((e) => {
   console.error(e);
