@@ -770,7 +770,8 @@ async function updateDetails() {
     ? tr("files.unit_hint", { size: chatModelDims(m) })
     : [m.title, m.designer && tr("files.by", { name: m.designer })].filter(Boolean).join(" — ");
   $("det-sub").classList.toggle("warn", !!oddUnit);
-  const rendered = state.pref === 3 || (state.pref !== 2 && !m.has_embedded_thumb);
+  // An STL never has an embedded image: its preview is always a render.
+  const rendered = f.kind === "stl" || state.pref === 3 || (state.pref !== 2 && !m.has_embedded_thumb);
   $("det-badge").textContent = rendered ? tr("files.render_badge") : "";
   $("det-badge").style.display = rendered ? "" : "none";
 

@@ -187,7 +187,7 @@ fn meta_of(path: &str) -> MetaDto {
     if scan::kind_of(Path::new(path)) == Some("stl") {
         // Triangles only: no name, settings or plates.
         dto.plates = 1;
-        dto.size_mm = stl::read(Path::new(path)).ok().map(|m| m.size());
+        dto.size_mm = stl::size(Path::new(path)).ok();
         return dto;
     }
     if scan::kind_of(Path::new(path)) == Some("gcode") {
