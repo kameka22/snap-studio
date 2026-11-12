@@ -1,6 +1,6 @@
 # STL files in the Files library
 
-Plan only, nothing implemented yet.
+Implemented in [#105](https://github.com/kameka22/snap-studio/pull/105). Checks in the app left (see Tests).
 
 ## The problem
 
@@ -56,7 +56,9 @@ the analysis.
 - no title, designer, licence, time, weight or filaments: an STL carries
   none of them;
 - `objects` empty, `plates` 1, `has_embedded_thumb` false;
-- `application`: "STL" as the format line, or nothing — see open question 2.
+- a new `size_mm`, the mesh's size, for the unit hint (section 7).
+
+The UI adds a **Format** row, "STL (mesh only)".
 
 The panel then shows the name, size and date, and the **Prepare**,
 **Edit with AI**, **Show in folder** and **Move to Trash** actions, as for a
@@ -64,16 +66,17 @@ The panel then shows the name, size and date, and the **Prepare**,
 
 ### 4. Analyze Geometry
 
-`analyze` reads an STL with `stl::read` (budget 2 500 000, as for a 3MF)
-and returns the same `AnalyzeDto` (size, triangles, approximated). Same
-code path afterwards.
+`analyze` reads an STL with `stl::read` and returns the same `AnalyzeDto`
+(size, triangles, approximated). The whole file is read, so the count is
+never approximated. Same code path afterwards.
 
 ### 5. Names and actions in the UI
 
 - `makeCard` / `makeRow` strip `.stl` as well as `.3mf` (one regex,
   `/\.(3mf|stl)$/i`).
 - A small **STL** badge on the card, in the style of the **G-code** badge,
-  so a 3MF and an STL with the same name can be told apart.
+  so a 3MF and an STL with the same name can be told apart. It takes the
+  place of the "3D render" badge: an STL is always a render.
 - Double-click and ⏎ already send any non-G-code file to Prepare
   (`openFile`), and **Prepare** with several picked files mixes 3MF and STL
   without change (`prepareFiles`).
@@ -88,20 +91,22 @@ end to end (see Tests).
 
 ### 7. Units
 
-An STL has no unit. Some exporters write inches or metres, so a model shows
-25.4 times too small, or 1 000 times too big. Prepare already shows the
-size; this plan adds nothing automatic, but proposes a hint in the details
-panel when the analysis finds a model under 1 mm or over 1 m — see open
-question 3.
+An STL has no unit. A model exported in inches shows 25.4 times too small,
+one in metres 1 000 times too small, and one in micrometres 1 000 times too
+big. Nothing is rescaled automatically: the details' subtitle warns, in the
+warning colour, when the longest side is under 1 mm or over 1 m. Same rule
+and wording as for AI conversations (`attachOddScale`, `chat.model_dims`).
 
 ## Texts
 
 New strings, in the 9 languages (`ui/i18n/*.json`):
 
-- `files.stl_badge`: "STL" (title: "Mesh only: no colour, settings or
-  plates")
-- `files.unit_hint` (only if question 3 is a yes): "This model is very
-  small or very large: it may have been exported in inches or metres."
+- `files.stl_badge`: the badge's title, "Mesh only: no colours, settings
+  or plates"
+- `files.unit_hint`: "Measures {size}: check its unit (millimeters
+  expected)"
+- `files.info.format` and `files.info.format.stl`: "Format", "STL (mesh
+  only)"
 
 ## Tests
 
@@ -114,17 +119,18 @@ New strings, in the 9 languages (`ui/i18n/*.json`):
   list and grid, thumbnails, details, Analyze, View in 3D, Prepare from a
   double-click and from a multiple pick, slice, then print on the U1.
 
-## Open questions
+## Decisions (2026-11-12)
 
-1. **Large folders**: STL thumbnails are always rendered (never embedded),
-   so a folder of hundreds of STL files costs more on the first scan.
-   Rendering is already serialized by `RenderGuard` and cached; is that
-   enough, or should STL rendering wait until the card is visible?
-2. **Format line** in the details: show "STL" in the application row, or
-   leave it empty?
-3. **Unit hint**: worth adding now, or later if users report it?
-4. **Other mesh formats** (OBJ, STEP): out of scope here; the engine reads
-   them, but `plate.rs` and the viewer don't.
+1. **Large folders**: no special handling. STL thumbnails are rendered,
+   serialized by `RenderGuard` and cached like any other render.
+2. **Format line**: yes. The details show a **Format** row, "STL (mesh
+   only)", and the card an **STL** badge (in place of the "3D render" one,
+   which an STL always is).
+3. **Unit hint**: yes, now. `meta_of` reads the STL's size (`size_mm`), and
+   the details' subtitle warns when its longest side is under 1 mm or over
+   1 m, with the same rule and wording as AI conversations
+   (`attachOddScale`, `chat.model_dims`).
+4. **Other mesh formats** (OBJ, STEP): out of scope.
 
 ## CHANGELOG
 
