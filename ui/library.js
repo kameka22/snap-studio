@@ -120,6 +120,8 @@ async function openSite(site, url = site.url) {
   pushRect();
   try {
     await invoke("lib_open", { id, url });
+    // Shown by Rust as it opens (library.rs open_tab).
+    libMarkShown(true);
   } catch (e) {
     toast(String(e), true);
   }
@@ -458,9 +460,13 @@ listen("lib-download", async (e) => {
 /* Shows a tab's site view, or none. Snappy's avatar rests meanwhile
    (snappy-avatar.js): its frames made a site's scrolling stutter. */
 function libShowView(id) {
-  window.libSiteShown = !!id;
-  window.snappyAvatarsPause?.(!!id);
+  libMarkShown(!!id);
   invoke("lib_show", { id }).catch(() => {});
+}
+
+function libMarkShown(on) {
+  window.libSiteShown = on;
+  window.snappyAvatarsPause?.(on);
 }
 
 /* Called by the sidebar: Explore comes on or goes off screen. */
