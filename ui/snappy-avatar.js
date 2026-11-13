@@ -8,8 +8,8 @@
    mood.ts): a pose is a pure function of time and mood — the body's turn
    (yaw, pitch, roll), lift and squash, the eyes' look, blink and shape —
    and the pointer is followed by easing a look target, the whole body
-   turning towards it with the eyes adding a share. Moods: idle (a breath,
-   a sway, blinks, the eyes wandering), thinking (while Snappy works: it
+   turning towards it with the eyes adding a share. Moods: idle (still,
+   a gesture and a blink every 6 to 10 s), thinking (while Snappy works: it
    turns about its vertical axis, a full turn then a pause, eyes up and
    narrowed), happy (hops, eyes as arcs). Mood changes ease over 420 ms.
    Reduced motion keeps the body still; only the eyes follow.
@@ -64,38 +64,36 @@ function snvBlink(seed, t) {
   return closure;
 }
 
-/* Idle eye wander: short holds between quick saccades, centered more often. */
-function snvWander(seed, t) {
-  const SLOT = 1.9;
-  const s = Math.floor(t / SLOT);
-  const target = (k) =>
-    snvNoise(seed, 1000 + k * 3) < 0.35 ? [0, 0] : [(snvNoise(seed, 1001 + k * 3) * 2 - 1) * 0.9, (snvNoise(seed, 1002 + k * 3) * 2 - 1) * 0.5];
-  const a = target(s - 1), b = target(s);
-  const e = snvSmooth((t - s * SLOT) / 0.16);
-  return [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e];
-}
-
-/* Idle gestures, now and then at random moments: a sway left then right,
-   a look around, a little hop, a curious head tilt, a quick wiggle. Slots
-   of SNV_GESTURE_SLOT s; in each, maybe one gesture, starting at a random
-   point — so they come every 4 to 9 s or so, never on a beat. Returns the
-   pose offsets at `t` (all zero between gestures). */
-const SNV_GESTURE_SLOT = 6.5;
+/* Idle, the avatar is still, and now and then makes a gesture: a sway
+   left then right, a look around, a little hop, a curious head tilt, a
+   quick wiggle, with a blink as it starts. One per slot of
+   SNV_GESTURE_SLOT s, starting a little after the slot does — every 6 to
+   10 s, never on a beat — and short: between them nothing moves, so no
+   frame is drawn (the avatar costs nothing at rest). */
+const SNV_GESTURE_SLOT = 8;
+const SNV_GESTURE_JITTER = 2;
 const SNV_GESTURES = ["sway", "look", "hop", "tilt", "wiggle"];
+const SNV_GESTURE_DUR = { sway: 1.5, look: 1.5, hop: 0.75, tilt: 1.5, wiggle: 0.9 };
+const SNV_BLINK_DUR = 0.19;
+/* The gesture of slot `s`: its kind, start and length (s). */
+function snvGestureAt(seed, s) {
+  const kind = SNV_GESTURES[Math.floor(snvNoise(seed, 5001 + s * 4) * SNV_GESTURES.length)];
+  return { kind, start: s * SNV_GESTURE_SLOT + snvNoise(seed, 5002 + s * 4) * SNV_GESTURE_JITTER, dur: SNV_GESTURE_DUR[kind] };
+}
+/* Returns the pose offsets at `t` (all zero between gestures). */
 function snvGesture(seed, t) {
-  const none = { kind: null, yaw: 0, roll: 0, lift: 0, sx: 1, sy: 1, gazeX: 0 };
+  const none = { kind: null, yaw: 0, roll: 0, lift: 0, sx: 1, sy: 1, gazeX: 0, blink: 0 };
   const slot = Math.floor(t / SNV_GESTURE_SLOT);
   for (const s of [slot - 1, slot]) {
-    if (snvNoise(seed, 5000 + s * 4) < 0.18) continue;
-    const kind = SNV_GESTURES[Math.floor(snvNoise(seed, 5001 + s * 4) * SNV_GESTURES.length)];
-    const dur = { sway: 2.2, look: 2.6, hop: 0.75, tilt: 1.8, wiggle: 0.9 }[kind];
-    const start = s * SNV_GESTURE_SLOT + snvNoise(seed, 5002 + s * 4) * (SNV_GESTURE_SLOT - dur);
+    const { kind, start, dur } = snvGestureAt(seed, s);
     const u = (t - start) / dur;
     if (u <= 0 || u >= 1) continue;
     const side = snvNoise(seed, 5003 + s * 4) < 0.5 ? -1 : 1;
     // Eased in and out over the gesture.
     const env = Math.sin(Math.PI * u);
     const g = { ...none, kind };
+    const b = (t - start) / SNV_BLINK_DUR;
+    if (b < 1) g.blink = Math.sin(Math.PI * b);
     if (kind === "sway") {
       // Left, then right, then back.
       g.roll = 10 * side * Math.sin(SNV_TAU * u) * env;
@@ -123,6 +121,19 @@ function snvGesture(seed, t) {
     return g;
   }
   return none;
+}
+
+/* Idle, seconds from `time` (the pose's clock) to the next gesture: 0
+   during one. Nothing moves until then. */
+function snvIdleWait(seed, time) {
+  const t = time + snvNoise(seed, 7) * 10;
+  const slot = Math.floor(t / SNV_GESTURE_SLOT);
+  for (const s of [slot - 1, slot, slot + 1]) {
+    const { start, dur } = snvGestureAt(seed, s);
+    if (t < start) return start - t;
+    if (t < start + dur) return 0;
+  }
+  return SNV_GESTURE_SLOT;
 }
 
 /* The thinking turn's angle at `t`: a full eased turn, then a pause. */
@@ -164,28 +175,18 @@ function snvMoodPose({ seed, t: time, mood, gaze, reduced }) {
     pose.gazeY = -0.8;
     pose.squint = 0.3 + 0.1 * wave(3.1);
     if (!reduced) pose.blink = snvBlink(seed, t * 0.7);
-  } else {
-    // Rest, well visible: a sway, a tilt, a float, a breath.
-    pose.yaw += 0.16 * sway * wave(6.1);
-    pose.pitch += 0.08 * sway * wave(4.7, 1);
-    pose.roll = 3.5 * wave(5.3, 2);
-    pose.lift = reduced ? 0 : -1.4 * (1 - Math.cos((SNV_TAU * t) / 3.4));
-    const breath = wave(3.4, -Math.PI / 2);
-    pose.sy = 1 + 0.03 * breath;
-    pose.sx = 1 - 0.02 * breath;
-    if (!reduced) {
-      pose.blink = snvBlink(seed, t);
-      [pose.gazeX, pose.gazeY] = snvWander(seed, t);
-      // Now and then a gesture, softer while it looks at the pointer.
-      const g = snvGesture(seed, t);
-      if (g.kind) {
-        pose.yaw += g.yaw * sway;
-        pose.roll += g.roll * sway;
-        pose.lift += g.lift;
-        pose.sx *= g.sx;
-        pose.sy *= g.sy;
-        if (g.gazeX) pose.gazeX = g.gazeX;
-      }
+  } else if (!reduced) {
+    // Rest: still, but now and then a gesture, softer while it looks at
+    // the pointer.
+    const g = snvGesture(seed, t);
+    if (g.kind) {
+      pose.yaw += g.yaw * sway;
+      pose.roll += g.roll * sway;
+      pose.lift += g.lift;
+      pose.sx *= g.sx;
+      pose.sy *= g.sy;
+      pose.blink = g.blink;
+      if (g.gazeX) pose.gazeX = g.gazeX;
     }
   }
 
@@ -269,7 +270,7 @@ function snvEyesSvg(pose) {
     .join("");
 }
 
-if (typeof module !== "undefined") module.exports = { snvGesture, snvMoodPose, snvBlend, snvSpin, snvPointerGaze, snvFollow, snvEyesSvg, SNV_EYES };
+if (typeof module !== "undefined") module.exports = { snvGesture, snvIdleWait, snvMoodPose, snvBlend, snvSpin, snvPointerGaze, snvFollow, snvEyesSvg, SNV_EYES };
 
 if (typeof document !== "undefined") {
   const AVATARS = new Set();
@@ -355,7 +356,16 @@ if (typeof document !== "undefined") {
      goes back to its own idle look. */
   let pointer = null;
   let movedAt = 0;
-  document.addEventListener("pointermove", (e) => ((pointer = { x: e.clientX, y: e.clientY }), (movedAt = performance.now())), { passive: true });
+  // The pointer moving wakes a still avatar: it looks.
+  document.addEventListener(
+    "pointermove",
+    (e) => {
+      pointer = { x: e.clientX, y: e.clientY };
+      movedAt = performance.now();
+      snvTick();
+    },
+    { passive: true },
+  );
   document.addEventListener("pointerleave", () => (pointer = null));
 
   let last = 0;
@@ -365,8 +375,11 @@ if (typeof document !== "undefined") {
   /* Paused, an avatar still shows that Snappy works or is happy: only
      idle ones rest. */
   const resting = () => paused && [...AVATARS].every((a) => a.mood.now === "idle");
+  /* Still between gestures: woken by a timer, not drawn meanwhile. */
+  let sleep = 0;
   function snvTick() {
     if (running || resting()) return;
+    clearTimeout(sleep);
     running = true;
     requestAnimationFrame(snvFrame);
   }
@@ -379,32 +392,54 @@ if (typeof document !== "undefined") {
       last = 0;
       return;
     }
-    // The next frame first: one frame that fails must not stop them all.
-    if (AVATARS.size) snvTick();
     const dt = last ? (now - last) / 1000 : 0;
     last = now;
     const still = reduced();
+    // Seconds until something moves: 0 draws the next frame.
+    let wait = Infinity;
     for (const a of AVATARS) {
-      if (!a.el.isConnected || !a.el.offsetParent) continue;
-      const box = a.el.getBoundingClientRect();
-      // 1 em = one unit of the avatar's 100-unit box.
-      const unit = box.width / 100;
-      if (unit && a.unit !== unit) {
-        a.unit = unit;
-        a.el.style.fontSize = unit + "px";
+      try {
+        wait = Math.min(wait, snvFrameOf(a, now, dt, still));
+      } catch (e) {
+        // One frame that fails must not stop them all.
+        wait = 0;
+        console.error(e);
       }
-      const target = pointer && now - movedAt < 4000 ? snvPointerGaze(pointer, box) : null;
-      a.look = snvFollow(a.look, target, dt, still);
-      const w = snvSmooth(a.look.attention);
-      const gaze = w > 0.001 ? { x: a.look.x, y: a.look.y, weight: w } : null;
-      const t = now / 1000;
-      let pose = snvMoodPose({ seed: a.seed, t, mood: a.mood.now, gaze, reduced: still });
-      const k = still ? 1 : snvSmooth((now - a.mood.since) / SNV_MOOD_MS);
-      if (a.mood.from && k < 1) pose = snvBlend(a.mood.from, pose, k);
-      else a.mood.from = null;
-      a.last = pose;
-      snvDraw(a, pose);
     }
+    if (!AVATARS.size) return;
+    if (wait <= 0) snvTick();
+    else {
+      // Still: the next frame starts afresh, not a step from this one.
+      last = 0;
+      if (wait < Infinity) sleep = setTimeout(snvTick, wait * 1000);
+    }
+  }
+
+  /* Draws one avatar for the frame at `now`; returns the seconds until it
+     moves again (0: it moves now). */
+  function snvFrameOf(a, now, dt, still) {
+    if (!a.el.isConnected || !a.el.offsetParent) return snvIdleWait(a.seed, now / 1000) || SNV_GESTURE_SLOT;
+    const box = a.el.getBoundingClientRect();
+    // 1 em = one unit of the avatar's 100-unit box.
+    const unit = box.width / 100;
+    if (unit && a.unit !== unit) {
+      a.unit = unit;
+      a.el.style.fontSize = unit + "px";
+    }
+    const target = pointer && now - movedAt < 4000 ? snvPointerGaze(pointer, box) : null;
+    a.look = snvFollow(a.look, target, dt, still);
+    const w = snvSmooth(a.look.attention);
+    const gaze = w > 0.001 ? { x: a.look.x, y: a.look.y, weight: w } : null;
+    const t = now / 1000;
+    let pose = snvMoodPose({ seed: a.seed, t, mood: a.mood.now, gaze, reduced: still });
+    const k = still ? 1 : snvSmooth((now - a.mood.since) / SNV_MOOD_MS);
+    if (a.mood.from && k < 1) pose = snvBlend(a.mood.from, pose, k);
+    else a.mood.from = null;
+    a.last = pose;
+    snvDraw(a, pose);
+    // Moving: another mood, a mood easing in, the pointer looked at.
+    if (a.mood.now !== "idle" || a.mood.from || target || a.look.attention > 0.001) return 0;
+    return still ? Infinity : snvIdleWait(a.seed, t);
   }
 
   /* Its size, and the resting pose: what a paused avatar shows. */

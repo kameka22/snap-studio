@@ -24,8 +24,9 @@ with its packages for macOS, Windows and Linux. What comes next:
 - **Explore**: sites scroll more smoothly, on macOS above all. The floating
   navigation no longer checks the page's colors while it scrolls, only once
   it stops, and at most twice a second on pages that change all the time.
-  Snappy's avatar rests while a site is shown, instead of moving all the
-  time beside it.
+  Snappy's avatar rests while a site is shown, and elsewhere stays still
+  between its gestures, one every 6 to 10 seconds, instead of moving all
+  the time; it still follows the pointer and moves while Snappy works.
 - **Preview**: on long prints the sliced preview no longer stops part way up;
   all layers are shown, with the right layer count and time on the slider.
   The preview uses about three times less memory, and travel moves load only
