@@ -41,6 +41,11 @@ viewer's technical line (`viewer.truncated`, `#v-stats`), easy to miss.
 
 ## Proposal
 
+The order: first make each segment much lighter so the preview holds the
+whole file, as Snapmaker Orca does (it has no cap: every move is kept, in
+65 536-vertex GPU buffers). Only then, as a last resort for extreme files,
+simplify evenly instead of dropping the end.
+
 ### 1. Layers and times from the whole file
 
 - Count `layers` during the read, over **every** move, not over the kept
@@ -49,35 +54,74 @@ viewer's technical line (`viewer.truncated`, `#v-stats`), easy to miss.
   `meta.total_layers`, when the slicer writes it).
 - The slider then goes to the last layer, and its time matches the total.
 - `layerZ` (`ui/viewer.js`) is built from the segments: a layer with no
-  kept segment takes the Z of the previous one today. With 2 below, every
+  kept segment takes the Z of the previous one today. With 2–5 below, every
   layer keeps segments, so this case goes away.
 
-### 2. Never drop the end: simplify evenly instead
+### 2. A much lighter segment
 
-When the budget is reached, the preview should get **coarser**, not
-**shorter**. The way:
+Today an extrusion segment costs about **58 bytes** in the viewer
+(`decodeGcode`, `buildPathBuffers`), and as much again on the GPU:
 
-- **Travel apart.** Travel moves get their own smaller budget (for example
-  500 000) and are dropped first: they are hidden by default. Extrusions
-  then have the whole of `MAX_SEGS`.
-- **Merge tiny segments.** A statuette's surface is made of many
-  segments a fraction of a millimetre long. Next to each other in the same
-  layer, with the same feature, tool, width and height, and almost in line,
-  they are merged into one segment (same start, last end). The tolerance
-  starts at 0 (nothing merged) and grows only when the budget is exceeded.
-- **Second pass if needed.** If the file is still over budget after a first
-  read, it is read again with a larger tolerance (the size of the file and
-  the count of the first read give the right one). Reading is fast next to
-  the slicing, and only very large prints pay for it.
+| Data | Today | Proposed | How |
+|---|---|---|---|
+| Positions (start, end) | 24 B (6 × f32) | 12 B | 16-bit integers in the print's bounding box (`min`/`max` of the header), turned back into mm in the vertex shader. Step: about 4 µm on a 270 mm bed. |
+| Color | 24 B (6 × f32) | 0 B | Computed in the shader from feature and tool, with a small palette in a uniform (12 features × 16 tools, `MATERIAL_SHADE` applied there). Changing the color mode becomes a uniform update instead of a buffer rebuild (`setColorMode`, `extrusionColors`). |
+| Width, height | 8 B (2 × f32) | 2 B | Kept as the `u8` they already are in `gcode.rs`, read as integer attributes and scaled in the shader. |
+| Feature, tool | 2 B | 2 B | Unchanged. |
+| **Total** | **~58 B** | **~16 B** | about 3.5× less |
 
-With this, the whole height is always shown; only the detail of the curves
-is lighter on very large prints, which the eye doesn't see at preview
-scale.
+The encoded format (`gcode::encode`, the only producer; `decodeGcode`, the
+only reader) moves to **version 4** with these fields; the viewer is the only
+consumer, so no compatibility is kept with version 3.
 
-The budget itself (3 M) stays: it holds the memory of the read (about
-32 bytes per segment) and of the WebGL buffers.
+### 3. Fewer copies on the way
 
-### 3. Say it when the preview is simplified
+Today the same segments exist at once in the `Vec<Seg>` (32 B each), the
+encoded buffer, the `ArrayBuffer` received by the page, the split typed
+arrays of `decodeGcode` and the GPU buffers.
+
+- Rust: encode straight from the read (or free `segs` as soon as the buffer
+  is written) instead of holding both. The other users of `parse`
+  (`jobs.rs`, `thumbs.rs`, `sim/print.rs`, `slice.rs`) keep `segs` as today.
+- Viewer: the buffer from Rust is laid out so that it is uploaded to the GPU
+  as is (one view per attribute, no per-segment JavaScript loop), and the
+  typed arrays are released after the upload; only `feat` and `tool` (2 B per
+  segment) stay for the legend and the layer bounds.
+
+### 4. Travel loaded on demand
+
+Travel moves are hidden by default (`showTravel: false`) and are often 20 to
+30 % of the segments. They are left out of the first load and fetched (a
+second request on the G-code protocol, with a `travel` flag) the first time
+travel is shown. They no longer count against the extrusions' budget.
+
+### 5. Merge in-line tiny segments, always
+
+A statuette's surface is made of many segments a fraction of a millimetre
+long. Next to each other in the same layer, with the same feature, tool,
+width and height, and within **0.01 mm** of a straight line, they are merged
+into one segment (same start, last end). At that tolerance the difference is
+invisible at any zoom the viewer allows, so it is on for every file, not only
+over budget. It also shortens the read for the other users of `parse` that
+only need the shape (thumbnails).
+
+The times are not affected: they are accumulated per move before the merge.
+
+### 6. A higher cap, and even simplification as the last resort
+
+With 2–5, the same memory holds about 3.5 times more segments and fewer are
+produced. `MAX_SEGS` goes from 3 M to about **10 M** extrusion segments
+(about 160 MB in the viewer and as much on the GPU, below today's 3 M at
+~58 B). In practice no realistic file should reach it.
+
+If a file still goes over it, the end is **never** dropped: the file is read
+again with a larger merge tolerance (the size of the file and the count of
+the first read give the right one), so the whole height is shown with less
+detail on the curves.
+
+### 7. Say it when the preview is simplified
+
+Only in the last-resort case of 6:
 
 - `truncated` becomes `simplified` in the meaning (the header bit keeps its
   place). In the viewer and in Prepare's preview, a short note under the
@@ -87,11 +131,12 @@ The budget itself (3 M) stays: it holds the memory of the read (about
 
 ## Where it is used
 
-`gcode::parse` and `encode` serve the viewer (`lib.rs`, G-code protocol),
-Prepare after slicing (`slice.rs`), the Prints tab and the job's layer
-times (`jobs.rs`, `ui/prints.js`), the printer simulator (`sim/print.rs`)
-and thumbnails (`thumbs.rs`). Points 1 and 2 fix them all at once: today a
-long job's layer times and layer count are wrong in the Prints tab too.
+`gcode::parse` serves the viewer (`lib.rs`, G-code protocol), Prepare after
+slicing (`slice.rs`), the Prints tab and the job's layer times (`jobs.rs`,
+`ui/prints.js`), the printer simulator (`sim/print.rs`) and thumbnails
+(`thumbs.rs`); `gcode::encode` and `decodeGcode` only the viewer. Points 1,
+5 and 6 fix them all at once: today a long job's layer times and layer count
+are wrong in the Prints tab too. Points 2–4 concern the viewer only.
 
 ## Texts
 
@@ -103,30 +148,45 @@ New strings, in the 9 languages:
 
 `viewer.truncated` is then removed.
 
+## Steps
+
+Can land as two PRs:
+
+1. **Fix**: points 1, 5 and 6 (Rust only, plus the note): the preview is
+   whole again on the reported file.
+2. **Lighter viewer**: points 2, 3 and 4 (format v4, shader, travel on
+   demand), with memory measured before and after on the same file.
+
 ## Tests
 
-- Rust (`gcode.rs`): a generated G-code over budget (many tiny segments over
-  many layers):
+- Rust (`gcode.rs`): a generated G-code with many tiny segments over many
+  layers:
   - `layers` equals the number of layers in the file;
   - the last layer's segments are in the preview (its Z is the top);
   - `layer_end_s.last()` equals the total time;
-  - the merged path stays within the tolerance of the original points;
-  - a file under the budget is read as today, segment for segment.
-- Travel budget: past it, extrusions are all kept.
-- By hand: the statuette from the report (15 h 47 in 0.20 mm): the model is
-  whole, the slider ends at 609+ layers at about 15 h 47, the note shows;
-  a small print shows no note and the same preview as today.
+  - merged paths stay within 0.01 mm of the original points; a corner is
+    never merged; different feature, tool, width or height never merge;
+  - over the cap, the second pass keeps every layer and sets `simplified`.
+- Format v4: `encode` then a decode in Rust gives back positions within the
+  quantization step, and the same feature, tool, width, height.
+- Viewer (`ui` logic tests): decode of a v4 buffer, palette lookup per color
+  mode, layer bounds.
+- By hand, on the statuette from the report (15 h 47 in 0.20 mm): the model
+  is whole, the slider ends at the real layer count at about 15 h 47, no
+  note; showing travel loads it; color modes switch instantly; memory of the
+  app (system monitor) before and after on the same file. A small print
+  shows the same preview as today.
 
 ## Questions
 
-1. **Note**: show the "Simplified preview" note, or keep it silent since
-   the shape is whole?
-2. **Travel**: when travel is shown on a large print, a travel layer can be
-   incomplete (its budget is smaller). Fine, or should showing travel
-   reload with a travel-first budget?
+1. **Note**: in the last-resort case only, show the "Simplified preview"
+   note, or keep it silent since the shape is whole?
+2. **Two PRs or one**: ship the fix (1, 5, 6) first, or wait for the
+   lighter viewer to do everything at once?
 
 ## CHANGELOG
 
 At implementation, under *Unreleased › Fixed*: "**Preview**: on long prints
 the sliced preview no longer stops part way up; all layers are shown, with
-the right layer count and time on the slider."
+the right layer count and time on the slider. The preview uses about three
+times less memory, and travel moves load only when shown."
