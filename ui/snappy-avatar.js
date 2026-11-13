@@ -284,6 +284,23 @@ if (typeof document !== "undefined") {
   const SLICE_GAP_PX = 2;
   const reduced = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
+  /* While a site is shown in Explore (library.js), the avatars rest:
+     frames drawn sixty times a second beside a site's view made its
+     scrolling stutter on macOS, the window being composed again on each
+     one. They stop at rest, eyes open, and go on when the site goes. */
+  window.snappyAvatarsPause = function snappyAvatarsPause(on) {
+    on = !!on;
+    if (on === paused) return;
+    paused = on;
+    if (on) {
+      for (const a of AVATARS) snvRest(a);
+    } else {
+      // No jump: the time paused is not a step of the motion.
+      last = 0;
+      if (AVATARS.size) snvTick();
+    }
+  };
+
   /* Mounts an avatar in `host`; returns { setMood, destroy }. */
   window.snappyAvatar = function snappyAvatar(host) {
     const el = document.createElement("span");
@@ -313,6 +330,7 @@ if (typeof document !== "undefined") {
     a.eyesHtml = snvEyesSvg(snvMoodPose({ seed: a.seed, t: 0, mood: "idle", gaze: null, reduced: true }));
     a.eyes.innerHTML = a.eyesHtml;
     AVATARS.add(a);
+    if (paused) snvRest(a);
     snvTick();
     return {
       setMood(mood) {
@@ -339,14 +357,17 @@ if (typeof document !== "undefined") {
 
   let last = 0;
   let running = false;
+  // A site shown before this script ran (tabs restored at launch).
+  let paused = !!window.libSiteShown;
   function snvTick() {
-    if (running) return;
+    if (running || paused) return;
     running = true;
     requestAnimationFrame(snvFrame);
   }
 
   function snvFrame(now) {
     running = false;
+    if (paused) return;
     // The next frame first: one frame that fails must not stop them all.
     if (AVATARS.size) snvTick();
     const dt = last ? (now - last) / 1000 : 0;
@@ -371,21 +392,39 @@ if (typeof document !== "undefined") {
       if (a.mood.from && k < 1) pose = snvBlend(a.mood.from, pose, k);
       else a.mood.from = null;
       a.last = pose;
-      a.body.style.transform =
-        `translateY(${pose.lift.toFixed(2)}em) rotateZ(${pose.roll.toFixed(2)}deg) rotateY(${pose.yaw.toFixed(4)}rad) ` +
-        `rotateX(${pose.pitch.toFixed(4)}rad) translateZ(${DEPTH / 2}em) scale(${pose.sx.toFixed(4)}, ${pose.sy.toFixed(4)})`;
-      // Eyes only while the face looks towards us (open-bot-avatar's
-      // EYE_FACING): WebKit does not always hide a turned-away plane.
-      const facing = Math.cos(pose.yaw) * Math.cos(pose.pitch) > 0.22;
-      if (a.facing !== facing) {
-        a.facing = facing;
-        a.eyes.style.visibility = facing ? "" : "hidden";
-      }
-      const html = snvEyesSvg(pose);
-      if (html !== a.eyesHtml) {
-        a.eyesHtml = html;
-        a.eyes.innerHTML = html;
-      }
+      snvDraw(a, pose);
+    }
+  }
+
+  /* Its size, and the resting pose: what a paused avatar shows. */
+  function snvRest(a) {
+    const unit = a.el.getBoundingClientRect().width / 100;
+    if (unit && a.unit !== unit) {
+      a.unit = unit;
+      a.el.style.fontSize = unit + "px";
+    }
+    const pose = snvMoodPose({ seed: a.seed, t: 0, mood: "idle", gaze: null, reduced: true });
+    a.last = pose;
+    a.mood.from = null;
+    snvDraw(a, pose);
+  }
+
+  /* Puts a pose on screen: the body's turn, and the eyes. */
+  function snvDraw(a, pose) {
+    a.body.style.transform =
+      `translateY(${pose.lift.toFixed(2)}em) rotateZ(${pose.roll.toFixed(2)}deg) rotateY(${pose.yaw.toFixed(4)}rad) ` +
+      `rotateX(${pose.pitch.toFixed(4)}rad) translateZ(${DEPTH / 2}em) scale(${pose.sx.toFixed(4)}, ${pose.sy.toFixed(4)})`;
+    // Eyes only while the face looks towards us (open-bot-avatar's
+    // EYE_FACING): WebKit does not always hide a turned-away plane.
+    const facing = Math.cos(pose.yaw) * Math.cos(pose.pitch) > 0.22;
+    if (a.facing !== facing) {
+      a.facing = facing;
+      a.eyes.style.visibility = facing ? "" : "hidden";
+    }
+    const html = snvEyesSvg(pose);
+    if (html !== a.eyesHtml) {
+      a.eyesHtml = html;
+      a.eyes.innerHTML = html;
     }
   }
 }

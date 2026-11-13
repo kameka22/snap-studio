@@ -138,7 +138,7 @@ function activateTab(id) {
   renderTabs();
   saveTabs();
   pushRect();
-  invoke("lib_show", { id: libPinned(id) ? null : id }).catch(() => {});
+  libShowView(libPinned(id) ? null : id);
 }
 
 /* Open tabs come back at the next launch, each where it was. */
@@ -455,21 +455,29 @@ listen("lib-download", async (e) => {
 
 /* ------------------------------------------------------------ visibility */
 
+/* Shows a tab's site view, or none. Snappy's avatar rests meanwhile
+   (snappy-avatar.js): its frames made a site's scrolling stutter. */
+function libShowView(id) {
+  window.libSiteShown = !!id;
+  window.snappyAvatarsPause?.(!!id);
+  invoke("lib_show", { id }).catch(() => {});
+}
+
 /* Called by the sidebar: Explore comes on or goes off screen. */
 function libSetVisible(on) {
   LIB.visible = on;
   if (on) {
     restoreTabs();
     pushRect();
-    invoke("lib_show", { id: libPinned(LIB.active) ? null : LIB.active }).catch(() => {});
+    libShowView(libPinned(LIB.active) ? null : LIB.active);
   } else {
-    invoke("lib_show", { id: null }).catch(() => {});
+    libShowView(null);
   }
 }
 
 /* Hides the view while a dialog or the viewer is in front. */
 function libSuspend() {
-  invoke("lib_show", { id: null }).catch(() => {});
+  libShowView(null);
 }
 
 function libResume() {
