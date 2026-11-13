@@ -157,6 +157,22 @@ for (let t = 0.3; t < 100; t += 0.7) {
     assert.ok(A.snvIdleWait(7, t + w - 0.01) > 0, "none before, at " + t.toFixed(1));
   }
 }
+// Every gesture starts and ends at rest: no jump as it begins or ends.
+const firstOf = {};
+for (let t = 0; t < 600; t += 0.01) {
+  const k = A.snvGesture(7, t).kind;
+  if (k && !firstOf[k]) firstOf[k] = t;
+}
+for (const [k, t0] of Object.entries(firstOf)) {
+  let a = t0, t1 = t0;
+  while (A.snvGesture(7, a - 0.001).kind === k) a -= 0.001;
+  while (A.snvGesture(7, t1 + 0.001).kind === k) t1 += 0.001;
+  for (const t of [a, t1]) {
+    const g = A.snvGesture(7, t);
+    for (const f of ["yaw", "roll", "lift", "gazeX"]) assert.ok(Math.abs(g[f]) < 0.15, `${k} ${f} at an end: ${g[f]}`);
+    assert.ok(Math.abs(g.sx - 1) < 0.01 && Math.abs(g.sy - 1) < 0.01, `${k} squash at an end: ${g.sx} ${g.sy}`);
+  }
+}
 // A sway goes one way, then the other.
 let sway = null;
 for (let t = 0; t < 600 && !sway; t += 0.05) if (A.snvGesture(7, t).kind === "sway") sway = t;

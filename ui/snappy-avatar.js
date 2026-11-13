@@ -107,7 +107,9 @@ function snvGesture(seed, t) {
     } else if (kind === "hop") {
       const air = 4 * u * (1 - u);
       g.lift = -6 * air;
-      const land = snvClamp(1 - Math.min(u, 1 - u) / 0.15, 0, 1);
+      // The squash rises and settles at take-off and landing, never a jump.
+      const m = Math.min(u, 1 - u);
+      const land = m < 0.15 ? Math.sin(Math.PI * m / 0.15) : 0;
       g.sy = 1 - 0.1 * land + 0.04 * air;
       g.sx = 1 + 0.08 * land - 0.02 * air;
     } else if (kind === "tilt") {
