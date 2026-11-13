@@ -21,6 +21,9 @@ with its packages for macOS, Windows and Linux. What comes next:
   shows. Prepare's camera can now go below the plate too.
 
 ### Fixed
+- **Explore**: sites scroll more smoothly, on macOS above all. Snappy's
+  avatar rests while a site is shown, instead of moving all the time beside
+  it.
 - **Preview**: on long prints the sliced preview no longer stops part way up;
   all layers are shown, with the right layer count and time on the slider.
   The preview uses about three times less memory, and travel moves load only
