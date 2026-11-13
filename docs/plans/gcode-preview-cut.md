@@ -119,15 +119,16 @@ again with a larger merge tolerance (the size of the file and the count of
 the first read give the right one), so the whole height is shown with less
 detail on the curves.
 
-### 7. Say it when the preview is simplified
+### 7. Say it discreetly when the preview is simplified
 
-Only in the last-resort case of 6:
+Only in the last-resort case of 6. The model is never cut, so no note under
+the slider (decided):
 
 - `truncated` becomes `simplified` in the meaning (the header bit keeps its
-  place). In the viewer and in Prepare's preview, a short note under the
-  slider: "Simplified preview: very long print". The layers, times and
-  filament are still exact.
-- Remove the "(truncated)" wording from the technical line.
+  place).
+- The viewer's technical line (`#v-stats`) says "simplified" instead of
+  "(truncated)", with a tooltip: the layers, times and filament are exact,
+  only the curves have less detail.
 
 ## Where it is used
 
@@ -140,22 +141,16 @@ are wrong in the Prints tab too. Points 2–4 concern the viewer only.
 
 ## Texts
 
-New strings, in the 9 languages:
+`viewer.truncated` is replaced, in the 9 languages, by:
 
-- `viewer.simplified`: "Simplified preview: very long print"
-- `viewer.simplified_tip`: "All layers are shown with less detail.
-  Layers, times and filament are exact."
-
-`viewer.truncated` is then removed.
+- `viewer.simplified`: "simplified"
+- `viewer.simplified_tip`: "Very long print: all layers are shown with
+  less detail. Layers, times and filament are exact."
 
 ## Steps
 
-Can land as two PRs:
-
-1. **Fix**: points 1, 5 and 6 (Rust only, plus the note): the preview is
-   whole again on the reported file.
-2. **Lighter viewer**: points 2, 3 and 4 (format v4, shader, travel on
-   demand), with memory measured before and after on the same file.
+One PR with all of it (decided): the fix (1, 5, 6) and the lighter viewer
+(2, 3, 4), with memory measured before and after on the same file.
 
 ## Tests
 
@@ -172,17 +167,15 @@ Can land as two PRs:
 - Viewer (`ui` logic tests): decode of a v4 buffer, palette lookup per color
   mode, layer bounds.
 - By hand, on the statuette from the report (15 h 47 in 0.20 mm): the model
-  is whole, the slider ends at the real layer count at about 15 h 47, no
-  note; showing travel loads it; color modes switch instantly; memory of the
+  is whole, the slider ends at the real layer count at about 15 h 47; showing travel loads it; color modes switch instantly; memory of the
   app (system monitor) before and after on the same file. A small print
   shows the same preview as today.
 
-## Questions
+## Decisions
 
-1. **Note**: in the last-resort case only, show the "Simplified preview"
-   note, or keep it silent since the shape is whole?
-2. **Two PRs or one**: ship the fix (1, 5, 6) first, or wait for the
-   lighter viewer to do everything at once?
+1. **Note**: no note under the slider, since the model is never cut; only
+   the discreet "simplified" mark in the technical line.
+2. **Delivery**: one PR for the fix and the lighter viewer.
 
 ## CHANGELOG
 
