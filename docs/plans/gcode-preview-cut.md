@@ -176,6 +176,14 @@ One PR with all of it (decided): the fix (1, 5, 6) and the lighter viewer
 1. **Note**: no note under the slider, since the model is never cut; only
    the discreet "simplified" mark in the technical line.
 2. **Delivery**: one PR for the fix and the lighter viewer.
+3. **Last resort**: past the largest tolerance, one segment in two is kept
+   on a single rhythm over the file. A file alternating strictly between
+   two path types could lose one of them in that mode; no real G-code does
+   that, so it stays as is.
+4. **Thumbnails**: rendered from at most 2 M segments, as a folder scan
+   gains nothing from the preview's 10 M.
+5. **Prime tower**: its box (Prepare, print card) comes from its points
+   gathered during the read, whatever segments are kept.
 
 ## CHANGELOG
 

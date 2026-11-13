@@ -122,6 +122,11 @@ pub struct GcodeData {
     /// layer without any.
     pub layer_top: Vec<f32>,
     pub keep: Keep,
+    /// The prime tower's extrusion points (x, y), over every move, whatever
+    /// `keep`: its box needs the rotation, often written after them.
+    pub tower_pts: Vec<[f32; 2]>,
+    /// The prime tower's top (mm), 0 without a tower.
+    pub tower_top: f32,
 }
 
 /// Which segments a read keeps: the viewer asks for the extrusions first
@@ -211,6 +216,9 @@ struct Store {
 
 impl Store {
     fn new(cap: usize) -> Store {
+        // Below, three quarters of the budget would be 0: `shrink` would
+        // never get there.
+        debug_assert!(cap >= 4);
         Store { segs: Vec::new(), run: Vec::new(), tol: MERGE_TOL, cap, stride: 1, seen: 0, simplified: false }
     }
 
@@ -370,7 +378,7 @@ pub fn parse_with(read: impl Read, keep: Keep) -> Result<GcodeData> {
     parse_capped(read, keep, MAX_SEGS)
 }
 
-fn parse_capped(read: impl Read, keep: Keep, cap: usize) -> Result<GcodeData> {
+pub(crate) fn parse_capped(read: impl Read, keep: Keep, cap: usize) -> Result<GcodeData> {
     let mut rd = BufReader::with_capacity(1 << 20, read);
     let mut store = Store::new(cap);
     let mut meta = GMeta::default();
@@ -393,6 +401,7 @@ fn parse_capped(read: impl Read, keep: Keep, cap: usize) -> Result<GcodeData> {
     // line, which crosses the bed), else any extrusion, else any move.
     let mut frame = [([f32::MAX; 3], [f32::MIN; 3]); 3];
     let mut layer_top: Vec<f32> = Vec::new();
+    let (mut tower_pts, mut tower_top): (Vec<[f32; 2]>, f32) = (Vec::new(), 0.0);
     let mut line = String::new();
     // Current speed in mm/min (modal) and times computed segment by segment.
     let mut feed: f32 = 1800.0;
@@ -632,6 +641,15 @@ fn parse_capped(read: impl Read, keep: Keep, cap: usize) -> Result<GcodeData> {
                         layer_top.resize(li + 1, 0.0);
                     }
                     layer_top[li] = layer_top[li].max(z);
+                    if feature == 10 {
+                        // Each point once: a segment starts where the last ended.
+                        for p in [a, b] {
+                            if tower_pts.last() != Some(&[p[0], p[1]]) {
+                                tower_pts.push([p[0], p[1]]);
+                            }
+                            tower_top = tower_top.max(p[2]);
+                        }
+                    }
                 }
                 let wanted = match keep {
                     #[cfg(test)]
@@ -658,7 +676,7 @@ fn parse_capped(read: impl Read, keep: Keep, cap: usize) -> Result<GcodeData> {
 
     times.tools = (0..16u8).filter(|t| tools_used[*t as usize]).collect();
     let Store { segs, simplified, .. } = store;
-    Ok(GcodeData { segs, layers, min, max, meta, simplified, times, layer_top, keep })
+    Ok(GcodeData { segs, layers, min, max, meta, simplified, times, layer_top, keep, tower_pts, tower_top })
 }
 
 /// Time of a path feature in the preview.
@@ -767,19 +785,16 @@ pub struct TowerBox {
 /// taking their extent. None without a tower.
 pub fn tower_box(d: &GcodeData, at: [f32; 2], angle: f32) -> Option<TowerBox> {
     let (s, c) = (-angle.to_radians()).sin_cos();
-    let (mut x0, mut y0, mut x1, mut y1, mut h) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN, 0f32);
-    for seg in d.segs.iter().filter(|s| s.feature == 10 && !s.travel) {
-        for p in [&seg.a, &seg.b] {
-            let (dx, dy) = (p[0] - at[0], p[1] - at[1]);
-            let (x, y) = (dx * c - dy * s, dx * s + dy * c);
-            x0 = x0.min(x);
-            y0 = y0.min(y);
-            x1 = x1.max(x);
-            y1 = y1.max(y);
-            h = h.max(p[2]);
-        }
+    let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for p in &d.tower_pts {
+        let (dx, dy) = (p[0] - at[0], p[1] - at[1]);
+        let (x, y) = (dx * c - dy * s, dx * s + dy * c);
+        x0 = x0.min(x);
+        y0 = y0.min(y);
+        x1 = x1.max(x);
+        y1 = y1.max(y);
     }
-    (x0 <= x1).then(|| TowerBox { x: at[0], y: at[1], x0, y0, w: x1 - x0, d: y1 - y0, h })
+    (x0 <= x1).then(|| TowerBox { x: at[0], y: at[1], x0, y0, w: x1 - x0, d: y1 - y0, h: d.tower_top })
 }
 
 /// Serialization for the viewer, version 4: about 18 bytes per segment,
@@ -1352,6 +1367,12 @@ G1 X100.001 Y100 Z9.87 E2
         assert!(near(t.w, 40.0) && near(t.d, 26.0) && near(t.x0, -2.0) && near(t.y0, -2.0), "{t:?}");
         assert!(near(t.h, 5.0), "{t:?}");
         assert_eq!(stats(&parse("G1 X1 E1\n".as_bytes()).unwrap()).tower, None, "no tower");
+        // The same box from a read that keeps no segment (the stats after a
+        // slice), or only the travel moves.
+        for keep in [Keep::None, Keep::Travel] {
+            let k = stats(&parse_with(g.as_bytes(), keep).unwrap()).tower.unwrap();
+            assert!(near(k.w, t.w) && near(k.d, t.d) && near(k.x0, t.x0) && near(k.h, t.h), "{keep:?} {k:?}");
+        }
     }
 
     #[test]
