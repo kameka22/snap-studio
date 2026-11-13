@@ -239,8 +239,11 @@ void main() {
   frag = vec4(col, 1.0);
 }`;
 
-/* Beyond this, back to plain lines: rendering stays smooth. */
-const RIBBON_MAX = 2_500_000;
+/* Beyond this, back to plain lines, which show no relief. The ribbons are
+   drawn from the same buffer as the lines (no memory of their own), so
+   this is the Rust cap (gcode.rs MAX_SEGS): a long print keeps its shading
+   now that all its layers are kept. */
+const RIBBON_MAX = 10_000_000;
 /* The travel moves' color. */
 const TRAVEL_RGB = [96, 104, 126];
 
