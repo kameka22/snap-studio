@@ -167,7 +167,7 @@ fn generate_gcode(path: &Path, size: u32) -> Result<Thumb> {
         }
     }
     let _guard = RenderGuard::acquire();
-    let data = crate::gcode::parse(std::fs::File::open(path)?)?;
+    let data = crate::gcode::parse_with(std::fs::File::open(path)?, crate::gcode::Keep::Extrusions)?;
     let img = crate::render::render_paths(&data.segs, data.min, data.max, size);
     Ok(Thumb { png: to_png(&image::DynamicImage::ImageRgba8(img))?, source: ThumbSource::Rendered })
 }

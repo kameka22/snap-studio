@@ -25,7 +25,7 @@ lists below.
 
 | Plan | Subject | State |
 |---|---|---|
-| [gcode-preview-cut.md](gcode-preview-cut.md) | Long prints: the sliced preview stops part way up (3 M segment budget drops the top layers); keep every layer and simplify evenly instead | Written, draft PR [#106](https://github.com/kameka22/snap-studio/pull/106) |
+| [gcode-preview-cut.md](gcode-preview-cut.md) | Long prints: the sliced preview stops part way up (3 M segment budget drops the top layers); keep every layer and simplify evenly instead | In progress, PR [#106](https://github.com/kameka22/snap-studio/pull/106) |
 | [stl-in-files.md](stl-in-files.md) | Files library: list STL files with a rendered preview, details, Analyze and View in 3D; Prepare and print them like 3MF files | Merged in [#105](https://github.com/kameka22/snap-studio/pull/105) (`dd244f3`); checks in the app left |
 | [ai-agents.md](ai-agents.md) | OpenCode next to Claude Code, one agent active at a time | Written, postponed |
 | [ai-builtin-sandbox.md](ai-builtin-sandbox.md) | Claude Code's built-in sandbox as the default sandbox on macOS and Linux; yolobox kept for those who use it | Written, draft PR [#62](https://github.com/kameka22/snap-studio/pull/62) |
