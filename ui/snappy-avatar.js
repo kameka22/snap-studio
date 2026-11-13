@@ -287,12 +287,13 @@ if (typeof document !== "undefined") {
   /* While a site is shown in Explore (library.js), the avatars rest:
      frames drawn sixty times a second beside a site's view made its
      scrolling stutter on macOS, the window being composed again on each
-     one. They stop at rest, eyes open, and go on when the site goes. */
+     one. Idle, they stop at rest, eyes open, and go on when the site
+     goes. */
   window.snappyAvatarsPause = function snappyAvatarsPause(on) {
     on = !!on;
     if (on === paused) return;
     paused = on;
-    if (on) {
+    if (resting()) {
       for (const a of AVATARS) snvRest(a);
     } else {
       // No jump: the time paused is not a step of the motion.
@@ -340,6 +341,8 @@ if (typeof document !== "undefined") {
         a.mood = { now: mood, from: a.last || null, since: now };
         clearTimeout(a.happyTimer);
         if (mood === "happy") a.happyTimer = setTimeout(() => a.mood.now === "happy" && this.setMood("idle"), 1600);
+        // Paused, it moves again while it works or is happy.
+        snvTick();
       },
       destroy() {
         AVATARS.delete(a);
@@ -359,15 +362,23 @@ if (typeof document !== "undefined") {
   let running = false;
   // A site shown before this script ran (tabs restored at launch).
   let paused = !!window.libSiteShown;
+  /* Paused, an avatar still shows that Snappy works or is happy: only
+     idle ones rest. */
+  const resting = () => paused && [...AVATARS].every((a) => a.mood.now === "idle");
   function snvTick() {
-    if (running || paused) return;
+    if (running || resting()) return;
     running = true;
     requestAnimationFrame(snvFrame);
   }
 
   function snvFrame(now) {
     running = false;
-    if (paused) return;
+    if (resting()) {
+      // Back to idle while paused: at rest, then no more frames.
+      for (const a of AVATARS) if (a.last !== a.rest) snvRest(a);
+      last = 0;
+      return;
+    }
     // The next frame first: one frame that fails must not stop them all.
     if (AVATARS.size) snvTick();
     const dt = last ? (now - last) / 1000 : 0;
@@ -404,7 +415,7 @@ if (typeof document !== "undefined") {
       a.el.style.fontSize = unit + "px";
     }
     const pose = snvMoodPose({ seed: a.seed, t: 0, mood: "idle", gaze: null, reduced: true });
-    a.last = pose;
+    a.last = a.rest = pose;
     a.mood.from = null;
     snvDraw(a, pose);
   }
