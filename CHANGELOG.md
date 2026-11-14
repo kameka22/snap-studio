@@ -28,11 +28,26 @@ with its packages for macOS, Windows and Linux. What comes next:
   must start with a single head, print layer by layer, use a single prime
   tower and the file's layer heights, with no raft and the objects unscaled
   in height; the slice says so otherwise (#102).
+- **By height mode (HueForge)**: Prepare's colour mode gets a third choice,
+  "By height". The whole plate starts on one head and changes head, or
+  pauses for a spool swap, at the heights listed under the objects. They
+  are typed as layer numbers, as HueForge counts them ("layer 5 → T1"), or
+  in mm (a switch, remembered); each snaps to the top of a layer and shows
+  the other unit beside it. The plate itself is drawn in those colours. A
+  HueForge 3MF switches to this mode on its own; for a print that comes as
+  an STL, its description (the describe file, or the text of its MakerWorld
+  page) can be pasted or opened: the layer heights, the 100 % infill and
+  the swaps are taken over, each colour going to the closest loaded spool,
+  and the colours no spool holds are named in one line. With the printer
+  offline, one line says so, the heads follow the file's order, and the
+  colours are matched once the printer answers (#103).
 
 ### Fixed
 - **Undo in Prepare**: ⌘Z / Ctrl+Z (and redo) now work right after using a
   slider or a switch of the inspector, such as the scale or Keep proportions.
-  They used to do nothing until the plate was clicked.
+  They used to do nothing until the plate was clicked. On macOS, ⌘Z and
+  ⇧⌘Z from the Edit menu reach the plate too (only Ctrl+Z did); in a text
+  field they still undo the typing (#103).
 - **Explore**: sites scroll more smoothly, on macOS above all. The floating
   navigation no longer checks the page's colors while it scrolls, only once
   it stops, and at most twice a second on pages that change all the time.

@@ -82,6 +82,247 @@ function hcMarks(tools, pauses, max = 32) {
   return marks.sort((a, b) => a.layer - b.layer);
 }
 
+/* ------------------------------------------------- "By height" mode (step 2)
+
+   The plate's own list, edited in Prepare or imported from HueForge:
+   `PR.hz = { base, changes: [{ z, head, kind }], layers, src }`, `base` the
+   head the plate starts with, each change's `head` a head as the engine
+   numbers them (T0-T3, then the virtual heads), `layers` the file's
+   ({ layer_height, first_layer }) when imported, `src` "3mf" | "describe"
+   | null. */
+
+const r4 = (x) => Math.round(x * 1e4) / 1e4;
+
+/* The top of layer `n` (from 1): the first layer, then even layers. */
+const hzLayerTop = (n, lh, first) => r4(first + (n - 1) * lh);
+
+/* The layer whose top is nearest `z`: { layer, z, gap } (gap in mm, the
+   snapped height minus the asked one). Never the first layer, as Rust's
+   `Layers::snap`: a change there would be the plate's start. */
+function hzSnap(z, lh, first) {
+  if (!(lh > 0) || !(first > 0)) return { layer: null, z: r4(z), gap: 0 };
+  const layer = Math.max(2, Math.round((z - first) / lh) + 1);
+  const top = hzLayerTop(layer, lh, first);
+  return { layer, z: top, gap: r4(top - z) };
+}
+
+/* The head bands from the bed up, for the tint:
+   [{ from, to, head, pause }], `to` null for the top one. A pause keeps
+   the head (its band starts there, flagged). */
+function hzBands(plan) {
+  const out = [{ from: 0, to: null, head: plan?.base ?? 0, pause: false }];
+  for (const c of [...(plan?.changes || [])].sort((a, b) => a.z - b.z)) {
+    const last = out[out.length - 1];
+    const head = c.kind === "pause" ? last.head : c.head;
+    last.to = c.z;
+    out.push({ from: c.z, to: null, head, pause: c.kind === "pause" });
+  }
+  return out;
+}
+
+/* The heads a plan prints with: the start's and each head change's (a
+   pause keeps the head). For the slice's heads and the prime tower. */
+function hzPlanHeads(plan) {
+  if (!plan) return [];
+  return [plan.base ?? 0, ...(plan.changes || []).filter((c) => c.kind !== "pause").map((c) => c.head)];
+}
+
+/* What the slice sends in "by height" mode, or why it cannot: `items` the
+   sliced objects ({ base: own colours, scale }), `plate` as hcRequest's.
+   Every object prints with the plate's head until the first change: an
+   object with several colours (painted, or a multi-colour file) cannot. */
+function hzRequest(plan, items, plate = {}) {
+  const changes = [...(plan?.changes || [])].sort((a, b) => a.z - b.z);
+  if (items.some((it) => (it.base?.length || 0) > 1)) return { error: "multicolour" };
+  if (plan?.src && items.some((it) => Math.abs((it.scale?.[2] ?? 1) - 1) > 1e-6)) return { error: "scaled" };
+  if (!changes.length) return { changes: [], base: plan?.base ?? 0 };
+  if (plate.pillars) return { error: "pillars" };
+  if (plate.byObject) return { error: "by_object" };
+  let cur = plan.base ?? 0;
+  const out = changes.map((c) => {
+    if (c.kind !== "pause") cur = c.head;
+    return { z: c.z, head: cur, kind: c.kind === "pause" ? "pause" : "auto" };
+  });
+  return { changes: out, base: plan.base ?? 0, layers: plan.layers || null };
+}
+
+/* RGB distance of two "#rrggbb" (0 same, 441 black/white); Infinity when
+   either is not a colour. */
+function hzColourGap(a, b) {
+  const p = (h) => (/^#?[0-9a-f]{6}/i.test(h || "") ? [0, 2, 4].map((i) => parseInt(h.replace("#", "").slice(i, i + 2), 16)) : null);
+  const x = p(a), y = p(b);
+  if (!x || !y) return Infinity;
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+}
+
+/* The head holding `hex` (the same colour, else the nearest), from
+   `heads` [{ head, color }]: { head, exact } or null when none has a
+   colour. "Loaded" is within a small gap (a spool's hex rarely matches
+   the file's to the digit). */
+const HZ_LOADED = 40;
+function hzNearestHead(hex, heads) {
+  let best = null;
+  for (const h of heads || []) {
+    const gap = hzColourGap(hex, h.color);
+    if (gap < (best?.gap ?? Infinity)) best = { head: h.head, gap };
+  }
+  return best && { head: best.head, exact: best.gap <= HZ_LOADED };
+}
+
+/* A HueForge "describe" (the text file, or its copy in a MakerWorld page):
+   { layer_height, first_layer, infill100, colours: [{ hex, name }],
+     start, swaps: [{ layer, z, name }] }, or null when it says none of it.
+   The swap heights are the tops of layers (z = base + (n - 1) × layer). */
+function hzParseDescribe(text) {
+  const t = String(text || "").replace(/\r/g, "");
+  const num = (re) => {
+    const m = t.match(re);
+    return m ? parseFloat(m[1].replace(",", ".")) : null;
+  };
+  const layer_height = num(/layer height of\s*([\d.,]+)\s*mm/i);
+  const first_layer = num(/base layer of\s*([\d.,]+)\s*mm/i);
+  const infill100 = /100\s*%\s*infill/i.test(t);
+  const colours = [];
+  for (const m of t.matchAll(/#([0-9a-f]{6})\b[ \t]*[-–:]?[ \t]*([^\n#]*?)(?:\s*(?:Transmission Distance|TD)\b[^\n#]*)?(?=\n|#[0-9a-f]{6}\b|$)/gi)) {
+    colours.push({ hex: `#${m[1].toLowerCase()}`, name: m[2].replace(/[\s\-–:]+$/, "").trim() });
+  }
+  const start = t.match(/Start with\s+([^\n]+?)(?=\s*[,.;]?\s*(?:At layer|\n|$))/i)?.[1].trim() || null;
+  const swaps = [];
+  for (const m of t.matchAll(/At layer\s*#?\s*(\d+)\s*\(\s*([\d.,]+)\s*mm\s*\)\s*,?\s*swap to\s+([^\n]+?)(?=\s*(?:for the rest\b|[,.;]?\s*At layer\b|[.;]?\s*\n|[.;]?\s*$))/gi)) {
+    swaps.push({ layer: +m[1], z: parseFloat(m[2].replace(",", ".")), name: m[3].trim() });
+  }
+  if (layer_height == null && !colours.length && !swaps.length) return null;
+  return { layer_height, first_layer, infill100, colours, start, swaps };
+}
+
+/* The colour line a swap's name stands for: the line whose name holds it
+   (as words, any case), else the one sharing most of its words. */
+function hzColourOf(name, colours) {
+  const words = (s) => String(s || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  const want = words(name);
+  if (!want.length) return null;
+  const has = (c) => {
+    const w = words(c.name).join(" ");
+    return ` ${w} `.includes(` ${want.join(" ")} `);
+  };
+  const whole = colours.find(has);
+  if (whole) return whole;
+  let best = null, score = 0;
+  for (const c of colours) {
+    const w = new Set(words(c.name));
+    const s = want.filter((x) => w.has(x)).length;
+    if (s > score) (best = c), (score = s);
+  }
+  return best;
+}
+
+/* No head with a known spool (the printer never answered): the heads
+   follow the file's order, said once, and the colours wait (hzRematch). */
+const hzKnown = (heads) => (heads || []).some((h) => hzColourGap(h.color, h.color) === 0);
+const hzUniq = (warnings) => {
+  const seen = new Set();
+  return warnings.filter((w) => {
+    const k = JSON.stringify(w);
+    return seen.has(k) ? false : seen.add(k);
+  });
+};
+
+/* A plan from a describe and the printer's heads ([{ head, color }]):
+   { plan, warnings: [{ kind: "gap" | "unloaded" | "unknown" | "offline", ... }] }.
+   Each height goes to the top of a real layer of the file's layers; the
+   start and each change keep the colour they stand for (`baseHex`, `hex`). */
+function hzFromDescribe(d, heads) {
+  const warnings = [];
+  const known = hzKnown(heads);
+  if (!known) warnings.push({ kind: "offline" });
+  const lh = d.layer_height, first = d.first_layer ?? d.layer_height;
+  const headOf = (name) => {
+    const c = hzColourOf(name, d.colours);
+    if (!c) {
+      warnings.push({ kind: "unknown", name });
+      return { head: 0, hex: null };
+    }
+    if (!known) return { head: d.colours.indexOf(c) % 4, hex: c.hex };
+    const h = hzNearestHead(c.hex, heads);
+    if (!h?.exact) warnings.push({ kind: "unloaded", name: c.name || name, hex: c.hex });
+    return { head: h?.head ?? 0, hex: c.hex };
+  };
+  const start = d.start ? headOf(d.start) : { head: 0, hex: null };
+  const changes = d.swaps.map((s) => {
+    const snap = hzSnap(s.z, lh, first);
+    if (Math.abs(snap.gap) > 0.01) warnings.push({ kind: "gap", z: s.z, to: snap.z });
+    const to = headOf(s.name);
+    return { z: snap.z, head: to.head, kind: "auto", hex: to.hex };
+  });
+  return {
+    plan: {
+      base: start.head, baseHex: start.hex, changes,
+      layers: lh ? { layer_height: lh, first_layer: first } : null, src: "describe",
+      names: Object.fromEntries(d.colours.map((c) => [c.hex, c.name])),
+    },
+    warnings: hzUniq(warnings),
+  };
+}
+
+/* A plan from a 3MF's list (hcFromFile's, extruders from 1), the file's
+   colours by extruder ({ 1: "#rrggbb" }) and the printer's heads. A pause
+   keeps the head in force. */
+function hzFromFile(hc, colours, layers, heads) {
+  const warnings = [];
+  const known = hzKnown(heads);
+  if (!known) warnings.push({ kind: "offline" });
+  const headOf = (ext) => {
+    const hex = colours?.[ext] || null;
+    if (!known) return (ext - 1) % 4;
+    const h = hzNearestHead(hex, heads);
+    if (!h?.exact) warnings.push({ kind: "unloaded", name: null, hex });
+    return h?.head ?? (ext - 1) % 4;
+  };
+  const lh = layers?.layer_height, first = layers?.first_layer ?? lh;
+  const changes = [...(hc || [])]
+    .sort((a, b) => a.z - b.z)
+    .map((c) => {
+      const snap = lh ? hzSnap(c.z, lh, first) : { z: c.z, gap: 0 };
+      if (Math.abs(snap.gap) > 0.01) warnings.push({ kind: "gap", z: c.z, to: snap.z });
+      if (c.kind === "pause") return { z: snap.z, head: null, kind: c.kind };
+      return { z: snap.z, head: headOf(c.ext), kind: c.kind, hex: colours?.[c.ext] || null };
+    });
+  const base = headOf(1);
+  let cur = base;
+  for (const c of changes) c.head = c.kind === "pause" ? cur : (cur = c.head);
+  return {
+    plan: { base, baseHex: colours?.[1] || null, changes, layers: lh ? { layer_height: lh, first_layer: first } : null, src: "3mf" },
+    warnings: hzUniq(warnings),
+  };
+}
+
+/* An imported plan made while no spool was known, once the printer's
+   heads are: each colour to its head, the "offline" warning replaced by
+   the colours no head holds. Null while still none is known. */
+function hzRematch(plan, heads) {
+  if (!plan || !hzKnown(heads)) return null;
+  const warnings = (plan.warnings || []).filter((w) => w.kind !== "offline" && w.kind !== "unloaded");
+  const headOf = (hex, was) => {
+    if (!hex) return was;
+    const h = hzNearestHead(hex, heads);
+    if (!h?.exact) warnings.push({ kind: "unloaded", name: plan.names?.[hex] ?? null, hex });
+    return h?.head ?? was;
+  };
+  const base = headOf(plan.baseHex, plan.base);
+  let cur = base;
+  const changes = (plan.changes || []).map((c) => {
+    const head = c.kind === "pause" ? cur : (cur = headOf(c.hex, c.head));
+    return { ...c, head };
+  });
+  return { ...plan, base, changes, warnings: hzUniq(warnings) };
+}
+
+/* A change's layer typed (from 2: the first is the start): its height. */
+const hzLayerZ = (n, lh, first) => (n >= 2 && lh > 0 && first > 0 ? hzLayerTop(Math.round(n), lh, first) : null);
+
 if (typeof module !== "undefined") {
-  module.exports = { hcColours, hcFromFile, hcKey, hcRequest, hcMarks };
+  module.exports = {
+    hcColours, hcFromFile, hcKey, hcRequest, hcMarks,
+    hzLayerTop, hzSnap, hzBands, hzPlanHeads, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile, hzRematch, hzLayerZ,
+  };
 }

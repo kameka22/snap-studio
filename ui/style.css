@@ -2694,6 +2694,28 @@ pre:hover > .chat-copy, .chat-msg.assistant:hover > .chat-copy-msg { opacity: 1;
 .p-colours .p-color.unmapped .p-color-lbl { color: var(--danger); }
 .p-colours .p-color .tag { margin-left: 4px; }
 
+/* Prepare, "by height" mode: one row per change (layer or height, head
+   or pause), heights typed in layers or mm. */
+.p-hz .hz-line { padding-left: 10px; }
+.hz-z { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+.hz-z small { color: var(--text-secondary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.hz-z-in { width: 62px; padding: 2px 4px; font: inherit; font-variant-numeric: tabular-nums; }
+.hz-pause { padding: 1px 6px; border-radius: 999px; border: 1px dashed var(--border); font-size: 11px; color: var(--text-secondary); }
+.p-ico.hz-kind.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.hz-foot { display: flex; align-items: center; gap: 8px; margin: 6px 2px 0; }
+.hz-foot small { flex: 1; min-width: 0; }
+.hz-warn { margin: 4px 2px 0; font-size: 11px; color: var(--warning, #c98a00); }
+.hz-unit { margin-left: auto; height: 22px; }
+.hz-unit .seg-btn { padding: 0 8px; font-size: 11px; }
+.hz-col { white-space: nowrap; }
+.hz-col i { display: inline-block; width: 9px; height: 9px; margin-right: 3px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent); vertical-align: -1px; }
+/* The HueForge import sheet. */
+.modal-box.hz-box { width: 480px; }
+.hz-text { width: 100%; box-sizing: border-box; font: 12px/1.4 var(--font-mono, ui-monospace, monospace); resize: vertical; }
+.hz-row { display: flex; gap: 8px; }
+.hz-preview { font-size: 12px; }
+.hz-preview:empty { display: none; }
+
 .p-float-head {
   flex: none;
   display: flex;

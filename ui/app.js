@@ -1038,7 +1038,19 @@ onMenu("order", (o) => { state.asc = o === "asc"; save(); applyView(); syncHead(
 $("btn-add").addEventListener("click", pickFolder);
 onMenu("nav", (v) => switchView(v));
 onMenu("view", (v) => { switchView("files"); setView(v); });
+/* The Edit menu's undo / redo (macOS): typing in a field undoes itself,
+   as the system's entry did; elsewhere Prepare's plate takes it. A
+   Library site holding the keyboard gets it from Rust (menu.rs forward). */
+function editHistory(what) {
+  if (!document.hasFocus()) return;
+  // A list has no typing to undo: the plate's, as a slider.
+  const el = document.activeElement;
+  const typing = plTyping(el) && el.tagName !== "SELECT";
+  if (!typing && typeof prMenuHistory === "function" && prMenuHistory(what === "redo")) return;
+  document.execCommand(what);
+}
 onMenu("edit", (what) => {
+  if (what === "undo" || what === "redo") return editHistory(what);
   if (what === "find" && window.currentView === "files") { $("search").focus(); $("search").select(); }
   // On macOS ⌘F is the menu's: the AI list has its own search.
   if (what === "find" && window.currentView === "ia" && !IA.open && IA.list.length) { $("ia-q").focus(); $("ia-q").select(); }
