@@ -106,7 +106,7 @@ function hzSnap(z, lh, first) {
   return { layer, z: top, gap: r4(top - z) };
 }
 
-/* The head bands from the bed up, for the ruler and the tint:
+/* The head bands from the bed up, for the tint:
    [{ from, to, head, pause }], `to` null for the top one. A pause keeps
    the head (its band starts there, flagged). */
 function hzBands(plan) {
@@ -216,11 +216,25 @@ function hzColourOf(name, colours) {
   return best;
 }
 
+/* No head with a known spool (the printer never answered): the heads
+   follow the file's order, said once, and the colours wait (hzRematch). */
+const hzKnown = (heads) => (heads || []).some((h) => hzColourGap(h.color, h.color) === 0);
+const hzUniq = (warnings) => {
+  const seen = new Set();
+  return warnings.filter((w) => {
+    const k = JSON.stringify(w);
+    return seen.has(k) ? false : seen.add(k);
+  });
+};
+
 /* A plan from a describe and the printer's heads ([{ head, color }]):
-   { plan, warnings: [{ kind: "gap" | "unloaded" | "unknown", ... }] }.
-   Each height goes to the top of a real layer of the file's layers. */
+   { plan, warnings: [{ kind: "gap" | "unloaded" | "unknown" | "offline", ... }] }.
+   Each height goes to the top of a real layer of the file's layers; the
+   start and each change keep the colour they stand for (`baseHex`, `hex`). */
 function hzFromDescribe(d, heads) {
   const warnings = [];
+  const known = hzKnown(heads);
+  if (!known) warnings.push({ kind: "offline" });
   const lh = d.layer_height, first = d.first_layer ?? d.layer_height;
   const headOf = (name) => {
     const c = hzColourOf(name, d.colours);
@@ -228,24 +242,25 @@ function hzFromDescribe(d, heads) {
       warnings.push({ kind: "unknown", name });
       return { head: 0, hex: null };
     }
+    if (!known) return { head: d.colours.indexOf(c) % 4, hex: c.hex };
     const h = hzNearestHead(c.hex, heads);
     if (!h?.exact) warnings.push({ kind: "unloaded", name: c.name || name, hex: c.hex });
     return { head: h?.head ?? 0, hex: c.hex };
   };
-  const base = d.start ? headOf(d.start).head : 0;
+  const start = d.start ? headOf(d.start) : { head: 0, hex: null };
   const changes = d.swaps.map((s) => {
     const snap = hzSnap(s.z, lh, first);
     if (Math.abs(snap.gap) > 0.01) warnings.push({ kind: "gap", z: s.z, to: snap.z });
-    return { z: snap.z, head: headOf(s.name).head, kind: "auto" };
-  });
-  const seen = new Set();
-  const uniq = warnings.filter((w) => {
-    const k = JSON.stringify(w);
-    return seen.has(k) ? false : seen.add(k);
+    const to = headOf(s.name);
+    return { z: snap.z, head: to.head, kind: "auto", hex: to.hex };
   });
   return {
-    plan: { base, changes, layers: lh ? { layer_height: lh, first_layer: first } : null, src: "describe" },
-    warnings: uniq,
+    plan: {
+      base: start.head, baseHex: start.hex, changes,
+      layers: lh ? { layer_height: lh, first_layer: first } : null, src: "describe",
+      names: Object.fromEntries(d.colours.map((c) => [c.hex, c.name])),
+    },
+    warnings: hzUniq(warnings),
   };
 }
 
@@ -254,11 +269,14 @@ function hzFromDescribe(d, heads) {
    keeps the head in force. */
 function hzFromFile(hc, colours, layers, heads) {
   const warnings = [];
+  const known = hzKnown(heads);
+  if (!known) warnings.push({ kind: "offline" });
   const headOf = (ext) => {
-    const hex = colours?.[ext];
+    const hex = colours?.[ext] || null;
+    if (!known) return (ext - 1) % 4;
     const h = hzNearestHead(hex, heads);
-    if (!h?.exact) warnings.push({ kind: "unloaded", name: String(ext), hex: hex || null });
-    return h?.head ?? Math.max(0, ext - 1);
+    if (!h?.exact) warnings.push({ kind: "unloaded", name: null, hex });
+    return h?.head ?? (ext - 1) % 4;
   };
   const lh = layers?.layer_height, first = layers?.first_layer ?? lh;
   const changes = [...(hc || [])]
@@ -266,24 +284,45 @@ function hzFromFile(hc, colours, layers, heads) {
     .map((c) => {
       const snap = lh ? hzSnap(c.z, lh, first) : { z: c.z, gap: 0 };
       if (Math.abs(snap.gap) > 0.01) warnings.push({ kind: "gap", z: c.z, to: snap.z });
-      return { z: snap.z, head: c.kind === "pause" ? null : headOf(c.ext), kind: c.kind };
+      if (c.kind === "pause") return { z: snap.z, head: null, kind: c.kind };
+      return { z: snap.z, head: headOf(c.ext), kind: c.kind, hex: colours?.[c.ext] || null };
     });
   const base = headOf(1);
   let cur = base;
   for (const c of changes) c.head = c.kind === "pause" ? cur : (cur = c.head);
-  const seen = new Set();
   return {
-    plan: { base, changes, layers: lh ? { layer_height: lh, first_layer: first } : null, src: "3mf" },
-    warnings: warnings.filter((w) => {
-      const k = JSON.stringify(w);
-      return seen.has(k) ? false : seen.add(k);
-    }),
+    plan: { base, baseHex: colours?.[1] || null, changes, layers: lh ? { layer_height: lh, first_layer: first } : null, src: "3mf" },
+    warnings: hzUniq(warnings),
   };
 }
+
+/* An imported plan made while no spool was known, once the printer's
+   heads are: each colour to its head, the "offline" warning replaced by
+   the colours no head holds. Null while still none is known. */
+function hzRematch(plan, heads) {
+  if (!plan || !hzKnown(heads)) return null;
+  const warnings = (plan.warnings || []).filter((w) => w.kind !== "offline" && w.kind !== "unloaded");
+  const headOf = (hex, was) => {
+    if (!hex) return was;
+    const h = hzNearestHead(hex, heads);
+    if (!h?.exact) warnings.push({ kind: "unloaded", name: plan.names?.[hex] ?? null, hex });
+    return h?.head ?? was;
+  };
+  const base = headOf(plan.baseHex, plan.base);
+  let cur = base;
+  const changes = (plan.changes || []).map((c) => {
+    const head = c.kind === "pause" ? cur : (cur = headOf(c.hex, c.head));
+    return { ...c, head };
+  });
+  return { ...plan, base, changes, warnings: hzUniq(warnings) };
+}
+
+/* A change's layer typed (from 2: the first is the start): its height. */
+const hzLayerZ = (n, lh, first) => (n >= 2 && lh > 0 && first > 0 ? hzLayerTop(Math.round(n), lh, first) : null);
 
 if (typeof module !== "undefined") {
   module.exports = {
     hcColours, hcFromFile, hcKey, hcRequest, hcMarks,
-    hzLayerTop, hzSnap, hzBands, hzPlanHeads, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile,
+    hzLayerTop, hzSnap, hzBands, hzPlanHeads, hzRequest, hzColourGap, hzNearestHead, hzParseDescribe, hzColourOf, hzFromDescribe, hzFromFile, hzRematch, hzLayerZ,
   };
 }

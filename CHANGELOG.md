@@ -30,15 +30,17 @@ with its packages for macOS, Windows and Linux. What comes next:
   in height; the slice says so otherwise (#102).
 - **By height mode (HueForge)**: Prepare's colour mode gets a third choice,
   "By height". The whole plate starts on one head and changes head, or
-  pauses for a spool swap, at the heights listed under the objects; each
-  height snaps to the top of a layer and shows its layer number. A ruler
-  beside the plate shows the bands of colour from the bed up (a click adds
-  a change there), and the plate itself is drawn in those colours. A
+  pauses for a spool swap, at the heights listed under the objects. They
+  are typed as layer numbers, as HueForge counts them ("layer 5 → T1"), or
+  in mm (a switch, remembered); each snaps to the top of a layer and shows
+  the other unit beside it. The plate itself is drawn in those colours. A
   HueForge 3MF switches to this mode on its own; for a print that comes as
   an STL, its description (the describe file, or the text of its MakerWorld
   page) can be pasted or opened: the layer heights, the 100 % infill and
-  the swaps are taken over, each colour going to the closest loaded spool
-  (#103).
+  the swaps are taken over, each colour going to the closest loaded spool,
+  and the colours no spool holds are named in one line. With the printer
+  offline, one line says so, the heads follow the file's order, and the
+  colours are matched once the printer answers (#103).
 
 ### Fixed
 - **Undo in Prepare**: ⌘Z / Ctrl+Z (and redo) now work right after using a

@@ -167,13 +167,15 @@ assert.strictEqual(H.hzColourOf("Blue", d.colours), null);
 const fromD = H.hzFromDescribe(d, heads);
 assert.deepStrictEqual(fromD.plan, {
   base: 0,
+  baseHex: "#000000",
   changes: [
-    { z: 0.96, head: 1, kind: "auto" },
-    { z: 1.68, head: 2, kind: "auto" },
-    { z: 2.56, head: 2, kind: "auto" },
+    { z: 0.96, head: 1, kind: "auto", hex: "#8c6239" },
+    { z: 1.68, head: 2, kind: "auto", hex: "#ffffff" },
+    { z: 2.56, head: 2, kind: "auto", hex: "#f5e663" },
   ],
   layers: { layer_height: 0.08, first_layer: 0.16 },
   src: "describe",
+  names: { "#000000": "PLA Bambu Lab Basic Black", "#8c6239": "PLA Polymaker Bronze", "#f5e663": "PLA Elegoo Yellow", "#ffffff": "PLA Generic White" },
 });
 assert.deepStrictEqual(fromD.warnings, [{ kind: "unloaded", name: "PLA Elegoo Yellow", hex: "#f5e663" }], "1.69 → 1.68 is within 0.01");
 const far = H.hzFromDescribe({ ...d, swaps: [{ layer: 11, z: 0.99, name: "Pink" }] }, heads);
@@ -188,10 +190,45 @@ const fromF = H.hzFromFile(
 );
 assert.deepStrictEqual(fromF.plan, {
   base: 0,
-  changes: [{ z: 0.48, head: 2, kind: "auto" }, { z: 1.04, head: 2, kind: "pause" }],
+  baseHex: "#000000",
+  changes: [{ z: 0.48, head: 2, kind: "auto", hex: "#ffffff" }, { z: 1.04, head: 2, kind: "pause" }],
   layers: hcl,
   src: "3mf",
 });
 assert.deepStrictEqual(fromF.warnings, [{ kind: "gap", z: 0.5, to: 0.48 }]);
+
+// The printer never answered: no spool known, the heads follow the
+// file's order and one warning says so, not one per colour.
+const offline = [{ head: 0, color: null }, { head: 1, color: null }];
+const offF = H.hzFromFile(
+  [{ z: 0.48, ext: 2, kind: "auto" }, { z: 0.96, ext: 3, kind: "auto" }, { z: 1.2, ext: 5, kind: "auto" }],
+  { 1: "#000000", 2: "#ffffff", 3: "#f5e663", 5: "#8c6239" },
+  hcl,
+  [],
+);
+assert.deepStrictEqual(offF.plan.base, 0);
+assert.deepStrictEqual(offF.plan.changes.map((c) => c.head), [1, 2, 0], "in the file's order, on the four heads");
+assert.deepStrictEqual(offF.warnings, [{ kind: "offline" }]);
+const offD = H.hzFromDescribe(d, offline);
+assert.deepStrictEqual([offD.plan.base, ...offD.plan.changes.map((c) => c.head)], [0, 1, 3, 2], "a describe's colours in its list's order");
+assert.deepStrictEqual(offD.warnings, [{ kind: "offline" }]);
+
+// Then the printer answers: each colour to its head, the colours no
+// head holds said instead (with the describe's names), a pause keeps
+// the head in force, the other warnings kept.
+assert.strictEqual(H.hzRematch({ ...offD.plan, warnings: offD.warnings }, offline), null, "still none known");
+const reD = H.hzRematch({ ...offD.plan, warnings: [...offD.warnings, { kind: "gap", z: 1.69, to: 1.68 }] }, heads);
+assert.deepStrictEqual([reD.base, ...reD.changes.map((c) => c.head)], [fromD.plan.base, ...fromD.plan.changes.map((c) => c.head)], "as if imported online");
+assert.deepStrictEqual(reD.warnings, [{ kind: "gap", z: 1.69, to: 1.68 }, { kind: "unloaded", name: "PLA Elegoo Yellow", hex: "#f5e663" }]);
+const offP = H.hzFromFile([{ z: 0.48, ext: 3, kind: "auto" }, { z: 0.96, ext: 1, kind: "pause" }], { 1: "#ffffff", 3: "#8c6239" }, hcl, []).plan;
+const reP = H.hzRematch(offP, heads);
+assert.deepStrictEqual([reP.base, ...reP.changes.map((c) => c.head)], [2, 1, 1]);
+assert.deepStrictEqual(reP.warnings, []);
+
+// A layer typed: the top of that layer; the first is the start.
+assert.strictEqual(H.hzLayerZ(5, 0.08, 0.16), 0.48);
+assert.strictEqual(H.hzSnap(H.hzLayerZ(11, 0.08, 0.16), 0.08, 0.16).layer, 11, "back to the same layer");
+assert.strictEqual(H.hzLayerZ(1, 0.08, 0.16), null);
+assert.strictEqual(H.hzLayerZ(5, 0, 0.16), null);
 
 console.log("test-heights: ok");

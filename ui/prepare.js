@@ -1305,6 +1305,8 @@ const PRUI = (() => {
     assocExplained: !!s.assocExplained,
     /* The sheet saying a virtual head goes with its spools, likewise. */
     vhExplained: !!s.vhExplained,
+    /* "By height": changes typed in layers (default) or mm. */
+    hzUnit: s.hzUnit === "mm" ? "mm" : "layer",
   };
 })();
 const pruiSave = () =>
@@ -1318,6 +1320,7 @@ const pruiSave = () =>
       assocDefault: PRUI.assocDefault,
       assocExplained: PRUI.assocExplained,
       vhExplained: PRUI.vhExplained,
+      hzUnit: PRUI.hzUnit,
     })
   );
 
@@ -1438,7 +1441,6 @@ function prRenderInspector() {
   prTowerRenderSwitch();
   prRenderProps();
   prStatus();
-  if (typeof hzRuler === "function") hzRuler();
 }
 
 /* Inspector fields. Each one is a slider (live, one undo step per drag)

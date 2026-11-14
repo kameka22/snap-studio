@@ -1,9 +1,9 @@
 "use strict";
 /* Prepare, "By height" mode (HueForge, step 2): the plate prints with one
    head and changes head, or pauses for a spool swap, at heights. The plan
-   is `PR.hz` (prepare.js, heights-logic.js): the list above the objects,
-   the ruler beside the view, the model tinted by height, the import of a
-   HueForge describe or 3MF. The engine gets it at the slice (slice.js). */
+   is `PR.hz` (prepare.js, heights-logic.js): the list above the objects
+   (heights typed in layers or mm), the model tinted by height, the import
+   of a HueForge describe or 3MF. The engine gets it at the slice (slice.js). */
 
 /* The layers the heights land on: the imported file's, else the slice
    profile's (the engine snaps them again to the profile it slices with). */
@@ -19,7 +19,7 @@ const hzSnapZ = (z) => {
   return hzSnap(z, lh, first);
 };
 
-/* The tallest object on the plate (mm), for the ruler and a new change. */
+/* The tallest object on the plate (mm), for a new change. */
 function hzTop() {
   let top = 0;
   for (const o of PR.objects) {
@@ -76,6 +76,8 @@ const hzFmt = (z) => fmtNum(Math.round(z * 1000) / 1000, { maximumFractionDigits
 function hzBanner(live, slots, n) {
   const hz = PR.hz || { base: 0, changes: [] };
   const { lh, first } = hzLayers();
+  // Layers, as HueForge counts them ("At layer #5"), or mm.
+  const byLayer = PRUI.hzUnit !== "mm" && hzSnap(1, lh, first).layer != null;
   const tok = (h, i) => (live ? prHeadToken(h, { slots, n, own: true, attrs: ` data-hzi="${i}"` }) : `<span class="sl-token">${vhIs(h) ? `V${vhUid(h) + 1}` : `T${h}`}</span>`);
   const start = `<div class="p-color hz-line">
       <span class="hz-z">${esc(tr("hz.start"))}</span>
@@ -87,12 +89,16 @@ function hzBanner(live, slots, n) {
       const pause = c.kind === "pause";
       if (!pause) cur = c.head;
       const layer = hzSnap(c.z, lh, first).layer;
+      const z = byLayer ? `<span>${esc(tr("hz.layer.at"))}</span>
+          <input type="number" class="hz-z-in" data-hzz="${i}" data-unit="layer" step="1" min="2" value="${layer}" aria-label="${esc(tr("hz.layer.input"))}" />
+          <small>${esc(hzFmt(c.z))} mm</small>`
+        : `<input type="number" class="hz-z-in" data-hzz="${i}" step="${lh}" min="${first}" value="${+c.z.toFixed(3)}" aria-label="${esc(tr("hz.height"))}" /> mm
+          <small>${layer ? esc(tr("hz.layer", { n: layer })) : ""}</small>`;
       const who = pause
         ? `<span class="hz-pause" title="${esc(tr("hz.pause.title"))}">${esc(tr("hz.pause"))}</span>`
         : tok(c.head, i);
       return `<div class="p-color hz-line" data-hzrow="${i}">
-        <span class="hz-z"><input type="number" class="hz-z-in" data-hzz="${i}" step="${lh}" min="${first}" value="${+c.z.toFixed(3)}" aria-label="${esc(tr("hz.height"))}" /> mm
-          <small>${layer ? esc(tr("hz.layer", { n: layer })) : ""}</small></span>
+        <span class="hz-z">${z}</span>
         <span class="p-toks">${who}</span>
         <button type="button" class="p-ico hz-kind${pause ? " on" : ""}" data-hzk="${i}" title="${esc(tr(pause ? "hz.kind.auto" : "hz.kind.pause"))}">${HZ_ICON.pause}</button>
         <button type="button" class="p-ico" data-hzdel="${i}" title="${esc(tr("hz.remove"))}">${HZ_ICON.del}</button>
@@ -100,10 +106,12 @@ function hzBanner(live, slots, n) {
     })
     .join("");
   const layers = tr(PR.hz?.layers ? "hz.layers.file" : "hz.layers.profile", { lh: hzFmt(lh), first: hzFmt(first) });
-  const warns = (hz.warnings || []).map((w) => `<div class="hz-warn">${esc(hzWarnText(w))}</div>`).join("");
+  const warns = hzWarnsHtml(hz.warnings || []);
+  const unit = (u, key) => `<button type="button" class="seg-btn${(u === "layer") === byLayer ? " on" : ""}" data-hzunit="${u}">${esc(tr(key))}</button>`;
   return `<div class="p-grp p-hz">
       <div class="p-grp-head">
         <span class="k">${esc(tr("hz.title", { n: hz.changes.length }))}</span>
+        <div class="seg hz-unit" role="group" aria-label="${esc(tr("hz.unit"))}">${unit("layer", "hz.unit.layers")}${unit("mm", "hz.unit.mm")}</div>
         <button type="button" class="btn" data-hzimport>${esc(tr("hz.import"))}</button>
       </div>
       <div class="group">${start}${rows}</div>
@@ -123,12 +131,27 @@ const HZ_ICON = {
 /* What the import said, for the list and the sheet. */
 function hzWarnText(w) {
   if (w.kind === "gap") return tr("hz.warn.gap", { z: hzFmt(w.z), to: hzFmt(w.to) });
-  if (w.kind === "unloaded") return tr("hz.warn.unloaded", { name: w.name || w.hex || "?" });
+  if (w.kind === "offline") return tr("hz.warn.offline");
   if (w.kind === "unknown") return tr("hz.warn.unknown", { name: w.name });
   if (w.kind === "ranges") return tr("hz.warn.ranges");
   return "";
 }
 
+/* The warnings, the colours no head holds in one line, each with its
+   swatch and its name (a describe's) or hex (a 3MF's). */
+function hzWarnsHtml(warnings) {
+  const out = (w) => `<div class="hz-warn">${w}</div>`;
+  const missing = warnings.filter((w) => w.kind === "unloaded");
+  const lines = warnings.filter((w) => w.kind !== "unloaded").map((w) => out(esc(hzWarnText(w))));
+  if (missing.length) {
+    const names = missing
+      .map((w) => `<span class="hz-col">${w.hex ? `<i style="--c:${esc(w.hex)}"></i>` : ""}${esc(w.name || w.hex || "?")}</span>`)
+      .join(", ");
+    const [a, b] = tr("hz.warn.unloaded", { n: missing.length, names: "\u0000" }).split("\u0000");
+    lines.push(out(`${esc(a)}${names}${esc(b ?? "")}`));
+  }
+  return lines.join("");
+}
 /* A head for the start (`i` -1) or a change. */
 function hzPickHead(tok, i) {
   const cur = i < 0 ? PR.hz?.base : PR.hz?.changes[i]?.head;
@@ -137,7 +160,7 @@ function hzPickHead(tok, i) {
       if (i < 0) hz.base = h;
       else if (hz.changes[i]) hz.changes[i].head = h;
       // A head chosen by hand: what the import said of its colours is past.
-      if (hz.warnings) hz.warnings = hz.warnings.filter((w) => w.kind !== "unloaded" && w.kind !== "unknown");
+      if (hz.warnings) hz.warnings = hz.warnings.filter((w) => w.kind !== "unloaded" && w.kind !== "unknown" && w.kind !== "offline");
     }),
   );
 }
@@ -158,8 +181,12 @@ function hzAdd(z) {
   hzEdit((p) => p.changes.push({ z: snap.z, head, kind: "auto" }));
 }
 
-/* A change's height typed: snapped to a layer top. */
-function hzMove(i, z) {
+/* A change's height typed (or its layer, `byLayer`): snapped to a layer top. */
+function hzMove(i, z, byLayer) {
+  if (byLayer) {
+    const { lh, first } = hzLayers();
+    z = hzLayerZ(z, lh, first);
+  }
   if (!(z > 0)) return prRenderInspector();
   const snap = hzSnapZ(z);
   if (PR.hz.changes.some((c, j) => j !== i && Math.abs(c.z - snap.z) < 1e-4)) {
@@ -173,6 +200,12 @@ $("p-list").addEventListener("click", (e) => {
   if (PR.assoc !== "height") return;
   if (e.target.closest("[data-hzadd]")) return hzAdd();
   if (e.target.closest("[data-hzimport]")) return hzOpenImport();
+  const u = e.target.closest("[data-hzunit]");
+  if (u) {
+    PRUI.hzUnit = u.dataset.hzunit === "mm" ? "mm" : "layer";
+    pruiSave();
+    return prRenderInspector();
+  }
   const k = e.target.closest("[data-hzk]");
   if (k) {
     const i = +k.dataset.hzk;
@@ -189,7 +222,7 @@ $("p-list").addEventListener("click", (e) => {
 });
 $("p-list").addEventListener("change", (e) => {
   const inp = e.target.closest("[data-hzz]");
-  if (inp) hzMove(+inp.dataset.hzz, parseFloat(String(inp.value).replace(",", ".")));
+  if (inp) hzMove(+inp.dataset.hzz, parseFloat(String(inp.value).replace(",", ".")), inp.dataset.unit === "layer");
 });
 
 /* ------------------------------------------------------------ the view */
@@ -211,35 +244,6 @@ function hzUniforms(gl, prog) {
   gl.uniform3fv(gl.getUniformLocation(prog, "uHzCol"), col);
 }
 
-/* The ruler beside the view: the bands from the bed to the tallest object,
-   each with its head; a click adds a change at that height. */
-function hzRuler() {
-  const el = $("p-hz-ruler");
-  const on = PR.assoc === "height" && PR.hz && PR.objects.some((o) => bedState(o) !== "out");
-  el.classList.toggle("hidden", !on);
-  if (!on) return;
-  const pid = headsActive();
-  const top = Math.max(hzTop(), ...PR.hz.changes.map((c) => c.z + 0.5), 1);
-  const bands = hzBands(PR.hz).filter((b) => b.from < top);
-  el.innerHTML =
-    bands
-      .map((b) => {
-        const to = Math.min(b.to ?? top, top);
-        const c = headsColorOf(pid, b.head) || "#9a9a9a";
-        const name = vhIs(b.head) ? vhName(headsVirtual(pid), b.head) : `T${b.head}`;
-        return `<div class="hz-band${b.pause ? " pause" : ""}" title="${esc(name)}" style="bottom:${(b.from / top) * 100}%;height:${((to - b.from) / top) * 100}%;--c:${esc(c)}">
-          <span class="hz-tag">${esc(name)}</span>${b.from > 0 ? `<span class="hz-tick">${esc(hzFmt(b.from))}</span>` : ""}</div>`;
-      })
-      .join("") + `<span class="hz-top">${esc(hzFmt(top))} mm</span>`;
-  el.dataset.top = top;
-}
-$("p-hz-ruler").addEventListener("click", (e) => {
-  const el = $("p-hz-ruler"), r = el.getBoundingClientRect();
-  const top = +el.dataset.top || 0;
-  if (!top || !r.height) return;
-  hzAdd(((r.bottom - e.clientY) / r.height) * top);
-});
-
 /* ------------------------------------------------------------ import */
 
 /* A HueForge 3MF added to the plate: its list becomes the plate's, the
@@ -260,6 +264,22 @@ async function hzAdoptFile(path, hc, heights) {
   if (warnings.length) toast(tr("hz.imported.warn", { n: plan.changes.length }));
   else toast(tr("hz.imported", { n: plan.changes.length }));
 }
+
+/* Imported while the printer was off: once its spools are known, each
+   colour goes to its head (no undo step: the import's own result). */
+function hzRematchNow() {
+  if (!PR.hz?.warnings?.some((w) => w.kind === "offline")) return;
+  const next = hzRematch(PR.hz, hzHeads());
+  if (!next) return;
+  PR.hz = next;
+  prSave();
+  if (window.currentView !== "prepare") return;
+  prRenderInspector();
+  prSchedule();
+}
+window.addEventListener("headschange", (e) => {
+  if (e.detail?.what === "slots") hzRematchNow();
+});
 
 const HZI = { parsed: null };
 
@@ -285,7 +305,7 @@ function hzPreview() {
     d.infill100 ? tr("hz.import.infill") : "",
   ].filter(Boolean);
   box.innerHTML =
-    lines.map((l) => `<div>${esc(l)}</div>`).join("") + warnings.map((w) => `<div class="hz-warn">${esc(hzWarnText(w))}</div>`).join("");
+    lines.map((l) => `<div>${esc(l)}</div>`).join("") + hzWarnsHtml(warnings);
 }
 
 $("hz-text").addEventListener("input", hzPreview);
