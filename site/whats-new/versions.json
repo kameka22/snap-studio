@@ -17,7 +17,7 @@
           "icon": "prepare",
           "color": "#ff375f",
           "edge": "linear-gradient(90deg, #ff375f, #ff9f0a 35%, #30d158 65%, #0a84ff)",
-          "image": "../assets/prepare.webp",
+          "image": "../assets/whats-new-0.20-heights.png",
           "tag": {
             "en": "Prepare",
             "fr": "Préparer"
@@ -51,7 +51,7 @@
           "icon": "folder",
           "color": "#0a84ff",
           "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
-          "image": "../assets/files.webp",
+          "image": "../assets/whats-new-0.20-stl.png",
           "tag": {
             "en": "Files",
             "fr": "Fichiers"
@@ -85,7 +85,7 @@
           "icon": "sliders",
           "color": "#30d158",
           "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
-          "image": "../assets/gcode-preview.webp",
+          "image": "../assets/whats-new-0.20-performance.png",
           "tag": {
             "en": "Performance",
             "fr": "Performances"
@@ -110,8 +110,8 @@
             "fr": "L’aperçu de découpe prend environ trois fois moins de mémoire par trajet, ne charge les déplacements à vide que s’ils sont affichés, et montre enfin toutes les couches des longues impressions. Les sites d’Explorer défilent plus fluidement, sur macOS surtout. Snappy et la caméra travaillent moins en arrière-plan."
           },
           "alt": {
-            "en": "The sliced preview of a print, with its layer slider.",
-            "fr": "L’aperçu de découpe d’une impression, avec son curseur des couches."
+            "en": "Explore and Snappy side by side, with a model site open.",
+            "fr": "Explorer et Snappy côte à côte, avec un site de modèles ouvert."
           }
         }
       ],
