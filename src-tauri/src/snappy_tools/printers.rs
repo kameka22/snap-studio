@@ -206,7 +206,8 @@ pub fn printer_details_params() -> Value {
 pub fn printer_details(args: &Value) -> Result<Value> {
     let p = printer_named(str_arg(args, "printer")?)?;
     let state = block_on(crate::control_read(p.id.clone(), Some(false))).map_err(|e| anyhow!(e))?;
-    let log = crate::maintenance_log(p.id.clone());
+    // Care's log (its plugin store); empty when it cannot be read.
+    let log = crate::plugins::care_log(&p.id).unwrap_or_default();
     Ok(json!({ "printer": p.name, "control": state["state"], "maintenance": log }))
 }
 
@@ -482,7 +483,7 @@ pub fn bed_mesh_action(args: &Value) -> Result<Value> {
     }
 }
 
-/// Maintenance tasks: the same ids as `ui/maint.js` MT_TASKS (a second list,
+/// Maintenance tasks: the same ids as Care's TASKS (`ui/plugins/care/main.js`) (a second list,
 /// for the tool's schema; the page holds their intervals).
 pub(crate) const MAINT_TASKS: [&str; 6] = ["contacts", "docking", "rails", "zscrews", "nozzles", "plate"];
 
@@ -517,17 +518,21 @@ pub fn ask_maintenance(args: &Value) -> Result<String> {
     Ok(crate::t!(&format!("snappy.ask.maint_{action}"), printer = p.name, task = crate::t!(&format!("maint.t.{task}"))))
 }
 
-/// Logged done with the printer's counters now, as Maintenance does.
+/// Logged done with the printer's counters now, as Care does, in its store.
 pub fn maintenance(args: &Value) -> Result<Value> {
     let (p, task, action) = maint_of(args)?;
     let e = |e: String| anyhow!(e);
     if action == "remove" {
         let at = args["at"].as_u64().ok_or_else(|| anyhow!("remove needs `at`"))?;
-        return crate::maintenance_remove(p.id, task.into(), at).map(|l| json!({ "entries": l.len() })).map_err(e);
+        let l = crate::plugins::care_log_edit(&p.id, |l| l.retain(|x| !(x["task"] == task && x["at"] == at)))?;
+        return Ok(json!({ "entries": l.len() }));
     }
     let u = block_on(crate::printer_maintenance(p.host.clone(), p.port)).map_err(e)?;
-    let swaps = u.heads.iter().map(|h| h.switch_count).collect();
-    crate::maintenance_done(p.id, task.into(), u.print_hours, swaps).map(|l| json!({ "entries": l.len() })).map_err(e)
+    let swaps: Vec<u64> = u.heads.iter().map(|h| h.switch_count).collect();
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let entry = json!({ "task": task, "at": at, "print_hours": u.print_hours, "swaps": swaps });
+    let l = crate::plugins::care_log_edit(&p.id, |l| l.push(entry))?;
+    Ok(json!({ "entries": l.len() }))
 }
 
 /// A printer's timelapse videos, newest first.

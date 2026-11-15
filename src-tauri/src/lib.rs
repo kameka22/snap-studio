@@ -1339,7 +1339,6 @@ async fn printer_job_totals(host: String, port: u16) -> Result<maintenance::Tota
 /// The built-in plugins and their manifests (or why one is off).
 #[tauri::command]
 fn plugins_list(app: tauri::AppHandle) -> Vec<plugins::Found> {
-    use tauri::Manager;
     plugins::found(|path| app.asset_resolver().get(path.to_string()).map(|a| a.bytes))
 }
 

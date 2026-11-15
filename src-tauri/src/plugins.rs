@@ -214,6 +214,38 @@ pub fn set(id: &str, key: &str, value: Value) -> Result<()> {
     set_in(&crate::util::app_dir(), id, key, value)
 }
 
+// ------------------------------------------------------------ Care's log
+
+/// A printer's maintenance log in Care's store, oldest first: what Snappy
+/// reads (`printer_details`). Entries as Care writes them: `task`, `at`
+/// (Unix seconds), `print_hours`, `swaps`.
+pub fn care_log_in(dir: &Path, printer: &str) -> Result<Vec<Value>> {
+    let log = get_in(dir, CARE, "log")?;
+    Ok(log.get(printer).and_then(Value::as_array).cloned().unwrap_or_default())
+}
+
+/// Changes a printer's log in Care's store, as Care does (`editLog`), and
+/// returns it: Snappy's `maintenance` tool.
+pub fn care_log_edit_in(dir: &Path, printer: &str, change: impl FnOnce(&mut Vec<Value>)) -> Result<Vec<Value>> {
+    let mut log = match get_in(dir, CARE, "log")? {
+        Value::Object(m) => m,
+        _ => Map::new(),
+    };
+    let mut list = log.get(printer).and_then(Value::as_array).cloned().unwrap_or_default();
+    change(&mut list);
+    log.insert(printer.to_string(), Value::Array(list.clone()));
+    set_in(dir, CARE, "log", Value::Object(log))?;
+    Ok(list)
+}
+
+pub fn care_log(printer: &str) -> Result<Vec<Value>> {
+    care_log_in(&crate::util::app_dir(), printer)
+}
+
+pub fn care_log_edit(printer: &str, change: impl FnOnce(&mut Vec<Value>)) -> Result<Vec<Value>> {
+    care_log_edit_in(&crate::util::app_dir(), printer, change)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,6 +364,27 @@ mod tests {
         set_in(&dir, CARE, "cache", json!(1)).unwrap();
         std::fs::write(dir.join("maintenance.json"), log.to_string()).unwrap();
         assert_eq!(get_in(&dir, CARE, "log").unwrap(), Value::Null);
+    }
+
+    #[test]
+    fn snappy_reads_and_edits_cares_log() {
+        let dir = temp("care_log");
+        assert!(care_log_in(&dir, "u1").unwrap().is_empty());
+        let e = json!({ "task": "rails", "at": 20, "print_hours": 12.5, "swaps": [3] });
+        let l = care_log_edit_in(&dir, "u1", |l| l.push(e.clone())).unwrap();
+        assert_eq!(l, vec![e.clone()]);
+        // Stored where Care reads it, other printers and keys untouched.
+        set_in(&dir, CARE, "cache", json!(1)).unwrap();
+        care_log_edit_in(&dir, "u2", |l| l.push(e.clone())).unwrap();
+        assert_eq!(get_in(&dir, CARE, "log").unwrap(), json!({ "u1": [e], "u2": [e] }));
+        assert_eq!(get_in(&dir, CARE, "cache").unwrap(), 1);
+        let l = care_log_edit_in(&dir, "u1", |l| l.retain(|x| x["at"] != 20)).unwrap();
+        assert!(l.is_empty());
+        assert_eq!(care_log_in(&dir, "u2").unwrap().len(), 1);
+        // A log from earlier versions is read through Care's import.
+        let dir = temp("care_log_import");
+        std::fs::write(dir.join("maintenance.json"), json!({ "u1": [e] }).to_string()).unwrap();
+        assert_eq!(care_log_in(&dir, "u1").unwrap(), vec![e]);
     }
 
     #[test]
