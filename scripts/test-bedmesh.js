@@ -250,7 +250,7 @@ for (const id of ["pfl-tabs", "ia-views", "mt-tabs"]) {
 }
 for (const id of ["pfl-layout", "view-grid", "pfl-sort", "pfl-q", "ia-folder", "mt-refresh", "bm-measure-btn"]) assert.ok(bar.indexOf(`id="${id}"`) > spacer, `${id} stays right`);
 // Calibration waits for #17; Care & Tuning uses the Files tabs' component.
-assert.ok(/<button class="seg-btn labeled hidden" data-mtab="calib">/.test(html));
+assert.ok(/<button class="seg-btn labeled hidden" data-mtab="calib"[ >]/.test(html));
 assert.ok(/<div id="mt-tabs" class="seg"/.test(html) && /<div id="pfl-tabs" class="seg"/.test(html));
 
 console.log("bedmesh: ok");

@@ -46,10 +46,17 @@ def strip_comments(text):
 
 def used_keys():
     keys = set()
-    for f in UI.glob("*.js"):
-        keys |= set(re.findall(r'\btr\(\s*"([\w.]+)"', f.read_text()))
-        # Keys picked by a ternary, tr(x ? "a" : "b"), or passed around as literals.
+    # The app's scripts and the built-in plugins' (ctx.i18n.t, `t`).
+    for f in [*UI.glob("*.js"), *(UI / "plugins").rglob("*.js")]:
+        keys |= set(re.findall(r'\b(?:tr|t)\(\s*"([\w.]+)"', f.read_text()))
+        # Keys picked by a ternary, tr(x ? "a" : "b"), or passed around as
+        # literals; the plugin host's call names ("printers.list") are not.
+        if f.name in ("plugins-logic.js", "plugins.js"):
+            continue
         keys |= set(re.findall(r'"((?:[a-z_]+\.)+[a-z_0-9]+)"', strip_comments(f.read_text())))
+    # Plugin manifests: their name and their contributions' titles.
+    for f in (UI / "plugins").rglob("plugin.json"):
+        keys |= set(re.findall(r'"(?:name|title)"\s*:\s*"([\w.]+)"', f.read_text()))
     html = (UI / "index.html").read_text()
     keys |= set(re.findall(r'data-i18n(?:-[a-z]+)?="([\w.]+)"', html))
     for f in SRC.rglob("*.rs"):
