@@ -17,7 +17,8 @@
           "icon": "prepare",
           "color": "#ff375f",
           "edge": "linear-gradient(90deg, #ff375f, #ff9f0a 35%, #30d158 65%, #0a84ff)",
-          "image": "../assets/whats-new-0.20-heights.png",
+          "image": "../assets/whats-new-0.20-heights.webp",
+          "frame": "939/1675",
           "tag": {
             "en": "Prepare",
             "fr": "Préparer"
@@ -42,8 +43,8 @@
             "fr": "Le mode couleur de Préparer gagne un troisième choix, Par hauteur : le plateau part sur une tête, puis change de tête, ou fait une pause pour changer de bobine, aux couches que vous indiquez, comptées comme dans HueForge ou en mm. Un 3MF HueForge s’ouvre tout seul dans ce mode, chaque couleur sur la bobine chargée la plus proche, avec un avertissement quand elle s’en éloigne, et les réglages du fichier sont repris. Dans l’aperçu, des repères à côté du curseur des couches montrent chaque changement."
           },
           "alt": {
-            "en": "Prepare in By height mode: the plate drawn in its colours, and the list of changes, each layer with its colour and the head it goes to.",
-            "fr": "Préparer en mode Par hauteur : le plateau dessiné dans ses couleurs, et la liste des changements, chaque couche avec sa couleur et la tête qui l’imprime."
+            "en": "Prepare in By height mode: a list of colour changes, each layer with its colour and the head it goes to.",
+            "fr": "Préparer en mode Par hauteur : la liste des changements, chaque couche avec sa couleur et la tête qui l’imprime."
           }
         },
         {
@@ -51,7 +52,7 @@
           "icon": "folder",
           "color": "#0a84ff",
           "edge": "linear-gradient(90deg, #0a84ff, #64d2ff)",
-          "image": "../assets/whats-new-0.20-stl.png",
+          "image": "../assets/whats-new-0.20-stl.webp",
           "tag": {
             "en": "Files",
             "fr": "Fichiers"
@@ -85,7 +86,7 @@
           "icon": "sliders",
           "color": "#30d158",
           "edge": "linear-gradient(90deg, #30d158, #64d2ff)",
-          "image": "../assets/whats-new-0.20-performance.png",
+          "image": "../assets/whats-new-0.20-performance.webp",
           "tag": {
             "en": "Performance",
             "fr": "Performances"
