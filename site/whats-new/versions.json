@@ -106,8 +106,8 @@
             "fr": "Plus fluide, plus léger"
           },
           "text": {
-            "en": "The sliced preview uses about three times less memory, loads travel moves only when shown, and now shows every layer of long prints. Explore’s sites scroll more smoothly, on macOS above all. Snappy and the camera work less in the background, and a model changed on disk is read again.",
-            "fr": "L’aperçu de découpe utilise environ trois fois moins de mémoire, ne charge les déplacements à vide que s’ils sont affichés, et montre enfin toutes les couches des longues impressions. Les sites d’Explorer défilent plus fluidement, sur macOS surtout. Snappy et la caméra travaillent moins en arrière-plan, et un modèle modifié sur le disque est relu."
+            "en": "The sliced preview takes about three times less memory per line, loads travel moves only when shown, and now shows every layer of long prints. Explore’s sites scroll more smoothly, on macOS above all. Snappy and the camera work less in the background.",
+            "fr": "L’aperçu de découpe prend environ trois fois moins de mémoire par trajet, ne charge les déplacements à vide que s’ils sont affichés, et montre enfin toutes les couches des longues impressions. Les sites d’Explorer défilent plus fluidement, sur macOS surtout. Snappy et la caméra travaillent moins en arrière-plan."
           },
           "alt": {
             "en": "The sliced preview of a print, with its layer slider.",
@@ -137,7 +137,7 @@
           },
           "text": {
             "en": "In Prepare and Maintenance, an ⓘ opens its text in a bubble on a click, instead of a tooltip that needs the pointer to wait on it.",
-            "fr": "Dans Préparer et Maintenance, un ⓘ ouvre son texte dans une bulle au clic, au lieu d’une infobulle qui demande d’attendre dessus."
+            "fr": "Dans Préparer et Entretien, un ⓘ ouvre son texte dans une bulle au clic, au lieu d’une infobulle qui demande d’attendre dessus."
           }
         },
         {
@@ -148,8 +148,8 @@
             "fr": "Corrections"
           },
           "text": {
-            "en": "A print’s time left follows the slicer’s estimate, as on the printer’s screen. Snappy’s icon opens on the first click. The camera keeps its last image instead of a question mark. Undo works in Prepare right after a slider. A saved plate comes back after a restart.",
-            "fr": "Le temps restant d’une impression suit l’estimation du slicer, comme sur l’écran de l’imprimante. L’icône de Snappy s’ouvre au premier clic. La caméra garde sa dernière image au lieu d’un point d’interrogation. Annuler marche dans Préparer juste après un curseur. Un plateau enregistré revient après un redémarrage."
+            "en": "A print’s percentage is the one on the printer’s screen, and its time left follows the slicer’s estimate. Snappy’s icon opens on the first click. The camera keeps its last image instead of a question mark. Undo works in Prepare right after a slider. A saved plate comes back after a restart. A model changed on disk is read again.",
+            "fr": "Le pourcentage d’une impression est celui de l’écran de l’imprimante, et son temps restant suit l’estimation du slicer. L’icône de Snappy s’ouvre au premier clic. La caméra garde sa dernière image au lieu d’un point d’interrogation. Annuler marche dans Préparer juste après un curseur. Un plateau enregistré revient après un redémarrage. Un modèle modifié sur le disque est relu."
           }
         }
       ],
