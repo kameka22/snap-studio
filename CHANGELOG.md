@@ -11,6 +11,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-15
+
 ### Added
 - **STL files in Files**: STL files now show in the library, with a rendered
   preview and an STL badge. They can be analyzed, viewed in 3D, prepared and
@@ -878,7 +880,8 @@ with its packages for macOS, Windows and Linux. What comes next:
 - First public version: a 3MF browser with thumbnails, Prepare, built-in
   slicing, packages for macOS, Windows and Linux, automatic updates.
 
-[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/kameka22/snap-studio/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/kameka22/snap-studio/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/kameka22/snap-studio/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/kameka22/snap-studio/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/kameka22/snap-studio/compare/v0.17.0...v0.17.1
