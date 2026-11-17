@@ -281,9 +281,11 @@ async function advRefreshNow() {
         overrides: $("s-bed").value ? { curr_bed_type: $("s-bed").value } : {}, color: null,
       });
       if (seq !== ADV.seq) return;
+      ADV.rawDefaults = d?.geometry || d?.values || {};
       ADV.defaults = { ...ADV_ENGINE_DEFAULTS, ...Object.fromEntries(Object.entries(d?.values || {}).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])) };
       await spdSetProfile(d?.values || null);
     } catch {
+      ADV.rawDefaults = {};
       ADV.defaults = { ...ADV_ENGINE_DEFAULTS };
       await spdSetProfile(null);
     }
@@ -568,6 +570,7 @@ function advSet(k, v) {
   advRemember();
   advRenderPanel();
   advRenderRows();
+  if (k === "print_sequence") { prRenderInspector(); prSchedule(); }
   // A head chosen for supports, walls or infill counts for the plate.
   if (ADV_FILAMENT.has(k) && typeof pdBedLine === "function") pdBedLine();
 }
@@ -714,6 +717,7 @@ $("s-adv-reset").addEventListener("click", () => {
   advRemember();
   advRenderPanel();
   advRenderRows();
+  prRenderInspector(); prSchedule();
 });
 document.querySelectorAll(".sl-adv-btn").forEach((b) => b.addEventListener("click", () => advOpen(b.dataset.adv)));
 $("smodal").addEventListener("change", (e) => {

@@ -72,6 +72,15 @@ function prTowerAdv() {
   return (machine && SL.memory[machine]?.adv) || {};
 }
 
+/* Keep per-head arrays for geometry rules; the controls use scalar values. */
+function prTowerRawSetting(k) {
+  const adv = prTowerAdv();
+  if (k in adv) return adv[k];
+  if (typeof ADV !== "undefined" && ADV.rawDefaults?.[k] != null) return ADV.rawDefaults[k];
+  if (PR.towerProfile?.raw?.[k] != null) return PR.towerProfile.raw[k];
+  return prTowerProfileValue(k);
+}
+
 /* A profile's value: the sheet's, or the one read here, or the engine's. */
 function prTowerProfileValue(k) {
   if (typeof ADV !== "undefined" && ADV.defaults?.[k] != null) return ADV.defaults[k];
@@ -109,6 +118,7 @@ async function prTowerLoadProfile() {
   PR.towerProfile = { key, values: null };
   const d = await invoke("slice_details", { name: p.process, machine: p.machine, simple: p.simple, overrides: {}, color: null }).catch(() => null);
   if (PR.towerProfile?.key !== key) return;
+  PR.towerProfile.raw = d?.geometry || d?.values || {};
   PR.towerProfile.values = Object.fromEntries(Object.entries(d?.values || {}).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]));
   prTowerChanged();
 }
@@ -273,6 +283,7 @@ function prTowerSetOn(on) {
 /* The overrides a slice sends: the tower's place, with it only; with the
    pillars, the engine's tower off and the objects in the list's order. */
 function prTowerOverrides() {
+  if (typeof prSeqOn === "function" && prSeqOn()) return { print_order: "as_obj_list", enable_prime_tower: "0" };
   if (prPillarsShown()) return pmOverrides();
   if (!prTowerShown() || PR.tower.x == null) return {};
   const n = (v) => String(Math.round(v * 1000) / 1000);
@@ -472,13 +483,15 @@ function prTowerRenderSwitch() {
   const sw = $("p-tower-sw");
   if (!sw) return;
   const st = prTowerState();
-  $("p-plateopts").classList.toggle("hidden", st.reason === "single");
+  const sequential = String(prTowerSetting("print_sequence")) === "by object";
+  $("p-plateopts").classList.remove("hidden");
+  $("p-tower-row").classList.toggle("hidden", st.reason === "single" && !sequential);
   sw.checked = PR.tower.on;
   sw.disabled = !!st.reason;
   const why = $("p-tower-why");
   const pillars = prPillarsShown();
   // Off with a virtual head: advised, never turned on for the user.
-  why.textContent = st.reason ? tr(`prepare.tower.why.${st.reason}`) : st.show && !pillars ? prTowerLabel(undefined, true) : !PR.tower.on && prTowerVirtualUsed() ? tr("prepare.tower.virtual_hint") : "";
+  why.textContent = sequential ? tr("prepare.tower.why.by_object") : st.reason ? tr(`prepare.tower.why.${st.reason}`) : st.show && !pillars ? prTowerLabel(undefined, true) : !PR.tower.on && prTowerVirtualUsed() ? tr("prepare.tower.virtual_hint") : "";
   why.classList.toggle("hidden", !why.textContent);
   sw.title = st.reason ? why.textContent : "";
   $("p-tower-row").classList.toggle("off", !!st.reason);
